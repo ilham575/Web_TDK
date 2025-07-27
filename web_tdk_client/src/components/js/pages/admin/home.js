@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import '../../../css/pages/admin-home.css';
+import '../../../css/pages/admin/admin-home.css';
 
 function AdminPage() {
   const navigate = useNavigate();

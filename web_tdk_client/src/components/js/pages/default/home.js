@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import '../../../css/pages/default-home.css';
+import '../../../css/pages/default/default-home.css';
 
 function DefaultHome() {
   const navigate = useNavigate();

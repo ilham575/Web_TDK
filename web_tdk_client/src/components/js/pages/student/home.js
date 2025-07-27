@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import '../../../css/pages/student-home.css';
+import '../../../css/pages/student/student-home.css';
 
 function StudentPage() {
   const navigate = useNavigate();
