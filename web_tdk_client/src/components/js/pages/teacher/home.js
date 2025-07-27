@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import '../../../css/pages/teacher/teacher-home.css';
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 function TeacherPage() {
   const navigate = useNavigate();
@@ -14,17 +16,21 @@ function TeacherPage() {
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (token !== 'dummy-token-teacher') {
-      navigate('/signin');
+      localStorage.removeItem('token');
+      toast.error('Invalid token or role. Please sign in again.');
+      setTimeout(() => navigate('/signin'), 1500);
     }
   }, [navigate]);
 
   const handleSignout = () => {
     localStorage.removeItem('token');
-    navigate('/');
+    toast.success('Signed out successfully!');
+    setTimeout(() => navigate('/'), 1000);
   };
 
   return (
     <div className="teacher-container">
+      <ToastContainer />
       <h2 className="teacher-title">Welcome, Teacher!</h2>
       <button
         onClick={handleSignout}

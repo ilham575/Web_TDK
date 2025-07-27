@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import '../../../css/pages/admin/admin-home.css';
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 function AdminPage() {
   const navigate = useNavigate();
@@ -19,17 +21,21 @@ function AdminPage() {
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (token !== 'dummy-token-admin') {
-      navigate('/signin');
+      localStorage.removeItem('token');
+      toast.error('Invalid token or role. Please sign in again.');
+      setTimeout(() => navigate('/signin'), 1500);
     }
   }, [navigate]);
 
   const handleSignout = () => {
     localStorage.removeItem('token');
-    navigate('/');
+    toast.success('Signed out successfully!');
+    setTimeout(() => navigate('/'), 1000);
   };
 
   return (
     <div className="admin-container">
+      <ToastContainer />
       <h2 className="admin-title">Welcome, Admin!</h2>
       <div className="admin-lists-container">
         <div className="admin-list">
