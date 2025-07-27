@@ -26,3 +26,30 @@
 .student-signout-btn-hover {
   background: #1e7e34 !important;
 }
+.student-subject-table {
+  width: 100%;
+  max-width: 500px;
+  margin: 2rem auto 1.5rem auto;
+  border-collapse: collapse;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.student-subject-table th,
+.student-subject-table td {
+  padding: 0.75rem 1rem;
+  text-align: center;
+  border-bottom: 1px solid #eee;
+}
+
+.student-subject-table th {
+  background: #007bff;
+  color: #fff;
+  font-weight: 600;
+}
+
+.student-subject-table tr:last-child td {
+  border-bottom: none;
+}

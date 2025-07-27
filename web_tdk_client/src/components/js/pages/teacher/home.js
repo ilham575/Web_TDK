@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import '../../../css/pages/teacher/teacher-home.css';
 
@@ -11,11 +11,23 @@ function TeacherPage() {
     { name: 'English' }
   ]);
 
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token !== 'dummy-token-teacher') {
+      navigate('/signin');
+    }
+  }, [navigate]);
+
+  const handleSignout = () => {
+    localStorage.removeItem('token');
+    navigate('/');
+  };
+
   return (
     <div className="teacher-container">
       <h2 className="teacher-title">Welcome, Teacher!</h2>
       <button
-        onClick={() => navigate('/')}
+        onClick={handleSignout}
         className="teacher-signout-btn"
         onMouseOver={e => e.target.classList.add('teacher-signout-btn-hover')}
         onMouseOut={e => e.target.classList.remove('teacher-signout-btn-hover')}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import '../../../css/pages/admin/admin-home.css';
 
@@ -15,6 +15,18 @@ function AdminPage() {
     { name: 'Boonmee' },
     { name: 'Chai' }
   ]);
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token !== 'dummy-token-admin') {
+      navigate('/signin');
+    }
+  }, [navigate]);
+
+  const handleSignout = () => {
+    localStorage.removeItem('token');
+    navigate('/');
+  };
 
   return (
     <div className="admin-container">
@@ -38,7 +50,7 @@ function AdminPage() {
         </div>
       </div>
       <button
-        onClick={() => navigate('/')}
+        onClick={handleSignout}
         className="admin-signout-btn"
         onMouseOver={e => e.target.classList.add('admin-signout-btn-hover')}
         onMouseOut={e => e.target.classList.remove('admin-signout-btn-hover')}

@@ -36,12 +36,16 @@ function SigninPage() {
       if (!user) {
         setError('Invalid email or password');
       } else {
+        // สร้าง token ปลอมและเก็บใน localStorage
         // Redirect by role
         if (user.role === 'student') {
+          localStorage.setItem('token', 'dummy-token-student');
           navigate('/student');
         } else if (user.role === 'teacher') {
+          localStorage.setItem('token', 'dummy-token-teacher');
           navigate('/teacher');
         } else if (user.role === 'admin') {
+          localStorage.setItem('token', 'dummy-token-admin');
           navigate('/admin');
         }
       }
