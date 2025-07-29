@@ -1,0 +1,56 @@
+.admin-container {
+  max-width: 600px;
+  margin: 3rem auto;
+  background: #f8f9fa;
+  border-radius: 16px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  padding: 2rem;
+  text-align: center;
+}
+.admin-title {
+  color: #007bff;
+  margin-bottom: 1.5rem;
+}
+.admin-lists-container {
+  margin-top: 2rem;
+  display: flex;
+  justify-content: center;
+  gap: 4rem;
+}
+.admin-list {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  padding: 1rem 2rem;
+  min-width: 180px;
+}
+.admin-list-title {
+  color: #343a40;
+}
+.admin-ul {
+  list-style: none;
+  padding: 0;
+  margin-top: 1rem;
+}
+.admin-li {
+  margin: 0.5rem 0;
+  padding: 0.5rem;
+  border-radius: 6px;
+  background: #f1f3f4;
+  font-size: 1.05rem;
+}
+.admin-signout-btn {
+  margin-top: 2rem;
+  padding: 0.5rem 1.5rem;
+  background: #dc3545;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 1rem;
+  transition: background 0.2s;
+}
+.admin-signout-btn-hover {
+  background: #b52a37 !important;
+}
