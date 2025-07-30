@@ -40,22 +40,22 @@ input:focus {
   border-color: #007bff;
   box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
 }
-button {
+.button-signin {
   width: 100%;
-  padding: 0.75rem;
-  background-color: #007bff;
-  color: white;
+  background-color: #1976d2;
+  color: #fff;
   border: none;
+  padding: 10px 24px;
   border-radius: 4px;
-  font-size: 1rem;
+  font-size: 16px;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: background 0.2s;
 }
-button:hover:not(:disabled) {
+.button-signin:hover:not(:disabled) {
   background-color: #0056b3;
 }
-button:disabled {
-  background-color: #6c757d;
+.button-signin:disabled {
+  background-color: #90caf9;
   cursor: not-allowed;
 }
 .error-message {
@@ -77,4 +77,9 @@ button:disabled {
 }
 .signin-links a:hover {
   text-decoration: underline;
+}
+.toast-align-center {
+  display: flex !important;
+  align-items: center;
+  gap: 10px;
 }

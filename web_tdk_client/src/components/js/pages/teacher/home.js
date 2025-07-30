@@ -25,7 +25,7 @@ function TeacherPage() {
   const handleSignout = () => {
     localStorage.removeItem('token');
     toast.success('Signed out successfully!');
-    setTimeout(() => navigate('/'), 1000);
+    setTimeout(() => navigate('/signin'), 1000);
   };
 
   return (

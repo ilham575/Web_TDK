@@ -29,8 +29,7 @@ function AdminPage() {
 
   const handleSignout = () => {
     localStorage.removeItem('token');
-    toast.success('Signed out successfully!');
-    setTimeout(() => navigate('/'), 1000);
+    navigate('/signin', { state: { signedOut: true } });
   };
 
   return (
