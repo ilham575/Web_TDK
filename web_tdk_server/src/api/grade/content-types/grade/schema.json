@@ -1,0 +1,48 @@
+{
+  "kind": "collectionType",
+  "collectionName": "grades",
+  "info": {
+    "singularName": "grade",
+    "pluralName": "grades",
+    "displayName": "grade"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "term": {
+      "type": "string",
+      "required": true
+    },
+    "grade": {
+      "type": "enumeration",
+      "required": true,
+      "enum": [
+        "A (4.0)",
+        "B+ (3.5)",
+        "B (3.0)",
+        "C+ (2.5)",
+        "C (2.0)",
+        "D+ (1.5)",
+        "D (1.0)",
+        "E (0.0)"
+      ]
+    },
+    "comment": {
+      "type": "text"
+    },
+    "student": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::student.student",
+      "inversedBy": "grades"
+    },
+    "subject": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::subject.subject",
+      "inversedBy": "grades"
+    }
+  }
+}

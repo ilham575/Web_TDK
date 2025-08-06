@@ -1,0 +1,52 @@
+{
+  "kind": "collectionType",
+  "collectionName": "score_categories",
+  "info": {
+    "singularName": "score-category",
+    "pluralName": "score-categories",
+    "displayName": "score-category"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "title": {
+      "type": "string",
+      "required": true
+    },
+    "description": {
+      "type": "text"
+    },
+    "max_score": {
+      "type": "float",
+      "required": true
+    },
+    "weight": {
+      "type": "float",
+      "required": true
+    },
+    "term": {
+      "type": "string",
+      "required": true
+    },
+    "subject": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::subject.subject",
+      "inversedBy": "score_categories"
+    },
+    "created_user": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user",
+      "inversedBy": "score_categories"
+    },
+    "scores": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::score.score",
+      "mappedBy": "category"
+    }
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "kind": "collectionType",
+  "collectionName": "schedules",
+  "info": {
+    "singularName": "schedule",
+    "pluralName": "schedules",
+    "displayName": "schedule"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "day_of_week": {
+      "type": "enumeration",
+      "required": true,
+      "default": "saturday",
+      "enum": [
+        "saturday",
+        "sunday"
+      ]
+    },
+    "start_time": {
+      "type": "time",
+      "required": true
+    },
+    "end_time": {
+      "type": "time",
+      "required": true
+    },
+    "group": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::group.group",
+      "inversedBy": "schedules"
+    },
+    "subject": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::subject.subject",
+      "inversedBy": "schedules"
+    },
+    "room": {
+      "type": "string"
+    }
+  }
+}

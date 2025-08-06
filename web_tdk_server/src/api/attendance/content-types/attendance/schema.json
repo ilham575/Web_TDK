@@ -1,0 +1,46 @@
+{
+  "kind": "collectionType",
+  "collectionName": "attendances",
+  "info": {
+    "singularName": "attendance",
+    "pluralName": "attendances",
+    "displayName": "attendance"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "date": {
+      "type": "date",
+      "required": true
+    },
+    "attendance_status": {
+      "type": "enumeration",
+      "required": true,
+      "default": "present (มา)",
+      "enum": [
+        "present (มา)",
+        "absent (ขาด)",
+        "late (สาย)",
+        "sick-leave (ลาป่วย)",
+        "personal-leave (ลากิจ)"
+      ]
+    },
+    "attendanceNote": {
+      "type": "string"
+    },
+    "student": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::student.student",
+      "inversedBy": "attendances"
+    },
+    "subject": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::subject.subject",
+      "inversedBy": "attendances"
+    }
+  }
+}

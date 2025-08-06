@@ -66,11 +66,41 @@
       "inversedBy": "users",
       "configurable": false
     },
-    "Usernames": {
+    "teacher": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "api::teacher.teacher",
+      "mappedBy": "user"
+    },
+    "parent": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "api::parent.parent",
+      "mappedBy": "user"
+    },
+    "student": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "api::student.student",
+      "inversedBy": "user"
+    },
+    "score_categories": {
       "type": "relation",
       "relation": "oneToMany",
-      "target": "api::username.username",
-      "mappedBy": "Role"
+      "target": "api::score-category.score-category",
+      "mappedBy": "created_user"
+    },
+    "announcements": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::announcement.announcement",
+      "mappedBy": "posted_by"
+    },
+    "uploaded_documents": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::uploaded-document.uploaded-document",
+      "mappedBy": "submitted_by"
     }
   }
 }

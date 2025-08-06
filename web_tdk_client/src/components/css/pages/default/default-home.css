@@ -1,31 +1,93 @@
 .default-container {
+  padding: 40px;
+  font-family: 'Prompt', sans-serif;
+  color: #333;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  background: #f5f5f5;
   min-height: 100vh;
-  background-color: #f5f5f5;
 }
 
 .default-title {
-  font-size: 2.5rem;
-  color: #333;
+  font-size: 32px;
+  color: #00794d;
+  text-align: center;
+}
+
+.default-welcome {
+  font-size: 1.2rem;
   margin-bottom: 2rem;
+  color: #555;
   text-align: center;
 }
 
 .default-signin-btn {
-  width: 40%;
-  padding: 0.75rem 1.2rem;
-  font-size: 1.2rem;
-  background-color: #007bff;
+  background-color: #00794d;
   color: white;
+  padding: 10px 20px;
   border: none;
-  border-radius: 6px;
   cursor: pointer;
-  transition: background-color 0.2s;
+  font-weight: bold;
+  border-radius: 6px;
+  margin-bottom: 2rem;
 }
 
-.default-signin-btn:hover {
-  background-color: #0056b3;
+.default-section {
+  width: 80%;
+  max-width: 800px;
+  margin-top: 2rem;
+  background-color: #ffffff;
+  padding: 1.5rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.default-section h2 {
+  color: #007bff;
+  margin-bottom: 1rem;
+}
+
+.announcement-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.announcement-item {
+  margin-bottom: 1.5rem;
+  border-left: 4px solid #007bff;
+  padding-left: 1rem;
+  background-color: #f9f9f9;
+  padding: 1rem;
+  border-radius: 6px;
+}
+
+.announcement-item h3 {
+  margin: 0 0 0.5rem;
+  color: #333;
+}
+
+.default-section ul {
+  list-style: none;
+  padding-left: 0;
+}
+
+.default-section ul li {
+  margin-bottom: 0.75rem;
+}
+
+.default-section ul li a {
+  text-decoration: none;
+  color: #007bff;
+  font-weight: bold;
+}
+
+.default-footer {
+  margin-top: 3rem;
+  font-size: 0.9rem;
+  color: #666;
+  text-align: center;
+  padding: 1rem;
+  border-top: 1px solid #ccc;
 }

@@ -1,0 +1,47 @@
+{
+  "kind": "collectionType",
+  "collectionName": "parents",
+  "info": {
+    "singularName": "parent",
+    "pluralName": "parents",
+    "displayName": "parent"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "firstname": {
+      "type": "string",
+      "required": true
+    },
+    "lastname": {
+      "type": "string",
+      "required": true
+    },
+    "phone_number": {
+      "type": "string",
+      "required": true
+    },
+    "relation": {
+      "type": "string",
+      "required": true
+    },
+    "user": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "plugin::users-permissions.user",
+      "inversedBy": "parent"
+    },
+    "students": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::student.student",
+      "mappedBy": "parent"
+    },
+    "address": {
+      "type": "text",
+      "required": true
+    }
+  }
+}
