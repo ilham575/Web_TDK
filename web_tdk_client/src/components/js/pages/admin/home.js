@@ -17,6 +17,7 @@ function AdminPage() {
     { name: 'Boonmee' },
     { name: 'Chai' }
   ]);
+  const [announcements, setAnnouncements] = useState([]);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -40,6 +41,13 @@ function AdminPage() {
         toast.error('Invalid token or role. Please sign in again.');
         setTimeout(() => navigate('/signin'), 1500);
       });
+
+    const schoolId = localStorage.getItem('school_id');
+    if (!schoolId) return;
+    fetch(`http://127.0.0.1:8000/announcement?school_id=${schoolId}`)
+      .then(res => res.json())
+      .then(data => setAnnouncements(data))
+      .catch(() => setAnnouncements([]));
   }, [navigate]);
 
   const handleSignout = () => {
@@ -69,6 +77,17 @@ function AdminPage() {
           </ul>
         </div>
       </div>
+      <section className="admin-section">
+        <h3>ข่าวสารโรงเรียน</h3>
+        <ul className="announcement-list">
+          {announcements.map(item => (
+            <li key={item.id} className="announcement-item">
+              <strong>{item.title}</strong>
+              <p>{item.content}</p>
+            </li>
+          ))}
+        </ul>
+      </section>
       <button
         onClick={handleSignout}
         className="admin-signout-btn"

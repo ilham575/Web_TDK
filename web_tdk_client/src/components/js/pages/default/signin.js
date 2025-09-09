@@ -146,6 +146,14 @@ function SigninPage() {
           <span> | </span>
           <a href="#">Don't have an account? Sign Up</a>
         </div>
+        <button
+          type="button"
+          className="button-signin"
+          style={{ marginTop: '1rem', background: '#6c757d' }}
+          onClick={() => navigate('/')}
+        >
+          กลับหน้า Home
+        </button>
       </div>
     </div>
   );

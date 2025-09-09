@@ -10,7 +10,7 @@ router = APIRouter()
 
 # Create default admin user in database if not exists
 if not get_user("admin"):
-    add_user("admin", "admin", "admin")
+    add_user("admin", "admin", "admin", "global")
 
 @router.post("/register")
 def register(user: User, current_user: dict = Depends(get_current_user)):
@@ -18,7 +18,7 @@ def register(user: User, current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Only admin can register new users")
     if get_user(user.email):
         raise HTTPException(status_code=400, detail="Email already registered")
-    if not add_user(user.email, user.password, user.role):
+    if not add_user(user.email, user.password, user.role, user.school_id):
         raise HTTPException(status_code=400, detail="Failed to register user")
     return {"message": "User registered successfully"}
 

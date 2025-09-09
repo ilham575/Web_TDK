@@ -12,6 +12,9 @@ function TeacherPage() {
     { name: 'Science' },
     { name: 'English' }
   ]);
+  const [title, setTitle] = useState("");
+  const [content, setContent] = useState("");
+  const [announcements, setAnnouncements] = useState([]);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -37,10 +40,48 @@ function TeacherPage() {
       });
   }, [navigate]);
 
+  useEffect(() => {
+    const schoolId = localStorage.getItem('school_id');
+    if (!schoolId) return;
+    fetch(`http://127.0.0.1:8000/announcement?school_id=${schoolId}`)
+      .then(res => res.json())
+      .then(data => setAnnouncements(data))
+      .catch(() => setAnnouncements([]));
+  }, []);
+
   const handleSignout = () => {
     localStorage.removeItem('token');
     toast.success('Signed out successfully!');
     setTimeout(() => navigate('/signin'), 1000);
+  };
+
+  const handleAnnouncement = async (e) => {
+    e.preventDefault();
+    const token = localStorage.getItem('token');
+    if (!title || !content) {
+      toast.error('กรุณากรอกหัวข้อและเนื้อหา');
+      return;
+    }
+    try {
+      const res = await fetch('http://127.0.0.1:8000/announcement', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ title, content })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.detail || 'ประกาศข่าวไม่สำเร็จ');
+      } else {
+        toast.success('ประกาศข่าวสำเร็จ!');
+        setTitle("");
+        setContent("");
+      }
+    } catch {
+      toast.error('เกิดข้อผิดพลาดในการประกาศข่าว');
+    }
   };
 
   return (
@@ -63,6 +104,34 @@ function TeacherPage() {
           ))}
         </ul>
       </div>
+      <form className="teacher-announcement-form" onSubmit={handleAnnouncement}>
+        <h3>ประกาศข่าว</h3>
+        <input
+          type="text"
+          placeholder="หัวข้อข่าว"
+          value={title}
+          onChange={e => setTitle(e.target.value)}
+          className="teacher-announcement-input"
+        />
+        <textarea
+          placeholder="เนื้อหาข่าว"
+          value={content}
+          onChange={e => setContent(e.target.value)}
+          className="teacher-announcement-textarea"
+        />
+        <button type="submit" className="teacher-announcement-btn">ประกาศข่าว</button>
+      </form>
+      <section className="teacher-section">
+        <h3>ข่าวสารโรงเรียน</h3>
+        <ul className="announcement-list">
+          {announcements.map(item => (
+            <li key={item.id} className="announcement-item">
+              <strong>{item.title}</strong>
+              <p>{item.content}</p>
+            </li>
+          ))}
+        </ul>
+      </section>
     </div>
   );
 }

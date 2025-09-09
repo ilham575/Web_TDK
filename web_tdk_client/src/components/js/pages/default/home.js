@@ -4,16 +4,6 @@ import '../../../css/pages/default/default-home.css';
 
 function DefaultHome() {
   const navigate = useNavigate();
-  const [announcements, setAnnouncements] = useState([]);
-
-  useEffect(() => {
-    fetch('http://127.0.0.1:8000/announcement')
-      .then(res => res.json())
-      .then(data => {
-        setAnnouncements(data);
-      })
-      .catch(() => setAnnouncements([]));
-  }, []);
 
   return (
     <div className="default-container">
@@ -28,23 +18,11 @@ function DefaultHome() {
       </button>
 
       <section className="default-section">
-        <h2>📢 ข่าวสารล่าสุด</h2>
-        <ul className="announcement-list">
-          {announcements.map((item) => (
-            <li key={item.id} className="announcement-item">
-              <h3>{item.title}</h3>
-              <p>{item.content}</p>
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <section className="default-section">
-        <h2>📎 เอกสารทั่วไป</h2>
-        <ul>
-          <li><a href="#">📄 แบบฟอร์มสมัครเรียน</a></li>
-          <li><a href="#">📄 ปฏิทินกิจกรรมปี 2568</a></li>
-        </ul>
+        <h2>🌐 แนะนำเว็บไซต์</h2>
+        <p>
+          เว็บไซต์นี้เป็นระบบสำหรับศูนย์การเรียนรู้แต่ละโรงเรียน<br/>
+          กรุณาเลือกโรงเรียนและเข้าสู่ระบบเพื่อดูข้อมูลข่าวสารและเอกสารเฉพาะของโรงเรียนคุณ
+        </p>
       </section>
 
       <footer className="default-footer">

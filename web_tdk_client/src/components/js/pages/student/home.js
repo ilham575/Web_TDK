@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import '../../../css/pages/student/student-home.css';
 import { ToastContainer, toast } from 'react-toastify';
@@ -14,6 +14,7 @@ const mockSubjects = [
 
 function StudentPage() {
   const navigate = useNavigate();
+  const [announcements, setAnnouncements] = useState([]);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -38,6 +39,15 @@ function StudentPage() {
         setTimeout(() => navigate('/signin'), 1500);
       });
   }, [navigate]);
+
+  useEffect(() => {
+    const schoolId = localStorage.getItem('school_id');
+    if (!schoolId) return;
+    fetch(`http://127.0.0.1:8000/announcement?school_id=${schoolId}`)
+      .then(res => res.json())
+      .then(data => setAnnouncements(data))
+      .catch(() => setAnnouncements([]));
+  }, []);
 
   const handleSignout = () => {
     localStorage.removeItem('token');
@@ -66,6 +76,17 @@ function StudentPage() {
           ))}
         </tbody>
       </table>
+      <section className="student-section">
+        <h3>ข่าวสารโรงเรียน</h3>
+        <ul className="announcement-list">
+          {announcements.map(item => (
+            <li key={item.id} className="announcement-item">
+              <strong>{item.title}</strong>
+              <p>{item.content}</p>
+            </li>
+          ))}
+        </ul>
+      </section>
       <button
         onClick={handleSignout}
         className="student-signout-btn"
