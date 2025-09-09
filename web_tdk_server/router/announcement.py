@@ -1,10 +1,9 @@
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends
 from schema.announcement import Announcement, AnnouncementUpdate
 from database import (create_announcement_table, add_announcement,
                       get_announcements as db_get_announcements,
                       get_all_announcements, update_announcement, delete_announcement)
 from security import get_current_user
-from pydantic import BaseModel
 
 router = APIRouter()
 
@@ -12,14 +11,16 @@ router = APIRouter()
 create_announcement_table()
 
 @router.post("/announcement")
-def create_announcement(announcement: Announcement, school_id: str = Query(...), current_user: dict = Depends(get_current_user)):
+def create_announcement(announcement: Announcement, current_user: dict = Depends(get_current_user)):
     if current_user["role"] not in ["admin", "teacher"]:
         raise HTTPException(status_code=403, detail="Only admin and teacher can create announcements")
+    school_id = current_user["school_id"]
     add_announcement(announcement.title, announcement.content, school_id)
     return {"message": "Announcement created successfully"}
 
 @router.get("/announcement")
-def get_announcements(school_id: str = Query(...)):
+def get_announcements(current_user: dict = Depends(get_current_user)):
+    school_id = current_user["school_id"]
     return db_get_announcements(school_id)
 
 @router.get("/announcement/all")
