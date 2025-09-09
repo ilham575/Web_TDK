@@ -53,3 +53,34 @@ def update_user(email: str, password: Optional[str] = None, role: Optional[str] 
     conn.commit()
     conn.close()
     return True
+
+def create_announcement_table():
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute('''
+    CREATE TABLE IF NOT EXISTS announcements (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        content TEXT NOT NULL
+    )
+    ''')
+    conn.commit()
+    conn.close()
+
+
+def add_announcement(title: str, content: str):
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("INSERT INTO announcements (title, content) VALUES (?, ?)", (title, content))
+    conn.commit()
+    conn.close()
+    return True
+
+
+def get_announcements():
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT id, title, content FROM announcements ORDER BY id DESC")
+    rows = c.fetchall()
+    conn.close()
+    return [{"id": row[0], "title": row[1], "content": row[2]} for row in rows]

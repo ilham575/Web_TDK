@@ -1,23 +1,19 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import '../../../css/pages/default/default-home.css';
 
 function DefaultHome() {
   const navigate = useNavigate();
+  const [announcements, setAnnouncements] = useState([]);
 
-  // Mock ข้อมูลข่าวสาร
-  const announcements = [
-    {
-      id: 1,
-      title: 'เปิดรับสมัครนักเรียนใหม่',
-      content: 'เปิดรับสมัครตั้งแต่วันที่ 1 กันยายน ถึง 30 กันยายน 2568',
-    },
-    {
-      id: 2,
-      title: 'ประกาศวันหยุด',
-      content: 'โรงเรียนหยุดทำการในวันเสาร์ที่ 12 สิงหาคม เนื่องในวันแม่แห่งชาติ',
-    },
-  ];
+  useEffect(() => {
+    fetch('http://127.0.0.1:8000/announcement')
+      .then(res => res.json())
+      .then(data => {
+        setAnnouncements(data);
+      })
+      .catch(() => setAnnouncements([]));
+  }, []);
 
   return (
     <div className="default-container">

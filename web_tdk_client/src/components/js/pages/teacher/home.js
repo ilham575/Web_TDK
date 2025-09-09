@@ -15,11 +15,26 @@ function TeacherPage() {
 
   useEffect(() => {
     const token = localStorage.getItem('token');
-    if (token !== 'dummy-token-teacher') {
-      localStorage.removeItem('token');
-      toast.error('Invalid token or role. Please sign in again.');
-      setTimeout(() => navigate('/signin'), 1500);
+    if (!token) {
+      navigate('/signin');
+      return;
     }
+    fetch('http://127.0.0.1:8000/me', {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.role !== 'teacher') {
+          localStorage.removeItem('token');
+          toast.error('Invalid token or role. Please sign in again.');
+          setTimeout(() => navigate('/signin'), 1500);
+        }
+      })
+      .catch(() => {
+        localStorage.removeItem('token');
+        toast.error('Invalid token or role. Please sign in again.');
+        setTimeout(() => navigate('/signin'), 1500);
+      });
   }, [navigate]);
 
   const handleSignout = () => {
