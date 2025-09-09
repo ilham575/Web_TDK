@@ -17,5 +17,4 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
             detail="Could not validate credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    print("email:", email, "role:", role, "school_id:", school_id)
     return {"email": email, "role": role, "school_id": school_id}

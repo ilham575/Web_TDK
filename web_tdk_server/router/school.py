@@ -13,7 +13,14 @@ router = APIRouter()
 create_school_table()
 
 @router.post("/school", tags=["School"])
-def create_school(school: SchoolCreate):
+def create_school(
+    school: SchoolCreate,
+    current_user: dict = Depends(get_current_user)
+):
+    # ตรวจสอบสิทธิ์เฉพาะ role admin และ school_id เป็น global
+    if current_user["role"] != "admin" or current_user["school_id"] != "global":
+        raise HTTPException(status_code=403, detail="Only global admin can create schools")
+
     # หา school_id ล่าสุดแล้ว +1
     schools = get_schools()
     if schools:
@@ -21,9 +28,11 @@ def create_school(school: SchoolCreate):
         school_id = str(last_id + 1)
     else:
         school_id = "1"
+
     success = add_school(school_id, school.name, school.address, school.phone)
     if not success:
         raise HTTPException(status_code=400, detail="School ID already exists")
+
     return {"message": "School created successfully", "school_id": school_id}
 
 @router.get("/school", tags=["School"])
