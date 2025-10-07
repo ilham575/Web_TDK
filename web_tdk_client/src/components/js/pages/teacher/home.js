@@ -22,7 +22,7 @@ function TeacherPage() {
       navigate('/signin');
       return;
     }
-    fetch('http://127.0.0.1:8000/me', {
+    fetch('http://127.0.0.1:8000/users/me', {
       headers: { Authorization: `Bearer ${token}` }
     })
       .then(res => res.json())
@@ -31,6 +31,11 @@ function TeacherPage() {
           localStorage.removeItem('token');
           toast.error('Invalid token or role. Please sign in again.');
           setTimeout(() => navigate('/signin'), 1500);
+        } else {
+          // เพิ่มบรรทัดนี้
+          if (data.school_id) {
+            localStorage.setItem('school_id', data.school_id);
+          }
         }
       })
       .catch(() => {
@@ -58,18 +63,23 @@ function TeacherPage() {
   const handleAnnouncement = async (e) => {
     e.preventDefault();
     const token = localStorage.getItem('token');
+    const schoolId = localStorage.getItem('school_id');
     if (!title || !content) {
       toast.error('กรุณากรอกหัวข้อและเนื้อหา');
       return;
     }
+    if (!schoolId) {
+      toast.error('ไม่พบโรงเรียน');
+      return;
+    }
     try {
-      const res = await fetch('http://127.0.0.1:8000/announcement', {
+      const res = await fetch('http://127.0.0.1:8000/announcements/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ title, content })
+        body: JSON.stringify({ title, content, school_id: Number(schoolId) })
       });
       const data = await res.json();
       if (!res.ok) {

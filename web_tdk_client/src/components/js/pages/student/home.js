@@ -22,7 +22,7 @@ function StudentPage() {
       navigate('/signin');
       return;
     }
-    fetch('http://127.0.0.1:8000/me', {
+    fetch('http://127.0.0.1:8000/users/me', {
       headers: { Authorization: `Bearer ${token}` }
     })
       .then(res => res.json())
@@ -43,12 +43,13 @@ function StudentPage() {
   useEffect(() => {
     const schoolId = localStorage.getItem('school_id');
     if (!schoolId) return;
-    fetch(`http://127.0.0.1:8000/announcement?school_id=${schoolId}`)
+    fetch(`http://127.0.0.1:8000/announcements/?school_id=${schoolId}`)
       .then(res => res.json())
       .then(data => setAnnouncements(data))
       .catch(() => setAnnouncements([]));
   }, []);
 
+  console.log(announcements);
   const handleSignout = () => {
     localStorage.removeItem('token');
     navigate('/signin', { state: { signedOut: true } });
@@ -77,14 +78,30 @@ function StudentPage() {
         </tbody>
       </table>
       <section className="student-section">
-        <h3>ข่าวสารโรงเรียน</h3>
-        <ul className="announcement-list">
-          {announcements.map(item => (
-            <li key={item.id} className="announcement-item">
-              <strong>{item.title}</strong>
-              <p>{item.content}</p>
+        <h3 className="announcement-header">
+          <span role="img" aria-label="announcement" className="announcement-icon">📢</span>
+          ข่าวสารโรงเรียน
+        </h3>
+        <ul className="announcement-list enhanced-announcement-list">
+          {announcements.length === 0 ? (
+            <li style={{ textAlign: 'center', color: '#888', fontStyle: 'italic', padding: '1.5rem 0' }}>
+              ไม่มีข้อมูลข่าวสาร
             </li>
-          ))}
+          ) : (
+            announcements.map(item => (
+              <li key={item.id} className="announcement-item enhanced-announcement-item">
+                <div className="announcement-card">
+                  <div className="announcement-card-header">
+                    <span className="announcement-card-title">{item.title}</span>
+                    <span className="announcement-card-date">
+                      {item.created_at ? new Date(item.created_at).toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' }) : ''}
+                    </span>
+                  </div>
+                  <p className="announcement-card-content">{item.content}</p>
+                </div>
+              </li>
+            ))
+          )}
         </ul>
       </section>
       <button

@@ -1,14 +1,38 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from fastapi.security import OAuth2PasswordBearer
+from fastapi.middleware.cors import CORSMiddleware
+from routers.user import router as user_router
+from routers.school import router as school_router
+from routers.announcement import router as announcement_router
 
-# สร้าง instance ของ FastAPI
-app = FastAPI()
+# import ฟังก์ชันสร้างตาราง
+from database.connection import create_all_tables
 
-# สร้าง endpoint สำหรับ root ("/")
-@app.get("/")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    print("Creating database tables...")
+    create_all_tables()
+    print("Database tables created successfully!")
+    yield
+
+app = FastAPI(lifespan=lifespan)
+
+# เพิ่ม CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],  # หรือ ["*"] สำหรับทุก origin (ไม่แนะนำ production)
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/users/login")
+
+app.include_router(user_router)
+app.include_router(school_router)
+app.include_router(announcement_router)
+
+@app.get("/", tags=["root"])
 def read_root():
     return {"message": "Hello, FastAPI!"}
-
-# สร้าง endpoint สำหรับ items
-@app.get("/items/{item_id}")
-def read_item(item_id: int, q: str = None):
-    return {"item_id": item_id, "query": q}

@@ -26,7 +26,7 @@ function DefaultHome() {
       </section>
 
       <footer className="default-footer">
-        <p>ติดต่อ: 089-xxxxxxx | Facebook: ศูนย์การเรียนรู้มัสยิด | ที่ตั้ง: ปัตตานี</p>
+        <p>ติดต่อ: 089-xxxxxxx | Facebook: ศูนย์การเรียนรู้มัสยิด | ที่ตั้ง: ***</p>
       </footer>
     </div>
   );

@@ -61,7 +61,7 @@ function SigninPage() {
     }
 
     try {
-      const res = await fetch('http://127.0.0.1:8000/login', {
+      const res = await fetch('http://127.0.0.1:8000/users/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
@@ -79,9 +79,10 @@ function SigninPage() {
         });
       } else {
         localStorage.setItem('token', data.access_token);
-        if (data.role === 'student') navigate('/student');
-        else if (data.role === 'teacher') navigate('/teacher');
-        else if (data.role === 'admin') {
+        // เปลี่ยนจาก data.role เป็น data.user_info.role
+        if (data.user_info?.role === 'student') navigate('/student');
+        else if (data.user_info?.role === 'teacher') navigate('/teacher');
+        else if (data.user_info?.role === 'admin') {
           navigate('/admin');
         }
         toast.success('Sign in successful!', {
