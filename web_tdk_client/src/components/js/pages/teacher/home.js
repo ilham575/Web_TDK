@@ -48,9 +48,15 @@ function TeacherPage() {
   useEffect(() => {
     const schoolId = localStorage.getItem('school_id');
     if (!schoolId) return;
-    fetch(`http://127.0.0.1:8000/announcement?school_id=${schoolId}`)
+      fetch(`http://127.0.0.1:8000/announcements/?school_id=${schoolId}`)
       .then(res => res.json())
-      .then(data => setAnnouncements(data))
+      .then(data => {
+        if (Array.isArray(data)) {
+          setAnnouncements(data);
+        } else {
+          setAnnouncements([]);
+        }
+      })
       .catch(() => setAnnouncements([]));
   }, []);
 
@@ -134,7 +140,7 @@ function TeacherPage() {
       <section className="teacher-section">
         <h3>ข่าวสารโรงเรียน</h3>
         <ul className="announcement-list">
-          {announcements.map(item => (
+          {(Array.isArray(announcements) ? announcements : []).map(item => (
             <li key={item.id} className="announcement-item">
               <strong>{item.title}</strong>
               <p>{item.content}</p>
