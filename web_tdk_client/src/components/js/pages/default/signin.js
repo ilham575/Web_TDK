@@ -143,9 +143,9 @@ function SigninPage() {
           </button>
         </form>
         <div className="signin-links">
-          <a href="#">Forgot Password?</a>
+          <button type="button" onClick={() => navigate('/forgot')} style={{ background: 'none', border: 'none', color: '#1976d2', cursor: 'pointer' }}>Forgot Password?</button>
           <span> | </span>
-          <a href="#">Don't have an account? Sign Up</a>
+          <button type="button" onClick={() => navigate('/signup')} style={{ background: 'none', border: 'none', color: '#1976d2', cursor: 'pointer' }}>Don't have an account? Sign Up</button>
         </div>
         <button
           type="button"

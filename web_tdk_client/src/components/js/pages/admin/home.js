@@ -11,6 +11,7 @@ function AdminPage() {
   const [students, setStudents] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [usersError, setUsersError] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
   const [announcements, setAnnouncements] = useState([]);
   // create user form state
   const [newUsername, setNewUsername] = useState('');
@@ -38,6 +39,7 @@ function AdminPage() {
           setTimeout(() => navigate('/signin'), 1500);
         }
         else {
+          setCurrentUser(data);
           if (data.school_id) {
             localStorage.setItem('school_id', data.school_id);
           }
@@ -48,10 +50,13 @@ function AdminPage() {
         toast.error('Invalid token or role. Please sign in again.');
         setTimeout(() => navigate('/signin'), 1500);
       });
+    
+  }, [navigate]);
 
-    // fetch users for this school
-    const schoolId = localStorage.getItem('school_id');
-    if (!schoolId) return;
+  // When currentUser is available, fetch users and announcements for the user's school
+  useEffect(() => {
+    if (!currentUser || !currentUser.school_id) return;
+    const schoolId = currentUser.school_id;
     setLoadingUsers(true);
     fetch(`http://127.0.0.1:8000/users?limit=200`)
       .then(res => res.json())
@@ -61,6 +66,7 @@ function AdminPage() {
           const studentsData = data.filter(u => u.role === 'student' && String(u.school_id) === String(schoolId));
           setTeachers(teachersData);
           setStudents(studentsData);
+          // subjects are shown on the teacher detail page; no need to fetch here
         } else {
           setTeachers([]);
           setStudents([]);
@@ -74,7 +80,7 @@ function AdminPage() {
       })
       .finally(() => setLoadingUsers(false));
 
-  fetch(`http://127.0.0.1:8000/announcements/?school_id=${schoolId}`)
+    fetch(`http://127.0.0.1:8000/announcements/?school_id=${schoolId}`)
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) {
@@ -84,7 +90,7 @@ function AdminPage() {
         }
       })
       .catch(() => setAnnouncements([]));
-  }, [navigate]);
+  }, [currentUser]);
 
   const handleCreateUser = async (e) => {
     e.preventDefault();
@@ -135,6 +141,53 @@ function AdminPage() {
     }
   };
 
+  // bulk upload handlers
+  const [uploading, setUploading] = useState(false);
+  const [uploadFile, setUploadFile] = useState(null);
+
+  const handleFileChange = (e) => {
+    const f = e.target.files && e.target.files[0];
+    setUploadFile(f || null);
+  };
+
+  const handleUpload = async () => {
+    if (!uploadFile) { toast.error('Please select an Excel (.xlsx) file first'); return; }
+    const token = localStorage.getItem('token');
+    const form = new FormData();
+    form.append('file', uploadFile);
+    setUploading(true);
+    try {
+      const res = await fetch('http://127.0.0.1:8000/users/bulk_upload', {
+        method: 'POST',
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: form
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.detail || 'Upload failed');
+      } else {
+        const created = data.created_count || 0;
+        const errCount = (data.errors && data.errors.length) || 0;
+        toast.success(`Upload finished: ${created} created, ${errCount} errors`);
+        // optionally refresh users list
+        if (currentUser) {
+          // trigger refetch by setting currentUser (no-op) to re-run effect
+          setCurrentUser({ ...currentUser });
+        }
+      }
+    } catch (err) {
+      console.error('upload error', err);
+      toast.error('Upload failed');
+    } finally {
+      setUploading(false);
+      setUploadFile(null);
+      // clear file input DOM value
+      const inp = document.getElementById('bulk-upload-input'); if (inp) inp.value = '';
+    }
+  };
+
   const handleSignout = () => {
     localStorage.removeItem('token');
     navigate('/signin', { state: { signedOut: true } });
@@ -164,16 +217,26 @@ function AdminPage() {
     }
   };
 
+  // Note: subject management moved to TeacherDetail page; no per-teacher subjects shown here.
+
   return (
     <div className="admin-container">
       <ToastContainer />
-      <h2 className="admin-title">Welcome, Admin!</h2>
+  <h2 className="admin-title">{`Welcome, ${currentUser ? (currentUser.full_name || currentUser.username) : 'Admin'}!`}</h2>
       <div className="admin-lists-container">
         <div className="admin-list">
           <h3 className="admin-list-title">Teachers</h3>
           <ul className="admin-ul">
             {teachers.map((teacher, idx) => (
-              <li key={teacher.id || idx} className="admin-li">{teacher.full_name || teacher.username}</li>
+              <li key={teacher.id || idx} className="admin-li">
+                <div style={{display:'flex', alignItems:'center', justifyContent:'space-between'}}>
+                  <span>{teacher.full_name || teacher.username}</span>
+                  <div>
+                    <button className="small-btn" onClick={() => navigate(`/admin/teacher/${teacher.id}`)}>See Teacher</button>
+                  </div>
+                </div>
+                {/* subjects moved to teacher detail page - no chips here */}
+              </li>
             ))}
           </ul>
         </div>
@@ -186,34 +249,37 @@ function AdminPage() {
           </ul>
         </div>
       </div>
-      <div style={{display: 'flex', gap: '0.75rem', alignItems: 'center', justifyContent: 'center', marginTop: '1rem'}}>
-        <button className="create-user-btn" onClick={() => setShowModal(true)}>Create User</button>
-      </div>
-
-      {showModal && (
-        <div className="modal-overlay" onMouseDown={() => setShowModal(false)}>
-          <div className="modal" role="dialog" aria-modal="true" onMouseDown={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>สร้างผู้ใช้ใหม่</h3>
-              <button className="modal-close" onClick={() => setShowModal(false)} aria-label="Close">×</button>
-            </div>
-            <form className="modal-body" onSubmit={(e) => { handleCreateUser(e); }}>
-              <input className="user-input" placeholder="Username" value={newUsername} onChange={e => setNewUsername(e.target.value)} autoFocus />
-              <input className="user-input" placeholder="Email" type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} />
-              <input className="user-input" placeholder="Full name" value={newFullName} onChange={e => setNewFullName(e.target.value)} />
-              <input className="user-input" placeholder="Password" type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} />
-              <select className="user-select" value={newRole} onChange={e => setNewRole(e.target.value)}>
-                <option value="teacher">Teacher</option>
-                <option value="student">Student</option>
-              </select>
-              <div className="modal-footer">
-                <button type="button" className="btn-cancel" onClick={() => setShowModal(false)}>Cancel</button>
-                <button className="user-submit" type="submit" disabled={creatingUser}>{creatingUser ? 'กำลังสร้าง...' : 'Create'}</button>
-              </div>
-            </form>
-          </div>
+      <div style={{marginTop:'1rem', textAlign:'center'}}>
+        <label style={{display:'block', marginBottom:'0.5rem'}}>Or bulk upload users (.xlsx)</label>
+        <div style={{display:'flex', gap:'0.5rem', alignItems:'center', justifyContent:'center'}}>
+          <input id="bulk-upload-input" type="file" accept=".xlsx" onChange={handleFileChange} />
+          <button className="create-user-btn" onClick={handleUpload} disabled={uploading}>{uploading ? 'Uploading...' : 'Upload Excel'}</button>
+          <button className="create-user-btn" style={{background:'#6c757d'}} onClick={async () => {
+            const token = localStorage.getItem('token');
+            try {
+              const res = await fetch('http://127.0.0.1:8000/users/bulk_template', { headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+              if (!res.ok) {
+                let err = null;
+                try { err = await res.json(); } catch (e) {}
+                toast.error((err && err.detail) ? err.detail : 'Failed to download template');
+                return;
+              }
+              const blob = await res.blob();
+              const url = window.URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = 'user_bulk_template.xlsx';
+              document.body.appendChild(a);
+              a.click();
+              a.remove();
+              window.URL.revokeObjectURL(url);
+            } catch (err) {
+              console.error('download template error', err);
+              toast.error('Download failed');
+            }
+          }}>Download template</button>
         </div>
-      )}
+      </div>
       {/* Dashboard stats */}
       <div className="dashboard-grid">
         <div className="stats-card">

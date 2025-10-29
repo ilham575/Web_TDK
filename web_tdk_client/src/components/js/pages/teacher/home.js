@@ -6,18 +6,16 @@ import 'react-toastify/dist/ReactToastify.css';
 
 function TeacherPage() {
   const navigate = useNavigate();
-  // Mock subjects data
-  const [subjects] = useState([
-    { name: 'Mathematics' },
-    { name: 'Science' },
-    { name: 'English' }
-  ]);
+  const [teacherSubjects, setTeacherSubjects] = useState([]);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [showSubjectModal, setShowSubjectModal] = useState(false);
+  const [newSubjectName, setNewSubjectName] = useState('');
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [announcements, setAnnouncements] = useState([]);
 
   const stats = {
-    subjects: subjects.length,
+    subjects: teacherSubjects.length,
     announcements: 0
   };
 
@@ -41,6 +39,7 @@ function TeacherPage() {
           if (data.school_id) {
             localStorage.setItem('school_id', data.school_id);
           }
+          setCurrentUser(data);
         }
       })
       .catch(() => {
@@ -65,6 +64,21 @@ function TeacherPage() {
       })
       .catch(() => setAnnouncements([]));
   }, []);
+
+  useEffect(() => {
+    const fetchTeacherSubjects = async () => {
+      if (!currentUser) return;
+      try {
+        const res = await fetch(`http://127.0.0.1:8000/subjects/teacher/${currentUser.id}`);
+        const data = await res.json();
+        if (Array.isArray(data)) setTeacherSubjects(data);
+        else setTeacherSubjects([]);
+      } catch (err) {
+        setTeacherSubjects([]);
+      }
+    };
+    fetchTeacherSubjects();
+  }, [currentUser]);
 
   const handleSignout = () => {
     localStorage.removeItem('token');
@@ -132,6 +146,34 @@ function TeacherPage() {
     }
   };
 
+  const openAddSubject = () => setShowSubjectModal(true);
+
+  const handleAddSubject = async (e) => {
+    e.preventDefault();
+    if (!newSubjectName) { toast.error('กรุณากรอกชื่อรายวิชา'); return; }
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch('http://127.0.0.1:8000/subjects/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ name: newSubjectName })
+      });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.detail || 'ไม่สามารถเพิ่มรายวิชา'); }
+      else { toast.success('เพิ่มรายวิชาเรียบร้อย'); setTeacherSubjects(prev => [data, ...prev]); setShowSubjectModal(false); setNewSubjectName(''); }
+    } catch (err) { console.error(err); toast.error('เกิดข้อผิดพลาด'); }
+  };
+
+  const handleDeleteSubject = async (id) => {
+    if (!window.confirm('ต้องการลบรายวิชานี้ใช่หรือไม่?')) return;
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/subjects/${id}`, { method: 'DELETE', headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+      if (res.status === 204 || res.ok) { setTeacherSubjects(prev => prev.filter(s => s.id !== id)); toast.success('ลบรายวิชาเรียบร้อย'); }
+      else { const data = await res.json(); toast.error(data.detail || 'ลบไม่สำเร็จ'); }
+    } catch { toast.error('เกิดข้อผิดพลาด'); }
+  };
+
   return (
     <div className="teacher-container">
       <ToastContainer />
@@ -146,12 +188,37 @@ function TeacherPage() {
       </button>
       <div className="teacher-subjects-container">
         <h3 className="teacher-subjects-title">Your Subjects</h3>
+        <button className="teacher-add-subject-btn" onClick={openAddSubject}>Add Subject</button>
         <ul className="teacher-subjects-list">
-          {subjects.map((subject, idx) => (
-            <li key={idx} className="teacher-subject-item">{subject.name}</li>
+          {(Array.isArray(teacherSubjects) ? teacherSubjects : []).map((subject) => (
+            <li key={subject.id} className="teacher-subject-item">
+              <span>{subject.name}</span>
+              <button className="teacher-subject-delete" onClick={() => handleDeleteSubject(subject.id)}>ลบ</button>
+            </li>
           ))}
         </ul>
       </div>
+
+      {showSubjectModal && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <h3>เพิ่มรายวิชา</h3>
+            <form onSubmit={handleAddSubject}>
+              <input
+                type="text"
+                placeholder="ชื่อรายวิชา"
+                value={newSubjectName}
+                onChange={e => setNewSubjectName(e.target.value)}
+                className="modal-input"
+              />
+              <div className="modal-actions">
+                <button type="submit" className="modal-btn">เพิ่ม</button>
+                <button type="button" className="modal-btn modal-cancel" onClick={() => setShowSubjectModal(false)}>ยกเลิก</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
       <form className="teacher-announcement-form" onSubmit={handleAnnouncement}>
         <h3>ประกาศข่าว</h3>
         <input

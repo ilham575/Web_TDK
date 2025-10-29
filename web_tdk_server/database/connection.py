@@ -35,5 +35,5 @@ def table_exists(table_name):
 
 def create_all_tables():
     # Import models to register them with Base
-    from models import user, school, announcement, document
+    from models import user, school, announcement, document, subject
     Base.metadata.create_all(bind=engine)
