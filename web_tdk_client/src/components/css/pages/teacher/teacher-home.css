@@ -92,3 +92,64 @@
 .teacher-announcement-btn:hover {
   background: #218838;
 }
+
+/* Announcement card styles */
+.announcement-list {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0 0 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+.announcement-item {
+  margin: 0;
+}
+.announcement-card {
+  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+  border: 1px solid #e6eef8;
+  border-radius: 12px;
+  padding: 1rem;
+  box-shadow: 0 6px 18px rgba(13,38,59,0.06);
+  text-align: left;
+}
+.announcement-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+.announcement-card-title {
+  font-weight: 700;
+  color: #0b5ed7;
+  font-size: 1.05rem;
+}
+.announcement-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.announcement-card-date {
+  font-size: 0.85rem;
+  color: #6c757d;
+}
+.announcement-card-content {
+  color: #343a40;
+  line-height: 1.45;
+  margin-top: 0.25rem;
+  white-space: pre-wrap;
+}
+.announcement-delete-btn {
+  background: #ff4d4f;
+  border: none;
+  color: #fff;
+  padding: 0.35rem 0.6rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.announcement-delete-btn:hover {
+  background: #d93636;
+}

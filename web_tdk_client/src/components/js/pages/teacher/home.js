@@ -100,6 +100,32 @@ function TeacherPage() {
     }
   };
 
+  const deleteAnnouncement = async (id) => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      toast.error('กรุณาเข้าสู่ระบบเพื่อดำเนินการ');
+      return;
+    }
+    if (!window.confirm('ต้องการลบข่าวนี้ใช่หรือไม่?')) return;
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/announcements/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (res.status === 204 || res.ok) {
+        toast.success('ลบข่าวเรียบร้อย');
+        setAnnouncements(prev => Array.isArray(prev) ? prev.filter(a => a.id !== id) : []);
+      } else {
+        const data = await res.json();
+        toast.error(data.detail || 'ลบข่าวไม่สำเร็จ');
+      }
+    } catch (err) {
+      toast.error('เกิดข้อผิดพลาดในการลบข่าว');
+    }
+  };
+
   return (
     <div className="teacher-container">
       <ToastContainer />
@@ -142,8 +168,23 @@ function TeacherPage() {
         <ul className="announcement-list">
           {(Array.isArray(announcements) ? announcements : []).map(item => (
             <li key={item.id} className="announcement-item">
-              <strong>{item.title}</strong>
-              <p>{item.content}</p>
+              <div className="announcement-card">
+                <div className="announcement-card-header">
+                  <div className="announcement-card-title">{item.title}</div>
+                  <div className="announcement-card-actions">
+                    <div className="announcement-card-date">{item.created_at ? new Date(item.created_at).toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' }) : ''}</div>
+                    <button
+                      type="button"
+                      className="announcement-delete-btn"
+                      onClick={() => deleteAnnouncement(item.id)}
+                      title="ลบข่าว"
+                    >
+                      ลบ
+                    </button>
+                  </div>
+                </div>
+                <div className="announcement-card-content">{item.content}</div>
+              </div>
             </li>
           ))}
         </ul>
