@@ -54,3 +54,40 @@
 .admin-signout-btn-hover {
   background: #b52a37 !important;
 }
+
+/* Dashboard shared styles */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+.stats-card {
+  background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
+  border: 1px solid #e6eef8;
+  border-radius: 12px;
+  padding: 0.9rem 1rem;
+  box-shadow: 0 6px 18px rgba(13,38,59,0.04);
+  text-align: center;
+}
+.stats-value {
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: #0b5ed7;
+}
+.stats-label {
+  font-size: 0.9rem;
+  color: #6c757d;
+  margin-top: 0.25rem;
+}
+
+/* reuse announcement card styles similar to student/teacher */
+.announcement-list { list-style:none; padding:0; margin:0; }
+.announcement-item { margin-bottom: 1rem; }
+.announcement-card { background:#fff; border-radius:12px; padding:1rem; box-shadow:0 6px 18px rgba(13,38,59,0.06); text-align:left; }
+.announcement-card-header { display:flex; justify-content:space-between; align-items:center; gap:0.5rem; margin-bottom:0.5rem; }
+.announcement-card-title { font-weight:700; color:#0b5ed7; }
+.announcement-card-date { font-size:0.85rem; color:#6c757d; }
+.announcement-card-content { color:#343a40; line-height:1.45; }
+.announcement-delete-btn { background:#ff4d4f; border:none; color:#fff; padding:0.35rem 0.6rem; border-radius:8px; cursor:pointer; font-size:0.9rem; font-weight:600; }
+.announcement-delete-btn:hover { background:#d93636; }

@@ -153,3 +153,29 @@
 .announcement-delete-btn:hover {
   background: #d93636;
 }
+
+/* Stats cards for dashboard */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+.stats-card {
+  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+  border: 1px solid #e6eef8;
+  border-radius: 12px;
+  padding: 0.9rem 1rem;
+  box-shadow: 0 6px 18px rgba(13,38,59,0.04);
+  text-align: center;
+}
+.stats-value {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: #0b5ed7;
+}
+.stats-label {
+  font-size: 0.9rem;
+  color: #6c757d;
+  margin-top: 0.25rem;
+}

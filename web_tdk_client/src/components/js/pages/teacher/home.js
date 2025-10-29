@@ -16,6 +16,11 @@ function TeacherPage() {
   const [content, setContent] = useState("");
   const [announcements, setAnnouncements] = useState([]);
 
+  const stats = {
+    subjects: subjects.length,
+    announcements: 0
+  };
+
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) {
@@ -53,6 +58,7 @@ function TeacherPage() {
       .then(data => {
         if (Array.isArray(data)) {
           setAnnouncements(data);
+          stats.announcements = data.length;
         } else {
           setAnnouncements([]);
         }

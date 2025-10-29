@@ -163,3 +163,21 @@
     padding: 0.7rem 0.5rem;
   }
 }
+
+/* Dashboard stats */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+.stats-card {
+  background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
+  border: 1px solid #e6eef8;
+  border-radius: 12px;
+  padding: 0.8rem 1rem;
+  box-shadow: 0 6px 18px rgba(13,38,59,0.04);
+  text-align: center;
+}
+.stats-value { font-size:1.4rem; font-weight:800; color:#1976d2; }
+.stats-label { font-size:0.9rem; color:#6c757d; margin-top:0.25rem; }

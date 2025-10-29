@@ -16,6 +16,11 @@ function StudentPage() {
   const navigate = useNavigate();
   const [announcements, setAnnouncements] = useState([]);
 
+  const stats = {
+    subjects: mockSubjects.length,
+    announcements: 0
+  };
+
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) {
@@ -45,7 +50,14 @@ function StudentPage() {
     if (!schoolId) return;
     fetch(`http://127.0.0.1:8000/announcements/?school_id=${schoolId}`)
       .then(res => res.json())
-      .then(data => setAnnouncements(data))
+      .then(data => {
+        if (Array.isArray(data)) {
+          setAnnouncements(data);
+          stats.announcements = data.length;
+        } else {
+          setAnnouncements([]);
+        }
+      })
       .catch(() => setAnnouncements([]));
   }, []);
 
@@ -59,6 +71,16 @@ function StudentPage() {
     <div className="student-container">
       <ToastContainer />
       <h2 className="student-title">Welcome, Student!</h2>
+      <div className="dashboard-grid">
+        <div className="stats-card">
+          <div className="stats-value">{stats.subjects}</div>
+          <div className="stats-label">Subjects</div>
+        </div>
+        <div className="stats-card">
+          <div className="stats-value">{announcements.length}</div>
+          <div className="stats-label">Announcements</div>
+        </div>
+      </div>
       <table className="student-subject-table">
         <thead>
           <tr>
