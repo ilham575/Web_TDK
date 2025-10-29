@@ -12,6 +12,14 @@ function AdminPage() {
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [usersError, setUsersError] = useState(null);
   const [announcements, setAnnouncements] = useState([]);
+  // create user form state
+  const [newUsername, setNewUsername] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+  const [newFullName, setNewFullName] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [newRole, setNewRole] = useState('teacher');
+  const [creatingUser, setCreatingUser] = useState(false);
+  const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -78,6 +86,55 @@ function AdminPage() {
       .catch(() => setAnnouncements([]));
   }, [navigate]);
 
+  const handleCreateUser = async (e) => {
+    e.preventDefault();
+    const schoolId = localStorage.getItem('school_id');
+    if (!schoolId) {
+      toast.error('ไม่พบ school_id ของ admin');
+      return;
+    }
+    if (!newUsername || !newEmail || !newFullName || !newPassword) {
+      toast.error('กรุณากรอกข้อมูลให้ครบทุกช่อง');
+      return;
+    }
+    setCreatingUser(true);
+    try {
+      const token = localStorage.getItem('token');
+      const body = {
+        username: newUsername,
+        email: newEmail,
+        full_name: newFullName,
+        password: newPassword,
+        role: newRole,
+        school_id: Number(schoolId)
+      };
+      const res = await fetch('http://127.0.0.1:8000/users', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.detail || 'สร้างผู้ใช้ไม่สำเร็จ');
+      } else {
+        toast.success('สร้างผู้ใช้เรียบร้อย');
+        // add to state lists
+        if (data.role === 'teacher') setTeachers(prev => [data, ...prev]);
+        else if (data.role === 'student') setStudents(prev => [data, ...prev]);
+        // clear form
+        setNewUsername(''); setNewEmail(''); setNewFullName(''); setNewPassword(''); setNewRole('teacher');
+      }
+    } catch (err) {
+      console.error('create user error', err);
+      toast.error('เกิดข้อผิดพลาดขณะสร้างผู้ใช้');
+    } finally {
+      setCreatingUser(false);
+    }
+  };
+
   const handleSignout = () => {
     localStorage.removeItem('token');
     navigate('/signin', { state: { signedOut: true } });
@@ -129,6 +186,34 @@ function AdminPage() {
           </ul>
         </div>
       </div>
+      <div style={{display: 'flex', gap: '0.75rem', alignItems: 'center', justifyContent: 'center', marginTop: '1rem'}}>
+        <button className="create-user-btn" onClick={() => setShowModal(true)}>Create User</button>
+      </div>
+
+      {showModal && (
+        <div className="modal-overlay" onMouseDown={() => setShowModal(false)}>
+          <div className="modal" role="dialog" aria-modal="true" onMouseDown={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>สร้างผู้ใช้ใหม่</h3>
+              <button className="modal-close" onClick={() => setShowModal(false)} aria-label="Close">×</button>
+            </div>
+            <form className="modal-body" onSubmit={(e) => { handleCreateUser(e); }}>
+              <input className="user-input" placeholder="Username" value={newUsername} onChange={e => setNewUsername(e.target.value)} autoFocus />
+              <input className="user-input" placeholder="Email" type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} />
+              <input className="user-input" placeholder="Full name" value={newFullName} onChange={e => setNewFullName(e.target.value)} />
+              <input className="user-input" placeholder="Password" type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} />
+              <select className="user-select" value={newRole} onChange={e => setNewRole(e.target.value)}>
+                <option value="teacher">Teacher</option>
+                <option value="student">Student</option>
+              </select>
+              <div className="modal-footer">
+                <button type="button" className="btn-cancel" onClick={() => setShowModal(false)}>Cancel</button>
+                <button className="user-submit" type="submit" disabled={creatingUser}>{creatingUser ? 'กำลังสร้าง...' : 'Create'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
       {/* Dashboard stats */}
       <div className="dashboard-grid">
         <div className="stats-card">
