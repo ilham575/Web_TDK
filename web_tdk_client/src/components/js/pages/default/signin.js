@@ -61,29 +61,28 @@ function SigninPage() {
     }
 
     try {
-      // Mock authentication
-      await new Promise(resolve => setTimeout(resolve, 500));
-      const user = mockUsers.find(
-        u => u.email === email && u.password === password
-      );
-      if (!user) {
-        setError('Invalid email or password');
-        toast.error('Invalid email or password', {
+      const res = await fetch('http://127.0.0.1:8000/users/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          username: email,
+          password: password
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.detail || 'Invalid email or password');
+        toast.error(data.detail || 'Invalid email or password', {
           position: "top-center",
           hideProgressBar: false,
           theme: "colored"
         });
       } else {
-        // สร้าง token ปลอมและเก็บใน localStorage
-        // Redirect by role
-        if (user.role === 'student') {
-          localStorage.setItem('token', 'dummy-token-student');
-          navigate('/student');
-        } else if (user.role === 'teacher') {
-          localStorage.setItem('token', 'dummy-token-teacher');
-          navigate('/teacher');
-        } else if (user.role === 'admin') {
-          localStorage.setItem('token', 'dummy-token-admin');
+        localStorage.setItem('token', data.access_token);
+        // เปลี่ยนจาก data.role เป็น data.user_info.role
+        if (data.user_info?.role === 'student') navigate('/student');
+        else if (data.user_info?.role === 'teacher') navigate('/teacher');
+        else if (data.user_info?.role === 'admin') {
           navigate('/admin');
         }
         toast.success('Sign in successful!', {
@@ -119,7 +118,7 @@ function SigninPage() {
           <div className="form-group">
             <label htmlFor="email">Email:</label>
             <input
-              type="email"
+              type="string"
               id="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
@@ -144,10 +143,18 @@ function SigninPage() {
           </button>
         </form>
         <div className="signin-links">
-          <a href="#">Forgot Password?</a>
+          <button type="button" onClick={() => navigate('/forgot')} style={{ background: 'none', border: 'none', color: '#1976d2', cursor: 'pointer' }}>Forgot Password?</button>
           <span> | </span>
-          <a href="#">Don't have an account? Sign Up</a>
+          <button type="button" onClick={() => navigate('/signup')} style={{ background: 'none', border: 'none', color: '#1976d2', cursor: 'pointer' }}>Don't have an account? Sign Up</button>
         </div>
+        <button
+          type="button"
+          className="button-signin"
+          style={{ marginTop: '1rem', background: '#6c757d' }}
+          onClick={() => navigate('/')}
+        >
+          กลับหน้า Home
+        </button>
       </div>
     </div>
   );

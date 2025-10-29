@@ -2,9 +2,13 @@ import React from 'react';
 import './App.css';
 import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import SigninPage from './components/js/pages/default/signin';
+import SignupPage from './components/js/pages/default/signup';
+import ForgotPage from './components/js/pages/default/forgot';
+import ResetPasswordPage from './components/js/pages/default/reset-password';
 import StudentPage from './components/js/pages/student/home';
 import TeacherPage from './components/js/pages/teacher/home';
 import AdminPage from './components/js/pages/admin/home';
+import TeacherDetail from './components/js/pages/admin/teacherDetail';
 import DefaultHome from './components/js/pages/default/home';
 
 // ฟังก์ชั่นตรวจสอบ login
@@ -60,7 +64,18 @@ function App() {
             </RequireAuth>
           }
         />
+        <Route
+          path="/admin/teacher/:id"
+          element={
+            <RequireAuth>
+              <TeacherDetail />
+            </RequireAuth>
+          }
+        />
         <Route path="/signin" element={<SigninPage />} />
+        <Route path="/signup" element={<SignupPage />} />
+        <Route path="/forgot" element={<ForgotPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
       </Routes>
     </BrowserRouter>
   );

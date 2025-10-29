@@ -39,6 +39,27 @@
   background: #f1f3f4;
   font-size: 1.05rem;
 }
+.small-btn {
+  background: transparent;
+  border: 1px solid #e6eef8;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.small-btn:hover { background: #eef6ff; }
+/* Subject chip */
+.subject-chip {
+  display:flex;
+  align-items:center;
+  gap:0.4rem;
+  background:#fff;
+  border:1px solid #e6eef8;
+  padding:0.35rem 0.6rem;
+  border-radius:999px;
+  font-size:0.9rem;
+}
+.subject-chip span { color:#0b5ed7; font-weight:600; }
 .admin-signout-btn {
   margin-top: 2rem;
   padding: 0.5rem 1.5rem;
@@ -53,4 +74,122 @@
 }
 .admin-signout-btn-hover {
   background: #b52a37 !important;
+}
+
+/* Dashboard shared styles */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+.stats-card {
+  background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
+  border: 1px solid #e6eef8;
+  border-radius: 12px;
+  padding: 0.9rem 1rem;
+  box-shadow: 0 6px 18px rgba(13,38,59,0.04);
+  text-align: center;
+}
+.stats-value {
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: #0b5ed7;
+}
+.stats-label {
+  font-size: 0.9rem;
+  color: #6c757d;
+  margin-top: 0.25rem;
+}
+
+/* reuse announcement card styles similar to student/teacher */
+.announcement-list { list-style:none; padding:0; margin:0; }
+.announcement-item { margin-bottom: 1rem; }
+.announcement-card { background:#fff; border-radius:12px; padding:1rem; box-shadow:0 6px 18px rgba(13,38,59,0.06); text-align:left; }
+.announcement-card-header { display:flex; justify-content:space-between; align-items:center; gap:0.5rem; margin-bottom:0.5rem; }
+.announcement-card-title { font-weight:700; color:#0b5ed7; }
+.announcement-card-date { font-size:0.85rem; color:#6c757d; }
+.announcement-card-content { color:#343a40; line-height:1.45; }
+.announcement-delete-btn { background:#ff4d4f; border:none; color:#fff; padding:0.35rem 0.6rem; border-radius:8px; cursor:pointer; font-size:0.9rem; font-weight:600; }
+.announcement-delete-btn:hover { background:#d93636; }
+
+/* Create user form */
+.user-form {
+  margin: 1.25rem 0;
+  background: #fff;
+  padding: 0.9rem 1rem;
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(13,38,59,0.04);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+  align-items: center;
+}
+.user-form .user-input,
+.user-form .user-select {
+  padding: 0.5rem 0.7rem;
+  border: 1px solid #e6eef8;
+  border-radius: 8px;
+  font-size: 0.95rem;
+}
+.user-form .user-submit {
+  grid-column: span 2;
+  background: #0b5ed7;
+  color: #fff;
+  border: none;
+  padding: 0.6rem 0.9rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 700;
+}
+.user-form .user-submit[disabled] { opacity: 0.6; cursor: not-allowed; }
+
+@media (max-width: 720px) {
+  .user-form { grid-template-columns: 1fr; }
+}
+
+/* Modern Create User button */
+.create-user-btn {
+  background: linear-gradient(90deg,#0b5ed7 0%, #1976d2 100%);
+  color: #fff;
+  border: none;
+  padding: 0.6rem 1rem;
+  border-radius: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(11,94,215,0.18);
+}
+.create-user-btn:hover { transform: translateY(-2px); }
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(11,23,40,0.48);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 1rem;
+}
+.modal {
+  width: 100%;
+  max-width: 640px;
+  background: linear-gradient(180deg,#ffffff 0%, #fbfdff 100%);
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(2,6,23,0.35);
+  overflow: hidden;
+}
+.modal-header { display:flex; justify-content:space-between; align-items:center; padding:1rem 1.25rem; border-bottom:1px solid #eef6ff; }
+.modal-header h3 { margin:0; color:#072a6b; }
+.modal-close { background:transparent; border:none; font-size:1.6rem; cursor:pointer; }
+.modal-body { display:grid; grid-template-columns:1fr 1fr; gap:0.75rem; padding:1rem 1.25rem; }
+.modal-body .user-input, .modal-body .user-select { width:100%; padding:0.6rem 0.75rem; border:1px solid #e6eef8; border-radius:8px; }
+.modal-footer { grid-column: 1 / -1; display:flex; gap:0.6rem; justify-content:flex-end; padding:0.5rem 1.25rem 1rem 1.25rem; }
+.btn-cancel { background:transparent; border:1px solid #e6eef8; padding:0.55rem 0.85rem; border-radius:8px; cursor:pointer; }
+.user-submit { background:#0b5ed7; color:#fff; border:none; padding:0.6rem 0.95rem; border-radius:8px; font-weight:700; cursor:pointer; }
+.user-submit[disabled] { opacity:0.6; cursor:not-allowed; }
+
+@media (max-width: 720px) {
+  .modal-body { grid-template-columns: 1fr; }
 }
