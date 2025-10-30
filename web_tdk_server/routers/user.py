@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends, status, UploadFile, File
+import secrets
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from typing import List
@@ -43,6 +44,28 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         return user
     except ValueError as e:
         raise HTTPException(status_code=401, detail=str(e))
+
+
+@router.post("/{user_id}/admin_reset")
+def admin_reset_user_password(user_id: int, db: Session = Depends(get_db), current_user: UserModel = Depends(get_current_user)):
+    """Admin-only: reset a user's password and return a temporary password to the caller.
+
+    NOTE: This endpoint returns the temporary password in the response so the admin can communicate it to the user
+    through out-of-band channels (SMS/phone/hand-delivery). Use only in trusted admin contexts.
+    """
+    if getattr(current_user, 'role', None) != 'admin':
+        raise HTTPException(status_code=403, detail='Not authorized')
+
+    user = db.query(UserModel).filter(UserModel.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail='User not found')
+
+    # generate a secure temporary password
+    temp_password = secrets.token_urlsafe(8)
+    user.hashed_password = hash_password(temp_password)
+    db.commit()
+    # Do NOT log the plaintext password in real systems; return it only to caller here
+    return { 'detail': 'password reset', 'temp_password': temp_password }
 
 @router.get("/", response_model=List[User])
 def get_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):

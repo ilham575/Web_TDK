@@ -21,6 +21,8 @@ function AdminPage() {
   const [newRole, setNewRole] = useState('teacher');
   const [creatingUser, setCreatingUser] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [title, setTitle] = useState('');
+  const [content, setContent] = useState('');
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -141,6 +143,36 @@ function AdminPage() {
     }
   };
 
+  const handleAnnouncement = async (e) => {
+    e.preventDefault();
+    const token = localStorage.getItem('token');
+    const schoolId = localStorage.getItem('school_id');
+    if (!title || !content) { toast.error('กรุณากรอกหัวข้อและเนื้อหา'); return; }
+    if (!schoolId) { toast.error('ไม่พบโรงเรียน'); return; }
+    try {
+      const res = await fetch('http://127.0.0.1:8000/announcements/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ title, content, school_id: Number(schoolId) })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.detail || 'ประกาศข่าวไม่สำเร็จ');
+      } else {
+        toast.success('ประกาศข่าวสำเร็จ!');
+        setTitle(''); setContent('');
+        // prepend new announcement to list if returned
+        if (data && data.id) setAnnouncements(prev => Array.isArray(prev) ? [data, ...prev] : [data]);
+      }
+    } catch (err) {
+      console.error('announcement error', err);
+      toast.error('เกิดข้อผิดพลาดในการประกาศข่าว');
+    }
+  };
+
   // bulk upload handlers
   const [uploading, setUploading] = useState(false);
   const [uploadFile, setUploadFile] = useState(null);
@@ -222,7 +254,60 @@ function AdminPage() {
   return (
     <div className="admin-container">
       <ToastContainer />
-  <h2 className="admin-title">{`Welcome, ${currentUser ? (currentUser.full_name || currentUser.username) : 'Admin'}!`}</h2>
+
+      {/* Global header */}
+      <div className="app-header">
+        <div className="app-left">
+          <div className="app-logo">TD</div>
+          <div>
+            <div className="app-school">{currentUser && currentUser.school_name ? currentUser.school_name : (localStorage.getItem('school_name') || 'Your School')}</div>
+            <div style={{fontSize:'12px', color:'var(--muted)'}}>Admin dashboard</div>
+          </div>
+        </div>
+        <div className="header-actions">
+          <div className="app-user">{currentUser ? (currentUser.full_name || currentUser.username) : ''}</div>
+          <button className="btn btn-primary" onClick={handleSignout}>Sign out</button>
+          <button className="btn btn-ghost" onClick={() => setShowModal(true)}>Create User</button>
+        </div>
+      </div>
+
+  {/* Create user modal */}
+  {showModal && (
+    <div style={{position:'fixed', left:0, top:0, right:0, bottom:0, background:'rgba(0,0,0,0.4)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:9999}}>
+      <div style={{width:420, background:'#fff', padding:20, borderRadius:8, boxShadow:'0 8px 24px rgba(0,0,0,0.2)'}}>
+        <h3 style={{marginTop:0}}>Create User</h3>
+        <form onSubmit={handleCreateUser}>
+          <div style={{marginBottom:8}}>
+            <label>Username</label>
+            <input type="text" value={newUsername} onChange={e => setNewUsername(e.target.value)} required style={{width:'100%', padding:8, marginTop:6}} />
+          </div>
+          <div style={{marginBottom:8}}>
+            <label>Email</label>
+            <input type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} required style={{width:'100%', padding:8, marginTop:6}} />
+          </div>
+          <div style={{marginBottom:8}}>
+            <label>Full name</label>
+            <input type="text" value={newFullName} onChange={e => setNewFullName(e.target.value)} required style={{width:'100%', padding:8, marginTop:6}} />
+          </div>
+          <div style={{marginBottom:8}}>
+            <label>Password</label>
+            <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} required style={{width:'100%', padding:8, marginTop:6}} />
+          </div>
+          <div style={{marginBottom:12}}>
+            <label>Role</label>
+            <select value={newRole} onChange={e => setNewRole(e.target.value)} style={{width:'100%', padding:8, marginTop:6}}>
+              <option value="teacher">Teacher</option>
+              <option value="student">Student</option>
+            </select>
+          </div>
+          <div style={{display:'flex', gap:8, justifyContent:'flex-end'}}>
+            <button type="button" className="create-user-btn" onClick={() => setShowModal(false)} style={{background:'#6c757d'}}>Cancel</button>
+            <button type="submit" className="create-user-btn" disabled={creatingUser}>{creatingUser ? 'Creating...' : 'Create'}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )}
       <div className="admin-lists-container">
         <div className="admin-list">
           <h3 className="admin-list-title">Teachers</h3>
@@ -232,7 +317,21 @@ function AdminPage() {
                 <div style={{display:'flex', alignItems:'center', justifyContent:'space-between'}}>
                   <span>{teacher.full_name || teacher.username}</span>
                   <div>
-                    <button className="small-btn" onClick={() => navigate(`/admin/teacher/${teacher.id}`)}>See Teacher</button>
+                      <button className="small-btn" onClick={() => navigate(`/admin/teacher/${teacher.id}`)}>See Teacher</button>
+                      <button className="small-btn" style={{marginLeft:8}} onClick={async () => {
+                        if (!window.confirm('ต้องการรีเซ็ตรหัสผ่านผู้ใช้คนนี้ใช่หรือไม่?')) return;
+                        const token = localStorage.getItem('token');
+                        try {
+                          const res = await fetch(`http://127.0.0.1:8000/users/${teacher.id}/admin_reset`, { method: 'POST', headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+                          const data = await res.json();
+                          if (!res.ok) { toast.error(data.detail || 'Reset failed'); }
+                          else {
+                            // show the temporary password to the admin
+                            alert('Temporary password for user ' + (teacher.username || teacher.email || '') + '\n\n' + data.temp_password);
+                            toast.success('รีเซ็ตรหัสผ่านสำเร็จ — โปรดส่งรหัสชั่วคราวให้ผู้ใช้ด้วยช่องทางปลอดภัย');
+                          }
+                        } catch (err) { console.error(err); toast.error('Reset failed'); }
+                      }}>Reset Pass</button>
                   </div>
                 </div>
                 {/* subjects moved to teacher detail page - no chips here */}
@@ -248,6 +347,7 @@ function AdminPage() {
             ))}
           </ul>
         </div>
+        {/* Actions section removed per design decision */}
       </div>
       <div style={{marginTop:'1rem', textAlign:'center'}}>
         <label style={{display:'block', marginBottom:'0.5rem'}}>Or bulk upload users (.xlsx)</label>
@@ -297,6 +397,26 @@ function AdminPage() {
       </div>
       <section className="admin-section">
         <h3>ข่าวสารโรงเรียน</h3>
+
+        {/* Inline announcement form for admins */}
+        <form className="user-form" onSubmit={handleAnnouncement} style={{marginBottom: '1rem'}}>
+          <input
+            className="user-input"
+            type="text"
+            placeholder="หัวข้อข่าว"
+            value={title}
+            onChange={e => setTitle(e.target.value)}
+          />
+          <textarea
+            className="user-input"
+            placeholder="เนื้อหาข่าว"
+            value={content}
+            onChange={e => setContent(e.target.value)}
+            style={{ gridColumn: '1 / -1', minHeight: 88 }}
+          />
+          <button type="submit" className="user-submit">ประกาศข่าว</button>
+        </form>
+
         <ul className="announcement-list">
           {(Array.isArray(announcements) ? announcements : []).map(item => (
             <li key={item.id} className="announcement-item">
@@ -314,14 +434,8 @@ function AdminPage() {
           ))}
         </ul>
       </section>
-      <button
-        onClick={handleSignout}
-        className="admin-signout-btn"
-        onMouseOver={e => e.target.classList.add('admin-signout-btn-hover')}
-        onMouseOut={e => e.target.classList.remove('admin-signout-btn-hover')}
-      >
-        Signout
-      </button>
+      {/* footer spacing */}
+      <div style={{height:12}} />
     </div>
   );
 }
