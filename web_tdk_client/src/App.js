@@ -10,6 +10,8 @@ import TeacherPage from './components/js/pages/teacher/home';
 import AdminPage from './components/js/pages/admin/home';
 import TeacherDetail from './components/js/pages/admin/teacherDetail';
 import DefaultHome from './components/js/pages/default/home';
+import AttendancePage from './components/js/pages/teacher/attendance';
+import GradesPage from './components/js/pages/teacher/grades';
 
 // ฟังก์ชั่นตรวจสอบ login
 function isLoggedIn() {
@@ -53,6 +55,22 @@ function App() {
           element={
             <RequireAuth>
               <TeacherPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/teacher/subject/:id/attendance"
+          element={
+            <RequireAuth>
+              <AttendancePage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/teacher/subject/:id/grades"
+          element={
+            <RequireAuth>
+              <GradesPage />
             </RequireAuth>
           }
         />

@@ -6,6 +6,8 @@ from routers.user import router as user_router
 from routers.school import router as school_router
 from routers.announcement import router as announcement_router
 from routers.subject import router as subject_router
+from routers.attendance import router as attendance_router
+from routers.grades import router as grades_router
 
 # import ฟังก์ชันสร้างตาราง
 from database.connection import create_all_tables
@@ -34,6 +36,8 @@ app.include_router(user_router)
 app.include_router(school_router)
 app.include_router(announcement_router)
 app.include_router(subject_router)
+app.include_router(attendance_router)
+app.include_router(grades_router)
 
 @app.get("/", tags=["root"])
 def read_root():

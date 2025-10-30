@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import '../../../css/pages/admin/admin-home.css';
+import '../../../css/pages/admin/admin-teacher-detail.css';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -103,17 +103,19 @@ function TeacherDetail() {
     <div className="admin-container">
       <ToastContainer />
       <h2 className="admin-title">Teacher: {teacher.full_name || teacher.username}</h2>
-      <div style={{marginTop:'1rem', textAlign:'left'}}>
-        <h4>Subjects</h4>
-        <div style={{display:'flex', gap:'0.5rem', flexWrap:'wrap', marginBottom:'0.75rem'}}>
-          {(subjects || []).map(s => (
-            <div key={s.id} className="subject-chip">
-              <span>{s.name}</span>
-              <button className="small-btn" style={{marginLeft:'0.4rem'}} onClick={() => handleDelete(s.id)}>x</button>
-            </div>
-          ))}
+      <div className="teacher-detail-section">
+        <div className="subjects-container">
+          <h4 className="subjects-title">Subjects</h4>
+          <div className="subjects-list">
+            {(subjects || []).map(s => (
+              <div key={s.id} className="subject-chip">
+                <span>{s.name}</span>
+                <button className="small-btn" onClick={() => handleDelete(s.id)}>x</button>
+              </div>
+            ))}
+          </div>
         </div>
-        <form onSubmit={handleAdd} style={{display:'flex', gap:'0.5rem'}}>
+        <form className="add-subject-form" onSubmit={handleAdd}>
           <input className="user-input" placeholder="ชื่อรายวิชาใหม่" value={newSubjectName} onChange={e => setNewSubjectName(e.target.value)} />
           <button className="user-submit" type="submit" disabled={creating}>{creating ? 'Adding...' : 'Add'}</button>
           <button type="button" className="btn-cancel" onClick={() => navigate('/admin')}>Back</button>

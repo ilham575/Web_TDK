@@ -1,4 +1,4 @@
-/* Signin Page - Modern and Clean UI */
+/* Signup Page - Modern and Clean UI */
 .signin-container {
   display: flex;
   justify-content: center;
@@ -127,19 +127,6 @@
   transform: none;
 }
 
-.error-message {
-  color: #dc2626;
-  text-align: center;
-  margin: 0.5rem 0;
-  padding: 0.75rem;
-  background: linear-gradient(135deg, #fef2f2, #fee2e2);
-  border: 1px solid #fecaca;
-  border-radius: 10px;
-  font-size: 0.9rem;
-  font-weight: 500;
-  border-left: 4px solid #dc2626;
-}
-
 .signin-links {
   display: flex;
   justify-content: center;
@@ -167,16 +154,6 @@
   background: rgba(102, 126, 234, 0.1);
   color: #5a67d8;
   transform: translateY(-1px);
-}
-
-.link-separator {
-  color: #d1d5db;
-  font-weight: bold;
-}
-
-.home-link {
-  color: #64748b;
-  margin-left: auto;
 }
 
 .back-link {
@@ -249,13 +226,9 @@
     gap: 0.75rem;
   }
 
-  .home-link {
+  .back-link {
     margin-left: 0;
     margin-top: 0.5rem;
-  }
-
-  .link-separator {
-    display: none;
   }
 }
 

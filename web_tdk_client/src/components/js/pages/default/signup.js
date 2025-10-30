@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import '../../../css/pages/default/signin.css';
+import '../../../css/pages/default/signup.css';
 
 function SignupPage() {
   const navigate = useNavigate();
@@ -87,31 +87,89 @@ function SignupPage() {
     <div className="signin-container">
       <ToastContainer position="top-center" theme="colored" />
       <div className="signin-form">
-        <h2>Sign Up (Admin)</h2>
-        <form onSubmit={handleSubmit}>
+        <div className="signin-header">
+          <h2 className="signin-title">สร้างบัญชี (แอดมิน)</h2>
+          <p className="signin-subtitle">กรุณากรอกข้อมูลเพื่อสร้างบัญชีผู้ดูแลระบบ</p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="signin-form-content">
           <div className="form-group">
-            <label>School name</label>
-            <input value={schoolName} onChange={e => setSchoolName(e.target.value)} placeholder="ชื่อโรงเรียน" required />
+            <label htmlFor="schoolName" className="form-label">ชื่อโรงเรียน</label>
+            <input
+              type="text"
+              id="schoolName"
+              value={schoolName}
+              onChange={e => setSchoolName(e.target.value)}
+              placeholder="ชื่อโรงเรียนของคุณ"
+              required
+              className="form-input"
+            />
           </div>
+
           <div className="form-group">
-            <label>Full name</label>
-            <input value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Full name" required />
+            <label htmlFor="fullName" className="form-label">ชื่อเต็ม</label>
+            <input
+              type="text"
+              id="fullName"
+              value={fullName}
+              onChange={e => setFullName(e.target.value)}
+              placeholder="ชื่อเต็มของคุณ"
+              required
+              className="form-input"
+            />
           </div>
+
           <div className="form-group">
-            <label>Username</label>
-            <input value={username} onChange={e => setUsername(e.target.value)} placeholder="Username" required />
+            <label htmlFor="username" className="form-label">ชื่อผู้ใช้</label>
+            <input
+              type="text"
+              id="username"
+              value={username}
+              onChange={e => setUsername(e.target.value)}
+              placeholder="ชื่อผู้ใช้ของคุณ"
+              required
+              className="form-input"
+            />
           </div>
+
           <div className="form-group">
-            <label>Email</label>
-            <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" required />
+            <label htmlFor="email" className="form-label">อีเมล</label>
+            <input
+              type="email"
+              id="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="อีเมลของคุณ"
+              required
+              className="form-input"
+            />
           </div>
+
           <div className="form-group">
-            <label>Password</label>
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Password" required />
+            <label htmlFor="password" className="form-label">รหัสผ่าน</label>
+            <input
+              type="password"
+              id="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              placeholder="รหัสผ่านของคุณ"
+              required
+              className="form-input"
+            />
           </div>
-          <button className="button-signin" type="submit" disabled={isLoading}>{isLoading ? 'Creating...' : 'Create Admin'}</button>
+
+          <button className="button-signin" type="submit" disabled={isLoading}>
+            {isLoading ? 'กำลังสร้าง...' : 'สร้างบัญชีแอดมิน'}
+          </button>
         </form>
-        <button type="button" className="button-signin" style={{ marginTop: '1rem', background: '#6c757d' }} onClick={() => navigate('/signin')}>Back to Sign In</button>
+
+        <div className="signin-links">
+          <button type="button" onClick={() => navigate('/signin')} className="link-button back-link">
+            กลับไปเข้าสู่ระบบ
+          </button>
+        </div>
+
+        <div className="signin-divider" />
       </div>
     </div>
   );

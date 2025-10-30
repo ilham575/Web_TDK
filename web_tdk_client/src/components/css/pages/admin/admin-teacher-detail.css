@@ -1,0 +1,112 @@
+/* Admin Teacher Detail Page Styles */
+.admin-container {
+  max-width: 1100px;
+  margin: 2rem auto;
+  background: linear-gradient(180deg, rgba(255,255,255,0.96), rgba(247,250,255,0.98));
+  border-radius: 14px;
+  box-shadow: 0 18px 50px rgba(8,20,40,0.06);
+  padding: 1.25rem 1.5rem;
+  text-align: left;
+}
+
+.admin-title {
+  color: #072a6b;
+  margin-bottom: 0.5rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+/* Subject chip */
+.subject-chip {
+  display:flex; align-items:center; gap:0.4rem;
+  background: rgba(11,94,215,0.06);
+  padding:0.4rem 0.6rem; border-radius:999px; font-size:0.9rem;
+}
+.subject-chip span { color:#0b5ed7; font-weight:600; }
+
+.small-btn {
+  background: transparent;
+  border: 1px solid rgba(11,94,215,0.12);
+  padding: 0.35rem 0.6rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.small-btn:hover { background: rgba(11,94,215,0.06); }
+
+/* Form inputs */
+.user-input {
+  padding: 0.6rem 0.75rem;
+  border: 1px solid rgba(15,23,36,0.06);
+  border-radius: 10px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.user-submit {
+  background: linear-gradient(90deg,#0b5ed7 0%, #1976d2 100%);
+  color:#fff;
+  border:none;
+  padding:0.6rem 0.95rem;
+  border-radius:8px;
+  font-weight:700;
+  cursor:pointer;
+}
+.user-submit[disabled] { opacity:0.6; cursor:not-allowed; }
+
+.btn-cancel {
+  border:1px solid rgba(15,23,36,0.06);
+  padding:0.55rem 0.85rem;
+  border-radius:8px;
+  cursor:pointer;
+}
+
+/* Teacher Detail Page Specific Styles */
+.teacher-detail-section {
+  margin-top: 1.5rem;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+  border-radius: 12px;
+  padding: 1.25rem;
+  box-shadow: 0 10px 30px rgba(2,6,23,0.06);
+}
+
+.subjects-container {
+  margin-bottom: 1.5rem;
+}
+
+.subjects-title {
+  color: #0b5ed7;
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+  font-size: 1.1rem;
+}
+
+.subjects-list {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.add-subject-form {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.add-subject-form .user-input {
+  flex: 1;
+  min-width: 200px;
+}
+
+@media (max-width: 720px) {
+  .add-subject-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .add-subject-form .user-input {
+    min-width: auto;
+  }
+}

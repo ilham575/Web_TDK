@@ -4,13 +4,6 @@ import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import '../../../css/pages/default/signin.css';
 
-// Mock user data
-const mockUsers = [
-  { email: 'student@example.com', password: '123456', role: 'student' },
-  { email: 'teacher@example.com', password: '123456', role: 'teacher' },
-  { email: 'admin@example.com', password: '123456', role: 'admin' },
-];
-
 // Custom close button for toast
 const CustomCloseButton = ({ closeToast }) => (
   <button
@@ -32,7 +25,7 @@ const CustomCloseButton = ({ closeToast }) => (
 );
 
 function SigninPage() {
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -54,7 +47,7 @@ function SigninPage() {
     setError('');
     setIsLoading(true);
 
-    if (!email || !password) {
+    if (!username || !password) {
       setError('Please fill in all fields');
       setIsLoading(false);
       return;
@@ -65,20 +58,26 @@ function SigninPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
-          username: email,
-          password: password
-        })
+            username: username,
+            password: password
+          })
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.detail || 'Invalid email or password');
-        toast.error(data.detail || 'Invalid email or password', {
+        setError(data.detail || 'Invalid username or password');
+        toast.error(data.detail || 'Invalid username or password', {
           position: "top-center",
           hideProgressBar: false,
           theme: "colored"
         });
       } else {
         localStorage.setItem('token', data.access_token);
+        // Persist school_id (if provided) so subsequent pages can query school-scoped data
+        const detectedSchoolId = data.user_info?.school_id || data.user_info?.school?.id || data.school_id || data.school?.id || null;
+        if (detectedSchoolId) localStorage.setItem('school_id', String(detectedSchoolId));
+        // Also persist school_name when available
+        const detectedSchoolName = data.user_info?.school_name || data.user_info?.school?.name || data.school_name || data.school?.name || '';
+        if (detectedSchoolName) localStorage.setItem('school_name', detectedSchoolName);
         // เปลี่ยนจาก data.role เป็น data.user_info.role
         if (data.user_info?.role === 'student') navigate('/student');
         else if (data.user_info?.role === 'teacher') navigate('/teacher');
@@ -103,6 +102,7 @@ function SigninPage() {
     }
   };
 
+
   return (
     <div className="signin-container">
       <ToastContainer
@@ -112,49 +112,61 @@ function SigninPage() {
         toastClassName="toast-align-center"
         closeButton={CustomCloseButton}
       />
+
       <div className="signin-form">
-        <h2>Sign In</h2>
-        <form onSubmit={handleSubmit}>
+        <div className="signin-header">
+          <h2 className="signin-title">เข้าสู่ระบบ</h2>
+          <p className="signin-subtitle">ยินดีต้อนรับกลับ — กรุณาเข้าสู่ระบบ</p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="signin-form-content">
           <div className="form-group">
-            <label htmlFor="email">Email:</label>
+            <label htmlFor="username" className="form-label">ชื่อผู้ใช้</label>
             <input
-              type="string"
-              id="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              placeholder="Enter your email"
+              type="text"
+              id="username"
+              value={username}
+              onChange={e => setUsername(e.target.value)}
+              placeholder="ชื่อผู้ใช้ของคุณ"
               required
+              className="form-input"
             />
           </div>
+
           <div className="form-group">
-            <label htmlFor="password">Password:</label>
+            <label htmlFor="password" className="form-label">รหัสผ่าน</label>
             <input
               type="password"
               id="password"
               value={password}
               onChange={e => setPassword(e.target.value)}
-              placeholder="Enter your password"
+              placeholder="รหัสผ่านของคุณ"
               required
+              className="form-input"
             />
           </div>
+
           {error && <div className="error-message">{error}</div>}
-          <button type="submit" disabled={isLoading} className='button-signin'>
-            {isLoading ? 'Signing In...' : 'Sign In'}
+
+          <button type="submit" disabled={isLoading} className="button-signin">
+            {isLoading ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ'}
           </button>
         </form>
+
         <div className="signin-links">
-          <button type="button" onClick={() => navigate('/forgot')} style={{ background: 'none', border: 'none', color: '#1976d2', cursor: 'pointer' }}>Forgot Password?</button>
-          <span> | </span>
-          <button type="button" onClick={() => navigate('/signup')} style={{ background: 'none', border: 'none', color: '#1976d2', cursor: 'pointer' }}>Don't have an account? Sign Up</button>
+          <button type="button" onClick={() => navigate('/forgot')} className="link-button">
+            ลืมรหัสผ่าน?
+          </button>
+          <span className="link-separator">|</span>
+          <button type="button" onClick={() => navigate('/signup')} className="link-button">
+            สร้างบัญชี
+          </button>
+          <button type="button" onClick={() => navigate('/')} className="link-button home-link">
+            กลับหน้า Home
+          </button>
         </div>
-        <button
-          type="button"
-          className="button-signin"
-          style={{ marginTop: '1rem', background: '#6c757d' }}
-          onClick={() => navigate('/')}
-        >
-          กลับหน้า Home
-        </button>
+
+        <div className="signin-divider" />
       </div>
     </div>
   );
