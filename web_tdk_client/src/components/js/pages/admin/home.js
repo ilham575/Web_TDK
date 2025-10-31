@@ -4,6 +4,12 @@ import '../../../css/pages/admin/admin-home.css';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
+import Loading from '../../Loading';
+
+import ConfirmModal from '../../ConfirmModal';
+
+import AlertModal from '../../AlertModal';
+
 function AdminPage() {
   const navigate = useNavigate();
   const [teachers, setTeachers] = useState([]);
@@ -23,6 +29,20 @@ function AdminPage() {
   const [content, setContent] = useState('');
   const [uploading, setUploading] = useState(false);
   const [uploadFile, setUploadFile] = useState(null);
+
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+
+  const [confirmTitle, setConfirmTitle] = useState('');
+
+  const [confirmMessage, setConfirmMessage] = useState('');
+
+  const [onConfirmAction, setOnConfirmAction] = useState(() => {});
+
+  const [showAlertModal, setShowAlertModal] = useState(false);
+
+  const [alertTitle, setAlertTitle] = useState('');
+
+  const [alertMessage, setAlertMessage] = useState('');
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -101,12 +121,45 @@ function AdminPage() {
   const handleSignout = () => { localStorage.removeItem('token'); navigate('/signin', { state: { signedOut: true } }); };
 
   const deleteAnnouncement = async (id) => {
-    const token = localStorage.getItem('token'); if (!token) { toast.error('กรุณาเข้าสู่ระบบเพื่อดำเนินการ'); return; }
-    if (!window.confirm('ต้องการลบข่าวนี้ใช่หรือไม่?')) return;
-    try { const res = await fetch(`http://127.0.0.1:8000/announcements/${id}`, { method:'DELETE', headers:{ 'Authorization': `Bearer ${token}` } }); if (res.status===204 || res.ok) { toast.success('ลบข่าวเรียบร้อย'); setAnnouncements(prev=>Array.isArray(prev)?prev.filter(a=>a.id!==id):[]); } else { const data = await res.json(); toast.error(data.detail || 'ลบข่าวไม่สำเร็จ'); } } catch (err) { toast.error('เกิดข้อผิดพลาดในการลบข่าว'); }
+    const token = localStorage.getItem('token');
+    if (!token) { toast.error('กรุณาเข้าสู่ระบบเพื่อดำเนินการ'); return; }
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/announcements/${id}`, { method:'DELETE', headers:{ 'Authorization': `Bearer ${token}` } });
+      if (res.status===204 || res.ok) {
+        toast.success('ลบข่าวเรียบร้อย');
+        setAnnouncements(prev=>Array.isArray(prev)?prev.filter(a=>a.id!==id):[]);
+      } else {
+        const data = await res.json();
+        toast.error(data.detail || 'ลบข่าวไม่สำเร็จ');
+      }
+    } catch (err) {
+      toast.error('เกิดข้อผิดพลาดในการลบข่าว');
+    }
   };
 
   const initials = (name) => (name ? name.split(' ').map(n=>n[0]).slice(0,2).join('').toUpperCase() : 'A');
+
+  const openConfirmModal = (title, message, onConfirm) => {
+
+    setConfirmTitle(title);
+
+    setConfirmMessage(message);
+
+    setOnConfirmAction(() => onConfirm);
+
+    setShowConfirmModal(true);
+
+  };
+
+  const openAlertModal = (title, message) => {
+
+    setAlertTitle(title);
+
+    setAlertMessage(message);
+
+    setShowAlertModal(true);
+
+  };
 
   return (
     <div className="admin-dashboard">
@@ -166,7 +219,7 @@ function AdminPage() {
             <div className="user-management">
               <div className="user-section">
                 <h3><span className="card-icon">👨‍🏫</span> Teachers</h3>
-                {loadingUsers && <div className="loading-message">Loading users...</div>}
+                {loadingUsers && <Loading message="กำลังโหลดข้อมูลผู้ใช้..." />}
                 {usersError && <div className="error-message">{usersError}</div>}
                 <ul className="user-list">
                   {teachers.map((teacher)=> (
@@ -177,15 +230,14 @@ function AdminPage() {
                       </div>
                       <div className="user-actions">
                         <button className="btn-small" onClick={() => navigate(`/admin/teacher/${teacher.id}`)}>See</button>
-                        <button className="btn-small btn-danger" onClick={async ()=>{
-                          if (!window.confirm('ต้องการรีเซ็ตรหัสผ่านผู้ใช้คนนี้ใช่หรือไม่?')) return;
+                        <button className="btn-small btn-danger" onClick={() => openConfirmModal('รีเซ็ตรหัสผ่าน', 'ต้องการรีเซ็ตรหัสผ่านผู้ใช้คนนี้ใช่หรือไม่?', async () => {
                           const token = localStorage.getItem('token');
                           try {
                             const res = await fetch(`http://127.0.0.1:8000/users/${teacher.id}/admin_reset`, { method:'POST', headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
                             const data = await res.json();
-                            if (!res.ok) { toast.error(data.detail || 'Reset failed'); } else { alert('Temporary password for user ' + (teacher.username || teacher.email || '') + '\n\n' + data.temp_password); toast.success('รีเซ็ตรหัสผ่านสำเร็จ'); }
+                            if (!res.ok) { toast.error(data.detail || 'Reset failed'); } else { openAlertModal('Temporary password', `Temporary password for user ${teacher.username || teacher.email || ''}\n\n${data.temp_password}`); toast.success('รีเซ็ตรหัสผ่านสำเร็จ'); }
                           } catch (err) { console.error(err); toast.error('Reset failed'); }
-                        }}>Reset</button>
+                        })}>Reset</button>
                       </div>
                     </li>
                   ))}
@@ -265,7 +317,7 @@ function AdminPage() {
                           <div className="announcement-meta">{item.created_at ? new Date(item.created_at).toLocaleDateString('th-TH',{year:'numeric',month:'short',day:'numeric'}) : ''}</div>
                         </div>
                         <div className="announcement-actions">
-                          <button className="btn-danger btn-small" onClick={() => deleteAnnouncement(item.id)}>ลบ</button>
+                          <button className="btn-danger btn-small" onClick={() => openConfirmModal('ลบข่าว', 'ต้องการลบข่าวนี้ใช่หรือไม่?', async () => { await deleteAnnouncement(item.id); })}>ลบ</button>
                         </div>
                       </div>
                       <div className="announcement-content">{item.content}</div>
@@ -302,6 +354,21 @@ function AdminPage() {
           </div>
         </div>
       )}
+      {/* Confirm & Alert modals (shared) */}
+      <ConfirmModal
+        isOpen={showConfirmModal}
+        title={confirmTitle}
+        message={confirmMessage}
+        onCancel={() => setShowConfirmModal(false)}
+        onConfirm={async () => { setShowConfirmModal(false); try { await onConfirmAction(); } catch (e) { console.error(e); } }}
+      />
+
+      <AlertModal
+        isOpen={showAlertModal}
+        title={alertTitle}
+        message={alertMessage}
+        onClose={() => setShowAlertModal(false)}
+      />
     </div>
   );
 }

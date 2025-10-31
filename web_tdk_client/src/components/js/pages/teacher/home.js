@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import '../../../css/pages/teacher/teacher-home.css';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import ConfirmModal from '../../ConfirmModal';
 
 function TeacherPage() {
   const navigate = useNavigate();
@@ -16,6 +17,12 @@ function TeacherPage() {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [announcements, setAnnouncements] = useState([]);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [confirmTitle, setConfirmTitle] = useState('');
+  const [confirmMessage, setConfirmMessage] = useState('');
+  const [onConfirmAction, setOnConfirmAction] = useState(() => {});
+
+  const openConfirmModal = (title, message, onConfirm) => { setConfirmTitle(title); setConfirmMessage(message); setOnConfirmAction(() => onConfirm); setShowConfirmModal(true); };
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -92,7 +99,6 @@ function TeacherPage() {
   const deleteAnnouncement = async (id) => {
     const token = localStorage.getItem('token');
     if (!token) { toast.error('กรุณาเข้าสู่ระบบเพื่อดำเนินการ'); return; }
-    if (!window.confirm('ต้องการลบข่าวนี้ใช่หรือไม่?')) return;
     try {
       const res = await fetch(`http://127.0.0.1:8000/announcements/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
       if (res.status === 204 || res.ok) { toast.success('ลบข่าวเรียบร้อย'); setAnnouncements(prev => Array.isArray(prev) ? prev.filter(a => a.id !== id) : []); }
@@ -136,7 +142,7 @@ function TeacherPage() {
   };
 
   const unenrollStudent = async (studentId) => {
-    if (!managingSubjectId) return; if (!window.confirm('ต้องการย้ายนักเรียนออกจากรายวิชานี้ใช่หรือไม่?')) return;
+    if (!managingSubjectId) return;
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(`http://127.0.0.1:8000/subjects/${managingSubjectId}/enroll/${studentId}`, { method: 'DELETE', headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
@@ -146,7 +152,6 @@ function TeacherPage() {
   };
 
   const handleDeleteSubject = async (id) => {
-    if (!window.confirm('ต้องการลบรายวิชานี้ใช่หรือไม่?')) return;
     const token = localStorage.getItem('token');
     try {
       const res = await fetch(`http://127.0.0.1:8000/subjects/${id}`, { method: 'DELETE', headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
@@ -197,7 +202,7 @@ function TeacherPage() {
               </div>
               <div className="subject-actions">
                 <button className="btn-manage" onClick={() => openManageStudents(sub.id)}>จัดการนักเรียน</button>
-                <button className="btn-delete" onClick={() => handleDeleteSubject(sub.id)}>ลบ</button>
+                <button className="btn-delete" onClick={() => openConfirmModal('ลบรายวิชา', 'ต้องการลบรายวิชานี้ใช่หรือไม่?', async () => { await handleDeleteSubject(sub.id); })}>ลบ</button>
                 <button className="btn-attendance" onClick={() => navigate(`/teacher/subject/${sub.id}/attendance`)}>เช็คชื่อ</button>
                 <button className="btn-grades" onClick={() => navigate(`/teacher/subject/${sub.id}/grades`)}>ให้คะแนน</button>
               </div>
@@ -238,7 +243,7 @@ function TeacherPage() {
                     <div className="announcement-title">{item.title}</div>
                     <div className="announcement-meta">
                       <div className="announcement-date">{item.created_at ? new Date(item.created_at).toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' }) : ''}</div>
-                      <button onClick={() => deleteAnnouncement(item.id)} className="btn-delete-announcement">ลบ</button>
+                      <button onClick={() => openConfirmModal('ลบข่าว', 'ต้องการลบข่าวนี้ใช่หรือไม่?', async () => { await deleteAnnouncement(item.id); })} className="btn-delete-announcement">ลบ</button>
                     </div>
                   </div>
                   <div className="announcement-content">{item.content}</div>
@@ -272,13 +277,13 @@ function TeacherPage() {
               <div className="modal-section">
                 <h4 className="enrolled-title">นักเรียนที่ลงทะเบียนแล้ว</h4>
                 <div className="enrolled-list">
-                  {subjectStudents.length === 0 ? <div className="empty-state">ยังไม่มีนักเรียน</div> : subjectStudents.map(st => (
+                      {subjectStudents.length === 0 ? <div className="empty-state">ยังไม่มีนักเรียน</div> : subjectStudents.map(st => (
                     <div key={st.id} className="enrolled-item">
                       <div className="student-info">
                         <div className="student-name">{st.full_name || st.username}</div>
                         <div className="student-email">{st.email}</div>
                       </div>
-                      <button className="btn-remove" onClick={() => unenrollStudent(st.id)}>ย้ายออก</button>
+                      <button className="btn-remove" onClick={() => openConfirmModal('ย้ายออก', 'ต้องการย้ายนักเรียนออกจากรายวิชานี้ใช่หรือไม่?', async () => { await unenrollStudent(st.id); })}>ย้ายออก</button>
                     </div>
                   ))}
                 </div>
@@ -287,6 +292,13 @@ function TeacherPage() {
           </div>
         </div>
       )}
+      <ConfirmModal
+        isOpen={showConfirmModal}
+        title={confirmTitle}
+        message={confirmMessage}
+        onCancel={() => setShowConfirmModal(false)}
+        onConfirm={async () => { setShowConfirmModal(false); try { await onConfirmAction(); } catch (e) { console.error(e); } }}
+      />
     </div>
   );
 }

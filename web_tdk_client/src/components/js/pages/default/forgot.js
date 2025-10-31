@@ -2,11 +2,21 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import AlertModal from '../../AlertModal';
 
 function ForgotPage() {
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
+  const [showAlertModal, setShowAlertModal] = useState(false);
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+
+  const openAlertModal = (title, message) => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setShowAlertModal(true);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -24,8 +34,8 @@ function ForgotPage() {
         if (data.reset_token) {
           // dev convenience: show token
           toast.success('Reset token returned (dev): copy it somewhere safe.');
-          // show token in an alert so developer can copy
-          alert('Reset token (dev):\n' + data.reset_token);
+          // show token in a modal so developer can copy
+          openAlertModal('Reset Token (Dev)', 'Reset token (dev):\n' + data.reset_token);
         } else {
           toast.success('If an account exists, an email has been sent with reset instructions.');
         }
@@ -54,6 +64,12 @@ function ForgotPage() {
           </div>
         </form>
       </div>
+      <AlertModal
+        isOpen={showAlertModal}
+        title={alertTitle}
+        message={alertMessage}
+        onClose={() => setShowAlertModal(false)}
+      />
     </div>
   );
 }

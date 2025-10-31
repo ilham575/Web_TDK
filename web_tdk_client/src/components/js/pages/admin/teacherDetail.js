@@ -4,6 +4,9 @@ import '../../../css/pages/admin/admin-teacher-detail.css';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
+import Loading from '../../Loading';
+import ConfirmModal from '../../ConfirmModal';
+
 function TeacherDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -12,6 +15,17 @@ function TeacherDetail() {
   const [loading, setLoading] = useState(true);
   const [newSubjectName, setNewSubjectName] = useState('');
   const [creating, setCreating] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [confirmTitle, setConfirmTitle] = useState('');
+  const [confirmMessage, setConfirmMessage] = useState('');
+  const [onConfirmAction, setOnConfirmAction] = useState(() => {});
+
+  const openConfirmModal = (title, message, onConfirm) => {
+    setConfirmTitle(title);
+    setConfirmMessage(message);
+    setOnConfirmAction(() => onConfirm);
+    setShowConfirmModal(true);
+  };
 
   useEffect(() => {
     const fetchTeacher = async () => {
@@ -73,7 +87,6 @@ function TeacherDetail() {
   };
 
   const handleDelete = async (subjectId) => {
-    if (!window.confirm('ต้องการลบรายวิชานี้ใช่หรือไม่?')) return;
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(`http://127.0.0.1:8000/subjects/${subjectId}`, { method: 'DELETE', headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
@@ -90,7 +103,7 @@ function TeacherDetail() {
     }
   };
 
-  if (loading) return <div className="admin-container"><p>Loading...</p></div>;
+  if (loading) return <Loading message="กำลังโหลดข้อมูลครู..." />;
 
   if (!teacher) return (
     <div className="admin-container">
@@ -110,7 +123,7 @@ function TeacherDetail() {
             {(subjects || []).map(s => (
               <div key={s.id} className="subject-chip">
                 <span>{s.name}</span>
-                <button className="small-btn" onClick={() => handleDelete(s.id)}>x</button>
+                <button className="small-btn" onClick={() => openConfirmModal('ลบรายวิชา', 'ต้องการลบรายวิชานี้ใช่หรือไม่?', async () => { await handleDelete(s.id); })}>x</button>
               </div>
             ))}
           </div>
@@ -121,6 +134,13 @@ function TeacherDetail() {
           <button type="button" className="btn-cancel" onClick={() => navigate('/admin')}>Back</button>
         </form>
       </div>
+      <ConfirmModal
+        isOpen={showConfirmModal}
+        title={confirmTitle}
+        message={confirmMessage}
+        onCancel={() => setShowConfirmModal(false)}
+        onConfirm={async () => { setShowConfirmModal(false); try { await onConfirmAction(); } catch (e) { console.error(e); } }}
+      />
     </div>
   );
 }
