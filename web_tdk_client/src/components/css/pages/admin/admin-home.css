@@ -16,6 +16,7 @@
   backdrop-filter: blur(10px);
   border-bottom: 1px solid rgba(255, 255, 255, 0.2);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  animation: slideDown 0.6s ease-out;
 }
 
 .header-left {
@@ -119,6 +120,8 @@
   padding: 2rem;
   max-width: 1200px;
   margin: 0 auto;
+  animation: fadeIn 0.6s ease-out 0.2s forwards;
+  opacity: 0;
 }
 
 .stats-card {
@@ -136,6 +139,24 @@
 .stats-card:hover {
   transform: translateY(-5px);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+}
+
+.stats-card {
+  animation: slideUp 0.6s ease-out forwards;
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+.stats-card:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.stats-card:nth-child(2) {
+  animation-delay: 0.1s;
+}
+
+.stats-card:nth-child(3) {
+  animation-delay: 0.2s;
 }
 
 .stats-icon {
@@ -160,6 +181,61 @@
   font-weight: 500;
 }
 
+/* Tabs Styles */
+.tabs-header {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-bottom: 2rem;
+  animation: fadeIn 0.6s ease-out 0.4s forwards;
+  opacity: 0;
+}
+
+.tab-button {
+  background: #f1f5f9;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 1rem;
+  color: #64748b;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.tab-button:hover {
+  background: #e2e8f0;
+  color: #1e293b;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+}
+
+.tab-button.active {
+  background: linear-gradient(135deg, #0b5ed7, #1976d2);
+  color: #fff;
+  box-shadow: 0 6px 20px rgba(11,94,215,0.3);
+  transform: translateY(-2px);
+}
+
+.tab-button {
+  animation: fadeInScale 0.5s ease-out forwards;
+  opacity: 0;
+  transform: scale(0.9);
+}
+
+.tab-button:nth-child(1) {
+  animation-delay: 0.3s;
+}
+
+.tab-button:nth-child(2) {
+  animation-delay: 0.4s;
+}
+
+.tab-content {
+  display: block;
+}
+
 /* Main Content */
 .main-content {
   display: grid;
@@ -176,6 +252,9 @@
   border-radius: 16px;
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
   overflow: hidden;
+  animation: fadeInUp 0.6s ease-out 0.5s forwards;
+  opacity: 0;
+  transform: translateY(20px);
 }
 
 .card-header {
@@ -382,6 +461,7 @@
   border-radius: 12px;
   overflow: hidden;
   transition: all 0.3s ease;
+  animation: fadeInUp 0.6s ease-out;
 }
 
 .announcement-item:hover {
@@ -411,6 +491,12 @@
   font-size: 0.85rem;
   color: #666;
   margin-top: 0.25rem;
+}
+
+.announcement-expiry {
+  font-size: 0.75rem;
+  color: #dc3545;
+  font-weight: 500;
 }
 
 .announcement-actions {
@@ -501,6 +587,46 @@
   margin-bottom: 1rem;
 }
 
+@keyframes slideDown {
+  from {
+    transform: translateY(-20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fadeIn {
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInScale {
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* Responsive Design */
 @media (max-width: 1024px) {
   .user-management {
@@ -546,5 +672,15 @@
 
   .modal-body {
     padding: 1rem;
+  }
+
+  .tabs-header {
+    justify-content: flex-start;
+    gap: 0.25rem;
+  }
+
+  .tab-button {
+    padding: 0.6rem 1.2rem;
+    font-size: 0.9rem;
   }
 }

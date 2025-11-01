@@ -11,6 +11,7 @@ function StudentPage() {
   const [studentSubjects, setStudentSubjects] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
   const [expandedAnnouncement, setExpandedAnnouncement] = useState(null);
+  const [activeTab, setActiveTab] = useState('subjects');
 
   // We rely on styles in src/components/css/pages/student/student-home.css
 
@@ -89,6 +90,45 @@ function StudentPage() {
     return name.split(' ').map(n => n[0]).slice(0,2).join('').toUpperCase();
   };
 
+  // Parse server-provided datetime strings into a local Date object.
+  // This preserves the wall-clock time for naive datetimes like "YYYY-MM-DD HH:MM:SS"
+  const parseLocalDatetime = (s) => {
+    if (!s) return null;
+    if (s instanceof Date) return s;
+    if (typeof s !== 'string') return new Date(s);
+    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?/);
+    if (m) {
+      const y = Number(m[1]);
+      const mo = Number(m[2]) - 1;
+      const d = Number(m[3]);
+      const hh = Number(m[4]);
+      const mm = Number(m[5]);
+      const ss = Number(m[6] || 0);
+      return new Date(y, mo, d, hh, mm, ss);
+    }
+    return new Date(s);
+  };
+
+  const isExpired = (item) => {
+    const ex = item && (item.expires_at || item.expire_at || item.expiresAt);
+    if (!ex) return false;
+    const d = parseLocalDatetime(ex);
+    if (!d) return false;
+    return d <= new Date();
+  };
+
+  const ownedBy = (item) => {
+    if (!currentUser) return false;
+    const owner = item.created_by || item.creator_id || item.user_id || item.author_id || item.owner_id || item.created_by_id;
+    if (owner && (String(owner) === String(currentUser.id) || String(owner) === String(currentUser.user_id))) return true;
+    if (item.email && currentUser.email && String(item.email).toLowerCase() === String(currentUser.email).toLowerCase()) return true;
+    if (item.created_by_email && currentUser.email && String(item.created_by_email).toLowerCase() === String(currentUser.email).toLowerCase()) return true;
+    return false;
+  };
+
+  // Announcements visible to this user: exclude expired announcements unless the user is the owner
+  const visibleAnnouncements = Array.isArray(announcements) ? announcements.filter(item => !isExpired(item) || ownedBy(item)) : [];
+
   const toggleAnnouncement = (id) => {
     setExpandedAnnouncement(prev => prev === id ? null : id);
   };
@@ -154,7 +194,7 @@ function StudentPage() {
 
         <div className="stats-card">
           <div className="stats-content">
-            <div className="stats-value">{announcements.length}</div>
+            <div className="stats-value">{visibleAnnouncements.length}</div>
             <div className="stats-label">ข่าวสาร</div>
           </div>
           <div className="stats-icon" aria-hidden>📣</div>
@@ -169,62 +209,69 @@ function StudentPage() {
         </div>
       </div>
 
-      <main className="main-content">
-        <section className="student-section">
-          <h4><span className="section-icon">📚</span> รายวิชาของฉัน</h4>
-          {studentSubjects.length === 0 ? (
-            <div className="empty-state">ยังไม่มีรายวิชาที่ลงทะเบียน</div>
-          ) : (
-            <table className="student-subject-table">
-              <thead>
-                <tr><th>ชื่อวิชา</th><th>รหัส</th><th></th></tr>
-              </thead>
-              <tbody>
-                {studentSubjects.map(sub => (
-                  <tr key={sub.id}>
-                    <td className="subject-name">{sub.name}</td>
-                    <td className="subject-code">{sub.code || ''}</td>
-                    <td><span className="status-badge">ลงทะเบียน</span></td>
-                  </tr>
+      <div className="tabs-header">
+        <button className={`tab-button ${activeTab === 'subjects' ? 'active' : ''}`} onClick={() => setActiveTab('subjects')}>รายวิชา</button>
+        <button className={`tab-button ${activeTab === 'announcements' ? 'active' : ''}`} onClick={() => setActiveTab('announcements')}>ข่าวสาร</button>
+      </div>
+      <div className="tab-content">
+        {activeTab === 'subjects' && (
+          <section className="student-section">
+            <h4><span className="section-icon">📚</span> รายวิชาของฉัน</h4>
+            {studentSubjects.length === 0 ? (
+              <div className="empty-state">ยังไม่มีรายวิชาที่ลงทะเบียน</div>
+            ) : (
+              <table className="student-subject-table">
+                <thead>
+                  <tr><th>ชื่อวิชา</th><th>รหัส</th><th></th></tr>
+                </thead>
+                <tbody>
+                  {studentSubjects.map(sub => (
+                    <tr key={sub.id}>
+                      <td className="subject-name">{sub.name}</td>
+                      <td className="subject-code">{sub.code || ''}</td>
+                      <td><span className="status-badge">ลงทะเบียน</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </section>
+        )}
+        {activeTab === 'announcements' && (
+          <aside className="student-section">
+            <div className="announcement-header"><span className="announcement-icon">📣</span> ข่าวสารโรงเรียน</div>
+            {visibleAnnouncements.length === 0 ? (
+              <div className="empty-state">ไม่มีข้อมูลข่าวสาร</div>
+            ) : (
+              <ul className="announcement-list enhanced-announcement-list">
+                {visibleAnnouncements.map(item => (
+                  <li key={item.id} className="announcement-item enhanced-announcement-item">
+                    <article className={`announcement-card ${expandedAnnouncement === item.id ? 'expanded' : ''}`}>
+                      <div className="announcement-card-header">
+                        <div className="announcement-card-title">{item.title}</div>
+                        <div className="announcement-card-date">{item.created_at ? parseLocalDatetime(item.created_at).toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' }) : ''}</div>
+                      </div>
+                      <div className="announcement-card-content">
+                        {expandedAnnouncement === item.id ? (
+                          <div>
+                            <p className="announcement-text">{item.content}</p>
+                            <button className="collapse-btn" onClick={() => toggleAnnouncement(item.id)}>ย่อ</button>
+                          </div>
+                        ) : (
+                          <div>
+                            <p className="announcement-preview">{item.content}</p>
+                            <button className="read-more-btn" onClick={() => toggleAnnouncement(item.id)}>อ่านเพิ่มเติม</button>
+                          </div>
+                        )}
+                      </div>
+                    </article>
+                  </li>
                 ))}
-              </tbody>
-            </table>
-          )}
-        </section>
-
-        <aside className="student-section">
-          <div className="announcement-header"><span className="announcement-icon">📣</span> ข่าวสารโรงเรียน</div>
-          {announcements.length === 0 ? (
-            <div className="empty-state">ไม่มีข้อมูลข่าวสาร</div>
-          ) : (
-            <ul className="announcement-list enhanced-announcement-list">
-              {announcements.map(item => (
-                <li key={item.id} className="announcement-item enhanced-announcement-item">
-                  <article className={`announcement-card ${expandedAnnouncement === item.id ? 'expanded' : ''}`}>
-                    <div className="announcement-card-header">
-                      <div className="announcement-card-title">{item.title}</div>
-                      <div className="announcement-card-date">{item.created_at ? new Date(item.created_at).toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' }) : ''}</div>
-                    </div>
-                    <div className="announcement-card-content">
-                      {expandedAnnouncement === item.id ? (
-                        <div>
-                          <p className="announcement-text">{item.content}</p>
-                          <button className="collapse-btn" onClick={() => toggleAnnouncement(item.id)}>ย่อ</button>
-                        </div>
-                      ) : (
-                        <div>
-                          <p className="announcement-preview">{item.content}</p>
-                          <button className="read-more-btn" onClick={() => toggleAnnouncement(item.id)}>อ่านเพิ่มเติม</button>
-                        </div>
-                      )}
-                    </div>
-                  </article>
-                </li>
-              ))}
-            </ul>
-          )}
-        </aside>
-      </main>
+              </ul>
+            )}
+          </aside>
+        )}
+      </div>
     </div>
   );
 }

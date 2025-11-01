@@ -18,21 +18,87 @@
 
 /* Subject chip */
 .subject-chip {
-  display:flex; align-items:center; gap:0.4rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   background: rgba(11,94,215,0.06);
-  padding:0.4rem 0.6rem; border-radius:999px; font-size:0.9rem;
+  padding: 0.6rem 1rem;
+  border-radius: 12px;
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
+  border: 1px solid rgba(11,94,215,0.12);
 }
-.subject-chip span { color:#0b5ed7; font-weight:600; }
+
+.subject-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.subject-info span:first-child {
+  color: #0b5ed7;
+  font-weight: 600;
+}
+
+.subject-status {
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.subject-status.ended {
+  color: #059669;
+}
+
+.subject-status.active {
+  color: #d97706;
+}
+
+.subject-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.btn-end-small, .btn-unend-small {
+  padding: 0.3rem 0.6rem;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.btn-end-small {
+  background: #f59e0b;
+  color: #fff;
+}
+
+.btn-end-small:hover {
+  background: #d97706;
+}
+
+.btn-unend-small {
+  background: #06b6d4;
+  color: #fff;
+}
+
+.btn-unend-small:hover {
+  background: #0891b2;
+}
 
 .small-btn {
-  background: transparent;
-  border: 1px solid rgba(11,94,215,0.12);
-  padding: 0.35rem 0.6rem;
-  border-radius: 8px;
-  font-size: 0.85rem;
+  background: #ef4444;
+  color: #fff;
+  border: none;
+  padding: 0.3rem 0.6rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
   cursor: pointer;
+  font-weight: 600;
 }
-.small-btn:hover { background: rgba(11,94,215,0.06); }
+
+.small-btn:hover {
+  background: #dc2626;
+}
 
 /* Form inputs */
 .user-input {

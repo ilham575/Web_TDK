@@ -18,6 +18,7 @@
   padding-bottom: 1.5rem;
   border-bottom: 2px solid #e2e8f0;
   gap: 2rem;
+  animation: slideDown 0.6s ease-out;
 }
 
 .teacher-welcome {
@@ -88,6 +89,20 @@
   box-shadow: 0 12px 40px rgba(0,0,0,0.1);
 }
 
+.stats-card {
+  animation: slideUp 0.6s ease-out forwards;
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+.stats-card:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.stats-card:nth-child(2) {
+  animation-delay: 0.1s;
+}
+
 .stats-value {
   font-size: 1.8rem;
   font-weight: 900;
@@ -122,8 +137,8 @@
 }
 
 .teacher-body {
-  display: grid;
-  grid-template-columns: 1fr 380px;
+  display: flex;
+  flex-direction: column;
   gap: 2rem;
 }
 
@@ -133,6 +148,9 @@
   padding: 2rem;
   box-shadow: 0 12px 40px rgba(0,0,0,0.06);
   border: 1px solid #f1f5f9;
+  animation: fadeInUp 0.6s ease-out 0.5s forwards;
+  opacity: 0;
+  transform: translateY(20px);
 }
 
 .section-title {
@@ -272,6 +290,42 @@
   box-shadow: 0 8px 24px rgba(245,158,11,0.4);
 }
 
+.btn-end {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: #fff;
+  border: none;
+  padding: 0.6rem 1rem;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 16px rgba(245,158,11,0.3);
+}
+
+.btn-end:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(245,158,11,0.4);
+}
+
+.btn-unend {
+  background: linear-gradient(135deg, #06b6d4, #0891b2);
+  color: #fff;
+  border: none;
+  padding: 0.6rem 1rem;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 16px rgba(6,182,212,0.3);
+}
+
+.btn-unend:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(6,182,212,0.4);
+}
+
 .teacher-sidebar {
   background: #fff;
   border-radius: 16px;
@@ -371,6 +425,7 @@
   box-shadow: 0 4px 16px rgba(0,0,0,0.04);
   border: 1px solid #f1f5f9;
   transition: all 0.2s ease;
+  animation: fadeInUp 0.6s ease-out;
 }
 
 .announcement-card:hover {
@@ -606,16 +661,105 @@
   box-shadow: 0 4px 12px rgba(239,68,68,0.3);
 }
 
+/* Tabs Styles */
+.tabs-header {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-bottom: 2rem;
+  animation: fadeIn 0.6s ease-out 0.4s forwards;
+  opacity: 0;
+}
+
+.tab-button {
+  background: #f1f5f9;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 1rem;
+  color: #64748b;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.tab-button:hover {
+  background: #e2e8f0;
+  color: #1e293b;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+}
+
+.tab-button.active {
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  color: #fff;
+  box-shadow: 0 6px 20px rgba(59,130,246,0.3);
+  transform: translateY(-2px);
+}
+
+.tab-button {
+  animation: fadeInScale 0.5s ease-out forwards;
+  opacity: 0;
+  transform: scale(0.9);
+}
+
+.tab-button:nth-child(1) {
+  animation-delay: 0.3s;
+}
+
+.tab-button:nth-child(2) {
+  animation-delay: 0.4s;
+}
+
+.tab-content {
+  display: block;
+}
+
+.announcements-container {
+  background: #fff;
+  border-radius: 16px;
+  padding: 2rem;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.06);
+  border: 1px solid #f1f5f9;
+  animation: fadeInUp 0.6s ease-out 0.5s forwards;
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+.announcement-expiry {
+  font-size: 0.75rem;
+  color: #ef4444;
+  font-weight: 500;
+}
+
+.btn-secondary {
+  background: #64748b;
+  color: #fff;
+  border: none;
+  padding: 0.4rem 0.8rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(100,116,139,0.2);
+}
+
+.btn-secondary:hover {
+  background: #475569;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(100,116,139,0.3);
+}
+
+.btn-small {
+  font-size: 0.8rem !important;
+  padding: 0.3rem 0.6rem !important;
+}
+
 /* Responsive Design */
 @media (max-width: 1024px) {
-  .teacher-body {
-    grid-template-columns: 1fr;
-    gap: 2rem;
-  }
-
-  .teacher-sidebar {
-    order: -1;
-  }
+  /* No grid layout for teacher-body as it's now flex */
 }
 
 @media (max-width: 768px) {
@@ -637,6 +781,16 @@
   .teacher-stats {
     width: 100%;
     justify-content: center;
+  }
+
+  .tabs-header {
+    justify-content: flex-start;
+    gap: 0.25rem;
+  }
+
+  .tab-button {
+    padding: 0.6rem 1.2rem;
+    font-size: 0.9rem;
   }
 
   .subject-item {
@@ -687,7 +841,9 @@
   .btn-manage,
   .btn-delete,
   .btn-attendance,
-  .btn-grades {
+  .btn-grades,
+  .btn-end,
+  .btn-unend {
     padding: 0.5rem 0.8rem;
     font-size: 0.85rem;
   }
@@ -706,3 +862,43 @@
 .modal-btn { background: linear-gradient(90deg,#0b5ed7 0%, #1976d2 100%); color:#fff; border:none; padding:0.45rem 0.9rem; border-radius:8px; cursor:pointer; }
 .modal-cancel { background:#6c757d; color:#fff; }
 .modal-btn:hover { transform: translateY(-2px); }
+
+@keyframes slideDown {
+  from {
+    transform: translateY(-20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fadeIn {
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInScale {
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

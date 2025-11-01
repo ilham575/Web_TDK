@@ -19,6 +19,7 @@ function TeacherDetail() {
   const [confirmTitle, setConfirmTitle] = useState('');
   const [confirmMessage, setConfirmMessage] = useState('');
   const [onConfirmAction, setOnConfirmAction] = useState(() => {});
+  const [currentUser, setCurrentUser] = useState(null);
 
   const openConfirmModal = (title, message, onConfirm) => {
     setConfirmTitle(title);
@@ -28,6 +29,24 @@ function TeacherDetail() {
   };
 
   useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) { navigate('/signin'); return; }
+    fetch('http://127.0.0.1:8000/users/me', { headers: { Authorization: `Bearer ${token}` } })
+      .then(res => res.json())
+      .then(data => {
+        if (data.role !== 'admin') {
+          localStorage.removeItem('token');
+          toast.error('Invalid token or role. Please sign in again.');
+          setTimeout(() => navigate('/signin'), 1500);
+        } else {
+          setCurrentUser(data);
+        }
+      })
+      .catch(() => { localStorage.removeItem('token'); toast.error('Invalid token or role. Please sign in again.'); setTimeout(() => navigate('/signin'), 1500); });
+  }, [navigate]);
+
+  useEffect(() => {
+    if (!currentUser) return;
     const fetchTeacher = async () => {
       try {
         // fetch all users and find teacher by id (no single-user endpoint available)
@@ -54,7 +73,7 @@ function TeacherDetail() {
     };
 
     Promise.all([fetchTeacher(), fetchSubjects()]).finally(() => setLoading(false));
-  }, [id]);
+  }, [currentUser, id]);
 
   const handleAdd = async (e) => {
     e.preventDefault();
@@ -122,8 +141,22 @@ function TeacherDetail() {
           <div className="subjects-list">
             {(subjects || []).map(s => (
               <div key={s.id} className="subject-chip">
-                <span>{s.name}</span>
-                <button className="small-btn" onClick={() => openConfirmModal('ลบรายวิชา', 'ต้องการลบรายวิชานี้ใช่หรือไม่?', async () => { await handleDelete(s.id); })}>x</button>
+                <div className="subject-info">
+                  <span>{s.name}</span>
+                  <span className={`subject-status ${s.is_ended ? 'ended' : 'active'}`}>
+                    {s.is_ended ? '(จบแล้ว)' : '(กำลังดำเนินการ)'}
+                  </span>
+                </div>
+                <div className="subject-actions">
+                  {s.is_ended ? (
+                    <>
+                      <button className="small-btn" onClick={() => navigate(`/admin/subject/${s.id}/details`)}>View Details</button>
+                      <button className="small-btn" onClick={() => openConfirmModal('ลบรายวิชา', 'ต้องการลบรายวิชานี้ใช่หรือไม่?', async () => { await handleDelete(s.id); })}>ลบ</button>
+                    </>
+                  ) : (
+                    <button className="small-btn" onClick={() => navigate(`/admin/subject/${s.id}/details`)}>View Details</button>
+                  )}
+                </div>
               </div>
             ))}
           </div>

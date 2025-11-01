@@ -116,9 +116,39 @@ def delete_subject(subject_id: int, db: Session = Depends(get_db), current_user=
     subj = db.query(SubjectModel).filter(SubjectModel.id == subject_id).first()
     if not subj:
         raise HTTPException(status_code=404, detail="Subject not found")
-    # allow admin or the teacher assigned
-    if (getattr(current_user, 'role', None) != 'admin') and (subj.teacher_id != getattr(current_user, 'id', None)):
-        raise HTTPException(status_code=403, detail="Not authorized to delete this subject")
+    # only admin can delete, and only if ended
+    if getattr(current_user, 'role', None) != 'admin':
+        raise HTTPException(status_code=403, detail="Only admin can delete subjects")
+    if not subj.is_ended:
+        raise HTTPException(status_code=400, detail="Subject must be ended before deletion")
     db.delete(subj)
     db.commit()
     return
+
+
+@router.patch("/{subject_id}/end", response_model=Subject)
+def end_subject(subject_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    subj = db.query(SubjectModel).filter(SubjectModel.id == subject_id).first()
+    if not subj:
+        raise HTTPException(status_code=404, detail="Subject not found")
+    # only assigned teacher can end
+    if subj.teacher_id != getattr(current_user, 'id', None):
+        raise HTTPException(status_code=403, detail="Not authorized to end this subject")
+    subj.is_ended = True
+    db.commit()
+    db.refresh(subj)
+    return subj
+
+
+@router.patch("/{subject_id}/unend", response_model=Subject)
+def unend_subject(subject_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    subj = db.query(SubjectModel).filter(SubjectModel.id == subject_id).first()
+    if not subj:
+        raise HTTPException(status_code=404, detail="Subject not found")
+    # only assigned teacher can unend
+    if subj.teacher_id != getattr(current_user, 'id', None):
+        raise HTTPException(status_code=403, detail="Not authorized to unend this subject")
+    subj.is_ended = False
+    db.commit()
+    db.refresh(subj)
+    return subj

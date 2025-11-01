@@ -8,7 +8,8 @@ function AttendancePage(){
   const { id } = useParams(); // subject id
   const navigate = useNavigate();
   const [students, setStudents] = useState([]);
-  const [present, setPresent] = useState(new Set());
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0,10));
+  const [attendance, setAttendance] = useState({}); // student_id -> status ("present", "absent", "sick_leave", "other")
 
   useEffect(()=>{
     const load = async ()=>{
@@ -23,36 +24,41 @@ function AttendancePage(){
     load();
   },[id]);
 
-  // load today's attendance if any
+  // load attendance for selected date
   useEffect(()=>{
     const loadAttendance = async ()=>{
       try{
         const token = localStorage.getItem('token');
-        const today = new Date().toISOString().slice(0,10); // YYYY-MM-DD
-        const res = await fetch(`http://127.0.0.1:8000/attendance/?subject_id=${id}&date=${today}`, { headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
-        if (!res.ok) return;
+        const res = await fetch(`http://127.0.0.1:8000/attendance/?subject_id=${id}&date=${selectedDate}`, { headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
+        if (!res.ok) {
+          setAttendance({});
+          return;
+        }
         const data = await res.json();
         if (Array.isArray(data) && data.length>0){
           const rec = data[0];
-          if (rec && Array.isArray(rec.present)) setPresent(new Set(rec.present));
+          setAttendance(rec.attendance || {});
+        } else {
+          setAttendance({});
         }
-      }catch(err){ }
+      }catch(err){
+        setAttendance({});
+      }
     };
     loadAttendance();
-  },[id]);
+  },[id, selectedDate]);
 
-  const toggle = (sid)=>{
-    setPresent(prev=>{
-      const s = new Set(prev);
-      if(s.has(sid)) s.delete(sid); else s.add(sid);
-      return s;
-    });
+  const setStatus = (studentId, status)=>{
+    setAttendance(prev => ({
+      ...prev,
+      [studentId]: status
+    }));
   };
 
   const save = async ()=>{
     try{
       const token = localStorage.getItem('token');
-      const body = { subject_id: Number(id), present: Array.from(present) };
+      const body = { subject_id: Number(id), date: selectedDate, attendance: attendance };
       const res = await fetch('http://127.0.0.1:8000/attendance/mark', { method:'POST', headers:{ 'Content-Type':'application/json', ...(token?{Authorization:`Bearer ${token}`}:{}) }, body: JSON.stringify(body)});
       if (!res.ok) { const d = await res.json().catch(()=>({})); toast.error(d.detail || 'Save failed'); } else { toast.success('Attendance saved'); }
     }catch(err){ toast.error('Save failed'); }
@@ -63,9 +69,21 @@ function AttendancePage(){
       <ToastContainer />
       <div className="attendance-header">
         <h2 className="attendance-title">เช็คชื่อ - วิชา #{id}</h2>
-        <div className="attendance-actions">
-          <button onClick={()=>navigate(-1)} className="btn-back">กลับ</button>
-          <button onClick={save} className="btn-save">บันทึก</button>
+        <div className="attendance-controls">
+          <div className="date-picker">
+            <label htmlFor="attendance-date">วันที่: </label>
+            <input
+              type="date"
+              id="attendance-date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="date-input"
+            />
+          </div>
+          <div className="attendance-actions">
+            <button onClick={()=>navigate(-1)} className="btn-back">กลับ</button>
+            <button onClick={save} className="btn-save">บันทึก</button>
+          </div>
         </div>
       </div>
 
@@ -88,12 +106,18 @@ function AttendancePage(){
                     </div>
                   </td>
                   <td>
-                    <button
-                      className={`present-btn ${present.has(s.id) ? 'present' : 'absent'}`}
-                      onClick={()=>toggle(s.id)}
+                    <select
+                      value={attendance[s.id] || ''}
+                      onChange={(e) => setStatus(s.id, e.target.value)}
+                      className="status-select"
+                      data-status={attendance[s.id] || ''}
                     >
-                      {present.has(s.id) ? '✓ เข้าเรียน' : '✗ ขาดเรียน'}
-                    </button>
+                      <option value="">เลือกสถานะ</option>
+                      <option value="present">✓ เข้าเรียน</option>
+                      <option value="absent">✗ ขาดเรียน</option>
+                      <option value="sick_leave">🏥 ลาป่วย</option>
+                      <option value="other">❓ อื่นๆ</option>
+                    </select>
                   </td>
                 </tr>
               ))}
