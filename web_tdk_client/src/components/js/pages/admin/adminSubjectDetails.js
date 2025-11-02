@@ -141,8 +141,18 @@ function AdminSubjectDetails() {
 
   if (!subject) return (
     <div className="admin-container">
-      <h3>ไม่พบข้อมูลรายวิชา</h3>
-      <button className="create-user-btn" onClick={() => navigate('/admin')}>Back</button>
+      <div className="empty-state">
+        <div className="empty-icon">❌</div>
+        <div className="empty-text">ไม่พบข้อมูลรายวิชา</div>
+        <div className="empty-subtitle">กรุณาตรวจสอบ ID หรือติดต่อผู้ดูแลระบบ</div>
+        <button 
+          className="btn-back" 
+          onClick={() => navigate('/admin')}
+          style={{ marginTop: '1.5rem' }}
+        >
+          🔙 กลับหน้าหลัก
+        </button>
+      </div>
     </div>
   );
 
@@ -188,10 +198,13 @@ function AdminSubjectDetails() {
     // Letter grade
     let letterGrade = 'N/A';
     if (totalMax > 0) {
-      if (gradePercentage >= 90) letterGrade = 'A';
-      else if (gradePercentage >= 80) letterGrade = 'B';
-      else if (gradePercentage >= 70) letterGrade = 'C';
-      else if (gradePercentage >= 60) letterGrade = 'D';
+      if (gradePercentage >= 80) letterGrade = 'A';
+      else if (gradePercentage >= 75) letterGrade = 'B+';
+      else if (gradePercentage >= 70) letterGrade = 'B';
+      else if (gradePercentage >= 65) letterGrade = 'C+';
+      else if (gradePercentage >= 60) letterGrade = 'C';
+      else if (gradePercentage >= 55) letterGrade = 'D+';
+      else if (gradePercentage >= 50) letterGrade = 'D';
       else letterGrade = 'F';
     }
 
@@ -208,49 +221,51 @@ function AdminSubjectDetails() {
     <div className="admin-container">
       <ToastContainer />
       <div className="header-section">
-        <h2 className="admin-title">Subject Details: {subject.name}</h2>
-        <button className="btn-back" onClick={() => navigate(-1)}>Back</button>
+        <h2 className="admin-title">📚 {subject.name}</h2>
+        <button className="btn-back" onClick={() => navigate(-1)}>
+          🔙 กลับ
+        </button>
       </div>
       <div className="subject-details-section">
         <div className="subject-info-card">
           <h3>Subject Information</h3>
           <div className="info-grid">
             <div className="info-item">
-              <span className="label">ID:</span>
+              <span className="label">🆔 รหัสรายวิชา:</span>
               <span className="value">{subject.id}</span>
             </div>
             <div className="info-item">
-              <span className="label">Teacher:</span>
+              <span className="label">👨‍🏫 ครูผู้สอน:</span>
               <span className="value">
                 {subject.teacher ? (
                   (subject.teacher.full_name && subject.teacher.full_name.trim()) ? subject.teacher.full_name : (subject.teacher.username || subject.teacher.email || `User #${subject.teacher.id}`)
                 ) : (
-                  subject.teacher_id ? `Teacher ID: ${subject.teacher_id} (not found)` : 'Unknown'
+                  subject.teacher_id ? `Teacher ID: ${subject.teacher_id} (ไม่พบข้อมูล)` : 'ไม่ทราบ'
                 )}
               </span>
             </div>
             <div className="info-item">
-              <span className="label">Status:</span>
-              <span className={`value status-${subject.is_ended ? 'ended' : 'active'}`}>
-                {subject.is_ended ? 'Ended' : 'Active'}
+              <span className="label">📊 สถานะ:</span>
+              <span className={`status-${subject.is_ended ? 'ended' : 'active'}`}>
+                {subject.is_ended ? '✅ จบแล้ว' : '🔄 กำลังดำเนินการ'}
               </span>
             </div>
             <div className="info-item">
-              <span className="label">Total Students:</span>
-              <span className="value">{students.length}</span>
+              <span className="label">👥 จำนวนนักเรียน:</span>
+              <span className="value">{students.length} คน</span>
             </div>
           </div>
         </div>
 
         <div className="summary-section">
-          <h3>Student Summaries</h3>
+          <h3>สรุปข้อมูลนักเรียน</h3>
           <div className="summary-table-container">
             <table className="summary-table">
               <thead>
                 <tr>
-                  <th>Student</th>
-                  <th>Attendance</th>
-                  <th>Grade</th>
+                  <th>👤 นักเรียน</th>
+                  <th>📅 การเข้าเรียน</th>
+                  <th>📝 เกรด</th>
                 </tr>
               </thead>
               <tbody>
@@ -262,8 +277,8 @@ function AdminSubjectDetails() {
                     </td>
                     <td className="attendance-cell">
                       <div className="attendance-stats">
-                        <div className="stat">Present: {student.attendance.present}</div>
-                        <div className="stat">Absent: {student.attendance.absent}</div>
+                        <div className="stat">✅ มาเรียน: {student.attendance.present}</div>
+                        <div className="stat">❌ ขาดเรียน: {student.attendance.absent}</div>
                         <div className={`percentage ${student.attendance.percentage >= 80 ? 'good' : student.attendance.percentage >= 60 ? 'warning' : 'bad'}`}>
                           {student.attendance.percentage}%
                         </div>
@@ -285,15 +300,26 @@ function AdminSubjectDetails() {
         </div>
 
         <div className="details-section">
-          <h3>Detailed Records</h3>
+          <h3>รายละเอียดข้อมูล</h3>
           <div className="tabs">
-            <button className={`tab-button ${activeTab === 'attendance' ? 'active' : ''}`} onClick={() => setActiveTab('attendance')}>Attendance Details</button>
-            <button className={`tab-button ${activeTab === 'grades' ? 'active' : ''}`} onClick={() => setActiveTab('grades')}>Grades Details</button>
+            <button className={`tab-button ${activeTab === 'attendance' ? 'active' : ''}`} onClick={() => setActiveTab('attendance')}>
+              📅 รายละเอียดการเข้าเรียน
+            </button>
+            <button className={`tab-button ${activeTab === 'grades' ? 'active' : ''}`} onClick={() => setActiveTab('grades')}>
+              📝 รายละเอียดเกรด
+            </button>
           </div>
           <div className="tab-content">
             {activeTab === 'attendance' && (
               <div className="attendance-section">
-                <h4>Attendance Records</h4>
+                <h4>📋 บันทึกการเข้าเรียน</h4>
+                {attendanceDates.length === 0 ? (
+                  <div className="empty-state">
+                    <div className="empty-icon">📅</div>
+                    <div className="empty-text">ยังไม่มีข้อมูลการเข้าเรียน</div>
+                    <div className="empty-subtitle">ครูจะบันทึกการเข้าเรียนในภายหลัง</div>
+                  </div>
+                ) : (
                 <div className="table-container">
                   <table className="attendance-table">
                     <thead>
@@ -318,11 +344,19 @@ function AdminSubjectDetails() {
                     </tbody>
                   </table>
                 </div>
+                )}
               </div>
             )}
             {activeTab === 'grades' && (
               <div className="grades-section">
-                <h4>Grades Records</h4>
+                <h4>📊 บันทึกเกรด</h4>
+                {assignments.length === 0 ? (
+                  <div className="empty-state">
+                    <div className="empty-icon">📝</div>
+                    <div className="empty-text">ยังไม่มีข้อมูลเกรด</div>
+                    <div className="empty-subtitle">ครูจะบันทึกเกรดเมื่อมีการสอบหรืองาน</div>
+                  </div>
+                ) : (
                 <div className="table-container">
                   <table className="grades-table">
                     <thead>
@@ -346,6 +380,7 @@ function AdminSubjectDetails() {
                     </tbody>
                   </table>
                 </div>
+                )}
               </div>
             )}
           </div>

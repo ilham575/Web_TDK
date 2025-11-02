@@ -323,36 +323,36 @@ function TeacherPage() {
         <div className="teacher-welcome">
           <div className="teacher-avatar" aria-hidden>{initials(currentUser?.full_name || currentUser?.username)}</div>
           <div className="teacher-info">
-            <h2 className="teacher-title">{`สวัสดี, ${currentUser ? (currentUser.full_name || currentUser.username) : 'ครู'}`}</h2>
-            <p className="teacher-subtitle">จัดการรายวิชา และประกาศข่าวของโรงเรียน</p>
+            <h2 className="teacher-title">{`👋 สวัสดี, ${currentUser ? (currentUser.full_name || currentUser.username) : 'ครู'}`}</h2>
+            <p className="teacher-subtitle">🎓 จัดการรายวิชา และประกาศข่าวของโรงเรียนอย่างมีประสิทธิภาพ</p>
           </div>
         </div>
 
         <div className="teacher-actions">
           <div className="teacher-stats">
-            <div className="stats-card">
+            <div className="stats-card floating-effect">
               <div className="stats-value">{teacherSubjects.length}</div>
               <div className="stats-label">รายวิชา</div>
             </div>
-            <div className="stats-card">
+            <div className="stats-card floating-effect">
               <div className="stats-value">{Array.isArray(announcements) ? announcements.length : 0}</div>
               <div className="stats-label">ข่าวสาร</div>
             </div>
           </div>
-          <button onClick={handleSignout} className="teacher-signout-btn">Sign out</button>
+          <button onClick={handleSignout} className="teacher-signout-btn">🚪 ออกจากระบบ</button>
         </div>
       </div>
 
       <div className="teacher-body">
         <div className="tabs-header">
-          <button className={`tab-button ${activeTab === 'subjects' ? 'active' : ''}`} onClick={() => setActiveTab('subjects')}>รายวิชา</button>
-          <button className={`tab-button ${activeTab === 'announcements' ? 'active' : ''}`} onClick={() => setActiveTab('announcements')}>ประกาศข่าว</button>
+          <button className={`tab-button ${activeTab === 'subjects' ? 'active' : ''}`} onClick={() => setActiveTab('subjects')}>📚 รายวิชา</button>
+          <button className={`tab-button ${activeTab === 'announcements' ? 'active' : ''}`} onClick={() => setActiveTab('announcements')}>📢 ประกาศข่าว</button>
         </div>
         <div className="tab-content">
           {activeTab === 'subjects' && (
             <section className="teacher-section">
-              <h3 className="section-title">รายวิชาของฉัน</h3>
-              <p className="section-description">หมายเหตุ: การเพิ่ม/แก้ไขรายวิชาทำโดยผู้ดูแลระบบ (admin). คุณสามารถจัดการนักเรียนภายในรายวิชาของคุณได้ที่นี่</p>
+              <h3 className="section-title">📚 รายวิชาของฉัน</h3>
+              <p className="section-description">✨ จัดการรายวิชาและนักเรียน พร้อมเครื่องมือที่ครบครัน สำหรับการเรียนการสอนที่มีประสิทธิภาพ</p>
               {Array.isArray(teacherSubjects) && teacherSubjects.length === 0 && <div className="empty-state">ยังไม่มีรายวิชา</div>}
               {Array.isArray(teacherSubjects) && teacherSubjects.map(sub => (
                 <div key={sub.id} className="subject-item">

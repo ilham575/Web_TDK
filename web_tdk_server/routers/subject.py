@@ -121,6 +121,21 @@ def delete_subject(subject_id: int, db: Session = Depends(get_db), current_user=
         raise HTTPException(status_code=403, detail="Only admin can delete subjects")
     if not subj.is_ended:
         raise HTTPException(status_code=400, detail="Subject must be ended before deletion")
+
+    # Delete related records first to avoid foreign key constraint errors
+    from models.attendance import Attendance as AttendanceModel
+    from models.grade import Grade as GradeModel
+
+    # Delete attendance records
+    db.query(AttendanceModel).filter(AttendanceModel.subject_id == subject_id).delete()
+
+    # Delete grade records
+    db.query(GradeModel).filter(GradeModel.subject_id == subject_id).delete()
+
+    # Delete student enrollments
+    db.query(SubjectStudentModel).filter(SubjectStudentModel.subject_id == subject_id).delete()
+
+    # Now delete the subject
     db.delete(subj)
     db.commit()
     return

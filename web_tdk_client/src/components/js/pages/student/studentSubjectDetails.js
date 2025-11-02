@@ -162,10 +162,13 @@ function StudentSubjectDetails() {
 
   let letterGrade = 'N/A';
   if (totalMax > 0) {
-    if (gradePercentage >= 90) letterGrade = 'A';
-    else if (gradePercentage >= 80) letterGrade = 'B';
-    else if (gradePercentage >= 70) letterGrade = 'C';
-    else if (gradePercentage >= 60) letterGrade = 'D';
+    if (gradePercentage >= 80) letterGrade = 'A';
+    else if (gradePercentage >= 75) letterGrade = 'B+';
+    else if (gradePercentage >= 70) letterGrade = 'B';
+    else if (gradePercentage >= 65) letterGrade = 'C+';
+    else if (gradePercentage >= 60) letterGrade = 'C';
+    else if (gradePercentage >= 55) letterGrade = 'D+';
+    else if (gradePercentage >= 50) letterGrade = 'D';
     else letterGrade = 'F';
   }
 
@@ -181,10 +184,11 @@ function StudentSubjectDetails() {
         <div className="summary-card attendance-card">
           <div className="card-icon">📅</div>
           <div className="card-content">
-            <h3>การมาเรียน</h3>
+            <h3>📅 การมาเรียน</h3>
             <div className="stats">
-              <div className="stat">มาเรียน: {presentCount} วัน</div>
-              <div className="stat">ขาดเรียน: {absentCount} วัน</div>
+              <div className="stat">✅ มาเรียน: <strong>{presentCount}</strong> วัน</div>
+              <div className="stat">❌ ขาดเรียน: <strong>{absentCount}</strong> วัน</div>
+              <div className="stat">📈 จากทั้งหมด: <strong>{totalDays}</strong> วัน</div>
               <div className={`percentage ${attendancePercentage >= 80 ? 'good' : attendancePercentage >= 60 ? 'warning' : 'bad'}`}>
                 {attendancePercentage}%
               </div>
@@ -193,14 +197,17 @@ function StudentSubjectDetails() {
         </div>
 
         <div className="summary-card grade-card">
-          <div className="card-icon">📊</div>
+          <div className="card-icon">🎯</div>
           <div className="card-content">
-            <h3>คะแนนรวม</h3>
+            <h3>🏆 คะแนนรวม</h3>
             <div className="grade-display">
-              <div className={`letter-grade grade-${letterGrade.toLowerCase()}`}>
+              <div className={`letter-grade grade-${letterGrade.toLowerCase().replace('+', 'plus')}`}>
                 {letterGrade}
               </div>
-              <div className="percentage">{gradePercentage}%</div>
+              <div className="grade-details">
+                <div className="percentage">{gradePercentage}%</div>
+                <div className="score-breakdown">{totalScore}/{totalMax} คะแนน</div>
+              </div>
             </div>
           </div>
         </div>
@@ -215,59 +222,79 @@ function StudentSubjectDetails() {
         <div className="tab-content">
           {activeTab === 'attendance' && (
             <div className="attendance-section">
-              <h4>ประวัติการมาเรียน</h4>
-              <div className="table-container">
-                <table className="attendance-table">
-                  <thead>
-                    <tr>
-                      <th>วันที่</th>
-                      <th>สถานะ</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {attendanceDates.map(date => (
-                      <tr key={date}>
-                        <td>{new Date(date).toLocaleDateString('th-TH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</td>
-                        <td className={`status ${attendanceMap[date] && attendanceMap[date][currentUser.id] ? 'present' : 'absent'}`}>
-                          {attendanceMap[date] && attendanceMap[date][currentUser.id] ? '✓ มาเรียน' : '✗ ขาดเรียน'}
-                        </td>
+              <h4>📋 ประวัติการมาเรียน</h4>
+              {attendanceDates.length === 0 ? (
+                <div className="empty-state">
+                  <div className="empty-icon">📅</div>
+                  <p>ยังไม่มีข้อมูลการมาเรียน</p>
+                </div>
+              ) : (
+                <div className="table-container">
+                  <table className="attendance-table">
+                    <thead>
+                      <tr>
+                        <th>📅 วันที่</th>
+                        <th>📊 สถานะ</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {attendanceDates.map(date => (
+                        <tr key={date}>
+                          <td>{new Date(date).toLocaleDateString('th-TH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</td>
+                          <td className={`status ${attendanceMap[date] && attendanceMap[date][currentUser.id] ? 'present' : 'absent'}`}>
+                            {attendanceMap[date] && attendanceMap[date][currentUser.id] ? '✅ มาเรียน' : '❌ ขาดเรียน'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
 
           {activeTab === 'grades' && (
             <div className="grades-section">
-              <h4>คะแนนรายการ</h4>
-              <div className="table-container">
-                <table className="grades-table">
-                  <thead>
-                    <tr>
-                      <th>การบ้าน/งาน</th>
-                      <th>คะแนนที่ได้</th>
-                      <th>คะแนนเต็ม</th>
-                      <th>เปอร์เซ็นต์</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {assignments.map(ass => {
-                      const g = gradeMap[ass.title];
-                      const percentage = g && g.max_score > 0 ? Math.round((g.grade / g.max_score) * 100) : 0;
-                      return (
-                        <tr key={ass.id}>
-                          <td>{ass.title}</td>
-                          <td>{g ? g.grade || 0 : '-'}</td>
-                          <td>{ass.max_score}</td>
-                          <td>{g ? `${percentage}%` : '-'}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              <h4>📝 คะแนนรายการ</h4>
+              {assignments.length === 0 ? (
+                <div className="empty-state">
+                  <div className="empty-icon">📝</div>
+                  <p>ยังไม่มีการบ้านหรืองานที่ได้รับคะแนน</p>
+                </div>
+              ) : (
+                <div className="table-container">
+                  <table className="grades-table">
+                    <thead>
+                      <tr>
+                        <th>📚 การบ้าน/งาน</th>
+                        <th>🎯 คะแนนที่ได้</th>
+                        <th>💯 คะแนนเต็ม</th>
+                        <th>📈 เปอร์เซ็นต์</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {assignments.map(ass => {
+                        const g = gradeMap[ass.title];
+                        const percentage = g && g.max_score > 0 ? Math.round((g.grade / g.max_score) * 100) : 0;
+                        return (
+                          <tr key={ass.id}>
+                            <td><strong>{ass.title}</strong></td>
+                            <td><span className="score-value">{g ? g.grade || 0 : '-'}</span></td>
+                            <td>{ass.max_score}</td>
+                            <td>
+                              {g ? (
+                                <span className={`percentage-badge ${percentage >= 80 ? 'excellent' : percentage >= 60 ? 'good' : 'needs-improvement'}`}>
+                                  {percentage}%
+                                </span>
+                              ) : '-'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
         </div>

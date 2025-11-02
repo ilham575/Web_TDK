@@ -301,8 +301,10 @@ function AdminPage() {
         <div className="header-left">
           <div className="avatar" aria-hidden>{initials(currentUser?.full_name || currentUser?.username)}</div>
           <div className="user-info">
-            <h1>{`สวัสดี, ${currentUser ? (currentUser.full_name || currentUser.username) : 'Admin'}!`}</h1>
-            <div className="user-info-subtitle">จัดการผู้ใช้และประกาศของโรงเรียน</div>
+            <h1>{`สวัสดี, ${currentUser ? (currentUser.full_name || currentUser.username) : 'Admin'}! 👋`}</h1>
+            <div className="user-info-subtitle">
+              🏫 จัดการผู้ใช้และประกาศของโรงเรียน{displaySchool !== '-' ? displaySchool : ''}
+            </div>
           </div>
         </div>
 
@@ -312,32 +314,44 @@ function AdminPage() {
             <div className="account-email">{currentUser?.email || ''}</div>
           </div>
           <div className="header-actions">
-            <button className="btn-primary" onClick={() => setShowModal(true)}>Create User</button>
-            <button className="btn-danger" onClick={handleSignout}>Sign out</button>
+            <button 
+              className="btn-primary" 
+              onClick={() => setShowModal(true)}
+              title="สร้างผู้ใช้ใหม่"
+            >
+              ➕ เพิ่มผู้ใช้ใหม่
+            </button>
+            <button 
+              className="btn-danger" 
+              onClick={handleSignout}
+              title="ออกจากระบบ"
+            >
+              🚪 ออกจากระบบ
+            </button>
           </div>
         </div>
       </div>
 
       <div className="stats-section">
-        <div className="stats-card stats-teachers">
+        <div className="stats-card stats-teachers" title="จำนวนครูทั้งหมดในโรงเรียน">
           <div className="stats-icon">👨‍🏫</div>
           <div className="stats-content">
             <div className="stats-value">{teachers.length}</div>
-            <div className="stats-label">Teachers</div>
+            <div className="stats-label">ครูผู้สอน</div>
           </div>
         </div>
-        <div className="stats-card stats-students">
+        <div className="stats-card stats-students" title="จำนวนนักเรียนทั้งหมดในโรงเรียน">
           <div className="stats-icon">👨‍🎓</div>
           <div className="stats-content">
             <div className="stats-value">{students.length}</div>
-            <div className="stats-label">Students</div>
+            <div className="stats-label">นักเรียน</div>
           </div>
         </div>
-        <div className="stats-card stats-announcements">
+        <div className="stats-card stats-announcements" title="จำนวนประกาศที่ยังใช้งานได้">
           <div className="stats-icon">📢</div>
           <div className="stats-content">
-            <div className="stats-value">{(Array.isArray(announcements) ? announcements.length : 0)}</div>
-            <div className="stats-label">Announcements</div>
+            <div className="stats-value">{(Array.isArray(announcements) ? announcements.filter(a => !isExpired(a)).length : 0)}</div>
+            <div className="stats-label">ประกาศข่าว</div>
           </div>
         </div>
       </div>
@@ -355,44 +369,88 @@ function AdminPage() {
             <div className="card-content">
               <div className="user-management">
                 <div className="user-section">
-                  <h3><span className="card-icon">👨‍🏫</span> Teachers</h3>
+                  <h3><span className="card-icon">👨‍🏫</span> ครูผู้สอน ({teachers.length} คน)</h3>
                   {loadingUsers && <Loading message="กำลังโหลดข้อมูลผู้ใช้..." />}
-                  {usersError && <div className="error-message">{usersError}</div>}
-                  <ul className="user-list">
-                    {teachers.map((teacher)=> (
-                      <li key={teacher.id} className="user-item">
-                        <div className="user-info">
-                          <div className="user-name">{teacher.full_name || teacher.username}</div>
-                          <div className="user-email">{teacher.email}</div>
-                        </div>
-                        <div className="user-actions">
-                          <button className="btn-small" onClick={() => navigate(`/admin/teacher/${teacher.id}`)}>See</button>
-                          <button className="btn-small btn-danger" onClick={() => openConfirmModal('รีเซ็ตรหัสผ่าน', 'ต้องการรีเซ็ตรหัสผ่านผู้ใช้คนนี้ใช่หรือไม่?', async () => {
-                            const token = localStorage.getItem('token');
-                            try {
-                              const res = await fetch(`http://127.0.0.1:8000/users/${teacher.id}/admin_reset`, { method:'POST', headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
-                              const data = await res.json();
-                              if (!res.ok) { toast.error(data.detail || 'Reset failed'); } else { openAlertModal('Temporary password', `Temporary password for user ${teacher.username || teacher.email || ''}\n\n${data.temp_password}`); toast.success('รีเซ็ตรหัสผ่านสำเร็จ'); }
-                            } catch (err) { console.error(err); toast.error('Reset failed'); }
-                          })}>Reset</button>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
+                  {usersError && <div className="error-message">❌ {usersError}</div>}
+                  {teachers.length === 0 && !loadingUsers ? (
+                    <div className="empty-state">
+                      <div className="empty-icon">👨‍🏫</div>
+                      <div className="empty-text">ยังไม่มีครูผู้สอน</div>
+                      <div className="empty-subtitle">เริ่มต้นโดยการเพิ่มครูผู้สอนใหม่</div>
+                    </div>
+                  ) : (
+                    <ul className="user-list">
+                      {teachers.map((teacher)=> (
+                        <li key={teacher.id} className="user-item">
+                          <div className="user-info">
+                            <div className="user-name">👤 {teacher.full_name || teacher.username}</div>
+                            <div className="user-email">📧 {teacher.email}</div>
+                          </div>
+                          <div className="user-actions">
+                            <button 
+                              className="btn-small" 
+                              onClick={() => navigate(`/admin/teacher/${teacher.id}`)}
+                              title="ดูรายละเอียดครู"
+                            >
+                              👁️ ดูรายละเอียด
+                            </button>
+                            <button 
+                              className="btn-small btn-danger" 
+                              onClick={() => openConfirmModal('รีเซ็ตรหัสผ่าน', `ต้องการรีเซ็ตรหัสผ่านของ "${teacher.full_name || teacher.username}" ใช่หรือไม่?`, async () => {
+                                const token = localStorage.getItem('token');
+                                try {
+                                  const res = await fetch(`http://127.0.0.1:8000/users/${teacher.id}/admin_reset`, { method:'POST', headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
+                                  const data = await res.json();
+                                  if (!res.ok) { toast.error(data.detail || 'รีเซ็ตรหัสผ่านไม่สำเร็จ'); } else { openAlertModal('รหัสผ่านชั่วคราว', `รหัสผ่านชั่วคราวสำหรับ: ${teacher.username || teacher.email || ''}\n\n🔑 ${data.temp_password}`); toast.success('รีเซ็ตรหัสผ่านสำเร็จ'); }
+                                } catch (err) { console.error(err); toast.error('เกิดข้อผิดพลาดในการรีเซ็ตรหัสผ่าน'); }
+                              })}
+                              title="รีเซ็ตรหัสผ่าน"
+                            >
+                              🔄 รีเซ็ต
+                            </button>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
 
                 <div className="user-section">
-                  <h3><span className="card-icon">👨‍🎓</span> Students</h3>
-                  <ul className="user-list">
-                    {students.map(student => (
-                      <li key={student.id} className="user-item">
-                        <div className="user-info">
-                          <div className="user-name">{student.full_name || student.username}</div>
-                          <div className="user-email">{student.email}</div>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
+                  <h3><span className="card-icon">👨‍🎓</span> นักเรียน ({students.length} คน)</h3>
+                  {students.length === 0 && !loadingUsers ? (
+                    <div className="empty-state">
+                      <div className="empty-icon">👨‍🎓</div>
+                      <div className="empty-text">ยังไม่มีนักเรียน</div>
+                      <div className="empty-subtitle">เริ่มต้นโดยการเพิ่มนักเรียนใหม่</div>
+                    </div>
+                  ) : (
+                    <ul className="user-list">
+                      {students.map(student => (
+                        <li key={student.id} className="user-item">
+                          <div className="user-info">
+                            <div className="user-name">🎓 {student.full_name || student.username}</div>
+                            <div className="user-email">📧 {student.email}</div>
+                          </div>
+                          <div className="user-actions">
+                            <button 
+                              className="btn-small btn-secondary" 
+                              onClick={() => openConfirmModal('รีเซ็ตรหัสผ่าน', `ต้องการรีเซ็ตรหัสผ่านของ "${student.full_name || student.username}" ใช่หรือไม่?`, async () => {
+                                const token = localStorage.getItem('token');
+                                try {
+                                  const res = await fetch(`http://127.0.0.1:8000/users/${student.id}/admin_reset`, { method:'POST', headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
+                                  const data = await res.json();
+                                  if (!res.ok) { toast.error(data.detail || 'รีเซ็ตรหัสผ่านไม่สำเร็จ'); } else { openAlertModal('รหัสผ่านชั่วคราว', `รหัสผ่านชั่วคราวสำหรับ: ${student.username || student.email || ''}\n\n🔑 ${data.temp_password}`); toast.success('รีเซ็ตรหัสผ่านสำเร็จ'); }
+                                } catch (err) { console.error(err); toast.error('เกิดข้อผิดพลาดในการรีเซ็ตรหัสผ่าน'); }
+                              })}
+                              title="รีเซ็ตรหัสผ่าน"
+                            >
+                              🔄 รีเซ็ต
+                            </button>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
 
                 <div className="bulk-upload-section">

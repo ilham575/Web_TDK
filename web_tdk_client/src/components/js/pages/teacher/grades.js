@@ -47,7 +47,9 @@ function GradesPage(){
   // Calculate percentage
   const calculatePercentage = (score, max) => {
     if (!score || !max || max === 0) return 0;
-    return Math.round((score / max) * 100);
+    // Ensure score doesn't exceed max
+    const validScore = Math.min(Number(score), max);
+    return Math.round((validScore / max) * 100);
   };
 
   useEffect(()=>{
@@ -123,6 +125,17 @@ function GradesPage(){
   },[id]);
 
   const setGrade = (sid, value) => {
+    // Validate that the grade doesn't exceed max score
+    const numValue = Number(value);
+    if (!isNaN(numValue) && numValue > maxScore) {
+      toast.error(`คะแนนต้องไม่เกิน ${maxScore} คะแนน`);
+      return;
+    }
+    if (!isNaN(numValue) && numValue < 0) {
+      toast.error('คะแนนต้องไม่ติดลบ');
+      return;
+    }
+
     setGrades(prev => ({
       ...prev,
       [selectedAssignmentId]: {
@@ -141,9 +154,23 @@ function GradesPage(){
       toast.error('คะแนนเต็มต้องมากกว่า 0');
       return;
     }
+
+    // Validate all grades don't exceed max score
+    const currentGrades = grades[selectedAssignmentId] || {};
+    for (const [studentId, grade] of Object.entries(currentGrades)) {
+      const numGrade = Number(grade);
+      if (!isNaN(numGrade) && numGrade > maxScore) {
+        toast.error(`คะแนนของนักเรียนต้องไม่เกิน ${maxScore} คะแนน`);
+        return;
+      }
+      if (!isNaN(numGrade) && numGrade < 0) {
+        toast.error('คะแนนต้องไม่ติดลบ');
+        return;
+      }
+    }
+
     try{
       const token = localStorage.getItem('token');
-      const currentGrades = grades[selectedAssignmentId] || {};
       const payload = {
         subject_id: Number(id),
         title: title.trim(),
@@ -431,12 +458,14 @@ function GradesPage(){
 
     assignments.forEach(assignment => {
       const assignmentGrades = grades[assignment.id] || {};
-      const score = assignmentGrades[studentId] ? Number(assignmentGrades[studentId]) : 0;
+      const rawScore = assignmentGrades[studentId] ? Number(assignmentGrades[studentId]) : 0;
+      // Ensure score doesn't exceed max score
+      const score = Math.min(rawScore, assignment.max_score);
       const maxScore = assignment.max_score;
-      
+
       totalScore += score;
       totalMaxScore += maxScore;
-      
+
       assignmentDetails.push({
         title: assignment.title,
         score: score,
@@ -455,9 +484,7 @@ function GradesPage(){
       overallGrade,
       assignmentDetails
     };
-  };
-
-  return (
+  };  return (
     <div className="grades-container">
       <ToastContainer />
       <div className="grades-header">
@@ -571,13 +598,16 @@ function GradesPage(){
                           max={maxScore}
                           value={currentGrades[s.id] || ''}
                           onChange={e=>setGrade(s.id, e.target.value)}
-                          className="grades-input"
+                          className={`grades-input ${currentGrades[s.id] && Number(currentGrades[s.id]) > maxScore ? 'grade-error' : ''}`}
                           placeholder={`0-${maxScore}`}
                           data-grade={
                             percentage >= 80 ? 'excellent' :
                             percentage >= 60 ? 'good' : 'poor'
                           }
                         />
+                        {currentGrades[s.id] && Number(currentGrades[s.id]) > maxScore && (
+                          <div className="grade-warning">⚠️ เกินคะแนนเต็ม</div>
+                        )}
                       </div>
                     </td>
                     <td className="percentage-cell">

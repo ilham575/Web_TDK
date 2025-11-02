@@ -168,53 +168,115 @@ function TeacherDetail() {
 
   if (!teacher) return (
     <div className="admin-container">
-      <h3>ไม่พบข้อมูลครู</h3>
-      <button className="create-user-btn" onClick={() => navigate('/admin')}>Back</button>
+      <div className="subjects-empty">
+        <div className="subjects-empty-icon">❌</div>
+        <div className="subjects-empty-text">ไม่พบข้อมูลครู</div>
+        <div className="subjects-empty-subtitle">กรุณาตรวจสอบ ID หรือติดต่อผู้ดูแลระบบ</div>
+        <button 
+          className="user-submit" 
+          onClick={() => navigate('/admin')}
+          style={{ marginTop: '1rem' }}
+        >
+          🔙 กลับหน้าหลัก
+        </button>
+      </div>
     </div>
   );
 
   return (
     <div className="admin-container">
       <ToastContainer />
-      <h2 className="admin-title">Teacher: {teacher.full_name || teacher.username}</h2>
+      <h2 className="admin-title">
+        👨‍🏫 {teacher.full_name || teacher.username}
+      </h2>
+      
       <div className="teacher-detail-section">
         <div className="subjects-container">
-          <h4 className="subjects-title">Subjects</h4>
-          <div className="subjects-list">
-            {(subjects || []).map(s => (
-              <div key={s.id} className="subject-chip">
-                <div className="subject-info">
-                  <span>{s.name}</span>
-                  <span className={`subject-status ${s.is_ended ? 'ended' : 'active'}`}>
-                    {s.is_ended ? '(จบแล้ว)' : '(กำลังดำเนินการ)'}
-                  </span>
+          <h4 className="subjects-title">รายวิชาทั้งหมด</h4>
+          
+          {(subjects || []).length === 0 ? (
+            <div className="subjects-empty">
+              <div className="subjects-empty-icon">📚</div>
+              <div className="subjects-empty-text">ยังไม่มีรายวิชา</div>
+              <div className="subjects-empty-subtitle">เริ่มต้นโดยการเพิ่มรายวิชาใหม่ด้านล่าง</div>
+            </div>
+          ) : (
+            <div className="subjects-list">
+              {(subjects || []).map(s => (
+                <div key={s.id} className="subject-chip">
+                  <div className="subject-info">
+                    <span>{s.name}</span>
+                    <span className={`subject-status ${s.is_ended ? 'ended' : 'active'}`}>
+                      {s.is_ended ? '✅ จบแล้ว' : '🔄 กำลังดำเนินการ'}
+                    </span>
+                  </div>
+                  <div className="subject-actions">
+                    <button 
+                      className="small-btn" 
+                      onClick={() => navigate(`/admin/subject/${s.id}/details`)}
+                      title="ดูรายละเอียด"
+                    >
+                      📊 รายละเอียด
+                    </button>
+                    {s.is_ended && (
+                      <button 
+                        className="small-btn" 
+                        onClick={() => openConfirmModal(
+                          'ลบรายวิชา', 
+                          `ต้องการลบรายวิชา "${s.name}" ใช่หรือไม่?`, 
+                          async () => { await handleDelete(s.id); }
+                        )}
+                        title="ลบรายวิชา"
+                      >
+                        🗑️ ลบ
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <div className="subject-actions">
-                  {s.is_ended ? (
-                    <>
-                      <button className="small-btn" onClick={() => navigate(`/admin/subject/${s.id}/details`)}>View Details</button>
-                      <button className="small-btn" onClick={() => openConfirmModal('ลบรายวิชา', 'ต้องการลบรายวิชานี้ใช่หรือไม่?', async () => { await handleDelete(s.id); })}>ลบ</button>
-                    </>
-                  ) : (
-                    <button className="small-btn" onClick={() => navigate(`/admin/subject/${s.id}/details`)}>View Details</button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
+        
         <form className="add-subject-form" onSubmit={handleAdd}>
-          <input className="user-input" placeholder="ชื่อรายวิชาใหม่" value={newSubjectName} onChange={e => setNewSubjectName(e.target.value)} />
-          <button className="user-submit" type="submit" disabled={creating}>{creating ? 'Adding...' : 'Add'}</button>
-          <button type="button" className="btn-cancel" onClick={() => navigate('/admin')}>Back</button>
+          <input 
+            className="user-input" 
+            placeholder="กรอกชื่อรายวิชาใหม่..." 
+            value={newSubjectName} 
+            onChange={e => setNewSubjectName(e.target.value)}
+            autoComplete="off"
+          />
+          <button 
+            className="user-submit" 
+            type="submit" 
+            disabled={creating || !newSubjectName.trim()}
+          >
+            {creating ? '⏳ กำลังเพิ่ม...' : '➕ เพิ่มรายวิชา'}
+          </button>
+          <button 
+            type="button" 
+            className="btn-cancel" 
+            onClick={() => navigate('/admin')}
+          >
+            🔙 กลับ
+          </button>
         </form>
       </div>
+      
       <ConfirmModal
         isOpen={showConfirmModal}
         title={confirmTitle}
         message={confirmMessage}
         onCancel={() => setShowConfirmModal(false)}
-        onConfirm={async () => { setShowConfirmModal(false); try { await onConfirmAction(); } catch (e) { console.error(e); } }}
+        onConfirm={async () => { 
+          setShowConfirmModal(false); 
+          try { 
+            await onConfirmAction(); 
+          } catch (e) { 
+            console.error(e);
+            toast.error('เกิดข้อผิดพลาดขณะดำเนินการ');
+          } 
+        }}
       />
     </div>
   );
