@@ -15,6 +15,11 @@ function ResetPasswordPage() {
   const query = useQuery();
   const token = query.get('token') || '';
 
+  // Set page title
+  useEffect(() => {
+    document.title = 'ตั้งรหัสผ่านใหม่ - ศูนย์การเรียนรู้อิสลามประจำมัสยิด';
+  }, []);
+
   useEffect(() => {
     if (!token) {
       toast.error('Missing reset token');

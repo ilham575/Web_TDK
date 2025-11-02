@@ -29,6 +29,11 @@ function SigninPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  // Set page title
+  useEffect(() => {
+    document.title = 'เข้าสู่ระบบ - ศูนย์การเรียนรู้อิสลามประจำมัสยิด';
+  }, []);
   const navigate = useNavigate();
   const location = useLocation();
 

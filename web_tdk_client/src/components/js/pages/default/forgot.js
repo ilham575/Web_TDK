@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -11,6 +11,11 @@ function ForgotPage() {
   const [showAlertModal, setShowAlertModal] = useState(false);
   const [alertTitle, setAlertTitle] = useState('');
   const [alertMessage, setAlertMessage] = useState('');
+
+  // Set page title
+  useEffect(() => {
+    document.title = 'ลืมรหัสผ่าน - ศูนย์การเรียนรู้อิสลามประจำมัสยิด';
+  }, []);
 
   const openAlertModal = (title, message) => {
     setAlertTitle(title);

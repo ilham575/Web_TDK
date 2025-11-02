@@ -24,6 +24,14 @@ function GradesPage(){
   const [deletingAssignment, setDeletingAssignment] = useState(null);
   const [showSummaryModal, setShowSummaryModal] = useState(false);
 
+  // Update document title with school name
+  useEffect(() => {
+    const schoolName = localStorage.getItem('school_name');
+    if (schoolName && schoolName !== '-') {
+      document.title = `ระบบโรงเรียน${schoolName}`;
+    }
+  }, []);
+
   // Calculate grade letter based on percentage
   const calculateGrade = (percentage) => {
     if (percentage >= 80) return 'A';

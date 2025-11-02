@@ -162,6 +162,13 @@ function StudentPage() {
     tryResolveSchoolName();
   }, [currentUser]);
 
+  // Update document title with school name
+  useEffect(() => {
+    if (displaySchool && displaySchool !== '-') {
+      document.title = `ระบบโรงเรียน${displaySchool}`;
+    }
+  }, [displaySchool]);
+
   return (
     <div className="student-container">
       <ToastContainer />
@@ -229,7 +236,11 @@ function StudentPage() {
                     <tr key={sub.id}>
                       <td className="subject-name">{sub.name}</td>
                       <td className="subject-code">{sub.code || ''}</td>
-                      <td><span className="status-badge">ลงทะเบียน</span></td>
+                      <td>
+                        <button className="btn-view-details" onClick={() => navigate(`/student/subject/${sub.id}/details`)}>
+                          ดูรายละเอียด
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

@@ -11,6 +11,14 @@ function AttendancePage(){
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0,10));
   const [attendance, setAttendance] = useState({}); // student_id -> status ("present", "absent", "sick_leave", "other")
 
+  // Update document title with school name
+  useEffect(() => {
+    const schoolName = localStorage.getItem('school_name');
+    if (schoolName && schoolName !== '-') {
+      document.title = `ระบบโรงเรียน${schoolName}`;
+    }
+  }, []);
+
   useEffect(()=>{
     const load = async ()=>{
       try{

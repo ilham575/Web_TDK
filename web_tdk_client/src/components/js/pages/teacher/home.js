@@ -46,7 +46,12 @@ function TeacherPage() {
           toast.error('Invalid token or role. Please sign in again.');
           setTimeout(() => navigate('/signin'), 1500);
         } else {
-          if (data.school_id) localStorage.setItem('school_id', data.school_id);
+          // persist school name when available so other parts of the app can read it
+          const schoolName = data?.school_name || data?.school?.name || data?.school?.school_name || '';
+          if (schoolName) localStorage.setItem('school_name', schoolName);
+          // persist school id (try multiple possible field names) so school-scoped endpoints work
+          const sid = data?.school_id || data?.school?.id || data?.school?.school_id || data?.schoolId || null;
+          if (sid) localStorage.setItem('school_id', String(sid));
           setCurrentUser(data);
         }
       })
@@ -78,6 +83,42 @@ function TeacherPage() {
     };
     fetchTeacherSubjects();
   }, [currentUser]);
+
+  // Determine school name from multiple possible sources (API shape may vary)
+  const displaySchool = currentUser?.school_name || currentUser?.school?.name || localStorage.getItem('school_name') || '-';
+
+  // If backend only returns school_id (not name), try to load school name from /schools/
+  useEffect(() => {
+    const tryResolveSchoolName = async () => {
+      if (!currentUser) return;
+      // already have a name
+      if (currentUser?.school_name || currentUser?.school?.name) return;
+      const sid = currentUser?.school_id || localStorage.getItem('school_id');
+      if (!sid) return;
+      try {
+        const res = await fetch('http://127.0.0.1:8000/schools/');
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          const found = data.find(s => String(s.id) === String(sid));
+          if (found) {
+            // persist and update currentUser so UI updates
+            localStorage.setItem('school_name', found.name);
+            setCurrentUser(prev => prev ? ({...prev, school_name: found.name}) : prev);
+          }
+        }
+      } catch (err) {
+        // ignore quietly
+      }
+    };
+    tryResolveSchoolName();
+  }, [currentUser]);
+
+  // Update document title with school name
+  useEffect(() => {
+    if (displaySchool && displaySchool !== '-') {
+      document.title = `ระบบโรงเรียน${displaySchool}`;
+    }
+  }, [displaySchool]);
 
   const handleSignout = () => {
     localStorage.removeItem('token');

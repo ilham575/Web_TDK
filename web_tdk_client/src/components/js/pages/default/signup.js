@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -12,6 +12,11 @@ function SignupPage() {
   const [password, setPassword] = useState('');
   const [schoolName, setSchoolName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  // Set page title
+  useEffect(() => {
+    document.title = 'สมัครสมาชิก - ศูนย์การเรียนรู้อิสลามประจำมัสยิด';
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

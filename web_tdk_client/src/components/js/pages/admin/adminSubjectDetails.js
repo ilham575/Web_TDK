@@ -29,6 +29,12 @@ function AdminSubjectDetails() {
           toast.error('Invalid token or role. Please sign in again.');
           setTimeout(() => navigate('/signin'), 1500);
         } else {
+          // persist school name when available so other parts of the app can read it
+          const schoolName = data?.school_name || data?.school?.name || data?.school?.school_name || '';
+          if (schoolName) localStorage.setItem('school_name', schoolName);
+          // persist school id (try multiple possible field names) so school-scoped endpoints work
+          const sid = data?.school_id || data?.school?.id || data?.school?.school_id || data?.schoolId || null;
+          if (sid) localStorage.setItem('school_id', String(sid));
           setCurrentUser(data);
         }
       })
@@ -45,7 +51,24 @@ function AdminSubjectDetails() {
         // Fetch subject details (assuming we can get from subjects list or single endpoint, but since no single, fetch all and find)
         const subjectsRes = await fetch('http://127.0.0.1:8000/subjects/', { headers });
         const subjects = await subjectsRes.json();
-        const subj = Array.isArray(subjects) ? subjects.find(s => String(s.id) === String(subjectId)) : null;
+        let subj = Array.isArray(subjects) ? subjects.find(s => String(s.id) === String(subjectId)) : null;
+        // If API returns only teacher_id (not nested teacher object), try to fetch teacher details
+        if (subj) {
+          if (!subj.teacher && (subj.teacher_id || subj.teacherId)) {
+            const tid = subj.teacher_id || subj.teacherId;
+            try {
+              // Server does not reliably provide GET /users/{id}; get users list and find the teacher by id
+              const listRes = await fetch(`http://127.0.0.1:8000/users?limit=200`, { headers });
+              const list = await listRes.json();
+              if (Array.isArray(list)) {
+                const found = list.find(u => String(u.id) === String(tid));
+                if (found) subj.teacher = found;
+              }
+            } catch (e) {
+              // ignore — we'll fallback to showing Unknown or Teacher ID
+            }
+          }
+        }
         setSubject(subj);
 
         // Fetch students
@@ -77,6 +100,42 @@ function AdminSubjectDetails() {
     };
     fetchData();
   }, [currentUser, subjectId]);
+
+  // Determine school name from multiple possible sources (API shape may vary)
+  const displaySchool = currentUser?.school_name || currentUser?.school?.name || localStorage.getItem('school_name') || '-';
+
+  // If backend only returns school_id (not name), try to load school name from /schools/
+  useEffect(() => {
+    const tryResolveSchoolName = async () => {
+      if (!currentUser) return;
+      // already have a name
+      if (currentUser?.school_name || currentUser?.school?.name) return;
+      const sid = currentUser?.school_id || localStorage.getItem('school_id');
+      if (!sid) return;
+      try {
+        const res = await fetch('http://127.0.0.1:8000/schools/');
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          const found = data.find(s => String(s.id) === String(sid));
+          if (found) {
+            // persist and update currentUser so UI updates
+            localStorage.setItem('school_name', found.name);
+            setCurrentUser(prev => prev ? ({...prev, school_name: found.name}) : prev);
+          }
+        }
+      } catch (err) {
+        // ignore quietly
+      }
+    };
+    tryResolveSchoolName();
+  }, [currentUser]);
+
+  // Update document title with school name
+  useEffect(() => {
+    if (displaySchool && displaySchool !== '-') {
+      document.title = `ระบบโรงเรียน${displaySchool}`;
+    }
+  }, [displaySchool]);
 
   if (loading) return <Loading message="กำลังโหลดข้อมูลรายวิชา..." />;
 
@@ -143,12 +202,14 @@ function AdminSubjectDetails() {
     };
   });
 
+  // remove debug logs
+
   return (
     <div className="admin-container">
       <ToastContainer />
       <div className="header-section">
         <h2 className="admin-title">Subject Details: {subject.name}</h2>
-        <button className="btn-back" onClick={() => navigate('/admin')}>Back to Admin</button>
+        <button className="btn-back" onClick={() => navigate(-1)}>Back</button>
       </div>
       <div className="subject-details-section">
         <div className="subject-info-card">
@@ -160,7 +221,13 @@ function AdminSubjectDetails() {
             </div>
             <div className="info-item">
               <span className="label">Teacher:</span>
-              <span className="value">{subject.teacher?.full_name || 'Unknown'}</span>
+              <span className="value">
+                {subject.teacher ? (
+                  (subject.teacher.full_name && subject.teacher.full_name.trim()) ? subject.teacher.full_name : (subject.teacher.username || subject.teacher.email || `User #${subject.teacher.id}`)
+                ) : (
+                  subject.teacher_id ? `Teacher ID: ${subject.teacher_id} (not found)` : 'Unknown'
+                )}
+              </span>
             </div>
             <div className="info-item">
               <span className="label">Status:</span>

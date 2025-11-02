@@ -64,7 +64,22 @@ def get_assignments(subject_id: int, db: Session = Depends(get_db), current_user
         raise HTTPException(status_code=404, detail='Subject not found')
 
     # Check authorization
-    if getattr(current_user, 'role', None) != 'admin' and subj.teacher_id != getattr(current_user, 'id', None):
+    user_role = getattr(current_user, 'role', None)
+    if user_role == 'admin':
+        # Admin can view all
+        pass
+    elif user_role == 'teacher' and subj.teacher_id == getattr(current_user, 'id', None):
+        # Teacher assigned to this subject
+        pass
+    elif user_role == 'student':
+        # Check if student is enrolled in this subject
+        enrollment = db.query(SubjectStudentModel).filter(
+            SubjectStudentModel.subject_id == subject_id,
+            SubjectStudentModel.student_id == getattr(current_user, 'id', None)
+        ).first()
+        if not enrollment:
+            raise HTTPException(status_code=403, detail='Not authorized to view assignments for this subject')
+    else:
         raise HTTPException(status_code=403, detail='Not authorized to view assignments for this subject')
 
     # Get distinct assignments (unique title + max_score combinations)

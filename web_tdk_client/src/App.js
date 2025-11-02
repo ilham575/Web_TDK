@@ -10,6 +10,7 @@ import TeacherPage from './components/js/pages/teacher/home';
 import AdminPage from './components/js/pages/admin/home';
 import TeacherDetail from './components/js/pages/admin/teacherDetail';
 import AdminSubjectDetails from './components/js/pages/admin/adminSubjectDetails';
+import StudentSubjectDetails from './components/js/pages/student/studentSubjectDetails';
 import DefaultHome from './components/js/pages/default/home';
 import AttendancePage from './components/js/pages/teacher/attendance';
 import GradesPage from './components/js/pages/teacher/grades';
@@ -96,6 +97,14 @@ function App() {
           element={
             <RequireAuth>
               <AdminSubjectDetails />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/student/subject/:subjectId/details"
+          element={
+            <RequireAuth>
+              <StudentSubjectDetails />
             </RequireAuth>
           }
         />

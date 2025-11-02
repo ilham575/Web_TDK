@@ -5,6 +5,11 @@ import '../../../css/pages/default/default-home.css';
 function DefaultHome() {
   const navigate = useNavigate();
 
+  // Set page title
+  useEffect(() => {
+    document.title = 'ศูนย์การเรียนรู้อิสลามประจำมัสยิด';
+  }, []);
+
   return (
     <div className="default-container">
       <h1 className="default-title">ศูนย์การเรียนรู้อิสลามประจำมัสยิด</h1>
