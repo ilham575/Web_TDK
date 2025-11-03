@@ -1,6 +1,6 @@
 /* Admin Teacher Detail Page Styles */
 body {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 30%, #e2e8f0 70%, #cbd5e1 100%);
   min-height: 100vh;
 }
 
@@ -385,7 +385,10 @@ body {
 .subjects-empty-icon {
   font-size: 3rem;
   margin-bottom: 1rem;
-  opacity: 0.5;
+  color: #94a3b8;
+  opacity: 1;
+  display: block;
+  line-height: 1;
 }
 
 .subjects-empty-text {

@@ -1,7 +1,7 @@
 /* Student Home Page Styles */
 .student-container {
   min-height: 100vh;
-  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 50%, #e2e8f0 100%);
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   color: #0f1724;
   padding: 2rem;
@@ -172,7 +172,12 @@
 
 .stats-icon {
   font-size: 3rem;
-  opacity: 0.8;
+  color: #10b981;
+  opacity: 1;
+  text-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+  filter: drop-shadow(0 2px 4px rgba(16, 185, 129, 0.2));
+  display: block;
+  line-height: 1;
 }
 
 /* Main Content */
@@ -207,6 +212,10 @@
 
 .section-icon {
   font-size: 1.2rem;
+  color: #10b981;
+  opacity: 1;
+  display: inline-block;
+  line-height: 1;
 }
 
 /* Subject Table */
@@ -289,6 +298,10 @@
 
 .announcement-icon {
   font-size: 1.5rem;
+  color: #10b981;
+  opacity: 1;
+  display: inline-block;
+  line-height: 1;
 }
 
 .announcement-list {

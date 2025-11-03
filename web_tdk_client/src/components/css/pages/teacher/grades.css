@@ -1,10 +1,16 @@
 /* Grades page styles - Modern and clean UI */
+body {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 30%, #e2e8f0 70%, #cbd5e1 100%);
+  min-height: 100vh;
+  margin: 0;
+}
+
 .grades-container {
   max-width: 1000px;
   margin: 2rem auto;
   background: linear-gradient(180deg, rgba(255,255,255,0.95), rgba(248,250,255,0.98));
   border-radius: 16px;
-  box-shadow: 0 16px 48px rgba(8,20,40,0.12);
+  box-shadow: 0 16px 48px rgba(100, 116, 139, 0.08);
   padding: 2rem;
   font-family: Inter, 'Segoe UI', Roboto, Arial, sans-serif;
   color: #0f1724;
@@ -206,7 +212,8 @@
   font-size: 3rem;
   display: block;
   margin-bottom: 1rem;
-  opacity: 0.5;
+  opacity: 1;
+  color: #94a3b8;
 }
 
 .grades-table {
@@ -327,7 +334,7 @@
 .grades-student-name::before {
   content: '👤';
   font-size: 1.1rem;
-  opacity: 0.7;
+  opacity: 1;
 }
 
 .grades-student-email {
@@ -342,7 +349,7 @@
 .grades-student-email::before {
   content: '✉️';
   font-size: 0.8rem;
-  opacity: 0.6;
+  opacity: 1;
 }
 
 .grades-input-wrapper {
@@ -481,7 +488,10 @@
 .empty-icon {
   font-size: 4rem;
   margin-bottom: 1.5rem;
-  opacity: 0.7;
+  color: #94a3b8;
+  opacity: 1;
+  display: block;
+  line-height: 1;
 }
 
 .empty-title {
@@ -737,6 +747,10 @@
 .warning-icon {
   font-size: 3rem;
   margin-bottom: 1rem;
+  color: #f59e0b;
+  opacity: 1;
+  display: block;
+  line-height: 1;
 }
 
 .warning-text {

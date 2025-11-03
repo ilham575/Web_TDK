@@ -24,7 +24,7 @@ app = FastAPI(lifespan=lifespan)
 # เพิ่ม CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # หรือ ["*"] สำหรับทุก origin (ไม่แนะนำ production)
+    allow_origins=["http://localhost:3000", "*"],  # หรือ ["*"] สำหรับทุก origin (ไม่แนะนำ production)
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
