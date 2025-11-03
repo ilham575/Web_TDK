@@ -177,7 +177,7 @@ function StudentSubjectDetails() {
       <ToastContainer />
       <div className="header-section">
         <h2 className="subject-title">{subject.name}</h2>
-        <button className="btn-back" onClick={() => navigate('/student')}>กลับ</button>
+        <button className="btn-back" onClick={() => navigate(-1)}>กลับ</button>
       </div>
 
       <div className="summary-cards">

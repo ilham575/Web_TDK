@@ -83,11 +83,23 @@ function SigninPage() {
         // Also persist school_name when available
         const detectedSchoolName = data.user_info?.school_name || data.user_info?.school?.name || data.school_name || data.school?.name || '';
         if (detectedSchoolName) localStorage.setItem('school_name', detectedSchoolName);
+        
+        // ตรวจสอบว่าต้องเปลี่ยนรหัสผ่านหรือไม่
+        if (data.user_info?.must_change_password) {
+          toast.info('กรุณาเปลี่ยนรหัสผ่านเพื่อความปลอดภัย', {
+            position: "top-center",
+            hideProgressBar: false,
+            theme: "colored"
+          });
+          navigate('/change-password');
+          return;
+        }
+        
         // เปลี่ยนจาก data.role เป็น data.user_info.role
-        if (data.user_info?.role === 'student') navigate('/student');
-        else if (data.user_info?.role === 'teacher') navigate('/teacher');
+        if (data.user_info?.role === 'student') navigate('/student/home');
+        else if (data.user_info?.role === 'teacher') navigate('/teacher/home');
         else if (data.user_info?.role === 'admin') {
-          navigate('/admin');
+          navigate('/admin/home');
         }
         toast.success('Sign in successful!', {
           position: "top-center",
@@ -125,8 +137,8 @@ function SigninPage() {
         </div>
 
         <form onSubmit={handleSubmit} className="signin-form-content">
-          <div className="form-group">
-            <label htmlFor="username" className="form-label">ชื่อผู้ใช้</label>
+          <div className="signin-form-group">
+            <label htmlFor="username" className="signin-form-label">ชื่อผู้ใช้</label>
             <input
               type="text"
               id="username"
@@ -134,12 +146,12 @@ function SigninPage() {
               onChange={e => setUsername(e.target.value)}
               placeholder="ชื่อผู้ใช้ของคุณ"
               required
-              className="form-input"
+              className="signin-form-input"
             />
           </div>
 
-          <div className="form-group">
-            <label htmlFor="password" className="form-label">รหัสผ่าน</label>
+          <div className="signin-form-group">
+            <label htmlFor="password" className="signin-form-label">รหัสผ่าน</label>
             <input
               type="password"
               id="password"
@@ -147,26 +159,26 @@ function SigninPage() {
               onChange={e => setPassword(e.target.value)}
               placeholder="รหัสผ่านของคุณ"
               required
-              className="form-input"
+              className="signin-form-input"
             />
           </div>
 
           {error && <div className="error-message">{error}</div>}
 
-          <button type="submit" disabled={isLoading} className="button-signin">
+          <button type="submit" disabled={isLoading} className="signin-button">
             {isLoading ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ'}
           </button>
         </form>
 
         <div className="signin-links">
-          <button type="button" onClick={() => navigate('/forgot')} className="link-button">
+          <button type="button" onClick={() => navigate('/forgot')} className="signin-link-button">
             ลืมรหัสผ่าน?
           </button>
-          <span className="link-separator">|</span>
-          <button type="button" onClick={() => navigate('/signup')} className="link-button">
+          <span className="signin-link-separator">|</span>
+          <button type="button" onClick={() => navigate('/signup')} className="signin-link-button">
             สร้างบัญชี
           </button>
-          <button type="button" onClick={() => navigate('/')} className="link-button home-link">
+          <button type="button" onClick={() => navigate('/')} className="signin-link-button signin-home-link">
             กลับหน้า Home
           </button>
         </div>

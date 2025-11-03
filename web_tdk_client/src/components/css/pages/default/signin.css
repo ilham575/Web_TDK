@@ -58,13 +58,13 @@
   gap: 1.5rem;
 }
 
-.form-group {
+.signin-form-group {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
 }
 
-.form-label {
+.signin-form-label {
   color: #374151;
   font-size: 0.95rem;
   font-weight: 600;
@@ -72,7 +72,7 @@
   text-transform: uppercase;
 }
 
-.form-input {
+.signin-form-input {
   padding: 0.875rem 1rem;
   border: 2px solid #e2e8f0;
   border-radius: 12px;
@@ -83,18 +83,18 @@
   color: #1e293b;
 }
 
-.form-input:focus {
+.signin-form-input:focus {
   outline: none;
   border-color: #667eea;
   box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
   background: #f8fafc;
 }
 
-.form-input::placeholder {
+.signin-form-input::placeholder {
   color: #9ca3af;
 }
 
-.button-signin {
+.signin-button {
   width: 100%;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: #fff;
@@ -111,16 +111,16 @@
   letter-spacing: 0.05em;
 }
 
-.button-signin:hover:not(:disabled) {
+.signin-button:hover:not(:disabled) {
   transform: translateY(-2px);
   box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
 }
 
-.button-signin:active:not(:disabled) {
+.signin-button:active:not(:disabled) {
   transform: translateY(0);
 }
 
-.button-signin:disabled {
+.signin-button:disabled {
   background: linear-gradient(135deg, #9ca3af 0%, #6b7280 100%);
   cursor: not-allowed;
   box-shadow: 0 4px 12px rgba(107, 114, 128, 0.2);
@@ -149,7 +149,7 @@
   flex-wrap: wrap;
 }
 
-.link-button {
+.signin-link-button {
   background: none;
   border: none;
   color: #667eea;
@@ -163,18 +163,18 @@
   display: inline-block;
 }
 
-.link-button:hover {
+.signin-link-button:hover {
   background: rgba(102, 126, 234, 0.1);
   color: #5a67d8;
   transform: translateY(-1px);
 }
 
-.link-separator {
+.signin-link-separator {
   color: #d1d5db;
   font-weight: bold;
 }
 
-.home-link {
+.signin-home-link {
   color: #64748b;
   margin-left: auto;
 }
@@ -235,11 +235,11 @@
     font-size: 0.9rem;
   }
 
-  .form-input {
+  .signin-form-input {
     padding: 0.75rem;
   }
 
-  .button-signin {
+  .signin-button {
     padding: 0.875rem 1.25rem;
     font-size: 0.95rem;
   }
@@ -249,12 +249,12 @@
     gap: 0.75rem;
   }
 
-  .home-link {
+  .signin-home-link {
     margin-left: 0;
     margin-top: 0.5rem;
   }
 
-  .link-separator {
+  .signin-link-separator {
     display: none;
   }
 }

@@ -5,6 +5,7 @@ import SigninPage from './components/js/pages/default/signin';
 import SignupPage from './components/js/pages/default/signup';
 import ForgotPage from './components/js/pages/default/forgot';
 import ResetPasswordPage from './components/js/pages/default/reset-password';
+import ChangePasswordPage from './components/js/pages/default/change-password';
 import StudentPage from './components/js/pages/student/home';
 import TeacherPage from './components/js/pages/teacher/home';
 import AdminPage from './components/js/pages/admin/home';
@@ -14,6 +15,7 @@ import StudentSubjectDetails from './components/js/pages/student/studentSubjectD
 import DefaultHome from './components/js/pages/default/home';
 import AttendancePage from './components/js/pages/teacher/attendance';
 import GradesPage from './components/js/pages/teacher/grades';
+import ProfilePage from './components/js/pages/profile';
 
 // ฟังก์ชั่นตรวจสอบ login
 function isLoggedIn() {
@@ -45,7 +47,7 @@ function App() {
         <Route path="/" element={<DefaultHome />} />
         <Route path="/home" element={<DefaultHome />} />
         <Route
-          path="/student"
+          path="/student/home"
           element={
             <RequireAuth>
               <StudentPage />
@@ -53,7 +55,7 @@ function App() {
           }
         />
         <Route
-          path="/teacher"
+          path="/teacher/home"
           element={
             <RequireAuth>
               <TeacherPage />
@@ -77,7 +79,7 @@ function App() {
           }
         />
         <Route
-          path="/admin"
+          path="/admin/home"
           element={
             <RequireAuth>
               <AdminPage />
@@ -112,6 +114,8 @@ function App() {
         <Route path="/signup" element={<SignupPage />} />
         <Route path="/forgot" element={<ForgotPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/change-password" element={<RequireAuth><ChangePasswordPage /></RequireAuth>} />
+        <Route path="/profile" element={<RequireAuth><ProfilePage /></RequireAuth>} />
       </Routes>
     </BrowserRouter>
   );

@@ -50,6 +50,8 @@ function AdminPage() {
 
   const [alertMessage, setAlertMessage] = useState('');
 
+  const [deletionStatuses, setDeletionStatuses] = useState({});
+
   const [activeTab, setActiveTab] = useState('users');
 
   useEffect(() => {
@@ -62,6 +64,9 @@ function AdminPage() {
           localStorage.removeItem('token');
           toast.error('Invalid token or role. Please sign in again.');
           setTimeout(() => navigate('/signin'), 1500);
+        } else if (data.must_change_password) {
+          toast.info('กรุณาเปลี่ยนรหัสผ่านเพื่อความปลอดภัย');
+          navigate('/change-password');
         } else {
           setCurrentUser(data);
           // persist school name when available so other parts of the app can read it
@@ -84,6 +89,8 @@ function AdminPage() {
         const teachersData = data.filter(u => u.role === 'teacher' && String(u.school_id) === String(schoolId));
         const studentsData = data.filter(u => u.role === 'student' && String(u.school_id) === String(schoolId));
         setTeachers(teachersData); setStudents(studentsData);
+        // Check deletion status for all users
+        [...teachersData, ...studentsData].forEach(user => checkDeletionStatus(user.id));
       } else { setTeachers([]); setStudents([]); }
     }).catch(err=>{ console.error('failed to fetch users', err); setUsersError('Failed to load users'); setTeachers([]); setStudents([]); }).finally(()=>setLoadingUsers(false));
 
@@ -164,23 +171,6 @@ function AdminPage() {
     } catch (err) { console.error('announcement error', err); toast.error('เกิดข้อผิดพลาดในการประกาศข่าว'); }
   };
 
-  const expireAnnouncement = async (id) => {
-    const token = localStorage.getItem('token');
-    if (!token) { toast.error('กรุณาเข้าสู่ระบบเพื่อดำเนินการ'); return; }
-    try {
-  // create a local naive datetime string for "now" in format "YYYY-MM-DD HH:MM:SS"
-  const n = new Date();
-  const pad = (v) => String(v).padStart(2, '0');
-  const nowLocal = `${n.getFullYear()}-${pad(n.getMonth()+1)}-${pad(n.getDate())} ${pad(n.getHours())}:${pad(n.getMinutes())}:${pad(n.getSeconds())}`;
-  const res = await fetch(`http://127.0.0.1:8000/announcements/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...(token?{Authorization:`Bearer ${token}`}:{}) }, body: JSON.stringify({ expires_at: nowLocal }) });
-      const data = await res.json();
-      if (!res.ok) { toast.error(data.detail || 'Expire failed'); return; }
-      toast.success('ประกาศถูกตั้งให้หมดอายุแล้ว');
-      // update local list: use returned data if available, otherwise set expires_at locally
-  setAnnouncements(prev => (Array.isArray(prev) ? prev.map(a => a.id === id ? (data && data.id ? data : { ...a, expires_at: nowLocal }) : a) : prev));
-    } catch (err) { console.error('expire error', err); toast.error('เกิดข้อผิดพลาด'); }
-  };
-
   const handleFileChange = (e) => { const f = e.target.files && e.target.files[0]; setUploadFile(f || null); };
 
   const handleUpload = async () => {
@@ -211,6 +201,76 @@ function AdminPage() {
     } catch (err) {
       toast.error('เกิดข้อผิดพลาดในการลบข่าว');
     }
+  };
+
+  const checkDeletionStatus = async (userId) => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/users/${userId}/deletion_status`, { headers: { 'Authorization': `Bearer ${token}` } });
+      const data = await res.json();
+      if (res.ok) {
+        setDeletionStatuses(prev => ({ ...prev, [userId]: data }));
+      }
+    } catch (err) {
+      console.error('Failed to check deletion status', err);
+    }
+  };
+
+  const deactivateUser = async (userId, userName) => {
+    const token = localStorage.getItem('token');
+    if (!token) { toast.error('กรุณาเข้าสู่ระบบเพื่อดำเนินการ'); return; }
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/users/${userId}/deactivate`, { method: 'PATCH', headers: { 'Authorization': `Bearer ${token}` } });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.detail || 'ปิดใช้งานผู้ใช้ไม่สำเร็จ'); } 
+      else { 
+        toast.success(`ปิดใช้งานผู้ใช้ ${userName} เรียบร้อย`); 
+        // refresh user lists
+        window.location.reload();
+      }
+    } catch (err) { console.error(err); toast.error('เกิดข้อผิดพลาดในการปิดใช้งานผู้ใช้'); }
+  };
+
+  const activateUser = async (userId, userName) => {
+    const token = localStorage.getItem('token');
+    if (!token) { toast.error('กรุณาเข้าสู่ระบบเพื่อดำเนินการ'); return; }
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/users/${userId}/activate`, { method: 'PATCH', headers: { 'Authorization': `Bearer ${token}` } });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.detail || 'เปิดใช้งานผู้ใช้ไม่สำเร็จ'); } 
+      else { 
+        toast.success(`เปิดใช้งานผู้ใช้ ${userName} เรียบร้อย`); 
+        // refresh user lists
+        window.location.reload();
+      }
+    } catch (err) { console.error(err); toast.error('เกิดข้อผิดพลาดในการเปิดใช้งานผู้ใช้'); }
+  };
+
+  const deleteUser = async (userId, userName) => {
+    const token = localStorage.getItem('token');
+    if (!token) { toast.error('กรุณาเข้าสู่ระบบเพื่อดำเนินการ'); return; }
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/users/${userId}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+      const data = await res.json();
+      if (!res.ok) { 
+        // Handle specific error format from backend
+        if (data.detail && typeof data.detail === 'object' && data.detail.blocks) {
+          let errorMessage = data.detail.message + '\n\n';
+          data.detail.blocks.forEach((block, index) => {
+            errorMessage += `${index + 1}. ${block}\n`;
+          });
+          toast.error(errorMessage);
+        } else {
+          toast.error(data.detail || 'ลบผู้ใช้ไม่สำเร็จ');
+        }
+      } 
+      else { 
+        toast.success(`ลบผู้ใช้ ${userName} เรียบร้อย`); 
+        // refresh user lists
+        window.location.reload();
+      }
+    } catch (err) { console.error(err); toast.error('เกิดข้อผิดพลาดในการลบผู้ใช้'); }
   };
 
   const initials = (name) => (name ? name.split(' ').map(n=>n[0]).slice(0,2).join('').toUpperCase() : 'A');
@@ -315,14 +375,21 @@ function AdminPage() {
           </div>
           <div className="header-actions">
             <button 
-              className="btn-primary" 
+              className="admin-btn-primary" 
               onClick={() => setShowModal(true)}
               title="สร้างผู้ใช้ใหม่"
             >
               ➕ เพิ่มผู้ใช้ใหม่
             </button>
             <button 
-              className="btn-danger" 
+              className="admin-btn-secondary" 
+              onClick={() => navigate('/profile')}
+              title="ดูโปรไฟล์"
+            >
+              👤 โปรไฟล์
+            </button>
+            <button 
+              className="admin-btn-danger" 
               onClick={handleSignout}
               title="ออกจากระบบ"
             >
@@ -383,19 +450,39 @@ function AdminPage() {
                       {teachers.map((teacher)=> (
                         <li key={teacher.id} className="user-item">
                           <div className="user-info">
-                            <div className="user-name">👤 {teacher.full_name || teacher.username}</div>
+                            <div className="user-name">
+                              👤 {teacher.full_name || teacher.username}
+                              {!teacher.is_active && <span style={{ color: 'red', fontSize: '12px', marginLeft: '8px' }}>(ปิดใช้งาน)</span>}
+                              {deletionStatuses[teacher.id] && (
+                                <span style={{ 
+                                  color: deletionStatuses[teacher.id].can_delete ? 'green' : 'orange', 
+                                  fontSize: '12px', 
+                                  marginLeft: '8px',
+                                  fontWeight: 'bold'
+                                }}>
+                                  {deletionStatuses[teacher.id].can_delete ? '✅ พร้อมลบ' : '⚠️ ยังลบไม่ได้'}
+                                </span>
+                              )}
+                            </div>
                             <div className="user-email">📧 {teacher.email}</div>
+                            {deletionStatuses[teacher.id] && !deletionStatuses[teacher.id].can_delete && (
+                              <div className="deletion-reasons" style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
+                                {deletionStatuses[teacher.id].reasons.map((reason, idx) => (
+                                  <div key={idx}>• {reason}</div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                           <div className="user-actions">
                             <button 
-                              className="btn-small" 
+                              className="admin-btn-small" 
                               onClick={() => navigate(`/admin/teacher/${teacher.id}`)}
                               title="ดูรายละเอียดครู"
                             >
                               👁️ ดูรายละเอียด
                             </button>
                             <button 
-                              className="btn-small btn-danger" 
+                              className="admin-btn-small admin-btn-warning" 
                               onClick={() => openConfirmModal('รีเซ็ตรหัสผ่าน', `ต้องการรีเซ็ตรหัสผ่านของ "${teacher.full_name || teacher.username}" ใช่หรือไม่?`, async () => {
                                 const token = localStorage.getItem('token');
                                 try {
@@ -408,6 +495,38 @@ function AdminPage() {
                             >
                               🔄 รีเซ็ต
                             </button>
+                            {teacher.is_active ? (
+                              <button 
+                                className="admin-btn-small admin-btn-secondary" 
+                                onClick={() => openConfirmModal('ปิดใช้งานผู้ใช้', `ต้องการปิดใช้งาน "${teacher.full_name || teacher.username}" ใช่หรือไม่?`, async () => {
+                                  await deactivateUser(teacher.id, teacher.full_name || teacher.username);
+                                })}
+                                title="ปิดใช้งานผู้ใช้"
+                              >
+                                🚫 ปิดใช้งาน
+                              </button>
+                            ) : (
+                              <button 
+                                className="admin-btn-small admin-btn-success" 
+                                onClick={() => openConfirmModal('เปิดใช้งานผู้ใช้', `ต้องการเปิดใช้งาน "${teacher.full_name || teacher.username}" ใช่หรือไม่?`, async () => {
+                                  await activateUser(teacher.id, teacher.full_name || teacher.username);
+                                })}
+                                title="เปิดใช้งานผู้ใช้"
+                              >
+                                ✅ เปิดใช้งาน
+                              </button>
+                            )}
+                            {!teacher.is_active && deletionStatuses[teacher.id] && deletionStatuses[teacher.id].can_delete && (
+                              <button 
+                                className="admin-btn-small admin-btn-danger" 
+                                onClick={() => openConfirmModal('ลบผู้ใช้', `⚠️ คำเตือน: การลบผู้ใช้จะไม่สามารถกู้คืนได้!\n\nต้องการลบ "${teacher.full_name || teacher.username}" ใช่หรือไม่?\n\nเกณฑ์การลบ:\n- ผู้ใช้ต้องถูกปิดใช้งานแล้ว\n- ครูต้องไม่มีรายวิชาที่ยังใช้งาน\n- นักเรียนต้องไม่มีการลงทะเบียนรายวิชา`, async () => {
+                                  await deleteUser(teacher.id, teacher.full_name || teacher.username);
+                                })}
+                                title="ลบผู้ใช้ (เฉพาะที่ปิดใช้งานแล้ว)"
+                              >
+                                🗑️ ลบ
+                              </button>
+                            )}
                           </div>
                         </li>
                       ))}
@@ -428,12 +547,32 @@ function AdminPage() {
                       {students.map(student => (
                         <li key={student.id} className="user-item">
                           <div className="user-info">
-                            <div className="user-name">🎓 {student.full_name || student.username}</div>
+                            <div className="user-name">
+                              👤 {student.full_name || student.username}
+                              {!student.is_active && <span style={{ color: 'red', fontSize: '12px', marginLeft: '8px' }}>(ปิดใช้งาน)</span>}
+                              {deletionStatuses[student.id] && (
+                                <span style={{ 
+                                  color: deletionStatuses[student.id].can_delete ? 'green' : 'orange', 
+                                  fontSize: '12px', 
+                                  marginLeft: '8px',
+                                  fontWeight: 'bold'
+                                }}>
+                                  {deletionStatuses[student.id].can_delete ? '✅ พร้อมลบ' : '⚠️ ยังลบไม่ได้'}
+                                </span>
+                              )}
+                            </div>
                             <div className="user-email">📧 {student.email}</div>
+                            {deletionStatuses[student.id] && !deletionStatuses[student.id].can_delete && (
+                              <div className="deletion-reasons" style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
+                                {deletionStatuses[student.id].reasons.map((reason, idx) => (
+                                  <div key={idx}>• {reason}</div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                           <div className="user-actions">
                             <button 
-                              className="btn-small btn-secondary" 
+                              className="admin-btn-small admin-btn-warning" 
                               onClick={() => openConfirmModal('รีเซ็ตรหัสผ่าน', `ต้องการรีเซ็ตรหัสผ่านของ "${student.full_name || student.username}" ใช่หรือไม่?`, async () => {
                                 const token = localStorage.getItem('token');
                                 try {
@@ -446,6 +585,38 @@ function AdminPage() {
                             >
                               🔄 รีเซ็ต
                             </button>
+                            {student.is_active ? (
+                              <button 
+                                className="admin-btn-small admin-btn-secondary" 
+                                onClick={() => openConfirmModal('ปิดใช้งานผู้ใช้', `ต้องการปิดใช้งาน "${student.full_name || student.username}" ใช่หรือไม่?`, async () => {
+                                  await deactivateUser(student.id, student.full_name || student.username);
+                                })}
+                                title="ปิดใช้งานผู้ใช้"
+                              >
+                                🚫 ปิดใช้งาน
+                              </button>
+                            ) : (
+                              <button 
+                                className="admin-btn-small admin-btn-success" 
+                                onClick={() => openConfirmModal('เปิดใช้งานผู้ใช้', `ต้องการเปิดใช้งาน "${student.full_name || student.username}" ใช่หรือไม่?`, async () => {
+                                  await activateUser(student.id, student.full_name || student.username);
+                                })}
+                                title="เปิดใช้งานผู้ใช้"
+                              >
+                                ✅ เปิดใช้งาน
+                              </button>
+                            )}
+                            {!student.is_active && deletionStatuses[student.id] && deletionStatuses[student.id].can_delete && (
+                              <button 
+                                className="admin-btn-small admin-btn-danger" 
+                                onClick={() => openConfirmModal('ลบผู้ใช้', `⚠️ คำเตือน: การลบผู้ใช้จะไม่สามารถกู้คืนได้!\n\nต้องการลบ "${student.full_name || student.username}" ใช่หรือไม่?\n\nเกณฑ์การลบ:\n- ผู้ใช้ต้องถูกปิดใช้งานแล้ว\n- ครูต้องไม่มีรายวิชาที่ยังใช้งาน\n- นักเรียนต้องไม่มีการลงทะเบียนรายวิชา`, async () => {
+                                  await deleteUser(student.id, student.full_name || student.username);
+                                })}
+                                title="ลบผู้ใช้ (เฉพาะที่ปิดใช้งานแล้ว)"
+                              >
+                                🗑️ ลบ
+                              </button>
+                            )}
                           </div>
                         </li>
                       ))}
@@ -457,8 +628,20 @@ function AdminPage() {
                   <label className="bulk-upload-label">หรืออัปโหลดผู้ใช้จำนวนมาก (.xlsx)</label>
                   <div className="upload-controls">
                     <input id="bulk-upload-input" type="file" accept=".xlsx" onChange={handleFileChange} />
-                    <button type="button" className="btn-primary" onClick={handleUpload} disabled={uploading}>{uploading ? 'กำลังอัปโหลด...' : 'อัปโหลด Excel'}</button>
-                    <button type="button" className="btn-secondary" onClick={async ()=>{
+                    <button type="button" className="admin-btn-primary" onClick={handleUpload} disabled={uploading}>
+                      {uploading ? (
+                        <>
+                          <span className="btn-icon" aria-hidden>⬆️</span>
+                          กำลังอัปโหลด...
+                        </>
+                      ) : (
+                        <>
+                          <span className="btn-icon" aria-hidden>📁</span>
+                          อัปโหลด Excel
+                        </>
+                      )}
+                    </button>
+                    <button type="button" className="admin-btn-secondary" onClick={async ()=>{
                       const token = localStorage.getItem('token');
                       try {
                         const res = await fetch('http://127.0.0.1:8000/users/bulk_template', { headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
@@ -500,7 +683,7 @@ function AdminPage() {
                       </div>
                     </div>
                     <div className="form-actions">
-                      <button type="submit" className="btn-primary">ประกาศข่าว</button>
+                      <button type="submit" className="admin-btn-primary">ประกาศข่าว</button>
                     </div>
                   </form>
                 </div>
@@ -526,10 +709,10 @@ function AdminPage() {
                           <div className="announcement-actions">
                             {/* show expire button when announcement is not already expired */}
                             {ownedBy(item) && !(item.expires_at && parseLocalDatetime(item.expires_at) <= new Date()) && (
-                              <button className="btn-secondary btn-small" onClick={() => openExpiryModal(item)}>ตั้งเป็นหมดอายุ</button>
+                              <button className="admin-btn-secondary btn-small" onClick={() => openExpiryModal(item)}>ตั้งเป็นหมดอายุ</button>
                             )}
                             {ownedBy(item) ? (
-                              <button className="btn-danger btn-small" onClick={() => openConfirmModal('ลบข่าว', 'ต้องการลบข่าวนี้ใช่หรือไม่?', async () => { await deleteAnnouncement(item.id); })}>ลบ</button>
+                              <button className="admin-btn-danger btn-small" onClick={() => openConfirmModal('ลบข่าว', 'ต้องการลบข่าวนี้ใช่หรือไม่?', async () => { await deleteAnnouncement(item.id); })}>ลบ</button>
                             ) : null}
                           </div>
                         </div>
@@ -562,8 +745,8 @@ function AdminPage() {
               </select>
             </div>
             <div className="modal-footer">
-              <button type="button" className="btn-secondary" onClick={()=>setShowModal(false)}>ยกเลิก</button>
-              <button type="button" className="btn-primary" disabled={creatingUser} onClick={handleCreateUser}>{creatingUser ? 'กำลังสร้าง...' : 'สร้าง'}</button>
+              <button type="button" className="admin-btn-secondary" onClick={()=>setShowModal(false)}>ยกเลิก</button>
+              <button type="button" className="admin-btn-primary" disabled={creatingUser} onClick={handleCreateUser}>{creatingUser ? 'กำลังสร้าง...' : 'สร้าง'}</button>
             </div>
           </div>
         </div>

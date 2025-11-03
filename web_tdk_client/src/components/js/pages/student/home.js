@@ -30,6 +30,9 @@ function StudentPage() {
           localStorage.removeItem('token');
           toast.error('Invalid token or role. Please sign in again.');
           setTimeout(() => navigate('/signin'), 1500);
+        } else if (data.must_change_password) {
+          toast.info('กรุณาเปลี่ยนรหัสผ่านเพื่อความปลอดภัย');
+          navigate('/change-password');
         } else {
           setCurrentUser(data);
           // persist school name when available so other parts of the app can read it
@@ -186,7 +189,10 @@ function StudentPage() {
             <div className="account-email">{currentUser?.email || ''}</div>
             <div className="school-info">โรงเรียน: {displaySchool}</div>
           </div>
-          <button onClick={handleSignout} className="student-signout-btn">Sign out</button>
+          <div className="header-actions">
+            <button className="student-btn-secondary" onClick={() => navigate('/profile')}>👤 โปรไฟล์</button>
+            <button onClick={handleSignout} className="student-signout-btn">Sign out</button>
+          </div>
         </div>
       </header>
 
@@ -229,15 +235,20 @@ function StudentPage() {
             ) : (
               <table className="student-subject-table">
                 <thead>
-                  <tr><th>ชื่อวิชา</th><th>รหัส</th><th></th></tr>
+                  <tr><th>ชื่อวิชา</th><th>รหัส</th><th>สถานะ</th><th></th></tr>
                 </thead>
                 <tbody>
                   {studentSubjects.map(sub => (
                     <tr key={sub.id}>
                       <td className="subject-name">{sub.name}</td>
                       <td className="subject-code">{sub.code || ''}</td>
+                      <td className="subject-status">
+                        <span className={`status-badge ${sub.is_ended ? 'ended' : 'active'}`}>
+                          {sub.is_ended ? '✅ จบแล้ว' : '📚 กำลังเรียน'}
+                        </span>
+                      </td>
                       <td>
-                        <button className="btn-view-details" onClick={() => navigate(`/student/subject/${sub.id}/details`)}>
+                        <button className="student-btn-view-details" onClick={() => navigate(`/student/subject/${sub.id}/details`)}>
                           ดูรายละเอียด
                         </button>
                       </td>

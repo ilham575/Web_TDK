@@ -9,7 +9,7 @@ import smtplib
 from email.message import EmailMessage
 from datetime import timedelta
 
-from schemas.user import User, UserCreate, UserUpdate, Token
+from schemas.user import User, UserCreate, UserUpdate, Token, ChangePasswordRequest
 from models.user import User as UserModel
 from database.connection import get_db
 from utils.security import hash_password, verify_password, create_access_token, decode_access_token
@@ -63,6 +63,7 @@ def admin_reset_user_password(user_id: int, db: Session = Depends(get_db), curre
     # generate a secure temporary password
     temp_password = secrets.token_urlsafe(8)
     user.hashed_password = hash_password(temp_password)
+    user.must_change_password = True
     db.commit()
     # Do NOT log the plaintext password in real systems; return it only to caller here
     return { 'detail': 'password reset', 'temp_password': temp_password }
@@ -298,6 +299,231 @@ def update_current_user(
     db.commit()
     db.refresh(current_user)
     return current_user
+
+@router.post("/change_password")
+def change_password(
+    password_data: ChangePasswordRequest,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """เปลี่ยนรหัสผ่าน"""
+    # Verify current password
+    if not verify_password(password_data.current_password, current_user.hashed_password):
+        raise HTTPException(status_code=400, detail="รหัสผ่านปัจจุบันไม่ถูกต้อง")
+    
+    # Update to new password
+    current_user.hashed_password = hash_password(password_data.new_password)
+    current_user.must_change_password = False  # Clear the flag
+    db.commit()
+    
+    return {"message": "เปลี่ยนรหัสผ่านเรียบร้อยแล้ว"}
+
+
+@router.get("/{user_id}/deletion_status")
+def check_user_deletion_status(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user)
+):
+    """Admin-only: Check if a user can be deleted and why/why not"""
+    if getattr(current_user, 'role', None) != 'admin':
+        raise HTTPException(status_code=403, detail='Only admins can check deletion status')
+    
+    user = db.query(UserModel).filter(UserModel.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail='User not found')
+    
+    # Check all conditions
+    can_delete = True
+    reasons = []
+    
+    # Check if user is active
+    if user.is_active:
+        can_delete = False
+        reasons.append('ผู้ใช้ยังใช้งานได้อยู่ - ต้องปิดใช้งานก่อน')
+    
+    # Check if user is another admin
+    if user.role == 'admin':
+        can_delete = False
+        reasons.append('ไม่สามารถลบแอดมินคนอื่นได้')
+    
+    # Check if it's the current admin
+    if current_user.id == user_id:
+        can_delete = False
+        reasons.append('ไม่สามารถลบบัญชีตัวเองได้')
+    
+    # For teachers, check active subjects
+    if user.role == 'teacher':
+        try:
+            from models.subject import Subject as SubjectModel
+            active_subjects = db.query(SubjectModel).filter(
+                SubjectModel.teacher_id == user_id,
+                SubjectModel.is_ended == False
+            ).count()
+            if active_subjects > 0:
+                can_delete = False
+                reasons.append(f'ครูมีรายวิชาที่ยังใช้งานอยู่ {active_subjects} รายวิชา - ต้องจบคอร์สก่อน')
+        except ImportError:
+            pass
+    
+    # For students, check enrollments in active subjects only
+    if user.role == 'student':
+        try:
+            from models.subject_student import SubjectStudent as SubjectStudentModel
+            from models.subject import Subject as SubjectModel
+            active_enrollments = db.query(SubjectStudentModel).join(
+                SubjectModel, SubjectStudentModel.subject_id == SubjectModel.id
+            ).filter(
+                SubjectStudentModel.student_id == user_id,
+                SubjectModel.is_ended == False
+            ).count()
+            if active_enrollments > 0:
+                can_delete = False
+                reasons.append(f'นักเรียนยังลงทะเบียนรายวิชาที่กำลังเรียนอยู่ {active_enrollments} รายวิชา - ต้องจบคอร์สหรือถอนออกก่อน')
+        except ImportError:
+            pass
+    
+    return {
+        'user_id': user_id,
+        'username': user.username,
+        'role': user.role,
+        'is_active': user.is_active,
+        'can_delete': can_delete,
+        'reasons': reasons,
+        'next_steps': [] if can_delete else [
+            'ปิดใช้งานผู้ใช้' if user.is_active else None,
+            'จบคอร์สทั้งหมด' if user.role == 'teacher' and not can_delete else None,
+            'ถอนนักเรียนออกจากรายวิชา' if user.role == 'student' and not can_delete else None
+        ]
+    }
+
+
+@router.delete("/{user_id}")
+def delete_user(
+    user_id: int, 
+    db: Session = Depends(get_db), 
+    current_user: UserModel = Depends(get_current_user)
+):
+    """Admin-only: Delete a user with safety checks"""
+    # Only admins can delete users
+    if getattr(current_user, 'role', None) != 'admin':
+        raise HTTPException(status_code=403, detail='Only admins can delete users')
+    
+    # Cannot delete yourself
+    if current_user.id == user_id:
+        raise HTTPException(status_code=400, detail='Cannot delete your own account')
+    
+    # Find the user to delete
+    user_to_delete = db.query(UserModel).filter(UserModel.id == user_id).first()
+    if not user_to_delete:
+        raise HTTPException(status_code=404, detail='User not found')
+    
+    # Safety checks before deletion
+    deletion_blocks = []
+    
+    # Check if user is active
+    if user_to_delete.is_active:
+        deletion_blocks.append('User is still active. Deactivate the user first before deletion.')
+    
+    # Check if user is another admin (prevent deleting other admins)
+    if user_to_delete.role == 'admin':
+        deletion_blocks.append('Cannot delete another admin account.')
+    
+    # For teachers, check if they have active subjects
+    if user_to_delete.role == 'teacher':
+        try:
+            from models.subject import Subject as SubjectModel
+            active_subjects = db.query(SubjectModel).filter(
+                SubjectModel.teacher_id == user_id,
+                SubjectModel.is_ended == False
+            ).count()
+            if active_subjects > 0:
+                deletion_blocks.append(f'Teacher has {active_subjects} active subject(s). End all subjects first.')
+        except ImportError:
+            # If Subject model doesn't exist, skip this check
+            pass
+    
+    # For students, check if they have active enrollments in non-ended subjects
+    if user_to_delete.role == 'student':
+        try:
+            from models.subject_student import SubjectStudent as SubjectStudentModel
+            from models.subject import Subject as SubjectModel
+            active_enrollments = db.query(SubjectStudentModel).join(
+                SubjectModel, SubjectStudentModel.subject_id == SubjectModel.id
+            ).filter(
+                SubjectStudentModel.student_id == user_id,
+                SubjectModel.is_ended == False
+            ).count()
+            if active_enrollments > 0:
+                deletion_blocks.append(f'Student is enrolled in {active_enrollments} active subject(s). End subjects or remove enrollments first.')
+        except ImportError:
+            # If models don't exist, skip this check
+            pass
+    
+    # If there are any blocks, return them as errors
+    if deletion_blocks:
+        raise HTTPException(
+            status_code=400, 
+            detail={
+                'message': 'Cannot delete user due to the following reasons:',
+                'blocks': deletion_blocks
+            }
+        )
+    
+    # If all checks pass, perform deletion
+    try:
+        db.delete(user_to_delete)
+        db.commit()
+        return {'message': f'User {user_to_delete.username} deleted successfully'}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f'Failed to delete user: {str(e)}')
+
+
+@router.patch("/{user_id}/deactivate")
+def deactivate_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user)
+):
+    """Admin-only: Deactivate a user (set is_active to False)"""
+    if getattr(current_user, 'role', None) != 'admin':
+        raise HTTPException(status_code=403, detail='Only admins can deactivate users')
+    
+    if current_user.id == user_id:
+        raise HTTPException(status_code=400, detail='Cannot deactivate your own account')
+    
+    user = db.query(UserModel).filter(UserModel.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail='User not found')
+    
+    if user.role == 'admin':
+        raise HTTPException(status_code=400, detail='Cannot deactivate another admin account')
+    
+    user.is_active = False
+    db.commit()
+    db.refresh(user)
+    return {'message': f'User {user.username} deactivated successfully', 'user': user}
+
+
+@router.patch("/{user_id}/activate")
+def activate_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user)
+):
+    """Admin-only: Activate a user (set is_active to True)"""
+    if getattr(current_user, 'role', None) != 'admin':
+        raise HTTPException(status_code=403, detail='Only admins can activate users')
+    
+    user = db.query(UserModel).filter(UserModel.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail='User not found')
+    
+    user.is_active = True
+    db.commit()
+    db.refresh(user)
+    return {'message': f'User {user.username} activated successfully', 'user': user}
 
 
 @router.get('/bulk_template')

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import '../css/ExpiryModal.css';
 
 export default function ExpiryModal({ isOpen, initialValue, onClose, onSave, title = 'ตั้งวันหมดอายุ' }) {
   const [value, setValue] = useState('');
@@ -21,19 +22,19 @@ export default function ExpiryModal({ isOpen, initialValue, onClose, onSave, tit
   if (!isOpen) return null;
 
   return (
-    <div className="modal-overlay">
-      <div className="modal">
-        <div className="modal-header">
+    <div className="expiry-modal-overlay">
+      <div className="expiry-modal">
+        <div className="expiry-modal-header">
           <h3>{title}</h3>
-          <button className="modal-close" onClick={() => onClose()}>×</button>
+          <button className="expiry-modal-close" onClick={() => onClose()}>×</button>
         </div>
-        <div className="modal-body">
+        <div className="expiry-modal-body">
           <label className="form-label">เลือกวันที่และเวลา</label>
           <input type="datetime-local" value={value} onChange={e => setValue(e.target.value)} className="form-input" />
         </div>
-        <div className="modal-footer">
-          <button className="btn-secondary" onClick={() => onClose()}>ยกเลิก</button>
-          <button className="btn-primary" onClick={() => onSave(value)}>บันทึก</button>
+        <div className="expiry-modal-footer">
+          <button className="expiry-modal-btn expiry-modal-btn-secondary" onClick={() => onClose()}>ยกเลิก</button>
+          <button className="expiry-modal-btn expiry-modal-btn-primary" onClick={() => onSave(value)}>บันทึก</button>
         </div>
       </div>
     </div>

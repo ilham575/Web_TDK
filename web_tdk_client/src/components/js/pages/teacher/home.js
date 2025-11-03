@@ -45,6 +45,9 @@ function TeacherPage() {
           localStorage.removeItem('token');
           toast.error('Invalid token or role. Please sign in again.');
           setTimeout(() => navigate('/signin'), 1500);
+        } else if (data.must_change_password) {
+          toast.info('กรุณาเปลี่ยนรหัสผ่านเพื่อความปลอดภัย');
+          navigate('/change-password');
         } else {
           // persist school name when available so other parts of the app can read it
           const schoolName = data?.school_name || data?.school?.name || data?.school?.school_name || '';
@@ -339,7 +342,10 @@ function TeacherPage() {
               <div className="stats-label">ข่าวสาร</div>
             </div>
           </div>
-          <button onClick={handleSignout} className="teacher-signout-btn">🚪 ออกจากระบบ</button>
+          <div className="header-actions">
+            <button className="teacher-btn-secondary" onClick={() => navigate('/profile')}>👤 โปรไฟล์</button>
+            <button onClick={handleSignout} className="teacher-signout-btn">🚪 ออกจากระบบ</button>
+          </div>
         </div>
       </div>
 
@@ -432,7 +438,7 @@ function TeacherPage() {
                               ) : null}
                                   {ownedBy(item) ? (
                                     <>
-                                      <button className="btn-secondary btn-small" onClick={() => openExpiryModal(item)}>ตั้งเป็นหมดอายุ</button>
+                                      <button className="teacher-btn-secondary teacher-btn-small" onClick={() => openExpiryModal(item)}>ตั้งเป็นหมดอายุ</button>
                                       <button onClick={() => openConfirmModal('ลบข่าว', 'ต้องการลบข่าวนี้ใช่หรือไม่?', async () => { await deleteAnnouncement(item.id); })} className="btn-delete-announcement">ลบ</button>
                                     </>
                                   ) : null}

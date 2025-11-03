@@ -89,17 +89,17 @@ function SignupPage() {
   };
 
   return (
-    <div className="signin-container">
+    <div className="signup-container">
       <ToastContainer position="top-center" theme="colored" />
-      <div className="signin-form">
-        <div className="signin-header">
-          <h2 className="signin-title">สร้างบัญชี (แอดมิน)</h2>
-          <p className="signin-subtitle">กรุณากรอกข้อมูลเพื่อสร้างบัญชีผู้ดูแลระบบ</p>
+      <div className="signup-form">
+        <div className="signup-header">
+          <h2 className="signup-title">สร้างบัญชี (แอดมิน)</h2>
+          <p className="signup-subtitle">กรุณากรอกข้อมูลเพื่อสร้างบัญชีผู้ดูแลระบบ</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="signin-form-content">
-          <div className="form-group">
-            <label htmlFor="schoolName" className="form-label">ชื่อโรงเรียน</label>
+        <form onSubmit={handleSubmit} className="signup-form-content">
+          <div className="signup-form-group">
+            <label htmlFor="schoolName" className="signup-form-label">ชื่อโรงเรียน</label>
             <input
               type="text"
               id="schoolName"
@@ -107,12 +107,12 @@ function SignupPage() {
               onChange={e => setSchoolName(e.target.value)}
               placeholder="ชื่อโรงเรียนของคุณ"
               required
-              className="form-input"
+              className="signup-form-input"
             />
           </div>
 
-          <div className="form-group">
-            <label htmlFor="fullName" className="form-label">ชื่อเต็ม</label>
+          <div className="signup-form-group">
+            <label htmlFor="fullName" className="signup-form-label">ชื่อเต็ม</label>
             <input
               type="text"
               id="fullName"
@@ -120,12 +120,12 @@ function SignupPage() {
               onChange={e => setFullName(e.target.value)}
               placeholder="ชื่อเต็มของคุณ"
               required
-              className="form-input"
+              className="signup-form-input"
             />
           </div>
 
-          <div className="form-group">
-            <label htmlFor="username" className="form-label">ชื่อผู้ใช้</label>
+          <div className="signup-form-group">
+            <label htmlFor="username" className="signup-form-label">ชื่อผู้ใช้</label>
             <input
               type="text"
               id="username"
@@ -133,12 +133,12 @@ function SignupPage() {
               onChange={e => setUsername(e.target.value)}
               placeholder="ชื่อผู้ใช้ของคุณ"
               required
-              className="form-input"
+              className="signup-form-input"
             />
           </div>
 
-          <div className="form-group">
-            <label htmlFor="email" className="form-label">อีเมล</label>
+          <div className="signup-form-group">
+            <label htmlFor="email" className="signup-form-label">อีเมล</label>
             <input
               type="email"
               id="email"
@@ -146,12 +146,12 @@ function SignupPage() {
               onChange={e => setEmail(e.target.value)}
               placeholder="อีเมลของคุณ"
               required
-              className="form-input"
+              className="signup-form-input"
             />
           </div>
 
-          <div className="form-group">
-            <label htmlFor="password" className="form-label">รหัสผ่าน</label>
+          <div className="signup-form-group">
+            <label htmlFor="password" className="signup-form-label">รหัสผ่าน</label>
             <input
               type="password"
               id="password"
@@ -159,22 +159,22 @@ function SignupPage() {
               onChange={e => setPassword(e.target.value)}
               placeholder="รหัสผ่านของคุณ"
               required
-              className="form-input"
+              className="signup-form-input"
             />
           </div>
 
-          <button className="button-signin" type="submit" disabled={isLoading}>
+          <button className="signup-button" type="submit" disabled={isLoading}>
             {isLoading ? 'กำลังสร้าง...' : 'สร้างบัญชีแอดมิน'}
           </button>
         </form>
 
-        <div className="signin-links">
-          <button type="button" onClick={() => navigate('/signin')} className="link-button back-link">
+        <div className="signup-links">
+          <button type="button" onClick={() => navigate('/signin')} className="signup-back-link">
             กลับไปเข้าสู่ระบบ
           </button>
         </div>
 
-        <div className="signin-divider" />
+        <div className="signup-divider" />
       </div>
     </div>
   );

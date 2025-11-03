@@ -256,7 +256,7 @@ function TeacherDetail() {
           <button 
             type="button" 
             className="btn-cancel" 
-            onClick={() => navigate('/admin')}
+            onClick={() => navigate(-1)}
           >
             🔙 กลับ
           </button>

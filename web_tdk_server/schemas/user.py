@@ -22,10 +22,15 @@ class UserUpdate(BaseModel):
     is_active: Optional[bool] = None
     school_id: Optional[int] = None
 
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
 # Schema for response
 class User(UserBase):
     id: int
     is_active: bool
+    must_change_password: bool
     created_at: datetime
     updated_at: datetime
     
