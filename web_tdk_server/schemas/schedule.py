@@ -1,0 +1,54 @@
+from pydantic import BaseModel
+from typing import List, Optional
+from datetime import time
+
+class ScheduleSlotBase(BaseModel):
+    day_of_week: str
+    start_time: time
+    end_time: time
+
+class ScheduleSlotCreate(ScheduleSlotBase):
+    pass
+
+class ScheduleSlotUpdate(ScheduleSlotBase):
+    pass
+
+class ScheduleSlot(ScheduleSlotBase):
+    id: int
+    school_id: int
+    created_by: int
+    
+    class Config:
+        from_attributes = True
+
+class SubjectScheduleBase(BaseModel):
+    subject_id: int
+    day_of_week: str  # Day of week (0-6, where 0=Sunday)
+    start_time: time
+    end_time: time
+    schedule_slot_id: Optional[int] = None  # Optional reference to operating hours
+
+class SubjectScheduleCreate(SubjectScheduleBase):
+    pass
+
+class SubjectSchedule(SubjectScheduleBase):
+    id: int
+    teacher_id: int
+    subject_name: Optional[str] = None
+    teacher_name: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
+
+class StudentScheduleResponse(BaseModel):
+    id: int
+    subject_id: int
+    subject_name: str
+    subject_code: Optional[str] = None
+    teacher_name: str
+    day_of_week: str
+    start_time: time
+    end_time: time
+    
+    class Config:
+        from_attributes = True

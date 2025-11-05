@@ -125,12 +125,16 @@ def delete_subject(subject_id: int, db: Session = Depends(get_db), current_user=
     # Delete related records first to avoid foreign key constraint errors
     from models.attendance import Attendance as AttendanceModel
     from models.grade import Grade as GradeModel
+    from models.schedule import SubjectSchedule as SubjectScheduleModel
 
     # Delete attendance records
     db.query(AttendanceModel).filter(AttendanceModel.subject_id == subject_id).delete()
 
     # Delete grade records
     db.query(GradeModel).filter(GradeModel.subject_id == subject_id).delete()
+
+    # Delete subject schedules
+    db.query(SubjectScheduleModel).filter(SubjectScheduleModel.subject_id == subject_id).delete()
 
     # Delete student enrollments
     db.query(SubjectStudentModel).filter(SubjectStudentModel.subject_id == subject_id).delete()

@@ -1,6 +1,49 @@
-# Getting Started with Create React App
+# Web TDK Client - Frontend Application
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+
+## Setup Instructions
+
+### 1. Prerequisites
+- Node.js 16+ and npm
+- Backend server running on port 8000
+
+### 2. Install Dependencies
+
+```bash
+cd web_tdk_client
+npm install
+```
+
+### 3. Run Development Server
+
+```bash
+npm start
+```
+
+The application will be available at `http://localhost:3000`
+
+## Features
+
+### Schedule Management System
+Complete implementation with role-based access:
+
+#### Admin Interface (`/admin`):
+- **Schedule Tab**: Create, edit, delete time slots
+- **Day Selection**: Monday through Sunday  
+- **Time Management**: Start and end time configuration
+- **Conflict Prevention**: Automatic validation for overlapping slots
+
+#### Teacher Interface (`/teacher`):  
+- **Schedule Tab**: Assign subjects to available time slots
+- **Subject Assignment**: Select from personal subjects
+- **Schedule Overview**: View all assigned classes
+- **Assignment Management**: Remove subject assignments
+
+#### Student Interface (`/student`):
+- **Schedule Tab**: View weekly timetable
+- **Class Schedule**: Complete weekly view with subjects, teachers, and times
+- **Mobile Responsive**: Optimized table display for all devices
 
 ## Available Scripts
 

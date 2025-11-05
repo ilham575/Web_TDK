@@ -12,6 +12,10 @@ function StudentPage() {
   const [currentUser, setCurrentUser] = useState(null);
   const [expandedAnnouncement, setExpandedAnnouncement] = useState(null);
   const [activeTab, setActiveTab] = useState('subjects');
+  
+  // Schedule state
+  const [studentSchedule, setStudentSchedule] = useState([]);
+  const [operatingHours, setOperatingHours] = useState([]);
 
   // We rely on styles in src/components/css/pages/student/student-home.css
 
@@ -66,6 +70,49 @@ function StudentPage() {
     };
     load();
   }, [currentUser]);
+
+  // fetch student schedule
+  useEffect(() => {
+    if (!currentUser) return;
+    const loadSchedule = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const res = await fetch('http://127.0.0.1:8000/schedule/student', { headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+        const data = await res.json();
+        if (res.ok && Array.isArray(data)) setStudentSchedule(data);
+        else setStudentSchedule([]);
+      } catch (err) {
+        setStudentSchedule([]);
+      }
+    };
+    loadSchedule();
+  }, [currentUser]);
+
+  // fetch operating hours
+  useEffect(() => {
+    const loadOperatingHours = async () => {
+      const schoolId = localStorage.getItem('school_id');
+      if (!schoolId) return;
+      
+      try {
+        const token = localStorage.getItem('token');
+        const res = await fetch(`http://127.0.0.1:8000/schedule/slots?school_id=${schoolId}`, {
+          headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
+        });
+        
+        if (res.ok) {
+          const data = await res.json();
+          setOperatingHours(Array.isArray(data) ? data : []);
+        } else {
+          setOperatingHours([]);
+        }
+      } catch (err) {
+        console.error('Failed to load operating hours:', err);
+        setOperatingHours([]);
+      }
+    };
+    loadOperatingHours();
+  }, []);
 
   useEffect(() => {
     const schoolId = localStorage.getItem('school_id');
@@ -134,6 +181,98 @@ function StudentPage() {
 
   const toggleAnnouncement = (id) => {
     setExpandedAnnouncement(prev => prev === id ? null : id);
+  };
+
+  // Render weekly schedule table
+  const renderScheduleTable = () => {
+    // Create days array from operating hours
+    const dayNames = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
+    const days = operatingHours.map(slot => ({
+      key: parseInt(slot.day_of_week),
+      label: dayNames[parseInt(slot.day_of_week)] || 'ไม่ระบุ',
+      operatingStart: slot.start_time,
+      operatingEnd: slot.end_time
+    })).sort((a, b) => a.key - b.key); // Sort by day of week
+
+    if (days.length === 0) {
+      return (
+        <div className="schedule-no-data">
+          <div className="empty-icon">📅</div>
+          <div className="empty-text">ยังไม่ได้กำหนดเวลาเปิดเรียน</div>
+          <div className="empty-subtitle">กรุณาติดต่อผู้ดูแลระบบ</div>
+        </div>
+      );
+    }
+
+    if (studentSchedule.length === 0) {
+      return (
+        <div className="schedule-no-data">
+          <div className="empty-icon">📅</div>
+          <div className="empty-text">ยังไม่มีตารางเรียน</div>
+          <div className="empty-subtitle">ติดต่อครูผู้สอนเพื่อดูตารางเรียน</div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="schedule-table">
+        <table>
+          <thead>
+            <tr>
+              <th>เวลา</th>
+              {days.map(day => (
+                <th key={day.key}>
+                  {day.label}
+                  <div className="operating-hours-info" style={{ fontSize: '0.8em', color: '#666', fontWeight: 'normal' }}>
+                    {day.operatingStart} - {day.operatingEnd}
+                  </div>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {/* Group schedules by time slots and sort by start time */}
+            {Array.from(new Set(studentSchedule.map(s => `${s.start_time}-${s.end_time}`)))
+              .sort((a, b) => {
+                const [aStart] = a.split('-');
+                const [bStart] = b.split('-');
+                return aStart.localeCompare(bStart);
+              })
+              .map(timeSlot => {
+                const [startTime, endTime] = timeSlot.split('-');
+                return (
+                  <tr key={timeSlot}>
+                    <td className="schedule-time">{startTime} - {endTime}</td>
+                    {days.map(day => {
+                      const scheduleForDay = studentSchedule.find(
+                        s => parseInt(s.day_of_week) === day.key && 
+                             s.start_time === startTime && 
+                             s.end_time === endTime
+                      );
+                      
+                      return (
+                        <td key={day.key}>
+                          {scheduleForDay ? (
+                            <div className="schedule-slot">
+                              <div className="subject-name">{scheduleForDay.subject_name}</div>
+                              <div className="teacher-name">{scheduleForDay.teacher_name}</div>
+                              {scheduleForDay.subject_code && (
+                                <div className="subject-code">({scheduleForDay.subject_code})</div>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="schedule-empty">-</div>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
+          </tbody>
+        </table>
+      </div>
+    );
   };
 
   // Determine school name from multiple possible sources (API shape may vary)
@@ -225,6 +364,7 @@ function StudentPage() {
       <div className="tabs-header">
         <button className={`tab-button ${activeTab === 'subjects' ? 'active' : ''}`} onClick={() => setActiveTab('subjects')}>รายวิชา</button>
         <button className={`tab-button ${activeTab === 'announcements' ? 'active' : ''}`} onClick={() => setActiveTab('announcements')}>ข่าวสาร</button>
+        <button className={`tab-button ${activeTab === 'schedule' ? 'active' : ''}`} onClick={() => setActiveTab('schedule')}>ตารางเรียน</button>
       </div>
       <div className="tab-content">
         {activeTab === 'subjects' && (
@@ -292,6 +432,12 @@ function StudentPage() {
               </ul>
             )}
           </aside>
+        )}
+        {activeTab === 'schedule' && (
+          <section className="student-section">
+            <div className="schedule-header"><span className="schedule-icon">📅</span> ตารางเรียนของฉัน</div>
+            {renderScheduleTable()}
+          </section>
         )}
       </div>
     </div>

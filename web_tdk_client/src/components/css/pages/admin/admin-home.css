@@ -773,6 +773,183 @@
   flex-wrap: wrap;
 }
 
+/* Custom File Upload Area */
+.file-upload-area {
+  flex: 1;
+  min-width: 300px;
+  padding: 2rem;
+  border: 2px dashed rgba(102, 126, 234, 0.3);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  cursor: pointer;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  box-shadow: 
+    0 8px 25px rgba(0, 0, 0, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  overflow: hidden;
+}
+
+.file-upload-area::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.file-upload-area:hover {
+  border-color: rgba(102, 126, 234, 0.6);
+  background: rgba(255, 255, 255, 0.15);
+  transform: translateY(-2px);
+  box-shadow: 
+    0 12px 35px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.file-upload-area:hover::before {
+  opacity: 1;
+}
+
+.file-upload-area.drag-over {
+  border-color: #667eea;
+  background: rgba(102, 126, 234, 0.1);
+  transform: translateY(-4px) scale(1.02);
+  box-shadow: 
+    0 16px 45px rgba(102, 126, 234, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  animation: pulse 1s ease-in-out infinite;
+}
+
+.file-upload-area.drag-over::before {
+  opacity: 1;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+}
+
+.file-upload-area.has-file {
+  border-color: rgba(16, 185, 129, 0.5);
+  background: rgba(16, 185, 129, 0.05);
+}
+
+.file-upload-area.has-file::before {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(5, 150, 105, 0.08) 100%);
+  opacity: 1;
+}
+
+.upload-icon {
+  font-size: 3rem;
+  color: #667eea;
+  transition: all 0.3s ease;
+  filter: drop-shadow(0 2px 8px rgba(102, 126, 234, 0.2));
+  animation: float 3s ease-in-out infinite;
+}
+
+.file-upload-area.drag-over .upload-icon {
+  color: #667eea;
+  transform: scale(1.2);
+  filter: drop-shadow(0 4px 16px rgba(102, 126, 234, 0.4));
+}
+
+.file-upload-area.has-file .upload-icon {
+  color: #10b981;
+  filter: drop-shadow(0 2px 8px rgba(16, 185, 129, 0.3));
+}
+
+.upload-text {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.primary-text {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #2d3748;
+  line-height: 1.4;
+}
+
+.secondary-text {
+  font-size: 0.9rem;
+  color: rgba(45, 55, 72, 0.6);
+  font-weight: 500;
+}
+
+.file-name {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #10b981;
+  word-break: break-all;
+  text-align: center;
+}
+
+.file-size {
+  font-size: 0.85rem;
+  color: rgba(16, 185, 129, 0.7);
+  font-weight: 500;
+}
+
+.file-remove-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(245, 87, 108, 0.9);
+  color: white;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  font-weight: bold;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(245, 87, 108, 0.3);
+}
+
+.file-remove-btn:hover {
+  background: #f34560;
+  transform: scale(1.1);
+  box-shadow: 0 6px 16px rgba(245, 87, 108, 0.4);
+}
+
+.admin-btn-secondary {
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: #2d3748;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  padding: 1rem 1.5rem;
+  border-radius: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 
+    0 4px 15px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.admin-btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: translateY(-2px);
+  box-shadow: 
+    0 8px 25px rgba(0, 0, 0, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
 .admin-btn-secondary {
   background: rgba(255, 255, 255, 0.2);
   backdrop-filter: blur(10px);
@@ -1010,24 +1187,6 @@
   flex-wrap: wrap;
 }
 
-#bulk-upload-input {
-  -webkit-appearance: none;
-  appearance: none;
-  padding: 0.6rem 0.85rem;
-  border-radius: 10px;
-  border: 1px dashed rgba(2,6,23,0.08);
-  background: rgba(255,255,255,0.03);
-  color: #0b2546;
-  cursor: pointer;
-  font-weight: 600;
-  transition: box-shadow 0.15s ease, border-color 0.15s ease;
-}
-
-.upload-controls #bulk-upload-input:hover {
-  box-shadow: 0 6px 14px rgba(11,37,70,0.04);
-  border-color: rgba(2,6,23,0.12);
-}
-
 .upload-controls .admin-btn-primary {
   padding: 0.7rem 1.2rem;
   min-width: 150px;
@@ -1066,6 +1225,19 @@
   }
   #bulk-upload-input {
     width: 100%;
+  }
+  .file-upload-area {
+    min-width: unset;
+    padding: 1.5rem;
+  }
+  .upload-icon {
+    font-size: 2.5rem;
+  }
+  .primary-text {
+    font-size: 1rem;
+  }
+  .secondary-text {
+    font-size: 0.8rem;
   }
 }
 
@@ -1131,12 +1303,21 @@
   font-weight: 600;
 }
 
-@keyframes rotate {
-  from {
-    transform: rotate(0deg);
+@keyframes pulse {
+  0%, 100% {
+    transform: translateY(-4px) scale(1.02);
   }
-  to {
-    transform: rotate(360deg);
+  50% {
+    transform: translateY(-6px) scale(1.03);
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-8px);
   }
 }
 
@@ -1358,4 +1539,237 @@
 
 .admin-btn-small.admin-btn-success:hover {
   background: linear-gradient(135deg, #059669 0%, #047857 100%);
+}
+
+/* Admin Schedule Styles */
+.admin-schedule-container {
+  padding: 2rem;
+}
+
+.admin-schedule-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.admin-schedule-title {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: #1e293b;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.admin-schedule-icon {
+  font-size: 1.5rem;
+  color: #3b82f6;
+}
+
+.admin-schedule-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: linear-gradient(135deg,
+    rgba(255, 255, 255, 0.9) 0%,
+    rgba(255, 255, 255, 0.7) 100%);
+  backdrop-filter: blur(20px);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 
+    0 20px 60px rgba(0, 0, 0, 0.1),
+    0 8px 25px rgba(0, 0, 0, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.admin-schedule-table th,
+.admin-schedule-table td {
+  padding: 1.25rem 1.5rem;
+  text-align: left;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+  vertical-align: middle;
+}
+
+.admin-schedule-table th {
+  background: linear-gradient(135deg,
+    rgba(59, 130, 246, 0.1) 0%,
+    rgba(99, 102, 241, 0.1) 100%);
+  font-weight: 700;
+  color: #1e293b;
+  font-size: 0.95rem;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  border-bottom: 2px solid rgba(59, 130, 246, 0.2);
+}
+
+.admin-schedule-table tbody tr {
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.admin-schedule-table tbody tr:hover {
+  background: linear-gradient(135deg,
+    rgba(59, 130, 246, 0.05) 0%,
+    rgba(99, 102, 241, 0.05) 100%);
+  transform: translateX(4px);
+}
+
+.admin-schedule-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.admin-schedule-day {
+  font-weight: 600;
+  color: #374151;
+  font-size: 1rem;
+}
+
+.admin-schedule-time {
+  color: #6b7280;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.admin-schedule-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.admin-schedule-btn {
+  padding: 0.6rem 1.2rem;
+  border: none;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 80px;
+  justify-content: center;
+}
+
+.admin-schedule-btn.edit {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: white;
+  box-shadow: 0 4px 15px rgba(245, 158, 11, 0.3);
+}
+
+.admin-schedule-btn.edit:hover {
+  background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(245, 158, 11, 0.4);
+}
+
+.admin-schedule-btn.delete {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+  box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3);
+}
+
+.admin-schedule-btn.delete:hover {
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(239, 68, 68, 0.4);
+}
+
+.admin-schedule-empty {
+  text-align: center;
+  padding: 3rem 2rem;
+  color: #64748b;
+  font-style: italic;
+  font-size: 1.1rem;
+}
+
+.admin-schedule-empty-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  opacity: 0.5;
+}
+
+/* Schedule Modal Styles */
+.admin-schedule-modal .modal-body {
+  padding: 2rem;
+}
+
+.admin-schedule-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.admin-schedule-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.admin-schedule-form-label {
+  font-weight: 600;
+  color: #374151;
+  font-size: 0.95rem;
+  letter-spacing: 0.3px;
+}
+
+.admin-schedule-form-select,
+.admin-schedule-form-input {
+  padding: 0.9rem 1.2rem;
+  border: 2px solid rgba(203, 213, 225, 0.5);
+  border-radius: 12px;
+  font-size: 1rem;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  background: linear-gradient(135deg,
+    rgba(255, 255, 255, 0.8) 0%,
+    rgba(248, 250, 252, 0.8) 100%);
+  backdrop-filter: blur(10px);
+}
+
+.admin-schedule-form-select:focus,
+.admin-schedule-form-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 
+    0 0 0 3px rgba(59, 130, 246, 0.1),
+    0 4px 15px rgba(59, 130, 246, 0.1);
+  transform: translateY(-1px);
+}
+
+.admin-schedule-time-inputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+@media (max-width: 768px) {
+  .admin-schedule-container {
+    padding: 1rem;
+  }
+
+  .admin-schedule-title {
+    font-size: 1.5rem;
+  }
+
+  .admin-schedule-table th,
+  .admin-schedule-table td {
+    padding: 1rem 0.75rem;
+    font-size: 0.9rem;
+  }
+
+  .admin-schedule-actions {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .admin-schedule-btn {
+    width: 100%;
+    min-width: auto;
+  }
+
+  .admin-schedule-time-inputs {
+    grid-template-columns: 1fr;
+  }
 }

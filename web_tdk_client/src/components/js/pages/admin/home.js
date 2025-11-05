@@ -40,19 +40,47 @@ function AdminPage() {
 
   const [onConfirmAction, setOnConfirmAction] = useState(() => {});
 
+  // Alert modal state (was missing — ESLint flagged these as undefined)
+  const [showAlertModal, setShowAlertModal] = useState(false);
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+
   const [showExpiryModal, setShowExpiryModal] = useState(false);
   const [expiryModalValue, setExpiryModalValue] = useState('');
   const [expiryModalId, setExpiryModalId] = useState(null);
 
-  const [showAlertModal, setShowAlertModal] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
 
-  const [alertTitle, setAlertTitle] = useState('');
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    setDragOver(true);
+  };
 
-  const [alertMessage, setAlertMessage] = useState('');
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    setDragOver(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setDragOver(false);
+    const files = e.dataTransfer.files;
+    if (files && files[0]) {
+      setUploadFile(files[0]);
+    }
+  };
 
   const [deletionStatuses, setDeletionStatuses] = useState({});
 
   const [activeTab, setActiveTab] = useState('users');
+
+  // Schedule management state
+  const [scheduleSlots, setScheduleSlots] = useState([]);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [newScheduleDay, setNewScheduleDay] = useState('');
+  const [newScheduleStartTime, setNewScheduleStartTime] = useState('');
+  const [newScheduleEndTime, setNewScheduleEndTime] = useState('');
+  const [editingSchedule, setEditingSchedule] = useState(null);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -353,6 +381,176 @@ function AdminPage() {
 
   };
 
+  // Schedule management functions
+  const loadScheduleSlots = async () => {
+    const schoolId = localStorage.getItem('school_id');
+    if (!schoolId) return;
+    
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`http://127.0.0.1:8000/schedule/slots?school_id=${schoolId}`, {
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        setScheduleSlots(Array.isArray(data) ? data : []);
+      } else {
+        setScheduleSlots([]);
+      }
+    } catch (err) {
+      console.error('Failed to load schedule slots:', err);
+      setScheduleSlots([]);
+    }
+  };
+
+  const createScheduleSlot = async () => {
+    if (!newScheduleDay || !newScheduleStartTime || !newScheduleEndTime) {
+      toast.error('กรุณากรอกข้อมูลให้ครบทุกช่อง');
+      return;
+    }
+
+    if (newScheduleStartTime >= newScheduleEndTime) {
+      toast.error('เวลาเริ่มต้องน้อยกว่าเวลาสิ้นสุด');
+      return;
+    }
+
+    const schoolId = localStorage.getItem('school_id');
+    if (!schoolId) {
+      toast.error('ไม่พบข้อมูลโรงเรียน');
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      const body = {
+        school_id: Number(schoolId),
+        day_of_week: newScheduleDay,
+        start_time: newScheduleStartTime,
+        end_time: newScheduleEndTime
+      };
+
+      const res = await fetch('http://127.0.0.1:8000/schedule/slots', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify(body)
+      });
+
+      if (res.ok) {
+        toast.success('เพิ่มช่วงเวลาเรียนเรียบร้อย');
+        setShowScheduleModal(false);
+        setNewScheduleDay('');
+        setNewScheduleStartTime('');
+        setNewScheduleEndTime('');
+        loadScheduleSlots();
+      } else {
+        const data = await res.json();
+        toast.error(data.detail || 'เพิ่มช่วงเวลาไม่สำเร็จ');
+      }
+    } catch (err) {
+      console.error('Create schedule slot error:', err);
+      toast.error('เกิดข้อผิดพลาดในการเพิ่มช่วงเวลา');
+    }
+  };
+
+  const editScheduleSlot = (slot) => {
+    setEditingSchedule(slot);
+    setNewScheduleDay(slot.day_of_week);
+    setNewScheduleStartTime(slot.start_time);
+    setNewScheduleEndTime(slot.end_time);
+    setShowScheduleModal(true);
+  };
+
+  const updateScheduleSlot = async () => {
+    if (!newScheduleDay || !newScheduleStartTime || !newScheduleEndTime) {
+      toast.error('กรุณากรอกข้อมูลให้ครบทุกช่อง');
+      return;
+    }
+
+    if (newScheduleStartTime >= newScheduleEndTime) {
+      toast.error('เวลาเริ่มต้องน้อยกว่าเวลาสิ้นสุด');
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      const body = {
+        day_of_week: newScheduleDay,
+        start_time: newScheduleStartTime,
+        end_time: newScheduleEndTime
+      };
+
+      const res = await fetch(`http://127.0.0.1:8000/schedule/slots/${editingSchedule.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify(body)
+      });
+
+      if (res.ok) {
+        toast.success('แก้ไขช่วงเวลาเรียนเรียบร้อย');
+        setShowScheduleModal(false);
+        setEditingSchedule(null);
+        setNewScheduleDay('');
+        setNewScheduleStartTime('');
+        setNewScheduleEndTime('');
+        loadScheduleSlots();
+      } else {
+        const data = await res.json();
+        toast.error(data.detail || 'แก้ไขช่วงเวลาไม่สำเร็จ');
+      }
+    } catch (err) {
+      console.error('Update schedule slot error:', err);
+      toast.error('เกิดข้อผิดพลาดในการแก้ไขช่วงเวลา');
+    }
+  };
+
+  const deleteScheduleSlot = async (slotId) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`http://127.0.0.1:8000/schedule/slots/${slotId}`, {
+        method: 'DELETE',
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
+      });
+
+      if (res.ok) {
+        toast.success('ลบช่วงเวลาเรียนเรียบร้อย');
+        loadScheduleSlots();
+      } else {
+        const data = await res.json();
+        toast.error(data.detail || 'ลบช่วงเวลาไม่สำเร็จ');
+      }
+    } catch (err) {
+      console.error('Delete schedule slot error:', err);
+      toast.error('เกิดข้อผิดพลาดในการลบช่วงเวลา');
+    }
+  };
+
+  const getDayName = (dayNumber) => {
+    const days = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
+    return days[dayNumber] || 'ไม่ระบุ';
+  };
+
+  const cancelScheduleModal = () => {
+    setShowScheduleModal(false);
+    setEditingSchedule(null);
+    setNewScheduleDay('');
+    setNewScheduleStartTime('');
+    setNewScheduleEndTime('');
+  };
+
+  // Load schedule slots when switching to schedule tab
+  React.useEffect(() => {
+    if (activeTab === 'schedule') {
+      loadScheduleSlots();
+    }
+  }, [activeTab]);
+
   return (
     <div className="admin-dashboard">
       <ToastContainer />
@@ -426,6 +624,7 @@ function AdminPage() {
       <div className="tabs-header">
         <button className={`tab-button ${activeTab === 'users' ? 'active' : ''}`} onClick={() => setActiveTab('users')}>จัดการผู้ใช้</button>
         <button className={`tab-button ${activeTab === 'announcements' ? 'active' : ''}`} onClick={() => setActiveTab('announcements')}>จัดการประกาศข่าว</button>
+        <button className={`tab-button ${activeTab === 'schedule' ? 'active' : ''}`} onClick={() => setActiveTab('schedule')}>จัดการตารางเรียน</button>
       </div>
       <div className="tab-content">
         {activeTab === 'users' && (
@@ -627,28 +826,86 @@ function AdminPage() {
                 <div className="bulk-upload-section">
                   <label className="bulk-upload-label">หรืออัปโหลดผู้ใช้จำนวนมาก (.xlsx)</label>
                   <div className="upload-controls">
-                    <input id="bulk-upload-input" type="file" accept=".xlsx" onChange={handleFileChange} />
-                    <button type="button" className="admin-btn-primary" onClick={handleUpload} disabled={uploading}>
+                    <div 
+                      className={`file-upload-area ${dragOver ? 'drag-over' : ''} ${uploadFile ? 'has-file' : ''}`}
+                      onDragOver={handleDragOver}
+                      onDragLeave={handleDragLeave}
+                      onDrop={handleDrop}
+                      onClick={() => document.getElementById('bulk-upload-input').click()}
+                    >
+                      <input 
+                        id="bulk-upload-input" 
+                        type="file" 
+                        accept=".xlsx" 
+                        onChange={handleFileChange}
+                        style={{ display: 'none' }}
+                      />
+                      <div className="upload-icon">
+                        {uploading ? '⏳' : uploadFile ? '📄' : '📁'}
+                      </div>
+                      <div className="upload-text">
+                        {uploading ? (
+                          <span>กำลังอัปโหลดไฟล์...</span>
+                        ) : uploadFile ? (
+                          <>
+                            <span className="file-name">{uploadFile.name}</span>
+                            <span className="file-size">({(uploadFile.size / 1024).toFixed(1)} KB)</span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="primary-text">ลากไฟล์ Excel มาที่นี่ หรือคลิกเพื่อเลือกไฟล์</span>
+                            <span className="secondary-text">รองรับไฟล์ .xlsx เท่านั้น</span>
+                          </>
+                        )}
+                      </div>
+                      {uploadFile && !uploading && (
+                        <button 
+                          type="button" 
+                          className="file-remove-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setUploadFile(null);
+                            const inp = document.getElementById('bulk-upload-input');
+                            if (inp) inp.value = '';
+                          }}
+                          title="ลบไฟล์"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                    <button 
+                      type="button" 
+                      className="admin-btn-primary" 
+                      onClick={handleUpload} 
+                      disabled={uploading || !uploadFile}
+                    >
                       {uploading ? (
                         <>
-                          <span className="btn-icon" aria-hidden>⬆️</span>
+                          <span className="btn-icon" aria-hidden>⏳</span>
                           กำลังอัปโหลด...
                         </>
                       ) : (
                         <>
-                          <span className="btn-icon" aria-hidden>📁</span>
+                          <span className="btn-icon" aria-hidden>⬆️</span>
                           อัปโหลด Excel
                         </>
                       )}
                     </button>
-                    <button type="button" className="admin-btn-secondary" onClick={async ()=>{
-                      const token = localStorage.getItem('token');
-                      try {
-                        const res = await fetch('http://127.0.0.1:8000/users/bulk_template', { headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
-                        if (!res.ok) { let err = null; try { err = await res.json(); } catch(e){}; toast.error((err && err.detail) ? err.detail : 'Failed to download template'); return; }
-                        const blob = await res.blob(); const url = window.URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'user_bulk_template.xlsx'; document.body.appendChild(a); a.click(); a.remove(); window.URL.revokeObjectURL(url);
-                      } catch (err) { console.error('download template error', err); toast.error('Download failed'); }
-                    }}>ดาวน์โหลดเทมเพลต</button>
+                    <button 
+                      type="button" 
+                      className="admin-btn-secondary" 
+                      onClick={async ()=>{
+                        const token = localStorage.getItem('token');
+                        try {
+                          const res = await fetch('http://127.0.0.1:8000/users/bulk_template', { headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
+                          if (!res.ok) { let err = null; try { err = await res.json(); } catch(e){}; toast.error((err && err.detail) ? err.detail : 'Failed to download template'); return; }
+                          const blob = await res.blob(); const url = window.URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'user_bulk_template.xlsx'; document.body.appendChild(a); a.click(); a.remove(); window.URL.revokeObjectURL(url);
+                        } catch (err) { console.error('download template error', err); toast.error('Download failed'); }
+                      }}
+                    >
+                      📋 ดาวน์โหลดเทมเพลต
+                    </button>
                   </div>
                 </div>
               </div>
@@ -725,6 +982,75 @@ function AdminPage() {
             </div>
           </div>
         )}
+        {activeTab === 'schedule' && (
+          <div className="content-card">
+            <div className="card-header">
+              <h2><span className="card-icon">🗓️</span> จัดการตารางเรียน</h2>
+            </div>
+            <div className="card-content">
+              <div className="schedule-form-section">
+                <div className="schedule-actions">
+                  <button 
+                    className="admin-btn-primary" 
+                    onClick={() => setShowScheduleModal(true)}
+                    title="เพิ่มช่วงเวลาใหม่"
+                  >
+                    ➕ เพิ่มช่วงเวลาเรียน
+                  </button>
+                </div>
+              </div>
+
+              <div className="schedule-slots-list">
+                <h3>ช่วงเวลาเรียนที่กำหนด</h3>
+                {scheduleSlots.length === 0 ? (
+                  <div className="empty-state">
+                    <div className="empty-icon">🗓️</div>
+                    <div className="empty-text">ยังไม่มีช่วงเวลาเรียน</div>
+                    <div className="empty-subtitle">เริ่มต้นโดยการเพิ่มช่วงเวลาเรียนใหม่</div>
+                  </div>
+                ) : (
+                  <div className="schedule-table">
+                    <table className="admin-table">
+                      <thead>
+                        <tr>
+                          <th>วัน</th>
+                          <th>เวลาเริ่ม</th>
+                          <th>เวลาสิ้นสุด</th>
+                          <th>จัดการ</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {scheduleSlots.map((slot) => (
+                          <tr key={slot.id}>
+                            <td>{getDayName(slot.day_of_week)}</td>
+                            <td>{slot.start_time}</td>
+                            <td>{slot.end_time}</td>
+                            <td>
+                              <button 
+                                className="admin-btn-small admin-btn-warning" 
+                                onClick={() => editScheduleSlot(slot)}
+                                title="แก้ไข"
+                              >
+                                ✏️ แก้ไข
+                              </button>
+                              <button 
+                                className="admin-btn-small admin-btn-danger" 
+                                onClick={() => openConfirmModal('ลบช่วงเวลา', `ต้องการลบช่วงเวลา ${getDayName(slot.day_of_week)} ${slot.start_time}-${slot.end_time} ใช่หรือไม่?`, async () => { await deleteScheduleSlot(slot.id); })}
+                                title="ลบ"
+                              >
+                                🗑️ ลบ
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {showModal && (
@@ -768,6 +1094,68 @@ function AdminPage() {
         message={alertMessage}
         onClose={() => setShowAlertModal(false)}
       />
+
+      {/* Schedule Modal */}
+      {showScheduleModal && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <div className="modal-header">
+              <h3>{editingSchedule ? 'แก้ไขช่วงเวลาเรียน' : 'เพิ่มช่วงเวลาเรียนใหม่'}</h3>
+              <button className="modal-close" onClick={cancelScheduleModal}>×</button>
+            </div>
+            <div className="modal-body">
+              <div className="form-group">
+                <label className="form-label">วัน</label>
+                <select 
+                  className="form-input" 
+                  value={newScheduleDay} 
+                  onChange={e => setNewScheduleDay(e.target.value)}
+                  required
+                >
+                  <option value="">เลือกวัน</option>
+                  <option value="0">อาทิตย์</option>
+                  <option value="1">จันทร์</option>
+                  <option value="2">อังคาร</option>
+                  <option value="3">พุธ</option>
+                  <option value="4">พฤหัสบดี</option>
+                  <option value="5">ศุกร์</option>
+                  <option value="6">เสาร์</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">เวลาเริ่ม</label>
+                <input 
+                  className="form-input" 
+                  type="time" 
+                  value={newScheduleStartTime} 
+                  onChange={e => setNewScheduleStartTime(e.target.value)}
+                  required 
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">เวลาสิ้นสุด</label>
+                <input 
+                  className="form-input" 
+                  type="time" 
+                  value={newScheduleEndTime} 
+                  onChange={e => setNewScheduleEndTime(e.target.value)}
+                  required 
+                />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="admin-btn-secondary" onClick={cancelScheduleModal}>ยกเลิก</button>
+              <button 
+                type="button" 
+                className="admin-btn-primary" 
+                onClick={editingSchedule ? updateScheduleSlot : createScheduleSlot}
+              >
+                {editingSchedule ? 'แก้ไข' : 'เพิ่ม'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

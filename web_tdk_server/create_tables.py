@@ -1,5 +1,5 @@
 from database.connection import engine, Base
-from models import user, school, announcement, document, grade
+from models import user, school, announcement, document, grade, subject, schedule
 
 from sqlalchemy import inspect, text
 from sqlalchemy import types as sqltypes

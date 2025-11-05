@@ -27,6 +27,7 @@ const CustomCloseButton = ({ closeToast }) => (
 function SigninPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -150,17 +151,36 @@ function SigninPage() {
             />
           </div>
 
-          <div className="signin-form-group">
+          <div className="signin-form-group" style={{ display: 'flex', alignItems: 'center' }}>
             <label htmlFor="password" className="signin-form-label">รหัสผ่าน</label>
-            <input
-              type="password"
-              id="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              placeholder="รหัสผ่านของคุณ"
-              required
-              className="signin-form-input"
-            />
+            <div style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+              <input
+                type={showPassword ? 'text' : 'password'}
+                id="password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="รหัสผ่านของคุณ"
+                required
+                className="signin-form-input"
+                style={{ flex: 1 }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(s => !s)}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                title={showPassword ? 'ซ่อนรหัสผ่าน' : 'แสดงรหัสผ่าน'}
+                style={{
+                  marginLeft: '8px',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: '18px',
+                  lineHeight: 1
+                }}
+              >
+                {showPassword ? '🙈' : '👁️'}
+              </button>
+            </div>
           </div>
 
           {error && <div className="error-message">{error}</div>}
