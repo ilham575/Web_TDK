@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import '../../../css/pages/teacher/teacher-home.css';
+import '../../../css/pages/teacher/schedule-modal.css';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import ConfirmModal from '../../ConfirmModal';
 import ExpiryModal from '../../ExpiryModal';
+import AnnouncementModal from '../../AnnouncementModal';
 
 function TeacherPage() {
   const navigate = useNavigate();
@@ -19,6 +21,8 @@ function TeacherPage() {
   const [content, setContent] = useState("");
   const [expiry, setExpiry] = useState('');
   const [announcements, setAnnouncements] = useState([]);
+  const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
+  const [modalAnnouncement, setModalAnnouncement] = useState(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmTitle, setConfirmTitle] = useState('');
   const [confirmMessage, setConfirmMessage] = useState('');
@@ -32,7 +36,6 @@ function TeacherPage() {
   const [scheduleSlots, setScheduleSlots] = useState([]);
   const [subjectSchedules, setSubjectSchedules] = useState([]);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
-  const [selectedSlotIds, setSelectedSlotIds] = useState([]); // Keep for backward compatibility
   const [selectedSubjectId, setSelectedSubjectId] = useState('');
   const [scheduleDay, setScheduleDay] = useState('');
   const [scheduleStartTime, setScheduleStartTime] = useState('');
@@ -154,13 +157,15 @@ function TeacherPage() {
           body.expires_at = localWithSec.replace('T', ' ');
         } catch (e) { /* ignore invalid date */ }
       }
+
+      // create new announcement
       const res = await fetch('http://127.0.0.1:8000/announcements/', {
         method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify(body)
       });
       const data = await res.json();
       if (!res.ok) toast.error(data.detail || 'ประกาศข่าวไม่สำเร็จ');
-      else { toast.success('ประกาศข่าวสำเร็จ!'); setTitle(''); setContent(''); }
+      else { toast.success('ประกาศข่าวสำเร็จ!'); setTitle(''); setContent(''); setExpiry(''); if (data && data.id) setAnnouncements(prev => Array.isArray(prev) ? [data, ...prev] : [data]); }
     } catch { toast.error('เกิดข้อผิดพลาดในการประกาศข่าว'); }
   };
 
@@ -307,7 +312,34 @@ function TeacherPage() {
     return false;
   };
 
-  const openExpiryModal = (item) => {
+    const openAnnouncementModal = (item) => {
+      setModalAnnouncement(item || null);
+      setShowAnnouncementModal(true);
+    };
+
+    const closeAnnouncementModal = () => { setShowAnnouncementModal(false); setModalAnnouncement(null); };
+
+    const saveAnnouncementFromModal = async ({ title: t, content: c, expiry: ex }) => {
+      if (!modalAnnouncement || !modalAnnouncement.id) { toast.error('Invalid announcement to update'); return; }
+      const token = localStorage.getItem('token');
+      try {
+        const body = { title: t, content: c };
+        if (ex) {
+          const localWithSec = ex.length === 16 ? ex + ':00' : ex;
+          body.expires_at = localWithSec.replace('T', ' ');
+        } else {
+          body.expires_at = null;
+        }
+        const res = await fetch(`http://127.0.0.1:8000/announcements/${modalAnnouncement.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(body) });
+        const data = await res.json();
+        if (!res.ok) { toast.error(data.detail || 'แก้ไขข่าวไม่สำเร็จ'); return; }
+        toast.success('แก้ไขข่าวสำเร็จ!');
+        setAnnouncements(prev => (Array.isArray(prev) ? prev.map(a => (a.id === data.id ? data : a)) : prev));
+        closeAnnouncementModal();
+      } catch (err) { console.error(err); toast.error('เกิดข้อผิดพลาดในการแก้ไขข่าว'); }
+    };
+
+    const openExpiryModal = (item) => {
     setExpiryModalId(item?.id || null);
     // pass current expiry (if any) as initial value
     setExpiryModalValue(item?.expires_at || item?.expire_at || item?.expiresAt || '');
@@ -458,7 +490,6 @@ function TeacherPage() {
 
   const cancelScheduleModal = () => {
     setShowScheduleModal(false);
-    setSelectedSlotIds([]);
     setSelectedSubjectId('');
     setScheduleDay('');
     setScheduleStartTime('');
@@ -653,6 +684,8 @@ function TeacherPage() {
                     onChange={e => setExpiry(e.target.value)}
                     className="announcement-input"
                     style={{ marginTop: 6 }}
+                    step="60"
+                    lang="en-GB"
                   />
                 </div>
                 <div className="form-actions">
@@ -678,6 +711,7 @@ function TeacherPage() {
                               ) : null}
                                   {ownedBy(item) ? (
                                     <>
+                                      <button className="teacher-btn-secondary teacher-btn-small" onClick={() => openAnnouncementModal(item)}>แก้ไข</button>
                                       <button className="teacher-btn-secondary teacher-btn-small" onClick={() => openExpiryModal(item)}>ตั้งเป็นหมดอายุ</button>
                                       <button onClick={() => openConfirmModal('ลบข่าว', 'ต้องการลบข่าวนี้ใช่หรือไม่?', async () => { await deleteAnnouncement(item.id); })} className="btn-delete-announcement">ลบ</button>
                                     </>
@@ -696,7 +730,7 @@ function TeacherPage() {
               <div className="schedule-actions">
                 <button 
                   className="teacher-btn-primary" 
-                  onClick={() => setShowScheduleModal(true)}
+                  onClick={() => { loadScheduleSlots(); setShowScheduleModal(true); }}
                   title="กำหนดเวลาเรียนสำหรับรายวิชา"
                 >
                   ➕ กำหนดเวลาเรียน
@@ -722,6 +756,8 @@ function TeacherPage() {
       </div>
 
   <ExpiryModal isOpen={showExpiryModal} initialValue={expiryModalValue} onClose={() => setShowExpiryModal(false)} onSave={saveExpiry} title="ตั้งวันหมดอายุ" />
+
+  <AnnouncementModal isOpen={showAnnouncementModal} initialData={modalAnnouncement} onClose={closeAnnouncementModal} onSave={saveAnnouncementFromModal} />
 
   {showEnrollModal && (
         <div className="modal-overlay">
@@ -764,114 +800,118 @@ function TeacherPage() {
 
       {/* Schedule Assignment Modal */}
       {showScheduleModal && (
-        <div className="modal-overlay">
-          <div className="modal schedule-modal" style={{ background: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(20px)', borderRadius: '15px', boxShadow: '0 20px 40px rgba(0, 0, 0, 0.3)', maxWidth: '800px', width: '90%', maxHeight: '90vh', overflow: 'auto' }}>
-            <div className="modal-header" style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white', padding: '20px', borderRadius: '15px 15px 0 0', position: 'relative' }}>
-              <h3 className="modal-title" style={{ margin: 0, fontSize: '1.5em', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <span className="modal-icon" style={{ fontSize: '1.2em' }}>🗓️</span>
+        <div className="schedule-modal-overlay">
+          <div className="schedule-modal">
+            <div className="schedule-modal-header">
+              <h3 className="schedule-modal-title">
+                <span className="schedule-modal-icon">🗓️</span>
                 กำหนดเวลาเรียน
               </h3>
-              <button className="modal-close" onClick={cancelScheduleModal} style={{ position: 'absolute', top: '15px', right: '15px', background: 'rgba(255, 255, 255, 0.2)', border: 'none', borderRadius: '50%', width: '30px', height: '30px', color: 'white', cursor: 'pointer', fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="ปิด">×</button>
+              <button className="schedule-modal-close" onClick={cancelScheduleModal} title="ปิด">
+                ×
+              </button>
             </div>
-            <div className="modal-content">
-              <div className="schedule-form-intro" style={{ textAlign: 'center', marginBottom: '20px', color: '#666' }}>
-                <p className="form-description" style={{ margin: 0, fontSize: '14px' }}>เลือกวันและเวลาที่ต้องการจัดวิชาเรียน</p>
+            <div className="schedule-modal-content">
+              <div className="schedule-form-intro">
+                <p className="schedule-form-description">เลือกวันและเวลาที่ต้องการจัดวิชาเรียน</p>
               </div>
 
-              <div className="schedule-form-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px', marginBottom: '30px' }}>
-                <div className="schedule-form-card floating-effect" style={{ background: 'rgba(255, 255, 255, 0.1)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255, 255, 255, 0.2)', borderRadius: '15px', padding: '20px', textAlign: 'center' }}>
-                  <div className="schedule-card-icon" style={{ fontSize: '2em', marginBottom: '10px' }}>📅</div>
-                  <div className="schedule-card-content">
-                    <label className="schedule-card-label" style={{ display: 'block', marginBottom: '10px', fontWeight: 'bold', color: '#333' }}>เลือกวันเรียน</label>
-                    <select
-                      value={scheduleDay}
-                      onChange={e => setScheduleDay(e.target.value)}
-                      className="schedule-card-select"
-                      style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '14px' }}
-                    >
-                      <option value="">-- เลือกวัน --</option>
-                      <option value="0">🌞 อาทิตย์</option>
-                      <option value="1">🌙 จันทร์</option>
-                      <option value="2">🔥 อังคาร</option>
-                      <option value="3">🌿 พุธ</option>
-                      <option value="4">💎 พฤหัสบดี</option>
-                      <option value="5">🎨 ศุกร์</option>
-                      <option value="6">🏖️ เสาร์</option>
-                    </select>
-                    {scheduleDay && scheduleSlots.find(slot => slot.day_of_week.toString() === scheduleDay) && (
-                      <div className="operating-hours-display" style={{ marginTop: '15px', padding: '10px', background: 'rgba(0, 123, 255, 0.1)', borderRadius: '8px', border: '1px solid rgba(0, 123, 255, 0.3)' }}>
-                        <div className="hours-icon" style={{ display: 'inline', marginRight: '8px' }}>⏰</div>
-                        <div className="hours-text" style={{ display: 'inline' }}>
-                          <span className="hours-label" style={{ fontWeight: 'bold', color: '#007bff' }}>เวลาเปิดเรียน: </span>
-                          <span className="hours-value" style={{ color: '#007bff' }}>
-                            {scheduleSlots.find(slot => slot.day_of_week.toString() === scheduleDay).start_time} - {scheduleSlots.find(slot => slot.day_of_week.toString() === scheduleDay).end_time}
-                          </span>
+              <div className="schedule-form">
+                {/* Basic Information Section */}
+                <div className="schedule-form-section">
+                  <h4 className="schedule-section-title">
+                    📋 ข้อมูลพื้นฐาน
+                  </h4>
+                  <div className="schedule-form-grid">
+                    <div className="schedule-form-group">
+                      <label className="schedule-form-label">📅 วันเรียน</label>
+                        <select
+                          value={scheduleDay}
+                          onChange={e => setScheduleDay(e.target.value)}
+                          className="schedule-form-select"
+                        >
+                          <option value="">-- เลือกวัน --</option>
+                          {/* Only show days configured by admin in scheduleSlots */}
+                          {Array.isArray(scheduleSlots) && scheduleSlots.length > 0 ? (
+                            scheduleSlots
+                              // dedupe by day_of_week just in case
+                              .filter((s, idx, arr) => arr.findIndex(x => String(x.day_of_week) === String(s.day_of_week)) === idx)
+                              .map(slot => (
+                                <option key={slot.id || slot.day_of_week} value={String(slot.day_of_week)}>
+                                  {getDayName(slot.day_of_week)}{slot.start_time ? ` — ${slot.start_time}-${slot.end_time}` : ''}
+                                </option>
+                              ))
+                          ) : (
+                            <option disabled>ยังไม่มีวันเปิดเรียนที่กำหนดโดยผู้ดูแล</option>
+                          )}
+                        </select>
+                      {scheduleDay && scheduleSlots.find(slot => slot.day_of_week.toString() === scheduleDay) && (
+                        <div className="operating-hours-display">
+                          ⏰ เวลาเปิดเรียน: {scheduleSlots.find(slot => slot.day_of_week.toString() === scheduleDay).start_time} - {scheduleSlots.find(slot => slot.day_of_week.toString() === scheduleDay).end_time}
                         </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
+                      )}
+                    </div>
 
-                <div className="schedule-form-card floating-effect" style={{ background: 'rgba(255, 255, 255, 0.1)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255, 255, 255, 0.2)', borderRadius: '15px', padding: '20px', textAlign: 'center' }}>
-                  <div className="schedule-card-icon" style={{ fontSize: '2em', marginBottom: '10px' }}>⏰</div>
-                  <div className="schedule-card-content">
-                    <label className="schedule-card-label" style={{ display: 'block', marginBottom: '15px', fontWeight: 'bold', color: '#333' }}>ช่วงเวลาเรียน</label>
-                    <div className="time-inputs" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
-                      <div className="time-input-group" style={{ textAlign: 'center' }}>
-                        <label className="time-label" style={{ display: 'block', fontSize: '12px', color: '#666', marginBottom: '5px' }}>เริ่ม</label>
-                        <input
-                          type="time"
-                          value={scheduleStartTime}
-                          onChange={e => setScheduleStartTime(e.target.value)}
-                          className="time-input"
-                          style={{ padding: '8px', borderRadius: '6px', border: '1px solid #ddd', fontSize: '14px' }}
-                          placeholder="08:30"
-                        />
-                      </div>
-                      <div className="time-separator" style={{ fontSize: '14px', color: '#666', fontWeight: 'bold' }}>ถึง</div>
-                      <div className="time-input-group" style={{ textAlign: 'center' }}>
-                        <label className="time-label" style={{ display: 'block', fontSize: '12px', color: '#666', marginBottom: '5px' }}>สิ้นสุด</label>
-                        <input
-                          type="time"
-                          value={scheduleEndTime}
-                          onChange={e => setScheduleEndTime(e.target.value)}
-                          className="time-input"
-                          style={{ padding: '8px', borderRadius: '6px', border: '1px solid #ddd', fontSize: '14px' }}
-                          placeholder="09:30"
-                        />
-                      </div>
+                    <div className="schedule-form-group">
+                      <label className="schedule-form-label">📚 รายวิชา</label>
+                      <select
+                        value={selectedSubjectId}
+                        onChange={e => setSelectedSubjectId(e.target.value)}
+                        className="schedule-form-select"
+                      >
+                        <option value="">-- เลือกรายวิชา --</option>
+                        {teacherSubjects.map(subject => (
+                          <option key={subject.id} value={subject.id}>
+                            📖 {subject.name}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   </div>
                 </div>
 
-                <div className="schedule-form-card floating-effect" style={{ background: 'rgba(255, 255, 255, 0.1)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255, 255, 255, 0.2)', borderRadius: '15px', padding: '20px', textAlign: 'center' }}>
-                  <div className="schedule-card-icon" style={{ fontSize: '2em', marginBottom: '10px' }}>📚</div>
-                  <div className="schedule-card-content">
-                    <label className="schedule-card-label" style={{ display: 'block', marginBottom: '10px', fontWeight: 'bold', color: '#333' }}>เลือกรายวิชา</label>
-                    <select
-                      value={selectedSubjectId}
-                      onChange={e => setSelectedSubjectId(e.target.value)}
-                      className="schedule-card-select"
-                      style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '14px' }}
-                    >
-                      <option value="">-- เลือกรายวิชา --</option>
-                      {teacherSubjects.map(subject => (
-                        <option key={subject.id} value={subject.id}>
-                          📖 {subject.name}
-                        </option>
-                      ))}
-                    </select>
+                {/* Time Section */}
+                <div className="schedule-form-section">
+                  <h4 className="schedule-section-title">
+                    ⏰ ช่วงเวลาเรียน
+                  </h4>
+                  <div className="time-form-grid">
+                    <div className="schedule-form-group">
+                      <label className="schedule-form-label">เวลาเริ่ม</label>
+                      <input
+                        type="time"
+                        value={scheduleStartTime}
+                        onChange={e => setScheduleStartTime(e.target.value)}
+                        className="schedule-form-input"
+                        step="60"
+                        lang="en-GB"
+                      />
+                    </div>
+
+                    <div className="time-separator">ถึง</div>
+
+                    <div className="schedule-form-group">
+                      <label className="schedule-form-label">เวลาสิ้นสุด</label>
+                      <input
+                        type="time"
+                        value={scheduleEndTime}
+                        onChange={e => setScheduleEndTime(e.target.value)}
+                        className="schedule-form-input"
+                        step="60"
+                        lang="en-GB"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
 
-              <div className="modal-actions" style={{ display: 'flex', justifyContent: 'center', gap: '15px', marginTop: '30px' }}>
-                <button className="btn-cancel" onClick={cancelScheduleModal} style={{ padding: '12px 24px', borderRadius: '8px', border: '1px solid #dc3545', background: '#dc3545', color: 'white', cursor: 'pointer', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span className="btn-icon">❌</span>
+              <div className="schedule-modal-actions">
+                <button className="schedule-btn schedule-btn-cancel" onClick={cancelScheduleModal}>
+                  <span>❌</span>
                   ยกเลิก
                 </button>
-                <button className="btn-add" onClick={assignSubjectToSchedule} style={{ padding: '12px 24px', borderRadius: '8px', border: 'none', background: '#28a745', color: 'white', cursor: 'pointer', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span className="btn-icon">✅</span>
+                <button className="schedule-btn schedule-btn-submit" onClick={assignSubjectToSchedule}>
+                  <span>✅</span>
                   กำหนดเวลาเรียน
                 </button>
               </div>

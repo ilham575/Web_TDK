@@ -744,6 +744,12 @@
   color: rgba(45, 55, 72, 0.6);
 }
 
+/* Force 24-hour format for time and datetime inputs */
+.form-input[type="time"],
+.form-input[type="datetime-local"] {
+  font-family: 'Courier New', monospace;
+}
+
 .form-textarea {
   resize: vertical;
   min-height: 100px;

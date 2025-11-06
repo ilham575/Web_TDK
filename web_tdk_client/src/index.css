@@ -15,3 +15,27 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
 }
+
+/* Force 24-hour format for all time and datetime-local inputs globally */
+input[type="time"],
+input[type="datetime-local"] {
+  font-family: 'Courier New', monospace;
+}
+
+/* Remove AM/PM format for better 24-hour display */
+input[type="time"]::-webkit-datetime-edit-ampm-field,
+input[type="datetime-local"]::-webkit-datetime-edit-ampm-field {
+  display: none;
+}
+
+/* Ensure consistent time format display */
+input[type="time"]::-webkit-datetime-edit,
+input[type="datetime-local"]::-webkit-datetime-edit {
+  font-family: 'Courier New', monospace;
+}
+
+/* Hide seconds field in webkit pickers when step is minute-based */
+input[type="time"]::-webkit-datetime-edit-second-field,
+input[type="datetime-local"]::-webkit-datetime-edit-second-field {
+  display: none;
+}

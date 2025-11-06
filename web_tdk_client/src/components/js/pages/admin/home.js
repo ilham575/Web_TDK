@@ -10,6 +10,7 @@ import ConfirmModal from '../../ConfirmModal';
 
 import AlertModal from '../../AlertModal';
 import ExpiryModal from '../../ExpiryModal';
+import AnnouncementModal from '../../AnnouncementModal';
 
 function AdminPage() {
   const navigate = useNavigate();
@@ -19,6 +20,8 @@ function AdminPage() {
   const [usersError, setUsersError] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
   const [announcements, setAnnouncements] = useState([]);
+  const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
+  const [modalAnnouncement, setModalAnnouncement] = useState(null);
   const [newUsername, setNewUsername] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [newFullName, setNewFullName] = useState('');
@@ -195,7 +198,7 @@ function AdminPage() {
       }
       const res = await fetch('http://127.0.0.1:8000/announcements/', { method:'POST', headers:{ 'Content-Type':'application/json', ...(token?{Authorization:`Bearer ${token}`}:{}) }, body:JSON.stringify(body) });
       const data = await res.json();
-  if (!res.ok) toast.error(data.detail || 'ประกาศข่าวไม่สำเร็จ'); else { toast.success('ประกาศข่าวสำเร็จ!'); setTitle(''); setContent(''); setExpiry(''); if (data && data.id) setAnnouncements(prev=>Array.isArray(prev)?[data,...prev]:[data]); }
+      if (!res.ok) toast.error(data.detail || 'ประกาศข่าวไม่สำเร็จ'); else { toast.success('ประกาศข่าวสำเร็จ!'); setTitle(''); setContent(''); setExpiry(''); if (data && data.id) setAnnouncements(prev=>Array.isArray(prev)?[data,...prev]:[data]); }
     } catch (err) { console.error('announcement error', err); toast.error('เกิดข้อผิดพลาดในการประกาศข่าว'); }
   };
 
@@ -336,6 +339,33 @@ function AdminPage() {
     if (item.email && currentUser.email && String(item.email).toLowerCase() === String(currentUser.email).toLowerCase()) return true;
     if (item.created_by_email && currentUser.email && String(item.created_by_email).toLowerCase() === String(currentUser.email).toLowerCase()) return true;
     return false;
+  };
+
+  const openAnnouncementModal = (item) => {
+    setModalAnnouncement(item || null);
+    setShowAnnouncementModal(true);
+  };
+
+  const closeAnnouncementModal = () => { setShowAnnouncementModal(false); setModalAnnouncement(null); };
+
+  const saveAnnouncementFromModal = async ({ title: t, content: c, expiry: ex }) => {
+    if (!modalAnnouncement || !modalAnnouncement.id) { toast.error('Invalid announcement to update'); return; }
+    const token = localStorage.getItem('token');
+    try {
+      const body = { title: t, content: c };
+      if (ex) {
+        const localWithSec = ex.length === 16 ? ex + ':00' : ex;
+        body.expires_at = localWithSec.replace('T', ' ');
+      } else {
+        body.expires_at = null;
+      }
+      const res = await fetch(`http://127.0.0.1:8000/announcements/${modalAnnouncement.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...(token?{Authorization:`Bearer ${token}`}:{}) }, body: JSON.stringify(body) });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.detail || 'แก้ไขข่าวไม่สำเร็จ'); return; }
+      toast.success('แก้ไขข่าวสำเร็จ!');
+      setAnnouncements(prev => Array.isArray(prev) ? prev.map(a => a.id === data.id ? data : a) : prev);
+      closeAnnouncementModal();
+    } catch (err) { console.error('save announcement modal error', err); toast.error('เกิดข้อผิดพลาดในการแก้ไขข่าว'); }
   };
 
   const openExpiryModal = (item) => {
@@ -936,7 +966,7 @@ function AdminPage() {
                     <div className="form-row">
                       <div className="form-group full-width">
                         <label className="form-label">หมดอายุ (ถ้ามี)</label>
-                        <input className="form-input" type="datetime-local" value={expiry} onChange={e=>setExpiry(e.target.value)} />
+                        <input className="form-input" type="datetime-local" value={expiry} onChange={e=>setExpiry(e.target.value)} step="60" lang="en-GB" />
                       </div>
                     </div>
                     <div className="form-actions">
@@ -969,7 +999,10 @@ function AdminPage() {
                               <button className="admin-btn-secondary btn-small" onClick={() => openExpiryModal(item)}>ตั้งเป็นหมดอายุ</button>
                             )}
                             {ownedBy(item) ? (
-                              <button className="admin-btn-danger btn-small" onClick={() => openConfirmModal('ลบข่าว', 'ต้องการลบข่าวนี้ใช่หรือไม่?', async () => { await deleteAnnouncement(item.id); })}>ลบ</button>
+                              <>
+                                <button className="admin-btn-secondary btn-small" onClick={() => openAnnouncementModal(item)}>แก้ไข</button>
+                                <button className="admin-btn-danger btn-small" onClick={() => openConfirmModal('ลบข่าว', 'ต้องการลบข่าวนี้ใช่หรือไม่?', async () => { await deleteAnnouncement(item.id); })}>ลบ</button>
+                              </>
                             ) : null}
                           </div>
                         </div>
@@ -1078,7 +1111,8 @@ function AdminPage() {
         </div>
       )}
       {/* Confirm & Alert modals (shared) */}
-      <ExpiryModal isOpen={showExpiryModal} initialValue={expiryModalValue} onClose={() => setShowExpiryModal(false)} onSave={saveExpiry} title="ตั้งวันหมดอายุ" />
+  <ExpiryModal isOpen={showExpiryModal} initialValue={expiryModalValue} onClose={() => setShowExpiryModal(false)} onSave={saveExpiry} title="ตั้งวันหมดอายุ" />
+  <AnnouncementModal isOpen={showAnnouncementModal} initialData={modalAnnouncement} onClose={closeAnnouncementModal} onSave={saveAnnouncementFromModal} />
 
       <ConfirmModal
         isOpen={showConfirmModal}
@@ -1130,6 +1164,8 @@ function AdminPage() {
                   value={newScheduleStartTime} 
                   onChange={e => setNewScheduleStartTime(e.target.value)}
                   required 
+                  step="60"
+                  lang="en-GB"
                 />
               </div>
               <div className="form-group">
@@ -1140,6 +1176,8 @@ function AdminPage() {
                   value={newScheduleEndTime} 
                   onChange={e => setNewScheduleEndTime(e.target.value)}
                   required 
+                  step="60"
+                  lang="en-GB"
                 />
               </div>
             </div>
