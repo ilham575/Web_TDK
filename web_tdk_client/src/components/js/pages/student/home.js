@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import '../../../css/pages/student/student-home.css';
+import ScheduleGrid from '../../ScheduleGrid';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -215,63 +216,7 @@ function StudentPage() {
     }
 
     return (
-      <div className="schedule-table">
-        <table>
-          <thead>
-            <tr>
-              <th>เวลา</th>
-              {days.map(day => (
-                <th key={day.key}>
-                  {day.label}
-                  <div className="operating-hours-info" style={{ fontSize: '0.8em', color: '#666', fontWeight: 'normal' }}>
-                    {day.operatingStart} - {day.operatingEnd}
-                  </div>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {/* Group schedules by time slots and sort by start time */}
-            {Array.from(new Set(studentSchedule.map(s => `${s.start_time}-${s.end_time}`)))
-              .sort((a, b) => {
-                const [aStart] = a.split('-');
-                const [bStart] = b.split('-');
-                return aStart.localeCompare(bStart);
-              })
-              .map(timeSlot => {
-                const [startTime, endTime] = timeSlot.split('-');
-                return (
-                  <tr key={timeSlot}>
-                    <td className="schedule-time">{startTime} - {endTime}</td>
-                    {days.map(day => {
-                      const scheduleForDay = studentSchedule.find(
-                        s => parseInt(s.day_of_week) === day.key && 
-                             s.start_time === startTime && 
-                             s.end_time === endTime
-                      );
-                      
-                      return (
-                        <td key={day.key}>
-                          {scheduleForDay ? (
-                            <div className="schedule-slot">
-                              <div className="subject-name">{scheduleForDay.subject_name}</div>
-                              <div className="teacher-name">{scheduleForDay.teacher_name}</div>
-                              {scheduleForDay.subject_code && (
-                                <div className="subject-code">({scheduleForDay.subject_code})</div>
-                              )}
-                            </div>
-                          ) : (
-                            <div className="schedule-empty">-</div>
-                          )}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                );
-              })}
-          </tbody>
-        </table>
-      </div>
+      <ScheduleGrid operatingHours={operatingHours} schedules={studentSchedule} role="student" />
     );
   };
 

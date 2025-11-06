@@ -11,6 +11,7 @@ import ConfirmModal from '../../ConfirmModal';
 import AlertModal from '../../AlertModal';
 import ExpiryModal from '../../ExpiryModal';
 import AnnouncementModal from '../../AnnouncementModal';
+import ScheduleGrid from '../../ScheduleGrid';
 
 function AdminPage() {
   const navigate = useNavigate();
@@ -79,6 +80,7 @@ function AdminPage() {
 
   // Schedule management state
   const [scheduleSlots, setScheduleSlots] = useState([]);
+  const [adminSchedules, setAdminSchedules] = useState([]);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [newScheduleDay, setNewScheduleDay] = useState('');
   const [newScheduleStartTime, setNewScheduleStartTime] = useState('');
@@ -524,6 +526,8 @@ function AdminPage() {
 
       if (res.ok) {
         toast.success('แก้ไขช่วงเวลาเรียนเรียบร้อย');
+        // refresh any admin schedule assignments as well
+        setAdminSchedules(prev => prev);
         setShowScheduleModal(false);
         setEditingSchedule(null);
         setNewScheduleDay('');
@@ -537,6 +541,27 @@ function AdminPage() {
     } catch (err) {
       console.error('Update schedule slot error:', err);
       toast.error('เกิดข้อผิดพลาดในการแก้ไขช่วงเวลา');
+    }
+  };
+
+  const deleteAssignment = async (assignId) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`http://127.0.0.1:8000/schedule/assign/${assignId}`, {
+        method: 'DELETE',
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
+      });
+      if (res.ok) {
+        toast.success('ยกเลิกเวลาเรียนเรียบร้อย');
+        // refresh adminSchedules
+        setAdminSchedules(prev => (Array.isArray(prev) ? prev.filter(a => a.id !== assignId) : prev));
+      } else {
+        const data = await res.json();
+        toast.error(data.detail || 'ยกเลิกเวลาเรียนไม่สำเร็จ');
+      }
+    } catch (err) {
+      console.error('Delete assignment error:', err);
+      toast.error('เกิดข้อผิดพลาดในการยกเลิกเวลาเรียน');
     }
   };
 
@@ -578,6 +603,23 @@ function AdminPage() {
   React.useEffect(() => {
     if (activeTab === 'schedule') {
       loadScheduleSlots();
+      // try to load existing schedule assignments (best-effort; backend may not expose this exact endpoint)
+      (async () => {
+        try {
+          const schoolId = localStorage.getItem('school_id');
+          if (!schoolId) return;
+          const token = localStorage.getItem('token');
+          const res = await fetch(`http://127.0.0.1:8000/schedule/assignments?school_id=${schoolId}`, { headers: { ...(token?{ Authorization: `Bearer ${token}` }:{}) } });
+          if (res.ok) {
+            const data = await res.json();
+            setAdminSchedules(Array.isArray(data) ? data : []);
+          } else {
+            setAdminSchedules([]);
+          }
+        } catch (err) {
+          setAdminSchedules([]);
+        }
+      })();
     }
   }, [activeTab]);
 
@@ -1042,42 +1084,47 @@ function AdminPage() {
                     <div className="empty-subtitle">เริ่มต้นโดยการเพิ่มช่วงเวลาเรียนใหม่</div>
                   </div>
                 ) : (
-                  <div className="schedule-table">
-                    <table className="admin-table">
-                      <thead>
-                        <tr>
-                          <th>วัน</th>
-                          <th>เวลาเริ่ม</th>
-                          <th>เวลาสิ้นสุด</th>
-                          <th>จัดการ</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {scheduleSlots.map((slot) => (
-                          <tr key={slot.id}>
-                            <td>{getDayName(slot.day_of_week)}</td>
-                            <td>{slot.start_time}</td>
-                            <td>{slot.end_time}</td>
-                            <td>
-                              <button 
-                                className="admin-btn-small admin-btn-warning" 
-                                onClick={() => editScheduleSlot(slot)}
-                                title="แก้ไข"
-                              >
-                                ✏️ แก้ไข
-                              </button>
-                              <button 
-                                className="admin-btn-small admin-btn-danger" 
-                                onClick={() => openConfirmModal('ลบช่วงเวลา', `ต้องการลบช่วงเวลา ${getDayName(slot.day_of_week)} ${slot.start_time}-${slot.end_time} ใช่หรือไม่?`, async () => { await deleteScheduleSlot(slot.id); })}
-                                title="ลบ"
-                              >
-                                🗑️ ลบ
-                              </button>
-                            </td>
+                  <div>
+                    <div className="schedule-slots-table">
+                      <table className="admin-table">
+                        <thead>
+                          <tr>
+                            <th>วัน</th>
+                            <th>เวลาเริ่ม</th>
+                            <th>เวลาสิ้นสุด</th>
+                            <th>จัดการ</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {scheduleSlots.map((slot) => (
+                            <tr key={slot.id}>
+                              <td>{getDayName(slot.day_of_week)}</td>
+                              <td>{slot.start_time}</td>
+                              <td>{slot.end_time}</td>
+                              <td>
+                                <button 
+                                  className="admin-btn-small admin-btn-warning" 
+                                  onClick={() => editScheduleSlot(slot)}
+                                  title="แก้ไข"
+                                >
+                                  ✏️ แก้ไข
+                                </button>
+                                <button 
+                                  className="admin-btn-small admin-btn-danger" 
+                                  onClick={() => openConfirmModal('ลบช่วงเวลา', `ต้องการลบช่วงเวลา ${getDayName(slot.day_of_week)} ${slot.start_time}-${slot.end_time} ใช่หรือไม่?`, async () => { await deleteScheduleSlot(slot.id); })}
+                                  title="ลบ"
+                                >
+                                  🗑️ ลบ
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <h4 style={{ marginTop: 18 }}>ตัวอย่างตารางเรียน</h4>
+                    <ScheduleGrid operatingHours={scheduleSlots} schedules={adminSchedules} role="teacher" onActionDelete={(id)=>{ openConfirmModal('ยกเลิกเวลาเรียน', 'ต้องการยกเลิกเวลาเรียนใช่หรือไม่?', async ()=>{ await deleteAssignment(id); }); }} />
                   </div>
                 )}
               </div>

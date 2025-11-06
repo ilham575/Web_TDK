@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import '../../../css/pages/teacher/teacher-home.css';
 import '../../../css/pages/teacher/schedule-modal.css';
+import ScheduleGrid from '../../ScheduleGrid';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import ConfirmModal from '../../ConfirmModal';
@@ -502,92 +503,7 @@ function TeacherPage() {
       loadScheduleSlots();
       loadSubjectSchedules();
     }
-  }, [activeTab, currentUser]);
-
-  // Render teacher schedule table (grid format showing only days with operating hours)
-  const TeacherScheduleTable = ({ subjectSchedules, scheduleSlots }) => {
-    // Create days array from operating hours
-    const dayNames = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
-    const days = scheduleSlots.map(slot => ({
-      key: parseInt(slot.day_of_week),
-      label: dayNames[parseInt(slot.day_of_week)] || 'ไม่ระบุ',
-      operatingStart: slot.start_time,
-      operatingEnd: slot.end_time
-    })).sort((a, b) => a.key - b.key); // Sort by day of week
-
-    if (days.length === 0) {
-      return (
-        <div className="schedule-no-data">
-          <div className="empty-icon">📅</div>
-          <div className="empty-text">ยังไม่ได้กำหนดเวลาเปิดเรียน</div>
-          <div className="empty-subtitle">กรุณาติดต่อผู้ดูแลระบบ</div>
-        </div>
-      );
-    }
-
-    return (
-      <div className="schedule-table">
-        <table>
-          <thead>
-            <tr>
-              <th>เวลา</th>
-              {days.map(day => (
-                <th key={day.key}>
-                  {day.label}
-                  <div className="operating-hours-info" style={{ fontSize: '0.8em', color: '#666', fontWeight: 'normal' }}>
-                    {day.operatingStart} - {day.operatingEnd}
-                  </div>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {/* Group schedules by time slots and sort by start time */}
-            {Array.from(new Set(subjectSchedules.map(s => `${s.start_time}-${s.end_time}`)))
-              .sort((a, b) => {
-                const [aStart] = a.split('-');
-                const [bStart] = b.split('-');
-                return aStart.localeCompare(bStart);
-              })
-              .map(timeSlot => {
-                const [startTime, endTime] = timeSlot.split('-');
-                return (
-                  <tr key={timeSlot}>
-                    <td className="schedule-time">{startTime} - {endTime}</td>
-                    {days.map(day => {
-                      const scheduleForDay = subjectSchedules.find(
-                        s => parseInt(s.day_of_week) === day.key && 
-                             s.start_time === startTime && 
-                             s.end_time === endTime
-                      );
-                      
-                      return (
-                        <td key={day.key}>
-                          {scheduleForDay ? (
-                            <div className="schedule-slot">
-                              <div className="subject-name">{scheduleForDay.subject_name}</div>
-                              <button 
-                                className="teacher-btn-small teacher-btn-danger schedule-delete-btn" 
-                                onClick={() => openConfirmModal('ยกเลิกเวลาเรียน', `ต้องการยกเลิกเวลาเรียน ${scheduleForDay.subject_name} วัน${getDayName(scheduleForDay.day_of_week)} ${scheduleForDay.start_time}-${scheduleForDay.end_time} ใช่หรือไม่?`, async () => { await deleteSubjectSchedule(scheduleForDay.id); })}
-                                title="ยกเลิกเวลาเรียน"
-                              >
-                                🗑️ ยกเลิก
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="schedule-empty">-</div>
-                          )}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                );
-              })}
-          </tbody>
-        </table>
-      </div>
-    );
-  };
+  }, [activeTab, currentUser, loadSubjectSchedules]);
 
   return (
     <div className="teacher-container">
@@ -747,7 +663,7 @@ function TeacherPage() {
                     <div className="empty-subtitle">เริ่มต้นโดยการกำหนดเวลาเรียนสำหรับรายวิชาของคุณ</div>
                   </div>
                 ) : (
-                  <TeacherScheduleTable subjectSchedules={subjectSchedules} scheduleSlots={scheduleSlots} />
+                  <ScheduleGrid operatingHours={scheduleSlots} schedules={subjectSchedules} role="teacher" onActionDelete={(id)=>{ openConfirmModal('ยกเลิกเวลาเรียน', 'ต้องการยกเลิกเวลาเรียนใช่หรือไม่?', async ()=>{ await deleteSubjectSchedule(id); }); }} />
                 )}
               </div>
             </div>
