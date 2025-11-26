@@ -1,0 +1,16 @@
+# Local files to ignore when deploying with gcloud
+# See https://cloud.google.com/sdk/gcloud/reference/topic/gcloudignore
+node_modules/
+.git/
+.github/
+build/
+dist/
+*.log
+npm-debug.log*
+README*.md
+# .env
+
+# *.local
+# Dockerfile
+# cloudbuild.yaml
+
