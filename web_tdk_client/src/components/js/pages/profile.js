@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Loading from '../Loading';
 import '../../css/pages/profile.css';
+import { API_BASE_URL } from '../../endpoints';
 
 function ProfilePage() {
   const navigate = useNavigate();
@@ -13,13 +14,13 @@ function ProfilePage() {
     const token = localStorage.getItem('token');
     if (!token) { navigate('/signin'); return; }
 
-    fetch('http://127.0.0.1:8000/users/me', { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`${API_BASE_URL}/users/me`, { headers: { Authorization: `Bearer ${token}` } })
       .then(res => res.json())
       .then(data => {
         setUser(data);
         // resolve school name if needed
         if (data.school_id) {
-          fetch('http://127.0.0.1:8000/schools/')
+          fetch(`${API_BASE_URL}/schools/`)
             .then(res => res.json())
             .then(schools => {
               const school = schools.find(s => s.id === data.school_id);

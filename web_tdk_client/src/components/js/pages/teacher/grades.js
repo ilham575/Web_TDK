@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import '../../../css/pages/teacher/grades.css';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import { API_BASE_URL } from '../../../endpoints';
 
 function GradesPage(){
   const { id } = useParams(); // subject id
@@ -56,7 +57,7 @@ function GradesPage(){
     const load = async ()=>{
       try{
         const token = localStorage.getItem('token');
-        const res = await fetch(`http://127.0.0.1:8000/subjects/${id}/students`, { headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
+        const res = await fetch(`${API_BASE_URL}/subjects/${id}/students`, { headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
         const data = await res.json();
         if (Array.isArray(data)) setStudents(data);
         else setStudents([]);
@@ -72,7 +73,7 @@ function GradesPage(){
         const token = localStorage.getItem('token');
         
         // First load assignments
-        const assignmentsRes = await fetch(`http://127.0.0.1:8000/grades/assignments/${id}`, { headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
+        const assignmentsRes = await fetch(`${API_BASE_URL}/grades/assignments/${id}`, { headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
         if (!assignmentsRes.ok) return;
         const assignmentsData = await assignmentsRes.json();
         
@@ -87,7 +88,7 @@ function GradesPage(){
         setAssignments(assignmentList);
         
         // Then load all grades for this subject
-        const gradesRes = await fetch(`http://127.0.0.1:8000/grades/?subject_id=${id}`, { headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
+        const gradesRes = await fetch(`${API_BASE_URL}/grades/?subject_id=${id}`, { headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
         if (!gradesRes.ok) return;
         const gradesData = await gradesRes.json();
         
@@ -180,7 +181,7 @@ function GradesPage(){
           grade: grade ? Number(grade) : null
         }))
       };
-      const res = await fetch('http://127.0.0.1:8000/grades/bulk', { method:'POST', headers:{ 'Content-Type':'application/json', ...(token?{Authorization:`Bearer ${token}`}:{}) }, body: JSON.stringify(payload)});
+      const res = await fetch(`${API_BASE_URL}/grades/bulk`, { method:'POST', headers:{ 'Content-Type':'application/json', ...(token?{Authorization:`Bearer ${token}`}:{}) }, body: JSON.stringify(payload)});
       if(!res.ok){ const d = await res.json().catch(()=>({})); toast.error(d.detail || 'Save failed'); } else { toast.success('Grades saved'); }
     }catch(err){ toast.error('Save failed'); }
   };
@@ -222,7 +223,7 @@ function GradesPage(){
         max_score: newAssignmentMaxScore
       };
       
-      const res = await fetch(`http://127.0.0.1:8000/grades/assignments/${id}`, { 
+      const res = await fetch(`${API_BASE_URL}/grades/assignments/${id}`, { 
         method: 'POST', 
         headers: { 
           'Content-Type': 'application/json', 
@@ -313,7 +314,7 @@ function GradesPage(){
         max_score: editAssignmentMaxScore
       };
       
-      const res = await fetch(`http://127.0.0.1:8000/grades/assignments/${id}/${editingAssignment.title}`, { 
+      const res = await fetch(`${API_BASE_URL}/grades/assignments/${id}/${editingAssignment.title}`, { 
         method: 'PUT', 
         headers: { 
           'Content-Type': 'application/json', 
@@ -389,7 +390,7 @@ function GradesPage(){
   const confirmDeleteAssignment = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`http://127.0.0.1:8000/grades/assignments/${id}/${deletingAssignment.title}`, { 
+      const res = await fetch(`${API_BASE_URL}/grades/assignments/${id}/${deletingAssignment.title}`, { 
         method: 'DELETE', 
         headers: { 
           ...(token ? { Authorization: `Bearer ${token}` } : {}) 

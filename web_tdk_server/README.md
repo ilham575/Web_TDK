@@ -30,6 +30,7 @@ DATABASE_URL=mysql+pymysql://username:password@localhost/database_name
 JWT_SECRET_KEY=your-secret-key-here
 JWT_ALGORITHM=HS256
 JWT_ACCESS_TOKEN_EXPIRE_MINUTES=1440
+CORS_ORIGINS=*
 ```
 
 ### 4. Database Setup
@@ -49,6 +50,33 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 The server will be available at `http://localhost:8000`
+
+## Google Cloud Platform (GCP) Deployment
+
+สำหรับคำแนะนำการ deploy ตั้งแต่เริ่มต้น (สำหรับผู้ใช้ใหม่) โปรดดูที่ไฟล์ [DEPLOY_GUIDE.md](DEPLOY_GUIDE.md)
+
+### Prerequisites
+- Google Cloud Project
+- Google Cloud SDK (gcloud CLI)
+- Docker
+- Cloud SQL MySQL instance (optional, for managed database)
+
+### Quick Deploy (สำหรับผู้ที่มีประสบการณ์)
+
+1. ตั้งค่า project และเปิดใช้งาน APIs:
+   ```bash
+   gcloud config set project YOUR_PROJECT_ID
+   gcloud services enable cloudbuild.googleapis.com run.googleapis.com sqladmin.googleapis.com
+   ```
+
+2. ปรับแต่ง `cloudbuild.yaml` ตามความต้องการ
+
+3. Deploy:
+   ```bash
+   gcloud builds submit --config cloudbuild.yaml
+   ```
+
+สำหรับรายละเอียดเพิ่มเติม โปรดดู [DEPLOY_GUIDE.md](DEPLOY_GUIDE.md)
 
 ## API Endpoints
 
@@ -70,7 +98,7 @@ The server will be available at `http://localhost:8000`
 
 ### Other Endpoints:
 - `/users/*` - User management
-- `/schools/*` - School management  
+- `/schools/*` - School management
 - `/subjects/*` - Subject management
 - `/announcements/*` - Announcement management
 - `/attendance/*` - Attendance management
@@ -100,7 +128,7 @@ The server will be available at `http://localhost:8000`
 - id, day_of_week, start_time, end_time
 - school_id, created_by (admin)
 
-### SubjectSchedule  
+### SubjectSchedule
 - id, subject_id, schedule_slot_id, teacher_id
 - Links subjects to time slots with teacher assignment
 

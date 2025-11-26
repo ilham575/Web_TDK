@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import '../../../css/pages/teacher/attendance.css';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import { API_BASE_URL } from '../../../endpoints';
 
 function AttendancePage(){
   const { id } = useParams(); // subject id
@@ -23,7 +24,7 @@ function AttendancePage(){
     const load = async ()=>{
       try{
         const token = localStorage.getItem('token');
-        const res = await fetch(`http://127.0.0.1:8000/subjects/${id}/students`, { headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
+        const res = await fetch(`${API_BASE_URL}/subjects/${id}/students`, { headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
         const data = await res.json();
         if (Array.isArray(data)) setStudents(data);
         else setStudents([]);
@@ -37,7 +38,7 @@ function AttendancePage(){
     const loadAttendance = async ()=>{
       try{
         const token = localStorage.getItem('token');
-        const res = await fetch(`http://127.0.0.1:8000/attendance/?subject_id=${id}&date=${selectedDate}`, { headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
+        const res = await fetch(`${API_BASE_URL}/attendance/?subject_id=${id}&date=${selectedDate}`, { headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
         if (!res.ok) {
           setAttendance({});
           return;
@@ -67,7 +68,7 @@ function AttendancePage(){
     try{
       const token = localStorage.getItem('token');
       const body = { subject_id: Number(id), date: selectedDate, attendance: attendance };
-      const res = await fetch('http://127.0.0.1:8000/attendance/mark', { method:'POST', headers:{ 'Content-Type':'application/json', ...(token?{Authorization:`Bearer ${token}`}:{}) }, body: JSON.stringify(body)});
+      const res = await fetch(`${API_BASE_URL}/attendance/mark`, { method:'POST', headers:{ 'Content-Type':'application/json', ...(token?{Authorization:`Bearer ${token}`}:{}) }, body: JSON.stringify(body)});
       if (!res.ok) { const d = await res.json().catch(()=>({})); toast.error(d.detail || 'Save failed'); } else { toast.success('Attendance saved'); }
     }catch(err){ toast.error('Save failed'); }
   };

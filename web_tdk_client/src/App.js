@@ -16,6 +16,7 @@ import DefaultHome from './components/js/pages/default/home';
 import AttendancePage from './components/js/pages/teacher/attendance';
 import GradesPage from './components/js/pages/teacher/grades';
 import ProfilePage from './components/js/pages/profile';
+import OwnerPage from './components/js/pages/owner/home';
 
 // ฟังก์ชั่นตรวจสอบ login
 function isLoggedIn() {
@@ -83,6 +84,14 @@ function App() {
           element={
             <RequireAuth>
               <AdminPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/owner/home"
+          element={
+            <RequireAuth>
+              <OwnerPage />
             </RequireAuth>
           }
         />

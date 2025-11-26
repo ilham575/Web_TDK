@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import '../../../css/pages/default/signin.css';
+import { API_BASE_URL } from '../../../endpoints';
 
 // Custom close button for toast
 const CustomCloseButton = ({ closeToast }) => (
@@ -60,7 +61,7 @@ function SigninPage() {
     }
 
     try {
-      const res = await fetch('http://127.0.0.1:8000/users/login', {
+      const res = await fetch(`${API_BASE_URL}/users/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
@@ -101,6 +102,8 @@ function SigninPage() {
         else if (data.user_info?.role === 'teacher') navigate('/teacher/home');
         else if (data.user_info?.role === 'admin') {
           navigate('/admin/home');
+        } else if (data.user_info?.role === 'owner') {
+          navigate('/owner/home');
         }
         toast.success('Sign in successful!', {
           position: "top-center",

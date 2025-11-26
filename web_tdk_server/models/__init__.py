@@ -5,6 +5,7 @@ from .school import School
 from .subject import Subject
 from .subject_student import SubjectStudent
 from .schedule import ScheduleSlot, SubjectSchedule
+from .admin_request import AdminRequest
 
 # Add relationships to User model
 from sqlalchemy.orm import relationship

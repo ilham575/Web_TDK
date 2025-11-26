@@ -46,3 +46,11 @@ class Token(BaseModel):
     access_token: str
     token_type: str
     user_info: User
+
+# Admin request schema
+class AdminRequestCreate(BaseModel):
+    username: str
+    email: EmailStr
+    full_name: str
+    password: str
+    school_name: str

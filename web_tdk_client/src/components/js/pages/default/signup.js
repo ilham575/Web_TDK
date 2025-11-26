@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import '../../../css/pages/default/signup.css';
+import { API_BASE_URL } from '../../../endpoints';
 
 function SignupPage() {
   const navigate = useNavigate();
@@ -27,58 +28,26 @@ function SignupPage() {
 
     setIsLoading(true);
     try {
-      // Try to create school
-      let schoolId = null;
-      const createSchoolRes = await fetch('http://127.0.0.1:8000/schools/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: schoolName })
-      });
-
-      if (createSchoolRes.ok) {
-        const schoolData = await createSchoolRes.json();
-        schoolId = schoolData.id;
-      } else {
-        // If school exists or other error, try to find existing school by name
-        const listRes = await fetch('http://127.0.0.1:8000/schools/');
-        if (listRes.ok) {
-          const listData = await listRes.json();
-          const found = listData.find(s => String(s.name).toLowerCase() === String(schoolName).toLowerCase());
-          if (found) schoolId = found.id;
-          else {
-            const err = await createSchoolRes.json().catch(() => ({}));
-            toast.error(err.detail || 'ไม่สามารถสร้างหรือค้นหาโรงเรียนได้');
-            setIsLoading(false);
-            return;
-          }
-        } else {
-          toast.error('ไม่สามารถเข้าถึงรายการโรงเรียนได้');
-          setIsLoading(false);
-          return;
-        }
-      }
-
-      // Create admin user with schoolId
+      // Send admin request to owner
       const body = {
         username,
         email,
         full_name: fullName,
         password,
-        role: 'admin',
-        school_id: Number(schoolId)
+        school_name: schoolName
       };
-      const createUserRes = await fetch('http://127.0.0.1:8000/users', {
+      const res = await fetch(`${API_BASE_URL}/owner/request_admin`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
       });
 
-      const userData = await createUserRes.json();
-      if (!createUserRes.ok) {
-        toast.error(userData.detail || 'สร้างบัญชีไม่สำเร็จ');
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.detail || 'ส่งคำขอไม่สำเร็จ');
       } else {
-        toast.success('สร้างบัญชีแอดมินสำเร็จ กรุณาเข้าสู่ระบบ');
-        setTimeout(() => navigate('/signin'), 1200);
+        toast.success('ส่งคำขอสร้างบัญชีแอดมินเรียบร้อยแล้ว รอการอนุมัติจากผู้ดูแลระบบ');
+        setTimeout(() => navigate('/signin'), 2000);
       }
     } catch (err) {
       console.error(err);

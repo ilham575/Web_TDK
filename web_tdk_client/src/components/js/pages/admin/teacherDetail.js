@@ -6,6 +6,7 @@ import 'react-toastify/dist/ReactToastify.css';
 
 import Loading from '../../Loading';
 import ConfirmModal from '../../ConfirmModal';
+import { API_BASE_URL } from '../../../endpoints';
 
 function TeacherDetail() {
   const { id } = useParams();
@@ -31,7 +32,7 @@ function TeacherDetail() {
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) { navigate('/signin'); return; }
-    fetch('http://127.0.0.1:8000/users/me', { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`${API_BASE_URL}/users/me`, { headers: { Authorization: `Bearer ${token}` } })
       .then(res => res.json())
       .then(data => {
         if (data.role !== 'admin') {
@@ -56,7 +57,7 @@ function TeacherDetail() {
     const fetchTeacher = async () => {
       try {
         // fetch all users and find teacher by id (no single-user endpoint available)
-        const res = await fetch(`http://127.0.0.1:8000/users?limit=500`);
+        const res = await fetch(`${API_BASE_URL}/users?limit=500`);
         const users = await res.json();
         if (Array.isArray(users)) {
           const t = users.find(u => String(u.id) === String(id));
@@ -69,7 +70,7 @@ function TeacherDetail() {
 
     const fetchSubjects = async () => {
       try {
-        const res = await fetch(`http://127.0.0.1:8000/subjects/teacher/${id}`);
+        const res = await fetch(`${API_BASE_URL}/subjects/teacher/${id}`);
         const data = await res.json();
         if (Array.isArray(data)) setSubjects(data);
         else setSubjects([]);
@@ -93,7 +94,7 @@ function TeacherDetail() {
       const sid = currentUser?.school_id || localStorage.getItem('school_id');
       if (!sid) return;
       try {
-        const res = await fetch('http://127.0.0.1:8000/schools/');
+        const res = await fetch(`${API_BASE_URL}/schools/`);
         const data = await res.json();
         if (Array.isArray(data)) {
           const found = data.find(s => String(s.id) === String(sid));
@@ -126,7 +127,7 @@ function TeacherDetail() {
     setCreating(true);
     try {
       const body = { name: newSubjectName, teacher_id: Number(id), school_id: Number(schoolId) };
-      const res = await fetch('http://127.0.0.1:8000/subjects/', {
+      const res = await fetch(`${API_BASE_URL}/subjects/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify(body)
@@ -150,7 +151,7 @@ function TeacherDetail() {
   const handleDelete = async (subjectId) => {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`http://127.0.0.1:8000/subjects/${subjectId}`, { method: 'DELETE', headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+      const res = await fetch(`${API_BASE_URL}/subjects/${subjectId}`, { method: 'DELETE', headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
       if (res.status === 204 || res.ok) {
         toast.success('ลบรายวิชาเรียบร้อย');
         setSubjects(prev => (prev||[]).filter(s => s.id !== subjectId));

@@ -12,6 +12,7 @@ import AlertModal from '../../AlertModal';
 import ExpiryModal from '../../ExpiryModal';
 import AnnouncementModal from '../../AnnouncementModal';
 import ScheduleGrid from '../../ScheduleGrid';
+import { API_BASE_URL } from '../../../endpoints';
 
 function AdminPage() {
   const navigate = useNavigate();
@@ -90,7 +91,7 @@ function AdminPage() {
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) { navigate('/signin'); return; }
-    fetch('http://127.0.0.1:8000/users/me', { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`${API_BASE_URL}/users/me`, { headers: { Authorization: `Bearer ${token}` } })
       .then(res => res.json())
       .then(data => {
         if (data.role !== 'admin') {
@@ -117,7 +118,7 @@ function AdminPage() {
     if (!currentUser || !currentUser.school_id) return;
     const schoolId = currentUser.school_id;
     setLoadingUsers(true);
-    fetch(`http://127.0.0.1:8000/users?limit=200`).then(res=>res.json()).then(data=>{
+    fetch(`${API_BASE_URL}/users?limit=200`).then(res=>res.json()).then(data=>{
       if (Array.isArray(data)){
         const teachersData = data.filter(u => u.role === 'teacher' && String(u.school_id) === String(schoolId));
         const studentsData = data.filter(u => u.role === 'student' && String(u.school_id) === String(schoolId));
@@ -127,7 +128,7 @@ function AdminPage() {
       } else { setTeachers([]); setStudents([]); }
     }).catch(err=>{ console.error('failed to fetch users', err); setUsersError('Failed to load users'); setTeachers([]); setStudents([]); }).finally(()=>setLoadingUsers(false));
 
-    fetch(`http://127.0.0.1:8000/announcements/?school_id=${schoolId}`).then(res=>res.json()).then(data=>{ if (Array.isArray(data)) setAnnouncements(data); else setAnnouncements([]); }).catch(()=>setAnnouncements([]));
+    fetch(`${API_BASE_URL}/announcements/?school_id=${schoolId}`).then(res=>res.json()).then(data=>{ if (Array.isArray(data)) setAnnouncements(data); else setAnnouncements([]); }).catch(()=>setAnnouncements([]));
   }, [currentUser]);
 
   // Determine school name from multiple possible sources (API shape may vary)
@@ -142,8 +143,8 @@ function AdminPage() {
       const sid = currentUser?.school_id || localStorage.getItem('school_id');
       if (!sid) return;
       try {
-        const res = await fetch('http://127.0.0.1:8000/schools/');
-        const data = await res.json();
+        const res = await fetch(`${API_BASE_URL}/schools/`);
+          const data = await res.json();
         if (Array.isArray(data)) {
           const found = data.find(s => String(s.id) === String(sid));
           if (found) {
@@ -175,7 +176,7 @@ function AdminPage() {
     try {
       const token = localStorage.getItem('token');
       const body = { username:newUsername, email:newEmail, full_name:newFullName, password:newPassword, role:newRole, school_id:Number(schoolId) };
-      const res = await fetch('http://127.0.0.1:8000/users', { method:'POST', headers:{ 'Content-Type':'application/json', ...(token?{Authorization:`Bearer ${token}`}:{}) }, body:JSON.stringify(body) });
+      const res = await fetch(`${API_BASE_URL}/users`, { method:'POST', headers:{ 'Content-Type':'application/json', ...(token?{Authorization:`Bearer ${token}`}:{}) }, body:JSON.stringify(body) });
       const data = await res.json();
       if (!res.ok) toast.error(data.detail || 'สร้างผู้ใช้ไม่สำเร็จ'); else { toast.success('สร้างผู้ใช้เรียบร้อย'); if (data.role==='teacher') setTeachers(prev=>[data,...prev]); else if (data.role==='student') setStudents(prev=>[data,...prev]); setNewUsername(''); setNewEmail(''); setNewFullName(''); setNewPassword(''); setNewRole('teacher'); setShowModal(false); }
     } catch (err) { console.error('create user error', err); toast.error('เกิดข้อผิดพลาดขณะสร้างผู้ใช้'); } finally { setCreatingUser(false); }
@@ -198,7 +199,7 @@ function AdminPage() {
           body.expires_at = localWithSec.replace('T', ' '); // "YYYY-MM-DD HH:MM:SS"
         } catch (e) { /* ignore invalid date */ }
       }
-      const res = await fetch('http://127.0.0.1:8000/announcements/', { method:'POST', headers:{ 'Content-Type':'application/json', ...(token?{Authorization:`Bearer ${token}`}:{}) }, body:JSON.stringify(body) });
+      const res = await fetch(`${API_BASE_URL}/announcements/`, { method:'POST', headers:{ 'Content-Type':'application/json', ...(token?{Authorization:`Bearer ${token}`}:{}) }, body:JSON.stringify(body) });
       const data = await res.json();
       if (!res.ok) toast.error(data.detail || 'ประกาศข่าวไม่สำเร็จ'); else { toast.success('ประกาศข่าวสำเร็จ!'); setTitle(''); setContent(''); setExpiry(''); if (data && data.id) setAnnouncements(prev=>Array.isArray(prev)?[data,...prev]:[data]); }
     } catch (err) { console.error('announcement error', err); toast.error('เกิดข้อผิดพลาดในการประกาศข่าว'); }
@@ -211,7 +212,7 @@ function AdminPage() {
     const token = localStorage.getItem('token');
     const form = new FormData(); form.append('file', uploadFile); setUploading(true);
     try {
-      const res = await fetch('http://127.0.0.1:8000/users/bulk_upload', { method:'POST', headers:{ ...(token?{Authorization:`Bearer ${token}`}:{}) }, body:form });
+      const res = await fetch(`${API_BASE_URL}/users/bulk_upload`, { method:'POST', headers:{ ...(token?{Authorization:`Bearer ${token}`}:{}) }, body:form });
       const data = await res.json();
       if (!res.ok) toast.error(data.detail || 'Upload failed'); else { const created = data.created_count || 0; const errCount = (data.errors && data.errors.length) || 0; toast.success(`Upload finished: ${created} created, ${errCount} errors`); if (currentUser) setCurrentUser({...currentUser}); }
     } catch (err) { console.error('upload error', err); toast.error('Upload failed'); } finally { setUploading(false); setUploadFile(null); const inp = document.getElementById('bulk-upload-input'); if (inp) inp.value = ''; }
@@ -223,7 +224,7 @@ function AdminPage() {
     const token = localStorage.getItem('token');
     if (!token) { toast.error('กรุณาเข้าสู่ระบบเพื่อดำเนินการ'); return; }
     try {
-      const res = await fetch(`http://127.0.0.1:8000/announcements/${id}`, { method:'DELETE', headers:{ 'Authorization': `Bearer ${token}` } });
+      const res = await fetch(`${API_BASE_URL}/announcements/${id}`, { method:'DELETE', headers:{ 'Authorization': `Bearer ${token}` } });
       if (res.status===204 || res.ok) {
         toast.success('ลบข่าวเรียบร้อย');
         setAnnouncements(prev=>Array.isArray(prev)?prev.filter(a=>a.id!==id):[]);
@@ -240,7 +241,7 @@ function AdminPage() {
     const token = localStorage.getItem('token');
     if (!token) return;
     try {
-      const res = await fetch(`http://127.0.0.1:8000/users/${userId}/deletion_status`, { headers: { 'Authorization': `Bearer ${token}` } });
+      const res = await fetch(`${API_BASE_URL}/users/${userId}/deletion_status`, { headers: { 'Authorization': `Bearer ${token}` } });
       const data = await res.json();
       if (res.ok) {
         setDeletionStatuses(prev => ({ ...prev, [userId]: data }));
@@ -254,7 +255,7 @@ function AdminPage() {
     const token = localStorage.getItem('token');
     if (!token) { toast.error('กรุณาเข้าสู่ระบบเพื่อดำเนินการ'); return; }
     try {
-      const res = await fetch(`http://127.0.0.1:8000/users/${userId}/deactivate`, { method: 'PATCH', headers: { 'Authorization': `Bearer ${token}` } });
+      const res = await fetch(`${API_BASE_URL}/users/${userId}/deactivate`, { method: 'PATCH', headers: { 'Authorization': `Bearer ${token}` } });
       const data = await res.json();
       if (!res.ok) { toast.error(data.detail || 'ปิดใช้งานผู้ใช้ไม่สำเร็จ'); } 
       else { 
@@ -269,7 +270,7 @@ function AdminPage() {
     const token = localStorage.getItem('token');
     if (!token) { toast.error('กรุณาเข้าสู่ระบบเพื่อดำเนินการ'); return; }
     try {
-      const res = await fetch(`http://127.0.0.1:8000/users/${userId}/activate`, { method: 'PATCH', headers: { 'Authorization': `Bearer ${token}` } });
+      const res = await fetch(`${API_BASE_URL}/users/${userId}/activate`, { method: 'PATCH', headers: { 'Authorization': `Bearer ${token}` } });
       const data = await res.json();
       if (!res.ok) { toast.error(data.detail || 'เปิดใช้งานผู้ใช้ไม่สำเร็จ'); } 
       else { 
@@ -284,7 +285,7 @@ function AdminPage() {
     const token = localStorage.getItem('token');
     if (!token) { toast.error('กรุณาเข้าสู่ระบบเพื่อดำเนินการ'); return; }
     try {
-      const res = await fetch(`http://127.0.0.1:8000/users/${userId}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+      const res = await fetch(`${API_BASE_URL}/users/${userId}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
       const data = await res.json();
       if (!res.ok) { 
         // Handle specific error format from backend
@@ -361,7 +362,7 @@ function AdminPage() {
       } else {
         body.expires_at = null;
       }
-      const res = await fetch(`http://127.0.0.1:8000/announcements/${modalAnnouncement.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...(token?{Authorization:`Bearer ${token}`}:{}) }, body: JSON.stringify(body) });
+      const res = await fetch(`${API_BASE_URL}/announcements/${modalAnnouncement.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...(token?{Authorization:`Bearer ${token}`}:{}) }, body: JSON.stringify(body) });
       const data = await res.json();
       if (!res.ok) { toast.error(data.detail || 'แก้ไขข่าวไม่สำเร็จ'); return; }
       toast.success('แก้ไขข่าวสำเร็จ!');
@@ -383,7 +384,7 @@ function AdminPage() {
     try {
       const localWithSec = val && val.length === 16 ? val + ':00' : val;
       const body = { expires_at: localWithSec ? localWithSec.replace('T', ' ') : null };
-      const res = await fetch(`http://127.0.0.1:8000/announcements/${expiryModalId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...(token?{Authorization:`Bearer ${token}`}:{}) }, body: JSON.stringify(body) });
+      const res = await fetch(`${API_BASE_URL}/announcements/${expiryModalId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...(token?{Authorization:`Bearer ${token}`}:{}) }, body: JSON.stringify(body) });
       const data = await res.json();
       if (!res.ok) { toast.error(data.detail || 'ตั้งวันหมดอายุไม่สำเร็จ'); return; }
       toast.success('อัปเดตวันหมดอายุเรียบร้อย');
@@ -420,7 +421,7 @@ function AdminPage() {
     
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`http://127.0.0.1:8000/schedule/slots?school_id=${schoolId}`, {
+      const res = await fetch(`${API_BASE_URL}/schedule/slots?school_id=${schoolId}`, {
         headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
       });
       
@@ -462,7 +463,7 @@ function AdminPage() {
         end_time: newScheduleEndTime
       };
 
-      const res = await fetch('http://127.0.0.1:8000/schedule/slots', {
+      const res = await fetch(`${API_BASE_URL}/schedule/slots`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -515,7 +516,7 @@ function AdminPage() {
         end_time: newScheduleEndTime
       };
 
-      const res = await fetch(`http://127.0.0.1:8000/schedule/slots/${editingSchedule.id}`, {
+      const res = await fetch(`${API_BASE_URL}/schedule/slots/${editingSchedule.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -547,7 +548,7 @@ function AdminPage() {
   const deleteAssignment = async (assignId) => {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`http://127.0.0.1:8000/schedule/assign/${assignId}`, {
+      const res = await fetch(`${API_BASE_URL}/schedule/assign/${assignId}`, {
         method: 'DELETE',
         headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
       });
@@ -568,7 +569,7 @@ function AdminPage() {
   const deleteScheduleSlot = async (slotId) => {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`http://127.0.0.1:8000/schedule/slots/${slotId}`, {
+      const res = await fetch(`${API_BASE_URL}/schedule/slots/${slotId}`, {
         method: 'DELETE',
         headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
       });
@@ -609,7 +610,7 @@ function AdminPage() {
           const schoolId = localStorage.getItem('school_id');
           if (!schoolId) return;
           const token = localStorage.getItem('token');
-          const res = await fetch(`http://127.0.0.1:8000/schedule/assignments?school_id=${schoolId}`, { headers: { ...(token?{ Authorization: `Bearer ${token}` }:{}) } });
+          const res = await fetch(`${API_BASE_URL}/schedule/assignments?school_id=${schoolId}`, { headers: { ...(token?{ Authorization: `Bearer ${token}` }:{}) } });
           if (res.ok) {
             const data = await res.json();
             setAdminSchedules(Array.isArray(data) ? data : []);
@@ -757,7 +758,7 @@ function AdminPage() {
                               onClick={() => openConfirmModal('รีเซ็ตรหัสผ่าน', `ต้องการรีเซ็ตรหัสผ่านของ "${teacher.full_name || teacher.username}" ใช่หรือไม่?`, async () => {
                                 const token = localStorage.getItem('token');
                                 try {
-                                  const res = await fetch(`http://127.0.0.1:8000/users/${teacher.id}/admin_reset`, { method:'POST', headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
+                                  const res = await fetch(`${API_BASE_URL}/users/${teacher.id}/admin_reset`, { method:'POST', headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
                                   const data = await res.json();
                                   if (!res.ok) { toast.error(data.detail || 'รีเซ็ตรหัสผ่านไม่สำเร็จ'); } else { openAlertModal('รหัสผ่านชั่วคราว', `รหัสผ่านชั่วคราวสำหรับ: ${teacher.username || teacher.email || ''}\n\n🔑 ${data.temp_password}`); toast.success('รีเซ็ตรหัสผ่านสำเร็จ'); }
                                 } catch (err) { console.error(err); toast.error('เกิดข้อผิดพลาดในการรีเซ็ตรหัสผ่าน'); }
@@ -847,7 +848,7 @@ function AdminPage() {
                               onClick={() => openConfirmModal('รีเซ็ตรหัสผ่าน', `ต้องการรีเซ็ตรหัสผ่านของ "${student.full_name || student.username}" ใช่หรือไม่?`, async () => {
                                 const token = localStorage.getItem('token');
                                 try {
-                                  const res = await fetch(`http://127.0.0.1:8000/users/${student.id}/admin_reset`, { method:'POST', headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
+                                  const res = await fetch(`${API_BASE_URL}/users/${student.id}/admin_reset`, { method:'POST', headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
                                   const data = await res.json();
                                   if (!res.ok) { toast.error(data.detail || 'รีเซ็ตรหัสผ่านไม่สำเร็จ'); } else { openAlertModal('รหัสผ่านชั่วคราว', `รหัสผ่านชั่วคราวสำหรับ: ${student.username || student.email || ''}\n\n🔑 ${data.temp_password}`); toast.success('รีเซ็ตรหัสผ่านสำเร็จ'); }
                                 } catch (err) { console.error(err); toast.error('เกิดข้อผิดพลาดในการรีเซ็ตรหัสผ่าน'); }
@@ -970,7 +971,7 @@ function AdminPage() {
                       onClick={async ()=>{
                         const token = localStorage.getItem('token');
                         try {
-                          const res = await fetch('http://127.0.0.1:8000/users/bulk_template', { headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
+                          const res = await fetch(`${API_BASE_URL}/users/bulk_template`, { headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
                           if (!res.ok) { let err = null; try { err = await res.json(); } catch(e){}; toast.error((err && err.detail) ? err.detail : 'Failed to download template'); return; }
                           const blob = await res.blob(); const url = window.URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'user_bulk_template.xlsx'; document.body.appendChild(a); a.click(); a.remove(); window.URL.revokeObjectURL(url);
                         } catch (err) { console.error('download template error', err); toast.error('Download failed'); }

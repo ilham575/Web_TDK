@@ -4,6 +4,7 @@ import '../../../css/pages/student/student-home.css';
 import ScheduleGrid from '../../ScheduleGrid';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import { API_BASE_URL } from '../../../endpoints';
 
 // Modernized single-file UI for the Student home page.
 function StudentPage() {
@@ -26,7 +27,7 @@ function StudentPage() {
       navigate('/signin');
       return;
     }
-    fetch('http://127.0.0.1:8000/users/me', {
+    fetch(`${API_BASE_URL}/users/me`, {
       headers: { Authorization: `Bearer ${token}` }
     })
       .then(res => res.json())
@@ -61,7 +62,7 @@ function StudentPage() {
     const load = async () => {
       try {
         const token = localStorage.getItem('token');
-        const res = await fetch(`http://127.0.0.1:8000/subjects/student/${currentUser.id}`, { headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+        const res = await fetch(`${API_BASE_URL}/subjects/student/${currentUser.id}`, { headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
         const data = await res.json();
         if (res.ok && Array.isArray(data)) setStudentSubjects(data);
         else setStudentSubjects([]);
@@ -78,7 +79,7 @@ function StudentPage() {
     const loadSchedule = async () => {
       try {
         const token = localStorage.getItem('token');
-        const res = await fetch('http://127.0.0.1:8000/schedule/student', { headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+        const res = await fetch(`${API_BASE_URL}/schedule/student`, { headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
         const data = await res.json();
         if (res.ok && Array.isArray(data)) setStudentSchedule(data);
         else setStudentSchedule([]);
@@ -97,7 +98,7 @@ function StudentPage() {
       
       try {
         const token = localStorage.getItem('token');
-        const res = await fetch(`http://127.0.0.1:8000/schedule/slots?school_id=${schoolId}`, {
+        const res = await fetch(`${API_BASE_URL}/schedule/slots?school_id=${schoolId}`, {
           headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
         });
         
@@ -118,7 +119,7 @@ function StudentPage() {
   useEffect(() => {
     const schoolId = localStorage.getItem('school_id');
     if (!schoolId) return;
-    fetch(`http://127.0.0.1:8000/announcements/?school_id=${schoolId}`)
+    fetch(`${API_BASE_URL}/announcements/?school_id=${schoolId}`)
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) {
@@ -232,7 +233,7 @@ function StudentPage() {
       const sid = currentUser?.school_id || localStorage.getItem('school_id');
       if (!sid) return;
       try {
-        const res = await fetch('http://127.0.0.1:8000/schools/');
+        const res = await fetch(`${API_BASE_URL}/schools/`);
         const data = await res.json();
         if (Array.isArray(data)) {
           const found = data.find(s => String(s.id) === String(sid));

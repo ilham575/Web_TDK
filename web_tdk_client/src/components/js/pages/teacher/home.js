@@ -8,6 +8,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import ConfirmModal from '../../ConfirmModal';
 import ExpiryModal from '../../ExpiryModal';
 import AnnouncementModal from '../../AnnouncementModal';
+import { API_BASE_URL } from '../../../endpoints';
 
 function TeacherPage() {
   const navigate = useNavigate();
@@ -50,7 +51,7 @@ function TeacherPage() {
       navigate('/signin');
       return;
     }
-    fetch('http://127.0.0.1:8000/users/me', {
+    fetch(`${API_BASE_URL}/users/me`, {
       headers: { Authorization: `Bearer ${token}` }
     })
       .then(res => res.json())
@@ -82,7 +83,7 @@ function TeacherPage() {
   useEffect(() => {
     const schoolId = localStorage.getItem('school_id');
     if (!schoolId) return;
-    fetch(`http://127.0.0.1:8000/announcements/?school_id=${schoolId}`)
+    fetch(`${API_BASE_URL}/announcements/?school_id=${schoolId}`)
       .then(res => res.json())
       .then(data => { if (Array.isArray(data)) setAnnouncements(data); else setAnnouncements([]); })
       .catch(() => setAnnouncements([]));
@@ -92,7 +93,7 @@ function TeacherPage() {
     const fetchTeacherSubjects = async () => {
       if (!currentUser) return;
       try {
-        const res = await fetch(`http://127.0.0.1:8000/subjects/teacher/${currentUser.id}`);
+        const res = await fetch(`${API_BASE_URL}/subjects/teacher/${currentUser.id}`);
         const data = await res.json();
         if (Array.isArray(data)) setTeacherSubjects(data);
         else setTeacherSubjects([]);
@@ -113,7 +114,7 @@ function TeacherPage() {
       const sid = currentUser?.school_id || localStorage.getItem('school_id');
       if (!sid) return;
       try {
-        const res = await fetch('http://127.0.0.1:8000/schools/');
+        const res = await fetch(`${API_BASE_URL}/schools/`);
         const data = await res.json();
         if (Array.isArray(data)) {
           const found = data.find(s => String(s.id) === String(sid));
@@ -160,7 +161,7 @@ function TeacherPage() {
       }
 
       // create new announcement
-      const res = await fetch('http://127.0.0.1:8000/announcements/', {
+      const res = await fetch(`${API_BASE_URL}/announcements/`, {
         method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify(body)
       });
@@ -174,7 +175,7 @@ function TeacherPage() {
     const token = localStorage.getItem('token');
     if (!token) { toast.error('กรุณาเข้าสู่ระบบเพื่อดำเนินการ'); return; }
     try {
-      const res = await fetch(`http://127.0.0.1:8000/announcements/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+      const res = await fetch(`${API_BASE_URL}/announcements/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
       if (res.status === 204 || res.ok) { toast.success('ลบข่าวเรียบร้อย'); setAnnouncements(prev => Array.isArray(prev) ? prev.filter(a => a.id !== id) : []); }
       else { const data = await res.json(); toast.error(data.detail || 'ลบข่าวไม่สำเร็จ'); }
     } catch { toast.error('เกิดข้อผิดพลาดในการลบข่าว'); }
@@ -185,14 +186,14 @@ function TeacherPage() {
     setShowEnrollModal(true);
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`http://127.0.0.1:8000/subjects/${subjectId}/students`, { headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+      const res = await fetch(`${API_BASE_URL}/subjects/${subjectId}/students`, { headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
       const data = await res.json();
       if (res.ok && Array.isArray(data)) setSubjectStudents(data); else setSubjectStudents([]);
     } catch { setSubjectStudents([]); }
     try {
       const schoolId = localStorage.getItem('school_id');
       if (!schoolId) { setAvailableStudents([]); return; }
-      const res2 = await fetch(`http://127.0.0.1:8000/users?limit=500`);
+      const res2 = await fetch(`${API_BASE_URL}/users?limit=500`);
       const all = await res2.json();
       if (Array.isArray(all)) {
         const avail = all.filter(u => u.role === 'student' && String(u.school_id) === String(schoolId));
@@ -206,7 +207,7 @@ function TeacherPage() {
     if (!managingSubjectId || !selectedStudentId) { toast.error('เลือกนักเรียนก่อน'); return; }
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`http://127.0.0.1:8000/subjects/${managingSubjectId}/enroll`, {
+      const res = await fetch(`${API_BASE_URL}/subjects/${managingSubjectId}/enroll`, {
         method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({ student_id: Number(selectedStudentId) })
       });
@@ -219,7 +220,7 @@ function TeacherPage() {
     if (!managingSubjectId) return;
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`http://127.0.0.1:8000/subjects/${managingSubjectId}/enroll/${studentId}`, { method: 'DELETE', headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+      const res = await fetch(`${API_BASE_URL}/subjects/${managingSubjectId}/enroll/${studentId}`, { method: 'DELETE', headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
       if (res.status === 204 || res.ok) { toast.success('ลบนักเรียนออกจากรายวิชาเรียบร้อย'); openManageStudents(managingSubjectId); }
       else { const data = await res.json(); toast.error(data.detail || 'ไม่สามารถลบนักเรียนได้'); }
     } catch (err) { console.error(err); toast.error('เกิดข้อผิดพลาด'); }
@@ -228,7 +229,7 @@ function TeacherPage() {
   const handleDeleteSubject = async (id) => {
     const token = localStorage.getItem('token');
     try {
-      const res = await fetch(`http://127.0.0.1:8000/subjects/${id}`, { method: 'DELETE', headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+      const res = await fetch(`${API_BASE_URL}/subjects/${id}`, { method: 'DELETE', headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
       if (res.status === 204 || res.ok) { setTeacherSubjects(prev => prev.filter(s => s.id !== id)); toast.success('ลบรายวิชาเรียบร้อย'); }
       else { const data = await res.json(); toast.error(data.detail || 'ลบไม่สำเร็จ'); }
     } catch { toast.error('เกิดข้อผิดพลาด'); }
@@ -237,7 +238,7 @@ function TeacherPage() {
   const handleEndSubject = async (id) => {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`http://127.0.0.1:8000/subjects/${id}/end`, { method: 'PATCH', headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+      const res = await fetch(`${API_BASE_URL}/subjects/${id}/end`, { method: 'PATCH', headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
       if (!res.ok) {
         const data = await res.json();
         toast.error(data.detail || 'จบคอร์สไม่สำเร็จ');
@@ -254,7 +255,7 @@ function TeacherPage() {
   const handleUnendSubject = async (id) => {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`http://127.0.0.1:8000/subjects/${id}/unend`, { method: 'PATCH', headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+      const res = await fetch(`${API_BASE_URL}/subjects/${id}/unend`, { method: 'PATCH', headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
       if (!res.ok) {
         const data = await res.json();
         toast.error(data.detail || 'ยกเลิกจบคอร์สไม่สำเร็จ');
@@ -331,7 +332,7 @@ function TeacherPage() {
         } else {
           body.expires_at = null;
         }
-        const res = await fetch(`http://127.0.0.1:8000/announcements/${modalAnnouncement.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(body) });
+        const res = await fetch(`${API_BASE_URL}/announcements/${modalAnnouncement.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(body) });
         const data = await res.json();
         if (!res.ok) { toast.error(data.detail || 'แก้ไขข่าวไม่สำเร็จ'); return; }
         toast.success('แก้ไขข่าวสำเร็จ!');
@@ -355,7 +356,7 @@ function TeacherPage() {
     try {
       const localWithSec = val && val.length === 16 ? val + ':00' : val;
       const body = { expires_at: localWithSec ? localWithSec.replace('T', ' ') : null };
-      const res = await fetch(`http://127.0.0.1:8000/announcements/${expiryModalId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(body) });
+      const res = await fetch(`${API_BASE_URL}/announcements/${expiryModalId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(body) });
       const data = await res.json();
       if (!res.ok) { toast.error(data.detail || 'ตั้งวันหมดอายุไม่สำเร็จ'); return; }
       toast.success('อัปเดตวันหมดอายุเรียบร้อย');
@@ -370,7 +371,7 @@ function TeacherPage() {
     
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`http://127.0.0.1:8000/schedule/slots?school_id=${schoolId}`, {
+      const res = await fetch(`${API_BASE_URL}/schedule/slots?school_id=${schoolId}`, {
         headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
       });
       
@@ -391,7 +392,7 @@ function TeacherPage() {
     
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`http://127.0.0.1:8000/schedule/teacher`, {
+      const res = await fetch(`${API_BASE_URL}/schedule/teacher`, {
         headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
       });
       
@@ -435,7 +436,7 @@ function TeacherPage() {
         end_time: scheduleEndTime
       };
 
-      const res = await fetch('http://127.0.0.1:8000/schedule/assign', {
+      const res = await fetch(`${API_BASE_URL}/schedule/assign`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -465,7 +466,7 @@ function TeacherPage() {
   const deleteSubjectSchedule = async (scheduleId) => {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`http://127.0.0.1:8000/schedule/assign/${scheduleId}`, {
+      const res = await fetch(`${API_BASE_URL}/schedule/assign/${scheduleId}`, {
         method: 'DELETE',
         headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
       });

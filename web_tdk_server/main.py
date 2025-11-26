@@ -9,6 +9,8 @@ from routers.subject import router as subject_router
 from routers.attendance import router as attendance_router
 from routers.grades import router as grades_router
 from routers.schedule import router as schedule_router
+from routers.owner import router as owner_router
+import os
 
 # import ฟังก์ชันสร้างตาราง
 from database.connection import create_all_tables
@@ -23,9 +25,10 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 # เพิ่ม CORS middleware
+cors_origins = os.getenv("CORS_ORIGINS", "*").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # หรือ ["*"] สำหรับทุก origin (ไม่แนะนำ production)
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -40,6 +43,7 @@ app.include_router(subject_router)
 app.include_router(attendance_router)
 app.include_router(grades_router)
 app.include_router(schedule_router)
+app.include_router(owner_router)
 
 @app.get("/", tags=["root"])
 def read_root():

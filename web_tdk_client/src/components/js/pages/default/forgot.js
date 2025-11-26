@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import AlertModal from '../../AlertModal';
+import { API_BASE_URL } from '../../../endpoints';
 
 function ForgotPage() {
   const [email, setEmail] = useState('');
@@ -27,7 +28,7 @@ function ForgotPage() {
     e.preventDefault();
     setIsLoading(true);
     try {
-      const res = await fetch('http://127.0.0.1:8000/users/forgot_password', {
+      const res = await fetch(`${API_BASE_URL}/users/forgot_password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email })

@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import '../../../css/pages/student/student-subject-details.css';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import { API_BASE_URL } from '../../../endpoints';
 
 function StudentSubjectDetails() {
   const { subjectId } = useParams();
@@ -18,7 +19,7 @@ function StudentSubjectDetails() {
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) { navigate('/signin'); return; }
-    fetch('http://127.0.0.1:8000/users/me', { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`${API_BASE_URL}/users/me`, { headers: { Authorization: `Bearer ${token}` } })
       .then(res => res.json())
       .then(data => {
         if (data.role !== 'student') {
@@ -46,23 +47,23 @@ function StudentSubjectDetails() {
         const headers = { ...(token ? { Authorization: `Bearer ${token}` } : {}) };
 
         // Fetch subject details
-        const subjectsRes = await fetch('http://127.0.0.1:8000/subjects/', { headers });
+        const subjectsRes = await fetch(`${API_BASE_URL}/subjects/`, { headers });
         const subjects = await subjectsRes.json();
         const subj = Array.isArray(subjects) ? subjects.find(s => String(s.id) === String(subjectId)) : null;
         setSubject(subj);
 
         // Fetch attendance for this subject
-        const attendanceRes = await fetch(`http://127.0.0.1:8000/attendance/?subject_id=${subjectId}`, { headers });
+        const attendanceRes = await fetch(`${API_BASE_URL}/attendance/?subject_id=${subjectId}`, { headers });
         const att = await attendanceRes.json();
         setAttendanceRecords(Array.isArray(att) ? att : []);
 
         // Fetch grades for this subject
-        const gradesRes = await fetch(`http://127.0.0.1:8000/grades/?subject_id=${subjectId}`, { headers });
+        const gradesRes = await fetch(`${API_BASE_URL}/grades/?subject_id=${subjectId}`, { headers });
         const grds = await gradesRes.json();
         setGrades(Array.isArray(grds) ? grds.filter(g => g.student_id === currentUser.id) : []);
 
         // Fetch assignments
-        const assignmentsRes = await fetch(`http://127.0.0.1:8000/grades/assignments/${subjectId}`, { headers });
+        const assignmentsRes = await fetch(`${API_BASE_URL}/grades/assignments/${subjectId}`, { headers });
         const ass = await assignmentsRes.json();
         setAssignments(Array.isArray(ass) ? ass : []);
 
@@ -88,7 +89,7 @@ function StudentSubjectDetails() {
       const sid = currentUser?.school_id || localStorage.getItem('school_id');
       if (!sid) return;
       try {
-        const res = await fetch('http://127.0.0.1:8000/schools/');
+        const res = await fetch(`${API_BASE_URL}/schools/`);
         const data = await res.json();
         if (Array.isArray(data)) {
           const found = data.find(s => String(s.id) === String(sid));

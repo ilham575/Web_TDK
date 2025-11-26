@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import '../../../css/pages/default/change-password.css'; // CSS สำหรับหน้าเปลี่ยนรหัสผ่าน
+import { API_BASE_URL } from '../../../endpoints';
 
 function ChangePasswordPage() {
   const navigate = useNavigate();
@@ -21,7 +22,7 @@ function ChangePasswordPage() {
     }
 
     // ดึงข้อมูลผู้ใช้ปัจจุบัน
-    fetch('http://127.0.0.1:8000/users/me', {
+    fetch(`${API_BASE_URL}/users/me`, {
       headers: { Authorization: `Bearer ${token}` }
     })
       .then(res => res.json())
@@ -85,7 +86,7 @@ function ChangePasswordPage() {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://127.0.0.1:8000/users/change_password', {
+      const response = await fetch(`${API_BASE_URL}/users/change_password`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

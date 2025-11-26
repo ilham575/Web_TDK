@@ -5,6 +5,7 @@ import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
 import Loading from '../../Loading';
+import { API_BASE_URL } from '../../../endpoints';
 
 function AdminSubjectDetails() {
   const { subjectId } = useParams();
@@ -21,7 +22,7 @@ function AdminSubjectDetails() {
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) { navigate('/signin'); return; }
-    fetch('http://127.0.0.1:8000/users/me', { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`${API_BASE_URL}/users/me`, { headers: { Authorization: `Bearer ${token}` } })
       .then(res => res.json())
       .then(data => {
         if (data.role !== 'admin') {
@@ -49,7 +50,7 @@ function AdminSubjectDetails() {
         const headers = { ...(token ? { Authorization: `Bearer ${token}` } : {}) };
 
         // Fetch subject details (assuming we can get from subjects list or single endpoint, but since no single, fetch all and find)
-        const subjectsRes = await fetch('http://127.0.0.1:8000/subjects/', { headers });
+        const subjectsRes = await fetch(`${API_BASE_URL}/subjects/`, { headers });
         const subjects = await subjectsRes.json();
         let subj = Array.isArray(subjects) ? subjects.find(s => String(s.id) === String(subjectId)) : null;
         // If API returns only teacher_id (not nested teacher object), try to fetch teacher details
@@ -58,7 +59,7 @@ function AdminSubjectDetails() {
             const tid = subj.teacher_id || subj.teacherId;
             try {
               // Server does not reliably provide GET /users/{id}; get users list and find the teacher by id
-              const listRes = await fetch(`http://127.0.0.1:8000/users?limit=200`, { headers });
+              const listRes = await fetch(`${API_BASE_URL}/users?limit=200`, { headers });
               const list = await listRes.json();
               if (Array.isArray(list)) {
                 const found = list.find(u => String(u.id) === String(tid));
@@ -72,22 +73,22 @@ function AdminSubjectDetails() {
         setSubject(subj);
 
         // Fetch students
-        const studentsRes = await fetch(`http://127.0.0.1:8000/subjects/${subjectId}/students`, { headers });
+        const studentsRes = await fetch(`${API_BASE_URL}/subjects/${subjectId}/students`, { headers });
         const studs = await studentsRes.json();
         setStudents(Array.isArray(studs) ? studs : []);
 
         // Fetch attendance
-        const attendanceRes = await fetch(`http://127.0.0.1:8000/attendance/?subject_id=${subjectId}`, { headers });
+        const attendanceRes = await fetch(`${API_BASE_URL}/attendance/?subject_id=${subjectId}`, { headers });
         const att = await attendanceRes.json();
         setAttendanceRecords(Array.isArray(att) ? att : []);
 
         // Fetch grades
-        const gradesRes = await fetch(`http://127.0.0.1:8000/grades/?subject_id=${subjectId}`, { headers });
+        const gradesRes = await fetch(`${API_BASE_URL}/grades/?subject_id=${subjectId}`, { headers });
         const grds = await gradesRes.json();
         setGrades(Array.isArray(grds) ? grds : []);
 
         // Fetch assignments
-        const assignmentsRes = await fetch(`http://127.0.0.1:8000/grades/assignments/${subjectId}`, { headers });
+        const assignmentsRes = await fetch(`${API_BASE_URL}/grades/assignments/${subjectId}`, { headers });
         const ass = await assignmentsRes.json();
         setAssignments(Array.isArray(ass) ? ass : []);
 
@@ -113,7 +114,7 @@ function AdminSubjectDetails() {
       const sid = currentUser?.school_id || localStorage.getItem('school_id');
       if (!sid) return;
       try {
-        const res = await fetch('http://127.0.0.1:8000/schools/');
+        const res = await fetch(`${API_BASE_URL}/schools/`);
         const data = await res.json();
         if (Array.isArray(data)) {
           const found = data.find(s => String(s.id) === String(sid));
