@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import '../../../css/shared-dashboard.css';
 import '../../../css/pages/owner/owner-home.css';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -18,6 +19,7 @@ function OwnerPage() {
   const [loadingSchools, setLoadingSchools] = useState(false);
   const [loadingActivities, setLoadingActivities] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
+  const [isAuthChecking, setIsAuthChecking] = useState(true);
 
   // Create admin state
   const [newUsername, setNewUsername] = useState('');
@@ -45,6 +47,9 @@ function OwnerPage() {
 
   const [activeTab, setActiveTab] = useState('schools');
 
+  // Activities filter state
+  const [selectedSchoolForActivities, setSelectedSchoolForActivities] = useState('all');
+
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) { navigate('/signin'); return; }
@@ -55,11 +60,15 @@ function OwnerPage() {
           localStorage.removeItem('token');
           toast.error('Invalid token or role. Please sign in again.');
           setTimeout(() => navigate('/signin'), 1500);
+          return;
         } else if (data.must_change_password) {
           toast.info('กรุณาเปลี่ยนรหัสผ่านเพื่อความปลอดภัย');
+          setIsAuthChecking(false);
           navigate('/change-password');
+          return;
         } else {
           setCurrentUser(data);
+          setIsAuthChecking(false);
         }
       })
       .catch(() => { localStorage.removeItem('token'); toast.error('Invalid token or role. Please sign in again.'); setTimeout(() => navigate('/signin'), 1500); });
@@ -75,6 +84,11 @@ function OwnerPage() {
       loadAdminRequests();
     }
   }, [currentUser, activeTab]);
+
+  // Update document title
+  useEffect(() => {
+    document.title = 'ระบบจัดการโรงเรียน - Owner Dashboard';
+  }, []);
 
   const loadSchools = async () => {
     setLoadingSchools(true);
@@ -286,6 +300,10 @@ function OwnerPage() {
     <div className="owner-dashboard">
       <ToastContainer />
 
+      {isAuthChecking ? (
+        <Loading message="กำลังตรวจสอบสิทธิ์..." />
+      ) : (
+        <>
       <div className="owner-header">
         <div className="header-left">
           <div className="avatar" aria-hidden>{currentUser?.full_name ? currentUser.full_name.split(' ').map(n=>n[0]).slice(0,2).join('').toUpperCase() : 'O'}</div>
@@ -381,7 +399,7 @@ function OwnerPage() {
                       />
                     </div>
                     <div className="form-actions">
-                      <button type="submit" className="owner-btn-primary" disabled={creatingSchool}>
+                      <button type="submit" className="owner-btn-create-school" disabled={creatingSchool}>
                         {creatingSchool ? 'กำลังสร้าง...' : '➕ สร้างโรงเรียน'}
                       </button>
                     </div>
@@ -447,29 +465,120 @@ function OwnerPage() {
               <h2><span className="card-icon">📋</span> กิจกรรมล่าสุด</h2>
             </div>
             <div className="card-content">
+              {/* School Filter */}
+              <div className="activities-filter">
+                <div className="filter-group">
+                  <label className="filter-label">เลือกโรงเรียน</label>
+                  <select
+                    className="form-input filter-select"
+                    value={selectedSchoolForActivities}
+                    onChange={e => setSelectedSchoolForActivities(e.target.value)}
+                  >
+                    <option value="all">📊 ทุกโรงเรียน</option>
+                    {schools.map(school => (
+                      <option key={school.id} value={school.id}>
+                        🏫 {school.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
               {loadingActivities ? (
                 <Loading message="กำลังโหลดกิจกรรม..." />
-              ) : activities.length === 0 ? (
-                <div className="empty-state">
-                  <div className="empty-icon">📋</div>
-                  <div className="empty-text">ไม่มีกิจกรรมล่าสุด</div>
-                </div>
               ) : (
-                <div className="activities-list">
-                  {activities.map((activity, index) => (
-                    <div key={index} className="activity-item">
-                      <div className="activity-icon">{getActivityIcon(activity.type)}</div>
-                      <div className="activity-content">
-                        <div className="activity-title">{activity.title}</div>
-                        <div className="activity-meta">
-                          <span className="activity-school">{activity.school_name}</span>
-                          <span className="activity-date">{formatDate(activity.created_at)}</span>
-                        </div>
-                        <div className="activity-description">{activity.content}</div>
+                (() => {
+                  // Filter activities based on selected school
+                  const filteredActivities = selectedSchoolForActivities === 'all'
+                    ? activities
+                    : activities.filter(activity => {
+                        return activity.school_id && activity.school_id.toString() === selectedSchoolForActivities.toString();
+                      });
+
+                  // Group activities by school if showing all schools
+                  const groupedActivities = selectedSchoolForActivities === 'all'
+                    ? activities.reduce((groups, activity) => {
+                        const schoolId = activity.school_id ? activity.school_id.toString() : 'unknown';
+                        if (!groups[schoolId]) {
+                          groups[schoolId] = {
+                            school_name: activity.school_name || 'Unknown School',
+                            activities: []
+                          };
+                        }
+                        groups[schoolId].activities.push(activity);
+                        return groups;
+                      }, {})
+                    : null;
+
+                  if (selectedSchoolForActivities === 'all' && groupedActivities) {
+                    // Show activities grouped by school
+                    const schoolIds = Object.keys(groupedActivities);
+                    return schoolIds.length === 0 ? (
+                      <div className="empty-state">
+                        <div className="empty-icon">📋</div>
+                        <div className="empty-text">ไม่มีกิจกรรมล่าสุด</div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ) : (
+                      <div className="activities-by-school">
+                        {schoolIds.map(schoolId => {
+                          const schoolData = groupedActivities[schoolId];
+                          return (
+                            <div key={schoolId} className="school-activities-group">
+                              <div className="school-activities-header">
+                                <h3 className="school-activities-title">
+                                  🏫 {schoolData.school_name}
+                                </h3>
+                                <span className="activities-count">
+                                  {schoolData.activities.length} กิจกรรม
+                                </span>
+                              </div>
+                              <div className="activities-list">
+                                {schoolData.activities.map((activity, index) => (
+                                  <div key={index} className="activity-item">
+                                    <div className="activity-icon">{getActivityIcon(activity.type)}</div>
+                                    <div className="activity-content">
+                                      <div className="activity-title">{activity.title}</div>
+                                      <div className="activity-meta">
+                                        <span className="activity-date">{formatDate(activity.created_at)}</span>
+                                      </div>
+                                      <div className="activity-description">{activity.content}</div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  } else {
+                    // Show activities for selected school
+                    return filteredActivities.length === 0 ? (
+                      <div className="empty-state">
+                        <div className="empty-icon">📋</div>
+                        <div className="empty-text">
+                          {selectedSchoolForActivities === 'all' ? 'ไม่มีกิจกรรมล่าสุด' : 'ไม่มีกิจกรรมล่าสุดในโรงเรียนนี้'}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="activities-list">
+                        {filteredActivities.map((activity, index) => (
+                          <div key={index} className="activity-item">
+                            <div className="activity-icon">{getActivityIcon(activity.type)}</div>
+                            <div className="activity-content">
+                              <div className="activity-title">{activity.title}</div>
+                              <div className="activity-meta">
+                                <span className="activity-school">{activity.school_name}</span>
+                                <span className="activity-date">{formatDate(activity.created_at)}</span>
+                              </div>
+                              <div className="activity-description">{activity.content}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  }
+                })()
               )}
             </div>
           </div>
@@ -543,7 +652,7 @@ function OwnerPage() {
                   </div>
                 </div>
                 <div className="form-actions">
-                  <button type="submit" className="owner-btn-primary" disabled={creatingAdmin}>
+                  <button type="submit" className="owner-btn-create-admin" disabled={creatingAdmin}>
                     {creatingAdmin ? 'กำลังสร้าง...' : '👨‍💼 สร้างแอดมิน'}
                   </button>
                 </div>
@@ -634,6 +743,8 @@ function OwnerPage() {
         message={alertMessage}
         onClose={() => setShowAlertModal(false)}
       />
+        </>
+      )}
     </div>
   );
 }

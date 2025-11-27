@@ -31,7 +31,7 @@ python create_owner.py
 ```
 Owner user created successfully
 Username: owner
-Password: owner123
+Password: owner123 (บัญชีนี้จะถูกบังคับให้เปลี่ยนรหัสผ่านในการเข้าสู่ระบบครั้งแรก)
 ```
 
 ---
@@ -110,6 +110,8 @@ def init_owner(secret: str):
             full_name="System Owner",
             hashed_password=hashed,
             role="owner"
+            ,
+            must_change_password=True
         )
         db.add(owner)
         db.commit()
@@ -132,11 +134,11 @@ curl -X POST "https://YOUR_CLOUD_RUN_URL/admin/init-owner?secret=your-secret-ini
 
 ---
 
-## ✅ หลังจากเพิ่ม Owner สำเร็จ
+### ✅ หลังจากเพิ่ม Owner สำเร็จ
 
 ### ล็อกอินด้วย:
 - **Username:** `owner`
-- **Password:** `owner123`
+- **Password:** `owner123` (จะต้องเปลี่ยนรหัสผ่านเมื่อเข้าสู่ระบบครั้งแรก)
 
 ### เปลี่ยนรหัสผ่านทันที (สำคัญ!):
 1. ล็อกอินด้วยบัญชี owner

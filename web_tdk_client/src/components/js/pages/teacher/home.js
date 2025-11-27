@@ -42,6 +42,7 @@ function TeacherPage() {
   const [scheduleDay, setScheduleDay] = useState('');
   const [scheduleStartTime, setScheduleStartTime] = useState('');
   const [scheduleEndTime, setScheduleEndTime] = useState('');
+  const [editingAssignment, setEditingAssignment] = useState(null);
 
   const openConfirmModal = (title, message, onConfirm) => { setConfirmTitle(title); setConfirmMessage(message); setOnConfirmAction(() => onConfirm); setShowConfirmModal(true); };
 
@@ -377,7 +378,8 @@ function TeacherPage() {
       
       if (res.ok) {
         const data = await res.json();
-        setScheduleSlots(Array.isArray(data) ? data : []);
+        const sorted = Array.isArray(data) ? sortSlotsMondayFirst(data) : [];
+        setScheduleSlots(sorted);
       } else {
         setScheduleSlots([]);
       }
@@ -385,6 +387,23 @@ function TeacherPage() {
       console.error('Failed to load schedule slots:', err);
       setScheduleSlots([]);
     }
+  };
+
+  const sortSlotsMondayFirst = (slots) => {
+    if (!Array.isArray(slots)) return [];
+    return [...slots].sort((a, b) => {
+      const map = (d) => {
+        const n = Number(d);
+        if (isNaN(n)) return 0;
+        return n === 0 ? 7 : n;
+      };
+      const da = map(a.day_of_week);
+      const db = map(b.day_of_week);
+      if (da !== db) return da - db;
+      const sa = a.start_time || '';
+      const sb = b.start_time || '';
+      return sa.localeCompare(sb);
+    });
   };
 
   const loadSubjectSchedules = useCallback(async () => {
@@ -463,6 +482,51 @@ function TeacherPage() {
     }
   };
 
+  const updateSubjectSchedule = async () => {
+    if (!selectedSubjectId || !scheduleDay || !scheduleStartTime || !scheduleEndTime) {
+      toast.error('กรุณากรอกข้อมูลให้ครบถ้วน');
+      return;
+    }
+    if (!editingAssignment || !editingAssignment.id) {
+      toast.error('ไม่พบข้อมูลการกำหนดเวลา');
+      return;
+    }
+    try {
+      const token = localStorage.getItem('token');
+      const body = {
+        subject_id: parseInt(selectedSubjectId, 10),
+        day_of_week: scheduleDay,
+        start_time: scheduleStartTime,
+        end_time: scheduleEndTime
+      };
+
+      const res = await fetch(`${API_BASE_URL}/schedule/assign/${editingAssignment.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify(body)
+      });
+      if (res.ok) {
+        toast.success('อัปเดตเวลาเรียนเรียบร้อย');
+        setShowScheduleModal(false);
+        setSelectedSubjectId('');
+        setScheduleDay('');
+        setScheduleStartTime('');
+        setScheduleEndTime('');
+        setEditingAssignment(null);
+        loadSubjectSchedules();
+      } else {
+        const data = await res.json();
+        toast.error(data.detail || 'อัปเดตเวลาเรียนไม่สำเร็จ');
+      }
+    } catch (err) {
+      console.error('Update subject schedule error:', err);
+      toast.error('เกิดข้อผิดพลาดในการอัปเดตเวลาเรียน');
+    }
+  };
+
   const deleteSubjectSchedule = async (scheduleId) => {
     try {
       const token = localStorage.getItem('token');
@@ -496,6 +560,7 @@ function TeacherPage() {
     setScheduleDay('');
     setScheduleStartTime('');
     setScheduleEndTime('');
+    setEditingAssignment(null);
   };
 
   // Load schedule data when switching to schedule tab
@@ -606,7 +671,10 @@ function TeacherPage() {
                   />
                 </div>
                 <div className="form-actions">
-                  <button type="submit" className="btn-submit">ประกาศข่าว</button>
+                  <button type="submit" className="btn-submit" aria-label="ประกาศข่าว">
+                    <span className="btn-icon" aria-hidden>📣</span>
+                    ประกาศข่าว
+                  </button>
                 </div>
               </form>
 
@@ -664,7 +732,21 @@ function TeacherPage() {
                     <div className="empty-subtitle">เริ่มต้นโดยการกำหนดเวลาเรียนสำหรับรายวิชาของคุณ</div>
                   </div>
                 ) : (
-                  <ScheduleGrid operatingHours={scheduleSlots} schedules={subjectSchedules} role="teacher" onActionDelete={(id)=>{ openConfirmModal('ยกเลิกเวลาเรียน', 'ต้องการยกเลิกเวลาเรียนใช่หรือไม่?', async ()=>{ await deleteSubjectSchedule(id); }); }} />
+                  <ScheduleGrid
+                    operatingHours={scheduleSlots}
+                    schedules={subjectSchedules}
+                    role="teacher"
+                    onActionDelete={(id) => { openConfirmModal('ยกเลิกเวลาเรียน', 'ต้องการยกเลิกเวลาเรียนใช่หรือไม่?', async () => { await deleteSubjectSchedule(id); }); }}
+                    onActionEdit={(item) => {
+                      // prefill modal for editing
+                      setEditingAssignment(item);
+                      setSelectedSubjectId(item.subject_id || item.subjectId || (item.subject && item.subject.id) || '');
+                      setScheduleDay(String(item.day_of_week));
+                      setScheduleStartTime(item.start_time);
+                      setScheduleEndTime(item.end_time);
+                      setShowScheduleModal(true);
+                    }}
+                  />
                 )}
               </div>
             </div>
@@ -722,7 +804,7 @@ function TeacherPage() {
             <div className="schedule-modal-header">
               <h3 className="schedule-modal-title">
                 <span className="schedule-modal-icon">🗓️</span>
-                กำหนดเวลาเรียน
+                {editingAssignment ? '✏️ แก้ไขการกำหนดเวลา' : '➕ กำหนดเวลาเรียน'}
               </h3>
               <button className="schedule-modal-close" onClick={cancelScheduleModal} title="ปิด">
                 ×
@@ -827,9 +909,9 @@ function TeacherPage() {
                   <span>❌</span>
                   ยกเลิก
                 </button>
-                <button className="schedule-btn schedule-btn-submit" onClick={assignSubjectToSchedule}>
+                <button className="schedule-btn schedule-btn-submit" onClick={editingAssignment ? updateSubjectSchedule : assignSubjectToSchedule}>
                   <span>✅</span>
-                  กำหนดเวลาเรียน
+                  {editingAssignment ? 'อัปเดตเวลาเรียน' : 'กำหนดเวลาเรียน'}
                 </button>
               </div>
             </div>

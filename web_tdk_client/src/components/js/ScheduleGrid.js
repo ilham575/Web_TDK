@@ -1,11 +1,16 @@
-import React from 'react';
+import React, { useState } from 'react';
 import '../css/ScheduleGrid.css';
+import ScheduleDetailModal from './ScheduleDetailModal';
 
 // schedules: array of { day_of_week, start_time, end_time, subject_name, subject_code?, teacher_name?, id }
 // operatingHours: array of { day_of_week, start_time, end_time }
 // role: 'teacher'|'student' (if teacher, we can show action buttons when onActionDelete provided)
-export default function ScheduleGrid({ operatingHours = [], schedules = [], role = 'student', onActionDelete }) {
+export default function ScheduleGrid({ operatingHours = [], schedules = [], role = 'student', onActionDelete, onActionEdit }) {
   const dayNames = ['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์','เสาร์'];
+
+  // local state for modal + selection
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [selectedItem, setSelectedItem] = useState(null);
 
   // compute visible days in order
   const days = operatingHours.map(slot => ({
@@ -93,16 +98,23 @@ export default function ScheduleGrid({ operatingHours = [], schedules = [], role
     return Number(m[1]) + Number(m[2]) / 60;
   };
 
+  const openDetail = (item) => { setSelectedItem(item); setShowDetailModal(true); };
+  const closeDetail = () => { setSelectedItem(null); setShowDetailModal(false); };
+
+  const handleEdit = (item) => { if (onActionEdit) onActionEdit(item); };
+  const handleDelete = (id) => { if (onActionDelete) onActionDelete(id); };
+
   return (
     <div className="schedule-grid-wrap">
       <div className="schedule-grid-header">
         <div className="col day-col">วัน/เวลาเรียน</div>
-        {hours.map((h,i) => (
-          <div key={h} className="col time-col">
-            <span className="time-label">{String(h).padStart(2,'0')}.00</span>
-            {i < hours.length - 1 && <span className="time-sep">&nbsp;|&nbsp;</span>}
-          </div>
-        ))}
+        <div className="time-grid" style={{ gridTemplateColumns: `repeat(${hours.length}, 1fr)` }}>
+          {hours.map((h,i) => (
+            <div key={h} className="col time-col">
+              <span className="time-label">{String(h).padStart(2,'0')}.00</span>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="schedule-grid-body">
@@ -118,26 +130,29 @@ export default function ScheduleGrid({ operatingHours = [], schedules = [], role
                   {hours.map((h,i) => (<div key={i} className="time-cell" />))}
 
                   {/* schedule blocks */}
-                  {items.map(item => {
-                    const s = toFloat(item.start_time)||minH;
-                    const e = toFloat(item.end_time)||(minH+1);
-                    const startIdx = Math.max(0, Math.floor(s - minH));
-                    const endIdx = Math.min(hours.length, Math.ceil(e - minH));
-                    const gridColStart = startIdx + 1;
-                    const gridColEnd = endIdx + 1;
+                    {items.map(item => {
+                      const s = toFloat(item.start_time) || minH;
+                      const e = toFloat(item.end_time) || (minH + 1);
+                      const totalSpan = Math.max(0.001, (maxH - minH)); // avoid division by zero
+                      let leftPct = Math.max(0, ((s - minH) / totalSpan) * 100);
+                      let widthPct = Math.max(0.1, ((e - s) / totalSpan) * 100); // ensure visible
+                      if (leftPct + widthPct > 100) widthPct = Math.max(0.1, 100 - leftPct);
+                    const teacherDisplay = item.teacher_name || item.teacher || item.teacher_full_name || item.teacher_fullname || null;
+                    const subjectDisplay = item.subject_name || item.subject || item.subject_code || '';
                     return (
                       <div
                         key={item.id || `${item.subject_name}-${item.start_time}`}
                         className={`schedule-block ${role==='teacher' ? 'clickable' : ''}`}
-                        style={{ gridColumn: `${gridColStart} / ${gridColEnd}` }}
-                        title={`${item.subject_name} ${item.start_time}-${item.end_time}`}
+                        style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
+                        title={`${(item.subject_name || item.subject || item.subject_code || '').trim()} ${item.start_time}-${item.end_time}${item.teacher_name ? ' — ' + item.teacher_name : ''}`}
+                        aria-label={`${item.subject_name || item.subject || item.subject_code}, ${item.start_time} ถึง ${item.end_time}${item.teacher_name ? ', โดย ' + item.teacher_name : ''}`}
+                        onClick={() => openDetail(item)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDetail(item); } }}
                       >
-                        <div className="block-title">{item.subject_name}</div>
-                        {item.subject_code && <div className="block-sub">{item.subject_code}</div>}
-                        {item.room && <div className="block-sub">{item.room}</div>}
-                        {role === 'teacher' && onActionDelete && (
-                          <button className="block-delete" onClick={(e)=>{ e.stopPropagation(); onActionDelete(item.id); }}>🗑️ ยกเลิก</button>
-                        )}
+                          <div className="block-title">{subjectDisplay}</div>
+                        {/* delete action is moved to the modal — remove inline action */}
                       </div>
                     );
                   })}
@@ -147,6 +162,7 @@ export default function ScheduleGrid({ operatingHours = [], schedules = [], role
           );
         })}
       </div>
+      <ScheduleDetailModal isOpen={showDetailModal} item={selectedItem} onClose={closeDetail} role={role} onEdit={handleEdit} onDelete={handleDelete} />
     </div>
   );
 }

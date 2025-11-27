@@ -52,6 +52,6 @@ substitutions:
   _CPU: '1'
   _MAX_INSTANCES: '10'
   _CLOUDSQL_INSTANCE: 'tdk-proj:asia-southeast1:web-tdk-db'
-  _DB_PASSWORD: 'Ihsan53295'
+  _DB_PASSWORD: 'Ihsan#53295#'
   _JWT_SECRET_KEY: 'dYY4eEoeLVpHVGnZrzP6boTfBIRCerJ7e59qzh1GYN0='
   _CORS_ORIGINS: '*'

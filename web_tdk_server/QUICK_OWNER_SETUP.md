@@ -28,13 +28,13 @@ python create_owner.py
 ```
 Owner user created successfully
 Username: owner
-Password: owner123
+Password: owner123 (บัญชีนี้จะถูกบังคับให้เปลี่ยนรหัสผ่านในการเข้าสู่ระบบครั้งแรก)
 ```
 
 ### 4. ล็อกอิน Frontend
 - ไปที่ https://your-frontend-url
 - Username: `owner`
-- Password: `owner123`
+- Password: `owner123` (จะต้องเปลี่ยนรหัสผ่านเมื่อเข้าสู่ระบบครั้งแรก)
 
 ### 5. เปลี่ยนรหัสผ่าน (สำคัญ!)
 - ไปที่ Profile → Change Password
@@ -78,7 +78,8 @@ async def init_owner_endpoint(secret: str):
         email="owner@example.com",
         full_name="System Owner",
         hashed_password=hash_password("owner123"),
-        role="owner"
+        role="owner",
+        must_change_password=True
     )
     db.add(owner)
     db.commit()

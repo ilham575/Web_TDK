@@ -427,7 +427,8 @@ function AdminPage() {
       
       if (res.ok) {
         const data = await res.json();
-        setScheduleSlots(Array.isArray(data) ? data : []);
+        const sorted = Array.isArray(data) ? sortSlotsMondayFirst(data) : [];
+        setScheduleSlots(sorted);
       } else {
         setScheduleSlots([]);
       }
@@ -435,6 +436,24 @@ function AdminPage() {
       console.error('Failed to load schedule slots:', err);
       setScheduleSlots([]);
     }
+  };
+
+  const sortSlotsMondayFirst = (slots) => {
+    if (!Array.isArray(slots)) return [];
+    return [...slots].sort((a, b) => {
+      const map = (d) => {
+        const n = Number(d);
+        if (isNaN(n)) return 0;
+        return n === 0 ? 7 : n; // treat Sunday (0) as 7 for Monday-first sorting
+      };
+      const da = map(a.day_of_week);
+      const db = map(b.day_of_week);
+      if (da !== db) return da - db;
+      // same day: sort by start_time if available
+      const sa = a.start_time || '';
+      const sb = b.start_time || '';
+      return sa.localeCompare(sb);
+    });
   };
 
   const createScheduleSlot = async () => {
@@ -1013,7 +1032,10 @@ function AdminPage() {
                       </div>
                     </div>
                     <div className="form-actions">
-                      <button type="submit" className="admin-btn-primary">ประกาศข่าว</button>
+                      <button type="submit" className="admin-btn-primary btn-announcement" aria-label="ประกาศข่าว">
+                        <span className="btn-icon" aria-hidden>📣</span>
+                        ประกาศข่าว
+                      </button>
                     </div>
                   </form>
                 </div>
@@ -1069,9 +1091,10 @@ function AdminPage() {
                   <button 
                     className="admin-btn-primary" 
                     onClick={() => setShowScheduleModal(true)}
-                    title="เพิ่มช่วงเวลาใหม่"
+                    title="เพิ่มช่วงเวลาเรียนใหม่"
                   >
-                    ➕ เพิ่มช่วงเวลาเรียน
+                    <span>➕</span>
+                    เพิ่มช่วงเวลาเรียน
                   </button>
                 </div>
               </div>
@@ -1079,53 +1102,54 @@ function AdminPage() {
               <div className="schedule-slots-list">
                 <h3>ช่วงเวลาเรียนที่กำหนด</h3>
                 {scheduleSlots.length === 0 ? (
-                  <div className="empty-state">
-                    <div className="empty-icon">🗓️</div>
-                    <div className="empty-text">ยังไม่มีช่วงเวลาเรียน</div>
-                    <div className="empty-subtitle">เริ่มต้นโดยการเพิ่มช่วงเวลาเรียนใหม่</div>
+                  <div className="schedule-empty-state">
+                    <div className="schedule-empty-icon">🗓️</div>
+                    <div className="schedule-empty-text">ยังไม่มีช่วงเวลาเรียน</div>
+                    <div className="schedule-empty-subtitle">เริ่มต้นโดยการเพิ่มช่วงเวลาเรียนใหม่เพื่อกำหนดเวลาทำการของโรงเรียน</div>
                   </div>
                 ) : (
                   <div>
                     <div className="schedule-slots-table">
-                      <table className="admin-table">
-                        <thead>
-                          <tr>
-                            <th>วัน</th>
-                            <th>เวลาเริ่ม</th>
-                            <th>เวลาสิ้นสุด</th>
-                            <th>จัดการ</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {scheduleSlots.map((slot) => (
-                            <tr key={slot.id}>
-                              <td>{getDayName(slot.day_of_week)}</td>
-                              <td>{slot.start_time}</td>
-                              <td>{slot.end_time}</td>
-                              <td>
-                                <button 
-                                  className="admin-btn-small admin-btn-warning" 
-                                  onClick={() => editScheduleSlot(slot)}
-                                  title="แก้ไข"
-                                >
-                                  ✏️ แก้ไข
-                                </button>
-                                <button 
-                                  className="admin-btn-small admin-btn-danger" 
-                                  onClick={() => openConfirmModal('ลบช่วงเวลา', `ต้องการลบช่วงเวลา ${getDayName(slot.day_of_week)} ${slot.start_time}-${slot.end_time} ใช่หรือไม่?`, async () => { await deleteScheduleSlot(slot.id); })}
-                                  title="ลบ"
-                                >
-                                  🗑️ ลบ
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                      <div className="table-header">
+                        <div className="table-cell header-day">วัน</div>
+                        <div className="table-cell header-time-start">เวลาเริ่ม</div>
+                        <div className="table-cell header-time-end">เวลาสิ้นสุด</div>
+                        <div className="table-cell header-actions">จัดการ</div>
+                      </div>
+
+                      <div className="table-body">
+                        {scheduleSlots.map((slot) => (
+                          <div key={slot.id} className="table-row">
+                            <div className="table-cell cell-day">{getDayName(slot.day_of_week)}</div>
+                            <div className="table-cell cell-time-start">{slot.start_time}</div>
+                            <div className="table-cell cell-time-end">{slot.end_time}</div>
+                            <div className="table-cell cell-actions">
+                              <button 
+                                className="admin-btn-small edit" 
+                                onClick={() => editScheduleSlot(slot)}
+                                title="แก้ไขช่วงเวลา"
+                              >
+                                <span>✏️</span>
+                                แก้ไข
+                              </button>
+                              <button 
+                                className="admin-btn-small delete" 
+                                onClick={() => openConfirmModal('ลบช่วงเวลา', `ต้องการลบช่วงเวลา ${getDayName(slot.day_of_week)} ${slot.start_time}-${slot.end_time} ใช่หรือไม่?`, async () => { await deleteScheduleSlot(slot.id); })}
+                                title="ลบช่วงเวลา"
+                              >
+                                <span>🗑️</span>
+                                ลบ
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
 
-                    <h4 style={{ marginTop: 18 }}>ตัวอย่างตารางเรียน</h4>
-                    <ScheduleGrid operatingHours={scheduleSlots} schedules={adminSchedules} role="teacher" onActionDelete={(id)=>{ openConfirmModal('ยกเลิกเวลาเรียน', 'ต้องการยกเลิกเวลาเรียนใช่หรือไม่?', async ()=>{ await deleteAssignment(id); }); }} />
+                    <div className="schedule-preview-section">
+                      <h4>ตัวอย่างตารางเรียน</h4>
+                      <ScheduleGrid operatingHours={scheduleSlots} schedules={adminSchedules} role="teacher" onActionDelete={(id)=>{ openConfirmModal('ยกเลิกเวลาเรียน', 'ต้องการยกเลิกเวลาเรียนใช่หรือไม่?', async ()=>{ await deleteAssignment(id); }); }} />
+                    </div>
                   </div>
                 )}
               </div>
@@ -1179,64 +1203,73 @@ function AdminPage() {
 
       {/* Schedule Modal */}
       {showScheduleModal && (
-        <div className="modal-overlay">
-          <div className="modal">
-            <div className="modal-header">
+        <div className="schedule-modal-overlay">
+          <div className="schedule-modal">
+            <div className="schedule-modal-header">
               <h3>{editingSchedule ? 'แก้ไขช่วงเวลาเรียน' : 'เพิ่มช่วงเวลาเรียนใหม่'}</h3>
-              <button className="modal-close" onClick={cancelScheduleModal}>×</button>
+              <button className="schedule-modal-close" onClick={cancelScheduleModal}>×</button>
             </div>
-            <div className="modal-body">
-              <div className="form-group">
-                <label className="form-label">วัน</label>
+            <div className="schedule-modal-body">
+                <div className="schedule-form-group">
+                <label className="schedule-form-label">วันในสัปดาห์</label>
                 <select 
-                  className="form-input" 
+                  className="schedule-form-select form-field" 
                   value={newScheduleDay} 
                   onChange={e => setNewScheduleDay(e.target.value)}
                   required
                 >
-                  <option value="">เลือกวัน</option>
-                  <option value="0">อาทิตย์</option>
+                  <option value="">เลือกวันในสัปดาห์</option>
                   <option value="1">จันทร์</option>
                   <option value="2">อังคาร</option>
                   <option value="3">พุธ</option>
                   <option value="4">พฤหัสบดี</option>
                   <option value="5">ศุกร์</option>
                   <option value="6">เสาร์</option>
+                  <option value="0">อาทิตย์</option>
                 </select>
+                <div className="schedule-helper">เลือกวันในสัปดาห์ (0 = อาทิตย์, 1 = จันทร์, ... 6 = เสาร์)</div>
               </div>
-              <div className="form-group">
-                <label className="form-label">เวลาเริ่ม</label>
-                <input 
-                  className="form-input" 
-                  type="time" 
-                  value={newScheduleStartTime} 
-                  onChange={e => setNewScheduleStartTime(e.target.value)}
-                  required 
-                  step="60"
-                  lang="en-GB"
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">เวลาสิ้นสุด</label>
-                <input 
-                  className="form-input" 
-                  type="time" 
-                  value={newScheduleEndTime} 
-                  onChange={e => setNewScheduleEndTime(e.target.value)}
-                  required 
-                  step="60"
-                  lang="en-GB"
-                />
+                <div className="schedule-time-inputs">
+                <div className="schedule-form-group">
+                  <label className="schedule-form-label">เวลาเริ่มเรียน</label>
+                    <input 
+                    className="schedule-form-input form-field" 
+                    type="time" 
+                    value={newScheduleStartTime} 
+                    onChange={e => setNewScheduleStartTime(e.target.value)}
+                    required 
+                    step="60"
+                    lang="en-GB"
+                  />
+                  <div className="schedule-helper">รูปแบบเวลา 24 ชั่วโมง เช่น 08:30</div>
+                </div>
+                <div className="schedule-form-group">
+                  <label className="schedule-form-label">เวลาสิ้นสุดการเรียน</label>
+                    <input 
+                    className="schedule-form-input form-field" 
+                    type="time" 
+                    value={newScheduleEndTime} 
+                    onChange={e => setNewScheduleEndTime(e.target.value)}
+                    required 
+                    step="60"
+                    lang="en-GB"
+                  />
+                  <div className="schedule-helper">รูปแบบเวลา 24 ชั่วโมง เช่น 09:30</div>
+                </div>
               </div>
             </div>
-            <div className="modal-footer">
-              <button type="button" className="admin-btn-secondary" onClick={cancelScheduleModal}>ยกเลิก</button>
+            <div className="schedule-modal-footer">
+              <button type="button" className="admin-btn-secondary" onClick={cancelScheduleModal}>
+                <span>❌</span>
+                ยกเลิก
+              </button>
               <button 
                 type="button" 
                 className="admin-btn-primary" 
                 onClick={editingSchedule ? updateScheduleSlot : createScheduleSlot}
               >
-                {editingSchedule ? 'แก้ไข' : 'เพิ่ม'}
+                <span>{editingSchedule ? '✏️' : '➕'}</span>
+                {editingSchedule ? 'แก้ไขช่วงเวลา' : 'เพิ่มช่วงเวลา'}
               </button>
             </div>
           </div>

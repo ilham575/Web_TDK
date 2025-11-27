@@ -1,0 +1,66 @@
+/* Footer Styles for JWT countdown - moved out from App.css */
+
+/* add bottom padding so footer doesn't overlap content */
+body {
+  padding-bottom: 76px;
+}
+
+/* Light, glassy footer that matches card and header tone */
+.jwt-footer {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1200;
+  background: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(255,255,255,0.75));
+  color: #072a6b; /* darker text to match content */
+  box-shadow: 0 -10px 30px rgba(16,24,40,0.06);
+  font-family: 'Inter', sans-serif;
+  border-top: 3px solid rgba(255,255,255,0.75);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.jwt-footer::before {
+  /* subtle accent stripe across the top like header */
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+  opacity: 0.9;
+}
+.jwt-footer-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0.6rem 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+.jwt-footer-left {
+  font-weight: 700;
+  opacity: 0.9;
+}
+.jwt-footer-right {
+  font-weight: 600;
+  background: rgba(9, 34, 63, 0.06);
+  color: #072a6b;
+  padding: 0.35rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid rgba(9, 34, 63, 0.06);
+}
+.jwt-countdown strong {
+  margin-left: 6px;
+  color: #667eea; /* match page accent */
+}
+.jwt-expired {
+  color: #ef4444; /* keep a strong red for expired */
+  font-weight: 800;
+}
+
+@media (max-width: 768px) {
+  .jwt-footer-content { flex-direction: column; gap: 0.25rem; padding: 0.6rem; }
+}

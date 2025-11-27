@@ -326,6 +326,41 @@ def delete_subject_schedule(
     db.commit()
     return {"message": "Schedule assignment deleted successfully"}
 
+@router.get("/assignments", response_model=List[SubjectScheduleSchema])
+def get_school_assignments(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admins can access school assignments"
+        )
+    
+    schedules = db.query(SubjectSchedule).options(
+        joinedload(SubjectSchedule.subject),
+        joinedload(SubjectSchedule.schedule_slot),
+        joinedload(SubjectSchedule.teacher)
+    ).filter(
+        SubjectSchedule.subject.has(school_id=current_user.school_id)
+    ).all()
+    
+    result = []
+    for schedule in schedules:
+        result.append(SubjectScheduleSchema(
+            id=schedule.id,
+            subject_id=schedule.subject_id,
+            schedule_slot_id=schedule.schedule_slot_id,
+            teacher_id=schedule.teacher_id,
+            day_of_week=schedule.day_of_week,
+            start_time=schedule.start_time,
+            end_time=schedule.end_time,
+            subject_name=schedule.subject.name if schedule.subject else None,
+            teacher_name=schedule.teacher.full_name if schedule.teacher else None
+        ))
+    
+    return result
+
 # Student endpoint - Get student's schedule
 @router.get("/student", response_model=List[StudentScheduleResponse])
 def get_student_schedule(

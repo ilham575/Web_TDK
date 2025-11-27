@@ -68,14 +68,18 @@ def create_school(school: SchoolCreate, db: Session = Depends(get_db), current_u
 
 @router.post("/create_admin", response_model=User)
 def create_admin_for_school(
-    username: str,
-    email: str,
-    full_name: str,
-    password: str,
-    school_id: int,
+    user_data: UserCreate,
     db: Session = Depends(get_db),
     current_user: UserModel = Depends(require_owner)
 ):
+    if not user_data.school_id:
+        raise HTTPException(status_code=400, detail="school_id is required for admin creation")
+    
+    username = user_data.username
+    email = user_data.email
+    full_name = user_data.full_name
+    password = user_data.password
+    school_id = user_data.school_id
     # Check if school exists
     school = db.query(SchoolModel).filter(SchoolModel.id == school_id).first()
     if not school:
@@ -99,7 +103,8 @@ def create_admin_for_school(
         full_name=full_name,
         hashed_password=hashed_password,
         role="admin",
-        school_id=school_id
+        school_id=school_id,
+        must_change_password=True  # Force password change on first login
     )
     
     db.add(db_user)
@@ -117,6 +122,7 @@ def get_recent_activities(limit: int = 50, db: Session = Depends(get_db), curren
         school = db.query(SchoolModel).filter(SchoolModel.id == ann.school_id).first()
         activities.append({
             "type": "announcement",
+            "school_id": ann.school_id,
             "school_name": school.name if school else "Unknown",
             "title": ann.title,
             "content": ann.content[:100] + "..." if len(ann.content) > 100 else ann.content,
@@ -131,6 +137,7 @@ def get_recent_activities(limit: int = 50, db: Session = Depends(get_db), curren
         teacher = db.query(UserModel).filter(UserModel.id == subj.teacher_id).first()
         activities.append({
             "type": "subject_created",
+            "school_id": subj.school_id,
             "school_name": school.name if school else "Unknown",
             "title": f"Subject '{subj.name}' created",
             "content": f"Teacher: {teacher.full_name if teacher else 'Unknown'}",
@@ -145,6 +152,7 @@ def get_recent_activities(limit: int = 50, db: Session = Depends(get_db), curren
         school = db.query(SchoolModel).filter(SchoolModel.id == subject.school_id).first() if subject else None
         activities.append({
             "type": "attendance",
+            "school_id": subject.school_id if subject else None,
             "school_name": school.name if school else "Unknown",
             "title": f"Attendance recorded for {subject.name if subject else 'Unknown subject'}",
             "content": f"Date: {att.date}",
@@ -160,6 +168,7 @@ def get_recent_activities(limit: int = 50, db: Session = Depends(get_db), curren
         student = db.query(UserModel).filter(UserModel.id == grade.student_id).first()
         activities.append({
             "type": "grade",
+            "school_id": subject.school_id if subject else None,
             "school_name": school.name if school else "Unknown",
             "title": f"Grade recorded for {student.full_name if student else 'Unknown student'}",
             "content": f"Subject: {subject.name if subject else 'Unknown'}, Grade: {grade.grade}",
@@ -247,7 +256,8 @@ def approve_admin_request(request_id: int, db: Session = Depends(get_db), curren
         full_name=request.full_name,
         hashed_password=request.password_hash,
         role="admin",
-        school_id=school.id
+        school_id=school.id,
+        must_change_password=True  # Force password change on first login
     )
     db.add(user)
     db.commit()

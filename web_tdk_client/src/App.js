@@ -17,6 +17,7 @@ import AttendancePage from './components/js/pages/teacher/attendance';
 import GradesPage from './components/js/pages/teacher/grades';
 import ProfilePage from './components/js/pages/profile';
 import OwnerPage from './components/js/pages/owner/home';
+import Footer from './components/js/Footer';
 
 // ฟังก์ชั่นตรวจสอบ login
 function isLoggedIn() {
@@ -126,6 +127,8 @@ function App() {
         <Route path="/change-password" element={<RequireAuth><ChangePasswordPage /></RequireAuth>} />
         <Route path="/profile" element={<RequireAuth><ProfilePage /></RequireAuth>} />
       </Routes>
+      {/* Global footer (shows remaining JWT expiry) */}
+      <Footer />
     </BrowserRouter>
   );
 }

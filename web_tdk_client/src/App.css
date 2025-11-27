@@ -2,6 +2,7 @@
   text-align: center;
 }
 
+
 .App-logo {
   height: 40vmin;
   pointer-events: none;
@@ -23,6 +24,8 @@
   font-size: calc(10px + 2vmin);
   color: white;
 }
+
+/* Footer styles moved to components/css/common/footer.css */
 
 .App-link {
   color: #61dafb;

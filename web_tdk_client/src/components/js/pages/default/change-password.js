@@ -56,6 +56,9 @@ function ChangePasswordPage() {
       case 'student':
         navigate('/student/home');
         break;
+      case 'owner':
+        navigate('/owner/home');
+        break;
       default:
         navigate('/');
     }
