@@ -4,6 +4,7 @@ import '../../../css/pages/student/student-subject-details.css';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { API_BASE_URL } from '../../../endpoints';
+import { logout } from '../../../../utils/authUtils';
 
 function StudentSubjectDetails() {
   const { subjectId } = useParams();
@@ -23,7 +24,7 @@ function StudentSubjectDetails() {
       .then(res => res.json())
       .then(data => {
         if (data.role !== 'student') {
-          localStorage.removeItem('token');
+          logout();
           toast.error('Invalid token or role. Please sign in again.');
           setTimeout(() => navigate('/signin'), 1500);
         } else {
@@ -36,7 +37,7 @@ function StudentSubjectDetails() {
           setCurrentUser(data);
         }
       })
-      .catch(() => { localStorage.removeItem('token'); toast.error('Invalid token or role. Please sign in again.'); setTimeout(() => navigate('/signin'), 1500); });
+      .catch(() => { logout(); toast.error('Invalid token or role. Please sign in again.'); setTimeout(() => navigate('/signin'), 1500); });
   }, [navigate]);
 
   useEffect(() => {
@@ -108,9 +109,8 @@ function StudentSubjectDetails() {
 
   // Update document title with school name
   useEffect(() => {
-    if (displaySchool && displaySchool !== '-') {
-      document.title = `ระบบโรงเรียน${displaySchool}`;
-    }
+    const baseTitle = 'ระบบโรงเรียน';
+    document.title = (displaySchool && displaySchool !== '-') ? `${baseTitle} - ${displaySchool}` : baseTitle;
   }, [displaySchool]);
 
   if (loading) return (
@@ -216,8 +216,8 @@ function StudentSubjectDetails() {
 
       <div className="details-section">
         <div className="tabs">
-          <button className={`tab-button ${activeTab === 'attendance' ? 'active' : ''}`} onClick={() => setActiveTab('attendance')}>การมาเรียน</button>
-          <button className={`tab-button ${activeTab === 'grades' ? 'active' : ''}`} onClick={() => setActiveTab('grades')}>คะแนน</button>
+          <button className={`student-subject-tab-button ${activeTab === 'attendance' ? 'active' : ''}`} onClick={() => setActiveTab('attendance')}>การมาเรียน</button>
+          <button className={`student-subject-tab-button ${activeTab === 'grades' ? 'active' : ''}`} onClick={() => setActiveTab('grades')}>คะแนน</button>
         </div>
 
         <div className="tab-content">

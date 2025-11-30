@@ -29,6 +29,7 @@ def get_optional_current_user(token: str = Depends(oauth2_scheme_optional), db: 
     except Exception:
         return None
 
+@router.post("", response_model=Announcement, status_code=status.HTTP_201_CREATED)
 @router.post("/", response_model=Announcement, status_code=status.HTTP_201_CREATED)
 def create_announcement(
     announcement: AnnouncementCreate,
@@ -50,6 +51,7 @@ def create_announcement(
     db.refresh(new_announcement)
     return new_announcement
 
+@router.get("", response_model=List[Announcement])
 @router.get("/", response_model=List[Announcement])
 def list_announcements(db: Session = Depends(get_db), school_id: int = None, current_user: Optional[UserModel] = Depends(get_optional_current_user)):
     query = db.query(AnnouncementModel)

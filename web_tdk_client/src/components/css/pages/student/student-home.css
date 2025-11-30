@@ -29,7 +29,7 @@
   gap: 1rem;
 }
 
-.avatar {
+.student-avatar {
   width: 60px;
   height: 60px;
   border-radius: 50%;
@@ -83,6 +83,99 @@
   margin-top: 0.25rem;
 }
 
+.grade-info {
+  font-size: 0.8rem;
+  color: #64748b;
+  margin-top: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.grade-display {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.grade-display:hover {
+  color: #1e40af;
+}
+
+.grade-display strong {
+  color: #0f1724;
+  font-weight: 700;
+}
+
+.grade-btn-edit {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  opacity: 0.6;
+  transition: opacity 0.2s ease;
+  font-size: 0.85rem;
+}
+
+.grade-btn-edit:hover {
+  opacity: 1;
+}
+
+.grade-edit {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.grade-input {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  flex: 1;
+  max-width: 120px;
+  transition: border-color 0.2s ease;
+}
+
+.grade-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+.grade-btn-save,
+.grade-btn-cancel {
+  padding: 0.4rem 0.8rem;
+  border-radius: 6px;
+  border: none;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.grade-btn-save {
+  background: #10b981;
+  color: white;
+}
+
+.grade-btn-save:hover {
+  background: #059669;
+  transform: translateY(-1px);
+}
+
+.grade-btn-cancel {
+  background: #e2e8f0;
+  color: #475569;
+}
+
+.grade-btn-cancel:hover {
+  background: #cbd5e1;
+}
+
 .student-signout-btn {
   background: linear-gradient(90deg, #ef4444 0%, #dc2626 100%);
   color: white;
@@ -110,7 +203,7 @@
   opacity: 0;
 }
 
-.stats-card {
+.student-stats-card {
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(10px);
   border-radius: 16px;
@@ -123,26 +216,26 @@
   border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-.stats-card:hover {
+.student-stats-card:hover {
   transform: translateY(-5px);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
 }
 
-.stats-card {
+.student-stats-card {
   animation: slideUp 0.6s ease-out forwards;
   opacity: 0;
   transform: translateY(20px);
 }
 
-.stats-card:nth-child(1) {
+.student-stats-card:nth-child(1) {
   animation-delay: 0s;
 }
 
-.stats-card:nth-child(2) {
+.student-stats-card:nth-child(2) {
   animation-delay: 0.1s;
 }
 
-.stats-card:nth-child(3) {
+.student-stats-card:nth-child(3) {
   animation-delay: 0.2s;
 }
 
@@ -157,14 +250,14 @@
   flex: 1;
 }
 
-.stats-value {
+.student-stats-value {
   font-size: 2.5rem;
   font-weight: 800;
   color: #10b981;
   margin-bottom: 0.5rem;
 }
 
-.stats-label {
+.student-stats-label {
   font-size: 1rem;
   color: #64748b;
   font-weight: 500;
@@ -455,7 +548,7 @@
   opacity: 0;
 }
 
-.tab-button {
+.student-tab-button {
   background: #f1f5f9;
   border: none;
   padding: 0.75rem 1.5rem;
@@ -468,31 +561,31 @@
   box-shadow: 0 2px 8px rgba(0,0,0,0.05);
 }
 
-.tab-button:hover {
+.student-tab-button:hover {
   background: #e2e8f0;
   color: #1e293b;
   transform: translateY(-1px);
   box-shadow: 0 4px 16px rgba(0,0,0,0.1);
 }
 
-.tab-button.active {
+.student-tab-button.active {
   background: linear-gradient(135deg, #10b981, #3b82f6);
   color: #fff;
   box-shadow: 0 6px 20px rgba(16,185,129,0.3);
   transform: translateY(-2px);
 }
 
-.tab-button {
+.student-tab-button {
   animation: fadeInScale 0.5s ease-out forwards;
   opacity: 0;
   transform: scale(0.9);
 }
 
-.tab-button:nth-child(1) {
+.student-tab-button:nth-child(1) {
   animation-delay: 0.3s;
 }
 
-.tab-button:nth-child(2) {
+.student-tab-button:nth-child(2) {
   animation-delay: 0.4s;
 }
 
@@ -544,12 +637,12 @@
     gap: 0.25rem;
   }
 
-  .tab-button {
+  .student-tab-button {
     padding: 0.6rem 1.2rem;
     font-size: 0.9rem;
   }
 
-  .stats-card {
+  .student-stats-card {
     padding: 1.5rem;
   }
 
@@ -572,7 +665,7 @@
     padding: 1rem;
   }
 
-  .avatar {
+  .student-avatar {
     width: 50px;
     height: 50px;
     font-size: 1rem;
@@ -582,7 +675,7 @@
     font-size: 1.5rem;
   }
 
-  .stats-value {
+  .student-stats-value {
     font-size: 2rem;
   }
 
@@ -708,6 +801,51 @@
 }
 
 @media (max-width: 768px) {
+  .student-container {
+    padding: 1rem;
+  }
+
+  .student-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1.5rem;
+    padding: 1.5rem;
+  }
+
+  .header-left {
+    width: 100%;
+  }
+
+  .header-right {
+    width: 100%;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .account-info {
+    text-align: left;
+  }
+
+  .header-actions {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .student-btn-secondary,
+  .student-signout-btn {
+    width: 100%;
+  }
+
+  .grade-edit {
+    flex-wrap: wrap;
+  }
+
+  .grade-input {
+    max-width: 100%;
+  }
+
   .schedule-table {
     font-size: 0.85rem;
   }

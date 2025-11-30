@@ -7,6 +7,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import Loading from '../../Loading';
 import ConfirmModal from '../../ConfirmModal';
 import { API_BASE_URL } from '../../../endpoints';
+import { logout } from '../../../../utils/authUtils';
 
 function TeacherDetail() {
   const { id } = useParams();
@@ -36,7 +37,7 @@ function TeacherDetail() {
       .then(res => res.json())
       .then(data => {
         if (data.role !== 'admin') {
-          localStorage.removeItem('token');
+          logout();
           toast.error('Invalid token or role. Please sign in again.');
           setTimeout(() => navigate('/signin'), 1500);
         } else {
@@ -49,7 +50,7 @@ function TeacherDetail() {
           setCurrentUser(data);
         }
       })
-      .catch(() => { localStorage.removeItem('token'); toast.error('Invalid token or role. Please sign in again.'); setTimeout(() => navigate('/signin'), 1500); });
+      .catch(() => { logout(); toast.error('Invalid token or role. Please sign in again.'); setTimeout(() => navigate('/signin'), 1500); });
   }, [navigate]);
 
   useEffect(() => {
@@ -113,9 +114,8 @@ function TeacherDetail() {
 
   // Update document title with school name
   useEffect(() => {
-    if (displaySchool && displaySchool !== '-') {
-      document.title = `ระบบโรงเรียน${displaySchool}`;
-    }
+    const baseTitle = 'ระบบโรงเรียน';
+    document.title = (displaySchool && displaySchool !== '-') ? `${baseTitle} - ${displaySchool}` : baseTitle;
   }, [displaySchool]);
 
   const handleAdd = async (e) => {

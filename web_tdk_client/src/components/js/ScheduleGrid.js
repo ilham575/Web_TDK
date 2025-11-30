@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import '../css/ScheduleGrid.css';
 import ScheduleDetailModal from './ScheduleDetailModal';
 
@@ -11,6 +11,18 @@ export default function ScheduleGrid({ operatingHours = [], schedules = [], role
   // local state for modal + selection
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
+  const [isMobile, setIsMobile] = useState(false);
+  const [selectedMobileDay, setSelectedMobileDay] = useState(null);
+
+  // Mobile detection hook (must be called before any early returns)
+  useEffect(() => {
+    const mql = window.matchMedia('(max-width: 480px)');
+    const handler = (e) => setIsMobile(e.matches);
+    // Set initial
+    setIsMobile(mql.matches);
+    try { mql.addEventListener('change', handler); } catch (e) { mql.addListener(handler); }
+    return () => { try { mql.removeEventListener('change', handler); } catch (e) { mql.removeListener(handler); } };
+  }, []);
 
   // compute visible days in order
   const days = operatingHours.map(slot => ({
@@ -101,6 +113,10 @@ export default function ScheduleGrid({ operatingHours = [], schedules = [], role
   const openDetail = (item) => { setSelectedItem(item); setShowDetailModal(true); };
   const closeDetail = () => { setSelectedItem(null); setShowDetailModal(false); };
 
+  const toggleMobileDay = (dayKey) => {
+    setSelectedMobileDay(prev => (prev === dayKey ? null : dayKey));
+  };
+
   const handleEdit = (item) => { if (onActionEdit) onActionEdit(item); };
   const handleDelete = (id) => { if (onActionDelete) onActionDelete(id); };
 
@@ -122,8 +138,11 @@ export default function ScheduleGrid({ operatingHours = [], schedules = [], role
           const dayKey = String(day.key);
           const items = mergeAdjacentSchedules(schedulesByDay[dayKey] || []);
           return (
-            <div key={day.key} className="grid-row">
-              <div className="col day-col day-label">{day.label}</div>
+            <div key={day.key} className={`grid-row ${isMobile ? 'schedule-day-card' : ''} ${isMobile && selectedMobileDay == day.key ? 'open' : ''}`}>
+              <div className="col day-col day-label" role={isMobile ? 'button' : undefined} tabIndex={isMobile ? 0 : undefined} onClick={isMobile ? () => toggleMobileDay(day.key) : undefined} onKeyDown={isMobile ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleMobileDay(day.key) } } : undefined} aria-expanded={isMobile ? (selectedMobileDay === day.key) : undefined}>
+                <span className="day-label-text">{day.label}</span>
+                {isMobile && <span className="day-count">{items.length} รายการ</span>}
+              </div>
               <div className="col times-col">
                 <div className="times-inner" style={{ gridTemplateColumns: `repeat(${hours.length}, 1fr)` }}>
                   {/* empty grid cells as background */}

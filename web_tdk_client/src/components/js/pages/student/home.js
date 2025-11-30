@@ -2,9 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import '../../../css/pages/student/student-home.css';
 import ScheduleGrid from '../../ScheduleGrid';
+import AbsenceManager from './AbsenceManager';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { API_BASE_URL } from '../../../endpoints';
+import { setSchoolFavicon } from '../../../../utils/faviconUtils';
+import { logout } from '../../../../utils/authUtils';
 
 // Modernized single-file UI for the Student home page.
 function StudentPage() {
@@ -14,6 +17,8 @@ function StudentPage() {
   const [currentUser, setCurrentUser] = useState(null);
   const [expandedAnnouncement, setExpandedAnnouncement] = useState(null);
   const [activeTab, setActiveTab] = useState('subjects');
+  const [isEditingGrade, setIsEditingGrade] = useState(false);
+  const [editingGradeLevel, setEditingGradeLevel] = useState('');
   
   // Schedule state
   const [studentSchedule, setStudentSchedule] = useState([]);
@@ -33,7 +38,7 @@ function StudentPage() {
       .then(res => res.json())
       .then(data => {
         if (data.role !== 'student') {
-          localStorage.removeItem('token');
+          logout();
           toast.error('Invalid token or role. Please sign in again.');
           setTimeout(() => navigate('/signin'), 1500);
         } else if (data.must_change_password) {
@@ -41,16 +46,21 @@ function StudentPage() {
           navigate('/change-password');
         } else {
           setCurrentUser(data);
+          setEditingGradeLevel(data.grade_level || '');
           // persist school name when available so other parts of the app can read it
           const schoolName = data?.school_name || data?.school?.name || data?.school?.school_name || '';
           if (schoolName) localStorage.setItem('school_name', schoolName);
           // persist school id (try multiple possible field names) so school-scoped endpoints work
           const sid = data?.school_id || data?.school?.id || data?.school?.school_id || data?.schoolId || null;
-          if (sid) localStorage.setItem('school_id', String(sid));
+          if (sid) {
+            localStorage.setItem('school_id', String(sid));
+            // ตั้งค่า favicon เป็นโลโก้โรงเรียน
+            setSchoolFavicon(sid);
+          }
         }
       })
       .catch(() => {
-        localStorage.removeItem('token');
+        logout();
         toast.error('Invalid token or role. Please sign in again.');
         setTimeout(() => navigate('/signin'), 1500);
       });
@@ -132,8 +142,34 @@ function StudentPage() {
   }, []);
 
   const handleSignout = () => {
-    localStorage.removeItem('token');
-    navigate('/signin', { state: { signedOut: true } });
+      logout();
+      toast.success('Signed out successfully!');
+      setTimeout(() => navigate('/signin'), 1000);
+  };
+
+  const handleSaveGradeLevel = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE_URL}/users/me`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ grade_level: editingGradeLevel })
+      });
+      
+      if (res.ok) {
+        const updated = await res.json();
+        setCurrentUser(updated);
+        setIsEditingGrade(false);
+        toast.success('บันทึกชั้นปีสำเร็จ');
+      } else {
+        toast.error('ไม่สามารถบันทึกชั้นปี');
+      }
+    } catch (err) {
+      toast.error('เกิดข้อผิดพลาดในการบันทึก');
+    }
   };
 
   // Helpers
@@ -252,9 +288,8 @@ function StudentPage() {
 
   // Update document title with school name
   useEffect(() => {
-    if (displaySchool && displaySchool !== '-') {
-      document.title = `ระบบโรงเรียน${displaySchool}`;
-    }
+    const baseTitle = 'ระบบโรงเรียน';
+    document.title = (displaySchool && displaySchool !== '-') ? `${baseTitle} - ${displaySchool}` : baseTitle;
   }, [displaySchool]);
 
   return (
@@ -262,7 +297,7 @@ function StudentPage() {
       <ToastContainer />
       <header className="student-header">
         <div className="header-left">
-          <div className="avatar" aria-hidden>{initials(currentUser?.name || currentUser?.username || 'Student')}</div>
+          <div className="student-avatar" aria-hidden>{initials(currentUser?.name || currentUser?.username || 'Student')}</div>
           <div className="user-info">
             <h3>สวัสดี, {currentUser?.name || currentUser?.username || 'นักเรียน'}</h3>
             <p>บทบาท: นักเรียน</p>
@@ -273,6 +308,26 @@ function StudentPage() {
             <div className="account-label">ข้อมูลบัญชี</div>
             <div className="account-email">{currentUser?.email || ''}</div>
             <div className="school-info">โรงเรียน: {displaySchool}</div>
+            <div className="grade-info">
+              {isEditingGrade ? (
+                <div className="grade-edit">
+                  <input
+                    type="text"
+                    value={editingGradeLevel}
+                    onChange={(e) => setEditingGradeLevel(e.target.value)}
+                    placeholder="เช่น ป.1, ชั้น 1"
+                    className="grade-input"
+                  />
+                  <button className="grade-btn-save" onClick={handleSaveGradeLevel}>บันทึก</button>
+                  <button className="grade-btn-cancel" onClick={() => { setIsEditingGrade(false); setEditingGradeLevel(currentUser?.grade_level || ''); }}>ยกเลิก</button>
+                </div>
+              ) : (
+                <div className="grade-display" onClick={() => setIsEditingGrade(true)}>
+                  <span>ชั้นปี: <strong>{currentUser?.grade_level || 'ไม่ระบุ'}</strong></span>
+                  <button className="grade-btn-edit">✏️</button>
+                </div>
+              )}
+            </div>
           </div>
           <div className="header-actions">
             <button className="student-btn-secondary" onClick={() => navigate('/profile')}>👤 โปรไฟล์</button>
@@ -282,35 +337,36 @@ function StudentPage() {
       </header>
 
       <div className="dashboard-grid">
-        <div className="stats-card">
+        <div className="student-stats-card">
           <div className="stats-content">
-            <div className="stats-value">{studentSubjects.length}</div>
-            <div className="stats-label">รายวิชาที่ลงทะเบียน</div>
+            <div className="student-stats-value">{studentSubjects.length}</div>
+            <div className="student-stats-label">รายวิชาที่ลงทะเบียน</div>
           </div>
           <div className="stats-icon" aria-hidden>📚</div>
         </div>
 
-        <div className="stats-card">
+        <div className="student-stats-card">
           <div className="stats-content">
-            <div className="stats-value">{visibleAnnouncements.length}</div>
-            <div className="stats-label">ข่าวสาร</div>
+            <div className="student-stats-value">{visibleAnnouncements.length}</div>
+            <div className="student-stats-label">ข่าวสาร</div>
           </div>
           <div className="stats-icon" aria-hidden>📣</div>
         </div>
 
-        <div className="stats-card">
+        <div className="student-stats-card">
           <div className="stats-content">
-            <div className="stats-value">{currentUser?.username || '-'} <small>#{currentUser?.id || '-'}</small></div>
-            <div className="stats-label">ผู้ใช้</div>
+            <div className="student-stats-value">{currentUser?.username || '-'} <small>#{currentUser?.id || '-'}</small></div>
+            <div className="student-stats-label">ผู้ใช้</div>
           </div>
           <div className="stats-icon" aria-hidden>🆔</div>
         </div>
       </div>
 
       <div className="tabs-header">
-        <button className={`tab-button ${activeTab === 'subjects' ? 'active' : ''}`} onClick={() => setActiveTab('subjects')}>รายวิชา</button>
-        <button className={`tab-button ${activeTab === 'announcements' ? 'active' : ''}`} onClick={() => setActiveTab('announcements')}>ข่าวสาร</button>
-        <button className={`tab-button ${activeTab === 'schedule' ? 'active' : ''}`} onClick={() => setActiveTab('schedule')}>ตารางเรียน</button>
+        <button className={`student-tab-button ${activeTab === 'subjects' ? 'active' : ''}`} onClick={() => setActiveTab('subjects')}>รายวิชา</button>
+        <button className={`student-tab-button ${activeTab === 'announcements' ? 'active' : ''}`} onClick={() => setActiveTab('announcements')}>ข่าวสาร</button>
+        <button className={`student-tab-button ${activeTab === 'schedule' ? 'active' : ''}`} onClick={() => setActiveTab('schedule')}>ตารางเรียน</button>
+        <button className={`student-tab-button ${activeTab === 'absences' ? 'active' : ''}`} onClick={() => setActiveTab('absences')}>การลา</button>
       </div>
       <div className="tab-content">
         {activeTab === 'subjects' && (
@@ -384,6 +440,9 @@ function StudentPage() {
             <div className="schedule-header"><span className="schedule-icon">📅</span> ตารางเรียนของฉัน</div>
             {renderScheduleTable()}
           </section>
+        )}
+        {activeTab === 'absences' && (
+          <AbsenceManager studentId={currentUser?.id} operatingHours={operatingHours} studentSubjects={studentSubjects} />
         )}
       </div>
     </div>

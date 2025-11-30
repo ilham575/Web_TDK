@@ -95,17 +95,17 @@
   box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
 }
 
-.create-school-section .form-row {
+.create-school-section .owner-form-row {
   display: flex;
   gap: 1rem;
   align-items: end;
 }
 
-.create-school-section .form-group {
+.create-school-section .owner-form-group {
   flex: 1;
 }
 
-.create-school-section .form-actions {
+.create-school-section .owner-form-actions {
   display: flex;
   align-items: center;
 }
@@ -777,6 +777,74 @@
   -webkit-backdrop-filter: blur(10px);
   border-bottom: 1px solid rgba(255, 255, 255, 0.2);
   position: relative;
+}
+
+/* Responsive adjustments for owner dashboard */
+@media (max-width: 1024px) {
+  .owner-dashboard { padding: 1.25rem; }
+  .owner-header { padding: 1.25rem 1.5rem; }
+  .owner-header { flex-direction: column; align-items: stretch; gap: 0.75rem; }
+  .header-left { order: 2; }
+  .header-right { order: 1; display: flex; gap: 0.5rem; align-items: center; justify-content: space-between; }
+  .account-info { display: none; }
+  .header-actions { flex-wrap: wrap; gap: 0.5rem; justify-content: center; }
+  .header-actions button { min-width: 120px; flex: 1 1 auto; }
+  .stats-section { grid-template-columns: 1fr 1fr; gap: 1rem; padding: 1rem; }
+  .schools-grid { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; }
+  .create-school-section .owner-form-row { flex-direction: column; gap: 0.75rem; }
+  .create-school-section .owner-form-actions { justify-content: flex-start; }
+  .filter-select { max-width: 100%; }
+  .tabs-header { gap: 0.5rem; justify-content: flex-start; flex-wrap: wrap; }
+  .tab-button { font-size: 0.95rem; padding: 0.5rem 1rem; }
+  /* keep tab buttons single-line and avoid wrapping text */
+  .tabs-header .tab-button { white-space: nowrap; }
+}
+
+@media (max-width: 720px) {
+  .owner-dashboard { padding: 0.75rem; }
+  .owner-header { padding: 1rem; border-radius: 0; }
+  .owner-header::before { height: 3px; }
+  .owner-header { gap: 0.5rem; }
+  .avatar { height: 46px; width: 46px; font-size: 1rem; }
+  .user-info h1 { font-size: 1.15rem; }
+  .user-info-subtitle { font-size: 0.85rem; }
+  .stats-section { grid-template-columns: 1fr; padding: 0.75rem; }
+  .stat-item { padding: 0.75rem; }
+  .schools-grid { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.75rem; }
+  .school-card { padding: 0; }
+  .school-header { padding: 1rem; }
+  .school-stats { padding: 1rem; grid-template-columns: repeat(2, 1fr); }
+  .activities-list .activity-item { padding: 1rem; gap: 1rem; }
+  .activity-icon { font-size: 1.5rem; }
+  .request-item { padding: 1rem; }
+  .request-header { flex-direction: column; align-items: stretch; gap: 0.5rem; }
+  .request-actions { justify-content: flex-start; flex-wrap: wrap; }
+
+  /* Make header actions full width and more compact */
+  .header-actions { width: 100%; display: flex; justify-content: flex-end; gap: 0.5rem; }
+  .header-actions button { min-width: 90px; padding: 0.5rem; font-size: 0.85rem; }
+
+  /* Make tabs scroll horizontally on very small screens */
+  .tabs-header { display: flex; gap: 0.5rem; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 0.5rem; }
+  .tabs-header::-webkit-scrollbar { height: 8px; }
+  .tabs-header::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.2); border-radius: 4px; }
+  .tab-button { flex: 0 0 auto; padding: 0.5rem 0.8rem; font-size: 0.85rem; }
+
+  .create-school-section .owner-form-row { align-items: stretch; }
+  .create-school-section .owner-form-group input, .create-school-section .owner-form-actions { width: 100%; }
+  .create-school-section .owner-form-actions button { width: 100%; }
+  .owner-btn-primary, .owner-btn-create-school, .owner-btn-create-admin { min-width: 0; padding: 0.6rem 0.9rem; font-size: 0.9rem; }
+
+  .tab-content { padding: 0.5rem 0; }
+  .content-card { padding: 0.75rem; border-radius: 12px; }
+  .card-header { padding: 0.75rem 1rem; }
+  .card-content { padding: 0.75rem 1rem; }
+  .owner-form-row .owner-form-group { width: 100%; }
+}
+
+/* Accessibility: higher contrast and spacing on reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
 }
 
 .school-activities-header::before {

@@ -46,6 +46,7 @@ def mark_attendance(payload: AttendanceMark, db: Session = Depends(get_db), curr
     return { 'detail': 'created', 'id': new.id }
 
 
+@router.get('', response_model=List[AttendanceResponse])
 @router.get('/', response_model=List[AttendanceResponse])
 def list_attendance(subject_id: int = None, date: str = None, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     query = db.query(AttendanceModel)

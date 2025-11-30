@@ -13,6 +13,7 @@ from schemas.user import User as UserSchema
 router = APIRouter(prefix="/subjects", tags=["subjects"])
 
 
+@router.post("", response_model=Subject, status_code=status.HTTP_201_CREATED)
 @router.post("/", response_model=Subject, status_code=status.HTTP_201_CREATED)
 def create_subject(subject: SubjectCreate, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     # Only admin can create subjects and assign to teachers
@@ -36,6 +37,7 @@ def create_subject(subject: SubjectCreate, db: Session = Depends(get_db), curren
     return new_sub
 
 
+@router.get("", response_model=List[Subject])
 @router.get("/", response_model=List[Subject])
 def list_subjects(db: Session = Depends(get_db), school_id: int = None):
     query = db.query(SubjectModel)
@@ -73,6 +75,55 @@ def get_subject_students(subject_id: int, db: Session = Depends(get_db), current
     return student_rows
 
 
+@router.get("/available-students/{subject_id}")
+def get_available_students_for_enrollment(subject_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    """Get all students available for enrollment (not yet enrolled) grouped by grade_level"""
+    subj = db.query(SubjectModel).filter(SubjectModel.id == subject_id).first()
+    if not subj:
+        raise HTTPException(status_code=404, detail="Subject not found")
+    
+    # only admin or assigned teacher can view
+    if getattr(current_user, 'role', None) != 'admin' and subj.teacher_id != getattr(current_user, 'id', None):
+        raise HTTPException(status_code=403, detail='Not authorized to view students for this subject')
+    
+    # Get all students in same school not yet enrolled in this subject
+    enrolled_student_ids = db.query(SubjectStudentModel.student_id).filter(
+        SubjectStudentModel.subject_id == subject_id
+    ).subquery()
+    
+    available_students = db.query(UserModel).filter(
+        UserModel.role == 'student',
+        UserModel.school_id == subj.school_id,
+        UserModel.id.notin_(enrolled_student_ids),
+        UserModel.is_active == True
+    ).all()
+    
+    # Group by grade_level
+    grades = {}
+    for student in available_students:
+        grade = student.grade_level or 'ไม่ระบุ'
+        if grade not in grades:
+            grades[grade] = {
+                'grade_level': grade,
+                'count': 0,
+                'students': []
+            }
+        grades[grade]['students'].append({
+            'id': student.id,
+            'username': student.username,
+            'full_name': student.full_name,
+            'email': student.email,
+            'grade_level': student.grade_level
+        })
+        grades[grade]['count'] += 1
+    
+    return {
+        'subject_id': subject_id,
+        'total_available': len(available_students),
+        'grades': list(grades.values())
+    }
+
+
 @router.post("/{subject_id}/enroll", status_code=status.HTTP_201_CREATED)
 def enroll_student(subject_id: int, student_id: int = Body(..., embed=True), db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     subj = db.query(SubjectModel).filter(SubjectModel.id == subject_id).first()
@@ -94,6 +145,54 @@ def enroll_student(subject_id: int, student_id: int = Body(..., embed=True), db:
     db.commit()
     db.refresh(rel)
     return { 'detail': 'enrolled', 'id': rel.id }
+
+
+@router.post("/{subject_id}/enroll_by_grade", status_code=status.HTTP_201_CREATED)
+def enroll_students_by_grade(subject_id: int, grade_level: str = Body(..., embed=True), db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    """Enroll all students with matching grade_level to the subject"""
+    subj = db.query(SubjectModel).filter(SubjectModel.id == subject_id).first()
+    if not subj:
+        raise HTTPException(status_code=404, detail="Subject not found")
+    
+    # only admin or teacher assigned to subject can enroll
+    if getattr(current_user, 'role', None) != 'admin' and subj.teacher_id != getattr(current_user, 'id', None):
+        raise HTTPException(status_code=403, detail='Not authorized to enroll students to this subject')
+    
+    # Get all students with matching grade_level in the same school
+    students = db.query(UserModel).filter(
+        UserModel.role == 'student',
+        UserModel.grade_level == grade_level,
+        UserModel.school_id == subj.school_id
+    ).all()
+    
+    if not students:
+        raise HTTPException(status_code=404, detail=f'No students found with grade_level: {grade_level}')
+    
+    enrolled_count = 0
+    failed_count = 0
+    
+    for student in students:
+        # Check if already enrolled
+        exists = db.query(SubjectStudentModel).filter(
+            SubjectStudentModel.subject_id == subject_id,
+            SubjectStudentModel.student_id == student.id
+        ).first()
+        
+        if not exists:
+            rel = SubjectStudentModel(subject_id=subject_id, student_id=student.id)
+            db.add(rel)
+            enrolled_count += 1
+        else:
+            failed_count += 1
+    
+    db.commit()
+    return {
+        'detail': f'Bulk enrollment completed',
+        'grade_level': grade_level,
+        'enrolled_count': enrolled_count,
+        'already_enrolled_count': failed_count,
+        'total_students': len(students)
+    }
 
 
 @router.delete("/{subject_id}/enroll/{student_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -4,6 +4,7 @@ import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import '../../../css/pages/default/change-password.css'; // CSS สำหรับหน้าเปลี่ยนรหัสผ่าน
 import { API_BASE_URL } from '../../../endpoints';
+import { logout } from '../../../../utils/authUtils';
 
 function ChangePasswordPage() {
   const navigate = useNavigate();
@@ -29,7 +30,7 @@ function ChangePasswordPage() {
       .then(data => {
         if (data.detail) {
           // Token ไม่ถูกต้อง
-          localStorage.removeItem('token');
+          logout();
           navigate('/signin');
         } else {
           setCurrentUser(data);
@@ -40,7 +41,7 @@ function ChangePasswordPage() {
         }
       })
       .catch(() => {
-        localStorage.removeItem('token');
+        logout();
         navigate('/signin');
       });
   }, [navigate]);
@@ -120,7 +121,7 @@ function ChangePasswordPage() {
   };
 
   const handleSignout = () => {
-    localStorage.removeItem('token');
+    logout();
     navigate('/signin');
   };
 

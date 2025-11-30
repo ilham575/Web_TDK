@@ -533,7 +533,7 @@ body {
 }
 
 /* Modal styles */
-.modal-overlay {
+.grades-modal-overlay {
   position: fixed;
   top: 0;
   left: 0;
@@ -548,7 +548,7 @@ body {
   animation: fadeIn 0.3s ease-out;
 }
 
-.modal-content {
+.grades-modal-content {
   background: #ffffff;
   border-radius: 16px;
   box-shadow: 0 20px 64px rgba(0,0,0,0.2);
@@ -560,7 +560,7 @@ body {
   position: relative;
 }
 
-.modal-header {
+.grades-modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -570,7 +570,7 @@ body {
   border-radius: 16px 16px 0 0;
 }
 
-.modal-title {
+.grades-modal-title {
   color: #1e293b;
   font-size: 1.25rem;
   font-weight: 700;
@@ -578,7 +578,7 @@ body {
   letter-spacing: -0.025em;
 }
 
-.modal-close {
+.grades-modal-close {
   background: none;
   border: none;
   font-size: 1.5rem;
@@ -594,24 +594,24 @@ body {
   justify-content: center;
 }
 
-.modal-close:hover {
+.grades-modal-close:hover {
   background: #e2e8f0;
   color: #475569;
 }
 
-.modal-body {
+.grades-modal-body {
   padding: 2.5rem;
 }
 
-.modal-field {
+.grades-modal-field {
   margin-bottom: 1.5rem;
 }
 
-.modal-field:last-child {
+.grades-modal-field:last-child {
   margin-bottom: 0;
 }
 
-.modal-label {
+.grades-modal-label {
   display: block;
   font-weight: 600;
   color: #374151;
@@ -620,7 +620,7 @@ body {
   letter-spacing: 0.025em;
 }
 
-.modal-input {
+.grades-modal-input {
   width: 100%;
   padding: 0.75rem 1rem;
   border: 2px solid #e2e8f0;
@@ -633,18 +633,18 @@ body {
   box-sizing: border-box;
 }
 
-.modal-input:focus {
+.grades-modal-input:focus {
   outline: none;
   border-color: #10b981;
   box-shadow: 0 0 0 3px rgba(16,185,129,0.15);
   transform: translateY(-1px);
 }
 
-.modal-input:hover {
+.grades-modal-input:hover {
   border-color: #6b7280;
 }
 
-.modal-footer {
+.grades-modal-footer {
   display: flex;
   justify-content: flex-end;
   gap: 1rem;
@@ -739,7 +739,7 @@ body {
 }
 
 /* Delete modal specific styles */
-.delete-modal .modal-content {
+.delete-modal .grades-modal-content {
   max-width: 450px;
 }
 
@@ -773,7 +773,7 @@ body {
 }
 
 /* Summary modal styles */
-.summary-modal .modal-content {
+.summary-modal .grades-modal-content {
   max-width: 1500px;
   width: 98%;
   max-height: 95vh;
@@ -1077,22 +1077,22 @@ body {
     min-width: 45px;
   }
 
-  .modal-content {
+  .grades-modal-content {
     width: 95%;
     margin: 1rem;
   }
 
-  .modal-header,
-  .modal-body,
-  .modal-footer {
+  .grades-modal-header,
+  .grades-modal-body,
+  .grades-modal-footer {
     padding: 1.5rem 2rem;
   }
 
-  .modal-title {
+  .grades-modal-title {
     font-size: 1.1rem;
   }
 
-  .modal-input {
+  .grades-modal-input {
     padding: 0.6rem 0.8rem;
     font-size: 0.9rem;
   }
@@ -1252,7 +1252,7 @@ body {
     font-size: 0.9rem;
   }
 
-  .summary-modal .modal-content {
+  .summary-modal .grades-modal-content {
     width: 95%;
     max-height: 90vh;
   }

@@ -29,8 +29,8 @@ export default function ExpiryModal({ isOpen, initialValue, onClose, onSave, tit
           <button className="expiry-modal-close" onClick={() => onClose()}>×</button>
         </div>
         <div className="expiry-modal-body">
-          <label className="form-label">เลือกวันที่และเวลา</label>
-          <input type="datetime-local" value={value} onChange={e => setValue(e.target.value)} className="form-input" step="60" lang="en-GB" />
+          <label className="expiry-form-label">เลือกวันที่และเวลา</label>
+          <input type="datetime-local" value={value} onChange={e => setValue(e.target.value)} className="expiry-form-input" step="60" lang="en-GB" />
         </div>
         <div className="expiry-modal-footer">
           <button className="expiry-modal-btn expiry-modal-btn-secondary" onClick={() => onClose()}>ยกเลิก</button>

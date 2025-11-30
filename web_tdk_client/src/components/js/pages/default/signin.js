@@ -4,6 +4,7 @@ import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import '../../../css/pages/default/signin.css';
 import { API_BASE_URL } from '../../../endpoints';
+import { setSchoolFavicon } from '../../../../utils/faviconUtils';
 
 // Custom close button for toast
 const CustomCloseButton = ({ closeToast }) => (
@@ -85,6 +86,9 @@ function SigninPage() {
         // Also persist school_name when available
         const detectedSchoolName = data.user_info?.school_name || data.user_info?.school?.name || data.school_name || data.school?.name || '';
         if (detectedSchoolName) localStorage.setItem('school_name', detectedSchoolName);
+        if (detectedSchoolId) {
+          try { setSchoolFavicon(detectedSchoolId); } catch (err) { console.error('setSchoolFavicon failed after login', err); }
+        }
         
         // ตรวจสอบว่าต้องเปลี่ยนรหัสผ่านหรือไม่
         if (data.user_info?.must_change_password) {

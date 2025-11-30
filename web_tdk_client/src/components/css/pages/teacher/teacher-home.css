@@ -145,7 +145,7 @@ body {
   gap: 1rem;
 }
 
-.stats-card {
+.teacher-stats-card {
   background: rgba(255, 255, 255, 0.2);
   backdrop-filter: blur(15px);
   -webkit-backdrop-filter: blur(15px);
@@ -162,7 +162,7 @@ body {
   overflow: hidden;
 }
 
-.stats-card::before {
+.teacher-stats-card::before {
   content: '';
   position: absolute;
   top: -2px;
@@ -176,39 +176,39 @@ body {
   transition: opacity 0.4s ease;
 }
 
-.stats-card:hover {
+.teacher-stats-card:hover {
   transform: translateY(-8px) scale(1.05);
   box-shadow: 
     0 20px 50px rgba(31, 38, 135, 0.4),
     0 10px 25px rgba(0, 0, 0, 0.15);
 }
 
-.stats-card:hover::before {
+.teacher-stats-card:hover::before {
   opacity: 1;
 }
 
-.stats-card {
+.teacher-stats-card {
   animation: slideUp 0.6s ease-out forwards;
   opacity: 0;
   transform: translateY(20px);
 }
 
-.stats-card:nth-child(1) {
+.teacher-stats-card:nth-child(1) {
   animation-delay: 0s;
 }
 
-.stats-card:nth-child(2) {
+.teacher-stats-card:nth-child(2) {
   animation-delay: 0.1s;
 }
 
-.stats-value {
+.teacher-stats-value {
   font-size: 1.8rem;
   font-weight: 900;
   color: #1e293b;
   margin-bottom: 0.25rem;
 }
 
-.stats-label {
+.teacher-stats-label {
   font-size: 0.9rem;
   color: #64748b;
   font-weight: 600;
@@ -626,7 +626,7 @@ body {
   line-height: 1.5;
 }
 
-.form-actions {
+.teacher-form-actions {
   display: flex;
   justify-content: flex-end;
 }
@@ -750,7 +750,7 @@ body {
 }
 
 /* Modal Styles - Glassmorphism */
-.modal-overlay {
+.teacher-modal-overlay {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.4);
@@ -774,26 +774,31 @@ body {
   }
 }
 
-.modal {
-  background: rgba(255, 255, 255, 0.25);
-  backdrop-filter: blur(25px);
-  -webkit-backdrop-filter: blur(25px);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  padding: 2.5rem;
-  border-radius: 24px;
-  width: 90%;
-  max-width: 700px;
-  box-shadow: 
-    0 25px 80px rgba(31, 38, 135, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.5);
-  animation: slideInModal 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+.teacher-modal {
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(226, 232, 240, 0.7);
+  padding: 0;
+  border-radius: 16px;
+  width: 92%;
+  max-width: 750px;
+  max-height: calc(100vh - 100px);
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.12);
+  animation: slideInModal 0.28s cubic-bezier(0.25, 0.46, 0.45, 0.94);
   position: relative;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.teacher-modal.enroll-modal {
+  max-width: 700px;
 }
 
 @keyframes slideInModal {
   from {
-    transform: scale(0.9) translateY(20px);
+    transform: scale(0.92) translateY(20px);
     opacity: 0;
   }
   to {
@@ -802,7 +807,7 @@ body {
   }
 }
 
-.modal::before {
+.teacher-modal::before {
   content: '';
   position: absolute;
   top: 0;
@@ -810,97 +815,278 @@ body {
   right: 0;
   bottom: 0;
   background: linear-gradient(135deg, 
-    rgba(102, 126, 234, 0.05) 0%,
-    rgba(118, 75, 162, 0.03) 50%,
-    rgba(240, 147, 251, 0.05) 100%);
-  border-radius: 24px;
+    rgba(102, 126, 234, 0.02) 0%,
+    rgba(118, 75, 162, 0.01) 50%,
+    rgba(240, 147, 251, 0.02) 100%);
   z-index: -1;
 }
 
-.modal-title {
-  color: #1e293b;
+.teacher-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.5);
+  background: rgba(255, 255, 255, 0.5);
+  flex-shrink: 0;
+}
+
+.teacher-modal-title {
+  color: #0f172a;
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin: 0;
+  letter-spacing: -0.3px;
+}
+
+.teacher-modal-close {
+  background: transparent;
+  border: none;
   font-size: 1.4rem;
-  font-weight: 800;
-  margin: 0 0 1.5rem 0;
-  text-align: center;
+  cursor: pointer;
+  color: #94a3b8;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
 }
 
-.modal-content {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 2rem;
+.teacher-modal-close:hover {
+  background: rgba(15, 23, 42, 0.05);
+  color: #0f172a;
 }
 
-.modal-section {
+.teacher-modal-body {
+  overflow-y: auto;
+  flex: 1;
+  padding: 1.5rem;
   display: flex;
   flex-direction: column;
+  gap: 1.5rem;
+}
+
+.enroll-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.enroll-input-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: stretch;
+}
+
+.enroll-input-row .teacher-modal-select {
+  flex: 1;
+  min-width: 0;
+}
+
+.teacher-modal-label {
+  font-weight: 600;
+  color: #334155;
+  font-size: 0.9rem;
+  letter-spacing: -0.2px;
+}
+
+.teacher-modal-select {
+  padding: 0.7rem 0.9rem;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  color: #334155;
+  flex-grow: 1;
+}
+
+.teacher-modal-select:hover {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+}
+
+.teacher-modal-select:focus {
+  outline: none;
+  border-color: #667eea;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.enroll-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(226, 232, 240, 0.5), transparent);
+  margin: 0.5rem 0;
+}
+
+.enrolled-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.enrolled-title {
+  color: #1e293b;
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin: 0;
+  letter-spacing: -0.2px;
+}
+
+.enrolled-list {
+  max-height: 35vh;
+  overflow-y: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  padding: 0.5rem;
+}
+
+.enrolled-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.85rem 1rem;
+  border-radius: 8px;
+  background: #fff;
+  margin-bottom: 0.5rem;
+  border: 1px solid #f1f5f9;
+  transition: all 0.2s ease;
   gap: 1rem;
 }
 
-.modal-label {
+.enrolled-item:last-child {
+  margin-bottom: 0;
+}
+
+.enrolled-item:hover {
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  border-color: #e2e8f0;
+}
+
+.student-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.student-name {
   font-weight: 600;
-  color: #374151;
-  font-size: 0.95rem;
+  color: #0f172a;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.modal-select {
-  width: 100%;
-  padding: 0.75rem 1rem;
-  border: 2px solid #e2e8f0;
-  border-radius: 10px;
-  background: #f8fafc;
-  font-size: 0.95rem;
-  transition: all 0.2s ease;
+.student-email {
+  font-size: 0.8rem;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.btn-remove {
+  background: #ef4444;
+  color: #fff;
+  border: none;
+  padding: 0.5rem 0.9rem;
+  border-radius: 6px;
   cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.2);
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
-.modal-select:focus {
-  outline: none;
-  border-color: #3b82f6;
-  background: #fff;
-  box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
+.btn-remove:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+  background: #dc2626;
 }
 
-.modal-actions {
+.teacher-modal-footer {
   display: flex;
   gap: 0.75rem;
   justify-content: flex-end;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid rgba(226, 232, 240, 0.5);
+  background: rgba(248, 250, 252, 0.5);
+  flex-shrink: 0;
 }
 
 .btn-add {
   background: linear-gradient(135deg, #10b981, #059669);
   color: #fff;
   border: none;
-  padding: 0.6rem 1.25rem;
-  border-radius: 10px;
+  padding: 0.65rem 1.15rem;
+  border-radius: 8px;
   cursor: pointer;
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   transition: all 0.2s ease;
-  box-shadow: 0 4px 16px rgba(16,185,129,0.3);
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.2);
+  white-space: nowrap;
 }
 
 .btn-add:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(16,185,129,0.4);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.btn-add:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-bulk-enroll {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: #fff;
+  border: none;
+  padding: 0.65rem 1rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.85rem;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.btn-bulk-enroll:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
 }
 
 .btn-cancel {
   background: #64748b;
   color: #fff;
   border: none;
-  padding: 0.6rem 1.25rem;
-  border-radius: 10px;
+  padding: 0.65rem 1.5rem;
+  border-radius: 8px;
   cursor: pointer;
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   transition: all 0.2s ease;
-  box-shadow: 0 4px 16px rgba(100,116,139,0.2);
+  box-shadow: 0 2px 8px rgba(100, 116, 139, 0.2);
 }
 
 .btn-cancel:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(100,116,139,0.3);
+  box-shadow: 0 4px 12px rgba(100, 116, 139, 0.3);
+  background: #475569;
 }
 
 .enrolled-title {
@@ -911,7 +1097,7 @@ body {
 }
 
 .enrolled-list {
-  max-height: 300px;
+  max-height: 35vh;
   overflow-y: auto;
   border: 1px solid #e2e8f0;
   border-radius: 10px;
@@ -945,6 +1131,12 @@ body {
   font-weight: 600;
   color: #1e293b;
   font-size: 0.95rem;
+}
+.student-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 280px;
 }
 
 .student-email {
@@ -980,7 +1172,7 @@ body {
   opacity: 0;
 }
 
-.tab-button {
+.teacher-tab-button {
   background: rgba(255, 255, 255, 0.15);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
@@ -999,7 +1191,7 @@ body {
   overflow: hidden;
 }
 
-.tab-button::before {
+.teacher-tab-button::before {
   content: '';
   position: absolute;
   top: 0;
@@ -1010,7 +1202,7 @@ body {
   transition: left 0.6s ease;
 }
 
-.tab-button:hover {
+.teacher-tab-button:hover {
   background: rgba(255, 255, 255, 0.25);
   color: #2d3748;
   transform: translateY(-3px) scale(1.02);
@@ -1019,11 +1211,11 @@ body {
     inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
 
-.tab-button:hover::before {
+.teacher-tab-button:hover::before {
   left: 100%;
 }
 
-.tab-button.active {
+.teacher-tab-button.active {
   background: rgba(102, 126, 234, 0.8);
   backdrop-filter: blur(15px);
   -webkit-backdrop-filter: blur(15px);
@@ -1034,17 +1226,17 @@ body {
   transform: translateY(-5px) scale(1.05);
 }
 
-.tab-button {
+.teacher-tab-button {
   animation: fadeInScale 0.5s ease-out forwards;
   opacity: 0;
   transform: scale(0.9);
 }
 
-.tab-button:nth-child(1) {
+.teacher-tab-button:nth-child(1) {
   animation-delay: 0.3s;
 }
 
-.tab-button:nth-child(2) {
+.teacher-tab-button:nth-child(2) {
   animation-delay: 0.4s;
 }
 
@@ -1176,7 +1368,7 @@ body {
     gap: 0.75rem;
   }
 
-  .modal-content {
+  .teacher-modal-content {
     grid-template-columns: 1fr;
     gap: 1.5rem;
   }
@@ -1308,7 +1500,7 @@ body {
     gap: 1.5rem;
   }
 
-  .stats-card {
+  .teacher-stats-card {
     min-width: 140px;
     padding: 1.5rem 2rem;
     background: rgba(255, 255, 255, 0.2);
@@ -1324,21 +1516,21 @@ body {
     transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
   }
 
-  .stats-card:hover {
+  .teacher-stats-card:hover {
     transform: translateY(-8px) scale(1.05);
     box-shadow: 
       0 20px 50px rgba(31, 38, 135, 0.4),
       inset 0 1px 0 rgba(255, 255, 255, 0.5);
   }
 
-  .stats-value {
+  .teacher-stats-value {
     font-size: 2rem;
     font-weight: 900;
     color: #1e293b;
     margin-bottom: 0.5rem;
   }
 
-  .stats-label {
+  .teacher-stats-label {
     font-size: 0.9rem;
     color: #64748b;
     font-weight: 600;
@@ -1452,7 +1644,7 @@ body {
     display: none;
   }
 
-  .tab-button {
+  .teacher-tab-button {
     padding: 0.75rem 1.5rem;
     font-size: 0.9rem;
     white-space: nowrap;
@@ -1478,14 +1670,14 @@ body {
     min-width: 120px;
   }
 
-  .modal {
+  .teacher-modal {
     padding: 2rem;
     margin: 1rem;
     max-height: 90vh;
     overflow-y: auto;
   }
 
-  .modal-content {
+  .teacher-modal-content {
     grid-template-columns: 1fr;
     gap: 1.5rem;
   }
@@ -1575,13 +1767,13 @@ body {
     gap: 0.75rem;
   }
 
-  .stats-card {
+  .teacher-stats-card {
     min-width: 100px;
     padding: 1rem;
     width: 100%;
   }
 
-  .stats-value {
+  .teacher-stats-value {
     font-size: 1.5rem;
   }
 
@@ -1616,16 +1808,16 @@ body {
     margin-right: 0.25rem;
   }
 
-  .modal {
+  .teacher-modal {
     padding: 1.5rem;
     margin: 0.5rem;
   }
 
-  .modal-title {
+  .teacher-modal-title {
     font-size: 1.2rem;
   }
 
-  .modal-content {
+  .teacher-modal-content {
     gap: 1rem;
   }
 
@@ -1652,7 +1844,7 @@ body {
     padding: 0.875rem 1rem;
   }
 
-  .form-actions {
+  .teacher-form-actions {
     justify-content: center;
   }
 
@@ -1727,16 +1919,16 @@ body {
     font-size: 0.8rem;
   }
 
-  .stats-card {
+  .teacher-stats-card {
     padding: 0.75rem;
     min-width: auto;
   }
 
-  .stats-value {
+  .teacher-stats-value {
     font-size: 1.25rem;
   }
 
-  .stats-label {
+  .teacher-stats-label {
     font-size: 0.8rem;
   }
 
@@ -1745,7 +1937,7 @@ body {
     margin-bottom: 1.5rem;
   }
 
-  .tab-button {
+  .teacher-tab-button {
     padding: 0.625rem 1.25rem;
     font-size: 0.8rem;
   }
@@ -1820,25 +2012,25 @@ body {
     font-size: 0.9rem;
   }
 
-  .modal {
+  .teacher-modal {
     padding: 1rem;
     margin: 0.25rem;
   }
 
-  .modal-title {
+  .teacher-modal-title {
     font-size: 1.1rem;
   }
 
-  .modal-section {
+  .teacher-modal-section {
     gap: 0.75rem;
   }
 
-  .modal-select {
+  .teacher-modal-select {
     padding: 0.625rem 0.875rem;
     font-size: 0.9rem;
   }
 
-  .modal-actions {
+  .teacher-modal-actions {
     gap: 0.5rem;
   }
 
@@ -1913,11 +2105,11 @@ body {
     font-size: 0.9rem;
   }
 }
-.modal-input { width:100%; padding:0.6rem; margin-bottom:0.8rem; border:1px solid rgba(15,23,36,0.06); border-radius:8px; }
-.modal-actions { display:flex; gap:0.6rem; justify-content:flex-end; }
-.modal-btn { background: linear-gradient(90deg,#0b5ed7 0%, #1976d2 100%); color:#fff; border:none; padding:0.45rem 0.9rem; border-radius:8px; cursor:pointer; }
-.modal-cancel { background:#6c757d; color:#fff; }
-.modal-btn:hover { transform: translateY(-2px); }
+.teacher-modal-input { width:100%; padding:0.6rem; margin-bottom:0.8rem; border:1px solid rgba(15,23,36,0.06); border-radius:8px; }
+.teacher-modal-actions { display:flex; gap:0.6rem; justify-content:flex-end; }
+.teacher-modal-btn { background: linear-gradient(90deg,#0b5ed7 0%, #1976d2 100%); color:#fff; border:none; padding:0.45rem 0.9rem; border-radius:8px; cursor:pointer; }
+.teacher-modal-cancel { background:#6c757d; color:#fff; }
+.teacher-modal-btn:hover { transform: translateY(-2px); }
 
 @keyframes slideDown {
   from {
@@ -2140,7 +2332,7 @@ body {
   overflow: auto;
 }
 
-.schedule-modal .modal-header {
+.schedule-modal .teacher-modal-header {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   padding: 20px;
@@ -2148,7 +2340,7 @@ body {
   position: relative;
 }
 
-.schedule-modal .modal-title {
+.schedule-modal .teacher-modal-title {
   margin: 0;
   font-size: 1.5em;
   display: flex;
@@ -2156,11 +2348,11 @@ body {
   gap: 10px;
 }
 
-.schedule-modal .modal-icon {
+.schedule-modal .teacher-modal-icon {
   font-size: 1.2em;
 }
 
-.schedule-modal .modal-close {
+.schedule-modal .teacher-modal-close {
   position: absolute;
   top: 15px;
   right: 15px;
@@ -2177,7 +2369,7 @@ body {
   justify-content: center;
 }
 
-.schedule-modal .modal-close:hover {
+.schedule-modal .teacher-modal-close:hover {
   background: rgba(255, 255, 255, 0.3);
 }
 
@@ -2314,7 +2506,7 @@ body {
   font-weight: bold;
 }
 
-.schedule-modal .modal-actions {
+.schedule-modal .teacher-modal-actions {
   display: flex;
   justify-content: center;
   gap: 15px;
@@ -2416,4 +2608,89 @@ body {
   background: rgba(102, 126, 234, 0.1);
   padding: 0.5rem;
   border-radius: 6px;
+}
+
+/* Bulk Enrollment Button */
+.btn-bulk-enroll {
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.85rem;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-bulk-enroll:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(139, 92, 246, 0.4);
+  background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+}
+
+.btn-bulk-enroll:active {
+  transform: translateY(0);
+}
+
+/* Button Styles */
+.btn-add {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.85rem;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.btn-add:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+}
+
+.btn-cancel {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.85rem;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+.btn-cancel:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(239, 68, 68, 0.4);
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+}
+
+.btn-remove {
+  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+  color: white;
+  border: none;
+  padding: 0.35rem 0.7rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.8rem;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(249, 115, 22, 0.3);
+}
+
+.btn-remove:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(249, 115, 22, 0.4);
+  background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%);
 }

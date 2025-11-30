@@ -28,9 +28,8 @@ function GradesPage(){
   // Update document title with school name
   useEffect(() => {
     const schoolName = localStorage.getItem('school_name');
-    if (schoolName && schoolName !== '-') {
-      document.title = `ระบบโรงเรียน${schoolName}`;
-    }
+    const baseTitle = 'ระบบโรงเรียน';
+    document.title = (schoolName && schoolName !== '-') ? `${baseTitle} - ${schoolName}` : baseTitle;
   }, []);
 
   // Calculate grade letter based on percentage
@@ -634,13 +633,13 @@ function GradesPage(){
 
         {/* Create Assignment Modal */}
         {showCreateModal && (
-          <div className="modal-overlay" onClick={cancelCreateAssignment}>
+          <div className="grades-modal-overlay" onClick={cancelCreateAssignment}>
             <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-              <div className="modal-header">
+              <div className="grades-modal-header">
                 <h3 className="modal-title">สร้างหัวข้องานใหม่</h3>
                 <button className="modal-close" onClick={cancelCreateAssignment}>×</button>
               </div>
-              <div className="modal-body">
+              <div className="grades-modal-body">
                 <div className="modal-field">
                   <label htmlFor="new-assignment-title" className="modal-label">หัวข้องาน:</label>
                   <input
@@ -666,7 +665,7 @@ function GradesPage(){
                   />
                 </div>
               </div>
-              <div className="modal-footer">
+              <div className="grades-modal-footer">
                 <button className="btn-cancel" onClick={cancelCreateAssignment}>ยกเลิก</button>
                 <button className="btn-create" onClick={handleCreateAssignment}>สร้าง</button>
               </div>
@@ -676,13 +675,13 @@ function GradesPage(){
 
         {/* Edit Assignment Modal */}
         {showEditModal && editingAssignment && (
-          <div className="modal-overlay" onClick={cancelEditAssignment}>
+          <div className="grades-modal-overlay" onClick={cancelEditAssignment}>
             <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-              <div className="modal-header">
+              <div className="grades-modal-header">
                 <h3 className="modal-title">แก้ไขหัวข้องาน</h3>
                 <button className="modal-close" onClick={cancelEditAssignment}>×</button>
               </div>
-              <div className="modal-body">
+              <div className="grades-modal-body">
                 <div className="modal-field">
                   <label htmlFor="edit-assignment-title" className="modal-label">หัวข้องาน:</label>
                   <input
@@ -708,7 +707,7 @@ function GradesPage(){
                   />
                 </div>
               </div>
-              <div className="modal-footer">
+              <div className="grades-modal-footer">
                 <button className="btn-cancel" onClick={cancelEditAssignment}>ยกเลิก</button>
                 <button className="btn-edit" onClick={handleEditAssignment}>แก้ไข</button>
               </div>
@@ -718,13 +717,13 @@ function GradesPage(){
 
         {/* Delete Assignment Modal */}
         {showDeleteModal && deletingAssignment && (
-          <div className="modal-overlay" onClick={cancelDeleteAssignment}>
+          <div className="grades-modal-overlay" onClick={cancelDeleteAssignment}>
             <div className="modal-content delete-modal" onClick={(e) => e.stopPropagation()}>
-              <div className="modal-header">
+              <div className="grades-modal-header">
                 <h3 className="modal-title">ลบหัวข้องาน</h3>
                 <button className="modal-close" onClick={cancelDeleteAssignment}>×</button>
               </div>
-              <div className="modal-body">
+              <div className="grades-modal-body">
                 <div className="delete-warning">
                   <div className="warning-icon">⚠️</div>
                   <p className="warning-text">
@@ -735,7 +734,7 @@ function GradesPage(){
                   </p>
                 </div>
               </div>
-              <div className="modal-footer">
+              <div className="grades-modal-footer">
                 <button className="btn-cancel" onClick={cancelDeleteAssignment}>ยกเลิก</button>
                 <button className="btn-delete" onClick={confirmDeleteAssignment}>ลบหัวข้องาน</button>
               </div>
@@ -745,13 +744,13 @@ function GradesPage(){
 
         {/* Summary Modal */}
         {showSummaryModal && (
-          <div className="modal-overlay" onClick={closeSummaryModal}>
+          <div className="grades-modal-overlay" onClick={closeSummaryModal}>
             <div className="modal-content summary-modal" onClick={(e) => e.stopPropagation()}>
-              <div className="modal-header">
+              <div className="grades-modal-header">
                 <h3 className="modal-title">📊 สรุปคะแนนรวม - วิชา #{id}</h3>
                 <button className="modal-close" onClick={closeSummaryModal}>×</button>
               </div>
-              <div className="modal-body">
+              <div className="grades-modal-body">
                 {students.length === 0 ? (
                   <div className="summary-empty">ไม่มีนักเรียนในวิชานี้</div>
                 ) : (
@@ -837,7 +836,7 @@ function GradesPage(){
                   </div>
                 )}
               </div>
-              <div className="modal-footer">
+              <div className="grades-modal-footer">
                 <button className="btn-close-summary" onClick={closeSummaryModal}>ปิด</button>
               </div>
             </div>

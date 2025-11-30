@@ -128,6 +128,34 @@
   word-break: break-word;
 }
 
+.profile-field-value.profile-read-only {
+  opacity: 0.8;
+  color: #718096;
+}
+
+.profile-field-input {
+  font-size: 1rem;
+  font-weight: 500;
+  color: #2d3748;
+  border: 1px solid #cbd5e0;
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  width: 100%;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.profile-field-input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  background-color: #f0f4ff;
+}
+
+.profile-field-input::placeholder {
+  color: #a0aec0;
+}
+
 .profile-actions {
   display: flex;
   justify-content: center;
@@ -147,6 +175,12 @@
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
+}
+
+.profile-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none !important;
 }
 
 .profile-btn-primary {

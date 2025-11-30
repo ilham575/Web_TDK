@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import '../../../css/pages/admin/admin-home.css';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -11,8 +11,12 @@ import ConfirmModal from '../../ConfirmModal';
 import AlertModal from '../../AlertModal';
 import ExpiryModal from '../../ExpiryModal';
 import AnnouncementModal from '../../AnnouncementModal';
+import LogoUploadModal from '../../LogoUploadModal';
 import ScheduleGrid from '../../ScheduleGrid';
+import AbsenceApproval from './AbsenceApproval';
 import { API_BASE_URL } from '../../../endpoints';
+import { setSchoolFavicon } from '../../../../utils/faviconUtils';
+import { logout } from '../../../../utils/authUtils';
 
 function AdminPage() {
   const navigate = useNavigate();
@@ -56,6 +60,13 @@ function AdminPage() {
 
   const [dragOver, setDragOver] = useState(false);
 
+  // Logo upload modal state
+  const [showLogoUploadModal, setShowLogoUploadModal] = useState(false);
+  const [schoolData, setSchoolData] = useState(null);
+  const [showHeaderMenu, setShowHeaderMenu] = useState(false);
+  const headerMenuRef = React.useRef(null);
+  const location = useLocation();
+
   const handleDragOver = (e) => {
     e.preventDefault();
     setDragOver(true);
@@ -88,6 +99,48 @@ function AdminPage() {
   const [newScheduleEndTime, setNewScheduleEndTime] = useState('');
   const [editingSchedule, setEditingSchedule] = useState(null);
 
+  // Homeroom teacher management state
+  const [homeroomTeachers, setHomeroomTeachers] = useState([]);
+  const [availableGradeLevels, setAvailableGradeLevels] = useState([]);
+  const [showHomeroomModal, setShowHomeroomModal] = useState(false);
+  const [editingHomeroom, setEditingHomeroom] = useState(null);
+  const [newHomeroomTeacherId, setNewHomeroomTeacherId] = useState('');
+  const [newHomeroomGradeLevel, setNewHomeroomGradeLevel] = useState('');
+  const [newHomeroomAcademicYear, setNewHomeroomAcademicYear] = useState('');
+
+  // Grade level management state
+  const [gradeAssignmentFile, setGradeAssignmentFile] = useState(null);
+  const [assigningGrades, setAssigningGrades] = useState(false);
+  const [gradeDragOver, setGradeDragOver] = useState(false);
+
+  // Individual grade assignment state
+  const [selectedStudentId, setSelectedStudentId] = useState('');
+  const [selectedGradeLevel, setSelectedGradeLevel] = useState('');
+  const [assigningIndividualGrade, setAssigningIndividualGrade] = useState(false);
+  const [studentSearchTerm, setStudentSearchTerm] = useState('');
+  const [filteredStudents, setFilteredStudents] = useState([]);
+
+  useEffect(() => {
+    const onDocClick = (e) => {
+      if (!headerMenuRef.current) return;
+      if (headerMenuRef.current.contains(e.target)) return;
+      setShowHeaderMenu(false);
+    };
+    document.addEventListener('click', onDocClick);
+    const onKey = (e) => {
+      if (e.key === 'Escape') setShowHeaderMenu(false);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('click', onDocClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, []);
+
+  // close header menu on route change
+  useEffect(() => {
+    setShowHeaderMenu(false);
+  }, [location]);
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) { navigate('/signin'); return; }
@@ -95,7 +148,7 @@ function AdminPage() {
       .then(res => res.json())
       .then(data => {
         if (data.role !== 'admin') {
-          localStorage.removeItem('token');
+          logout();
           toast.error('Invalid token or role. Please sign in again.');
           setTimeout(() => navigate('/signin'), 1500);
         } else if (data.must_change_password) {
@@ -108,10 +161,14 @@ function AdminPage() {
           if (schoolName) localStorage.setItem('school_name', schoolName);
           // persist school id (try multiple possible field names) so school-scoped endpoints work
           const sid = data?.school_id || data?.school?.id || data?.school?.school_id || data?.schoolId || null;
-          if (sid) localStorage.setItem('school_id', String(sid));
+          if (sid) {
+            localStorage.setItem('school_id', String(sid));
+            // ตั้งค่า favicon เป็นโลโก้โรงเรียน
+            setSchoolFavicon(sid);
+          }
         }
       })
-      .catch(() => { localStorage.removeItem('token'); toast.error('Invalid token or role. Please sign in again.'); setTimeout(() => navigate('/signin'), 1500); });
+      .catch(() => { logout(); toast.error('Invalid token or role. Please sign in again.'); setTimeout(() => navigate('/signin'), 1500); });
   }, [navigate]);
 
   useEffect(() => {
@@ -162,9 +219,8 @@ function AdminPage() {
 
   // Update document title with school name
   useEffect(() => {
-    if (displaySchool && displaySchool !== '-') {
-      document.title = `ระบบโรงเรียน${displaySchool}`;
-    }
+    const baseTitle = 'ระบบโรงเรียน';
+    document.title = (displaySchool && displaySchool !== '-') ? `${baseTitle} - ${displaySchool}` : baseTitle;
   }, [displaySchool]);
 
   const handleCreateUser = async (e) => {
@@ -218,7 +274,10 @@ function AdminPage() {
     } catch (err) { console.error('upload error', err); toast.error('Upload failed'); } finally { setUploading(false); setUploadFile(null); const inp = document.getElementById('bulk-upload-input'); if (inp) inp.value = ''; }
   };
 
-  const handleSignout = () => { localStorage.removeItem('token'); navigate('/signin', { state: { signedOut: true } }); };
+  const handleSignout = () => {
+    logout();
+    navigate('/signin', { state: { signedOut: true } });
+  };
 
   const deleteAnnouncement = async (id) => {
     const token = localStorage.getItem('token');
@@ -619,6 +678,185 @@ function AdminPage() {
     setNewScheduleEndTime('');
   };
 
+  // Homeroom teacher functions
+  const loadHomeroomTeachers = async () => {
+    const schoolId = localStorage.getItem('school_id');
+    if (!schoolId) return;
+    
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE_URL}/homeroom?school_id=${schoolId}`, {
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        setHomeroomTeachers(Array.isArray(data) ? data : []);
+      } else {
+        setHomeroomTeachers([]);
+      }
+    } catch (err) {
+      console.error('Failed to load homeroom teachers:', err);
+      setHomeroomTeachers([]);
+    }
+  };
+
+  const loadAvailableGradeLevels = async () => {
+    const schoolId = localStorage.getItem('school_id');
+    if (!schoolId) return;
+    
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE_URL}/homeroom/grade-levels?school_id=${schoolId}`, {
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        setAvailableGradeLevels(Array.isArray(data) ? data : []);
+      } else {
+        setAvailableGradeLevels([]);
+      }
+    } catch (err) {
+      console.error('Failed to load grade levels:', err);
+      setAvailableGradeLevels([]);
+    }
+  };
+
+  const createHomeroomTeacher = async () => {
+    const schoolId = localStorage.getItem('school_id');
+    const token = localStorage.getItem('token');
+    
+    if (!newHomeroomTeacherId || !newHomeroomGradeLevel) {
+      toast.error('กรุณาเลือกครูและชั้นเรียน');
+      return;
+    }
+    
+    try {
+      const body = {
+        teacher_id: Number(newHomeroomTeacherId),
+        grade_level: newHomeroomGradeLevel,
+        school_id: Number(schoolId),
+        academic_year: newHomeroomAcademicYear || null
+      };
+      
+      const res = await fetch(`${API_BASE_URL}/homeroom`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify(body)
+      });
+      
+      const data = await res.json();
+      
+      if (res.ok) {
+        toast.success('กำหนดครูประจำชั้นเรียบร้อยแล้ว');
+        cancelHomeroomModal();
+        loadHomeroomTeachers();
+      } else {
+        toast.error(data.detail || 'กำหนดครูประจำชั้นไม่สำเร็จ');
+      }
+    } catch (err) {
+      console.error('Create homeroom teacher error:', err);
+      toast.error('เกิดข้อผิดพลาดในการกำหนดครูประจำชั้น');
+    }
+  };
+
+  const updateHomeroomTeacher = async () => {
+    if (!editingHomeroom) return;
+    
+    const token = localStorage.getItem('token');
+    
+    if (!newHomeroomTeacherId) {
+      toast.error('กรุณาเลือกครู');
+      return;
+    }
+    
+    try {
+      const body = {
+        teacher_id: Number(newHomeroomTeacherId),
+        academic_year: newHomeroomAcademicYear || null
+      };
+      
+      const res = await fetch(`${API_BASE_URL}/homeroom/${editingHomeroom.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify(body)
+      });
+      
+      const data = await res.json();
+      
+      if (res.ok) {
+        toast.success('แก้ไขครูประจำชั้นเรียบร้อยแล้ว');
+        cancelHomeroomModal();
+        loadHomeroomTeachers();
+      } else {
+        toast.error(data.detail || 'แก้ไขครูประจำชั้นไม่สำเร็จ');
+      }
+    } catch (err) {
+      console.error('Update homeroom teacher error:', err);
+      toast.error('เกิดข้อผิดพลาดในการแก้ไขครูประจำชั้น');
+    }
+  };
+
+  const deleteHomeroomTeacher = async (homeroomId) => {
+    const token = localStorage.getItem('token');
+    
+    try {
+      const res = await fetch(`${API_BASE_URL}/homeroom/${homeroomId}`, {
+        method: 'DELETE',
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
+      });
+      
+      if (res.ok) {
+        toast.success('ลบครูประจำชั้นเรียบร้อยแล้ว');
+        loadHomeroomTeachers();
+      } else {
+        const data = await res.json();
+        toast.error(data.detail || 'ลบครูประจำชั้นไม่สำเร็จ');
+      }
+    } catch (err) {
+      console.error('Delete homeroom teacher error:', err);
+      toast.error('เกิดข้อผิดพลาดในการลบครูประจำชั้น');
+    }
+  };
+
+  const openHomeroomModal = (homeroom = null) => {
+    if (homeroom) {
+      setEditingHomeroom(homeroom);
+      setNewHomeroomTeacherId(String(homeroom.teacher_id));
+      setNewHomeroomGradeLevel(homeroom.grade_level);
+      setNewHomeroomAcademicYear(homeroom.academic_year || '');
+    } else {
+      setEditingHomeroom(null);
+      setNewHomeroomTeacherId('');
+      setNewHomeroomGradeLevel('');
+      setNewHomeroomAcademicYear('');
+    }
+    setShowHomeroomModal(true);
+  };
+
+  const cancelHomeroomModal = () => {
+    setShowHomeroomModal(false);
+    setEditingHomeroom(null);
+    setNewHomeroomTeacherId('');
+    setNewHomeroomGradeLevel('');
+    setNewHomeroomAcademicYear('');
+  };
+
+  // Load homeroom data when switching to homeroom tab
+  React.useEffect(() => {
+    if (activeTab === 'homeroom') {
+      loadHomeroomTeachers();
+      loadAvailableGradeLevels();
+    }
+  }, [activeTab]);
+
   // Load schedule slots when switching to schedule tab
   React.useEffect(() => {
     if (activeTab === 'schedule') {
@@ -643,13 +881,167 @@ function AdminPage() {
     }
   }, [activeTab]);
 
+  // Grade level assignment functions
+  const handleGradeFileDrop = (e) => {
+    e.preventDefault();
+    setGradeDragOver(false);
+    const files = e.dataTransfer.files;
+    if (files && files[0]) {
+      setGradeAssignmentFile(files[0]);
+    }
+  };
+
+  const handleGradeFileDragOver = (e) => {
+    e.preventDefault();
+    setGradeDragOver(true);
+  };
+
+  const handleGradeFileDragLeave = (e) => {
+    e.preventDefault();
+    setGradeDragOver(false);
+  };
+
+  const handleGradeFileChange = (e) => {
+    const f = e.target.files && e.target.files[0];
+    setGradeAssignmentFile(f || null);
+  };
+
+  const uploadGradeAssignmentFile = async () => {
+    if (!gradeAssignmentFile) {
+      toast.error('กรุณาเลือกไฟล์ก่อน');
+      return;
+    }
+
+    const token = localStorage.getItem('token');
+    const form = new FormData();
+    form.append('file', gradeAssignmentFile);
+    setAssigningGrades(true);
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/users/bulk_assign_grade`, {
+        method: 'POST',
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: form
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        toast.success(`เพิ่มชั้นเรียนสำเร็จ: อัปเดต ${data.updated_count} คน, สร้างใหม่ ${data.created_count} คน`);
+        setGradeAssignmentFile(null);
+        const inp = document.getElementById('grade-assignment-input');
+        if (inp) inp.value = '';
+        loadHomeroomTeachers();
+      } else {
+        toast.error(data.detail || 'เพิ่มชั้นเรียนไม่สำเร็จ');
+      }
+    } catch (err) {
+      console.error('Grade assignment error:', err);
+      toast.error('เกิดข้อผิดพลาดในการเพิ่มชั้นเรียน');
+    } finally {
+      setAssigningGrades(false);
+    }
+  };
+
+  const downloadGradeTemplate = async () => {
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`${API_BASE_URL}/users/bulk_template`, {
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
+      });
+
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'student_grade_template.xlsx';
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      } else {
+        toast.error('ดาวน์โหลดเทมเพลตไม่สำเร็จ');
+      }
+    } catch (err) {
+      console.error('Download template error:', err);
+      toast.error('เกิดข้อผิดพลาดในการดาวน์โหลดเทมเพลต');
+    }
+  };
+
+  // Individual student grade assignment functions
+  useEffect(() => {
+    if (studentSearchTerm) {
+      const filtered = students.filter(s => 
+        s.full_name?.toLowerCase().includes(studentSearchTerm.toLowerCase()) ||
+        s.username?.toLowerCase().includes(studentSearchTerm.toLowerCase()) ||
+        s.email?.toLowerCase().includes(studentSearchTerm.toLowerCase())
+      );
+      setFilteredStudents(filtered);
+    } else {
+      setFilteredStudents(students);
+    }
+  }, [studentSearchTerm, students]);
+
+  const assignGradeToStudent = async () => {
+    if (!selectedStudentId || !selectedGradeLevel) {
+      toast.error('กรุณาเลือกนักเรียนและชั้นเรียน');
+      return;
+    }
+
+    const token = localStorage.getItem('token');
+    setAssigningIndividualGrade(true);
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/users/${selectedStudentId}/grade_level`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ grade_level: selectedGradeLevel })
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        const student = students.find(s => s.id === Number(selectedStudentId));
+        toast.success(`อัปเดตชั้นเรียนของ ${student?.full_name || 'นักเรียน'} เป็น ${selectedGradeLevel} เรียบร้อยแล้ว`);
+        setSelectedStudentId('');
+        setSelectedGradeLevel('');
+        // Reload students
+        if (currentUser?.school_id) {
+          fetch(`${API_BASE_URL}/users?limit=200`)
+            .then(res => res.json())
+            .then(data => {
+              if (Array.isArray(data)) {
+                const studentsData = data.filter(u => u.role === 'student' && String(u.school_id) === String(currentUser.school_id));
+                setStudents(studentsData);
+              }
+            })
+            .catch(err => console.error('Failed to reload students:', err));
+        }
+      } else {
+        toast.error(data.detail || 'อัปเดตชั้นเรียนไม่สำเร็จ');
+      }
+    } catch (err) {
+      console.error('Assign grade error:', err);
+      toast.error('เกิดข้อผิดพลาดในการอัปเดตชั้นเรียน');
+    } finally {
+      setAssigningIndividualGrade(false);
+    }
+  };
+
   return (
-    <div className="admin-dashboard">
+    <>
+      <div className="admin-dashboard">
       <ToastContainer />
 
       <div className="admin-header">
         <div className="header-left">
-          <div className="avatar" aria-hidden>{initials(currentUser?.full_name || currentUser?.username)}</div>
+          <div className="admin-avatar" aria-hidden>{initials(currentUser?.full_name || currentUser?.username)}</div>
           <div className="user-info">
             <h1>{`สวัสดี, ${currentUser ? (currentUser.full_name || currentUser.username) : 'Admin'}! 👋`}</h1>
             <div className="user-info-subtitle">
@@ -658,12 +1050,34 @@ function AdminPage() {
           </div>
         </div>
 
-        <div className="header-right">
+          <div className="header-right">
+            <button
+              className="header-menu-btn"
+              onClick={() => setShowHeaderMenu(s => !s)}
+              aria-expanded={showHeaderMenu}
+              aria-label="Open header menu"
+            >
+              ☰
+            </button>
           <div className="account-info">
             <div className="account-label">บัญชี</div>
             <div className="account-email">{currentUser?.email || ''}</div>
+            {/* Dropdown menu for small screens */}
+            <div ref={headerMenuRef} role="menu" className={`header-menu ${showHeaderMenu ? 'open' : ''}`}>
+              <button role="menuitem" className="admin-btn-primary" onClick={() => { setShowLogoUploadModal(true); setShowHeaderMenu(false); }}>📸 อัพโหลดโลโก้</button>
+              <button role="menuitem" className="admin-btn-primary" onClick={() => { setShowModal(true); setShowHeaderMenu(false); }}>➕ เพิ่มผู้ใช้ใหม่</button>
+              <button role="menuitem" className="admin-btn-secondary" onClick={() => { navigate('/profile'); setShowHeaderMenu(false); }}>👤 โปรไฟล์</button>
+              <button role="menuitem" className="admin-btn-danger" onClick={() => { handleSignout(); setShowHeaderMenu(false); }}>🚪 ออกจากระบบ</button>
+            </div>
           </div>
           <div className="header-actions">
+            <button 
+              className="admin-btn-primary" 
+              onClick={() => setShowLogoUploadModal(true)}
+              title="อัพโหลดโลโก้"
+            >
+              📸 อัพโหลดโลโก้
+            </button>
             <button 
               className="admin-btn-primary" 
               onClick={() => setShowModal(true)}
@@ -690,33 +1104,36 @@ function AdminPage() {
       </div>
 
       <div className="stats-section">
-        <div className="stats-card stats-teachers" title="จำนวนครูทั้งหมดในโรงเรียน">
-          <div className="stats-icon">👨‍🏫</div>
-          <div className="stats-content">
-            <div className="stats-value">{teachers.length}</div>
-            <div className="stats-label">ครูผู้สอน</div>
+        <div className="admin-stats-card stats-teachers" title="จำนวนครูทั้งหมดในโรงเรียน">
+          <div className="admin-stats-icon">👨‍🏫</div>
+          <div className="admin-stats-content">
+            <div className="admin-stats-value">{teachers.length}</div>
+            <div className="admin-stats-label">ครูผู้สอน</div>
           </div>
         </div>
-        <div className="stats-card stats-students" title="จำนวนนักเรียนทั้งหมดในโรงเรียน">
-          <div className="stats-icon">👨‍🎓</div>
-          <div className="stats-content">
-            <div className="stats-value">{students.length}</div>
-            <div className="stats-label">นักเรียน</div>
+        <div className="admin-stats-card stats-students" title="จำนวนนักเรียนทั้งหมดในโรงเรียน">
+          <div className="admin-stats-icon">👨‍🎓</div>
+          <div className="admin-stats-content">
+            <div className="admin-stats-value">{students.length}</div>
+            <div className="admin-stats-label">นักเรียน</div>
           </div>
         </div>
-        <div className="stats-card stats-announcements" title="จำนวนประกาศที่ยังใช้งานได้">
-          <div className="stats-icon">📢</div>
-          <div className="stats-content">
-            <div className="stats-value">{(Array.isArray(announcements) ? announcements.filter(a => !isExpired(a)).length : 0)}</div>
-            <div className="stats-label">ประกาศข่าว</div>
+        <div className="admin-stats-card stats-announcements" title="จำนวนประกาศที่ยังใช้งานได้">
+          <div className="admin-stats-icon">📢</div>
+          <div className="admin-stats-content">
+            <div className="admin-stats-value">{(Array.isArray(announcements) ? announcements.filter(a => !isExpired(a)).length : 0)}</div>
+            <div className="admin-stats-label">ประกาศข่าว</div>
           </div>
         </div>
       </div>
 
       <div className="tabs-header">
-        <button className={`tab-button ${activeTab === 'users' ? 'active' : ''}`} onClick={() => setActiveTab('users')}>จัดการผู้ใช้</button>
-        <button className={`tab-button ${activeTab === 'announcements' ? 'active' : ''}`} onClick={() => setActiveTab('announcements')}>จัดการประกาศข่าว</button>
-        <button className={`tab-button ${activeTab === 'schedule' ? 'active' : ''}`} onClick={() => setActiveTab('schedule')}>จัดการตารางเรียน</button>
+        <button className={`admin-tab-button ${activeTab === 'users' ? 'active' : ''}`} onClick={() => setActiveTab('users')}>จัดการผู้ใช้</button>
+        <button className={`admin-tab-button ${activeTab === 'homeroom' ? 'active' : ''}`} onClick={() => setActiveTab('homeroom')}>ครูประจำชั้น</button>
+        <button className={`admin-tab-button ${activeTab === 'grades' ? 'active' : ''}`} onClick={() => setActiveTab('grades')}>จัดการชั้นเรียน</button>
+        <button className={`admin-tab-button ${activeTab === 'announcements' ? 'active' : ''}`} onClick={() => setActiveTab('announcements')}>จัดการประกาศข่าว</button>
+        <button className={`admin-tab-button ${activeTab === 'absences' ? 'active' : ''}`} onClick={() => setActiveTab('absences')}>อนุมัติการลา</button>
+        <button className={`admin-tab-button ${activeTab === 'schedule' ? 'active' : ''}`} onClick={() => setActiveTab('schedule')}>จัดการตารางเรียน</button>
       </div>
       <div className="tab-content">
         {activeTab === 'users' && (
@@ -1004,6 +1421,323 @@ function AdminPage() {
             </div>
           </div>
         )}
+        {activeTab === 'homeroom' && (
+          <div className="content-card">
+            <div className="card-header">
+              <h2><span className="card-icon">🏠</span> ครูประจำชั้น</h2>
+            </div>
+            <div className="card-content">
+              <div className="homeroom-section">
+                <div className="homeroom-actions">
+                  <button 
+                    className="btn-homeroom-add" 
+                    onClick={() => openHomeroomModal()}
+                    title="กำหนดครูประจำชั้นใหม่"
+                  >
+                    <span>➕</span>
+                    กำหนดครูประจำชั้น
+                  </button>
+                </div>
+                
+                <div className="homeroom-list">
+                  <h3>รายชื่อครูประจำชั้น ({homeroomTeachers.length} ชั้น)</h3>
+                  {homeroomTeachers.length === 0 ? (
+                    <div className="homeroom-empty-state">
+                      <div className="homeroom-empty-icon">🏠</div>
+                      <div className="homeroom-empty-text">ยังไม่มีการกำหนดครูประจำชั้น</div>
+                      <div className="homeroom-empty-subtitle">เริ่มต้นโดยการกำหนดครูประจำชั้นสำหรับแต่ละระดับชั้น</div>
+                    </div>
+                  ) : (
+                    <div className="homeroom-table">
+                      <div className="table-header">
+                        <div className="table-cell header-grade">ชั้นเรียน</div>
+                        <div className="table-cell header-teacher">ครูประจำชั้น</div>
+                        <div className="table-cell header-students">จำนวนนักเรียน</div>
+                        <div className="table-cell header-year">ปีการศึกษา</div>
+                        <div className="table-cell header-actions">จัดการ</div>
+                      </div>
+                      <div className="table-body">
+                        {homeroomTeachers.map((hr) => (
+                          <div key={hr.id} className="table-row">
+                            <div className="table-cell cell-grade">
+                              <span className="grade-badge">📚 {hr.grade_level}</span>
+                            </div>
+                            <div className="table-cell cell-teacher">
+                              <div className="teacher-info">
+                                <span className="teacher-name">👤 {hr.teacher_name || 'ไม่ระบุ'}</span>
+                                {hr.teacher_email && (
+                                  <span className="teacher-email">📧 {hr.teacher_email}</span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="table-cell cell-students">
+                              <span className="student-count">👨‍🎓 {hr.student_count || 0} คน</span>
+                            </div>
+                            <div className="table-cell cell-year">
+                              {hr.academic_year || '-'}
+                            </div>
+                            <div className="table-cell cell-actions">
+                              <button 
+                                className="admin-btn-small edit" 
+                                onClick={() => openHomeroomModal(hr)}
+                                title="แก้ไขครูประจำชั้น"
+                              >
+                                <span>✏️</span>
+                                แก้ไข
+                              </button>
+                              <button 
+                                className="admin-btn-small delete" 
+                                onClick={() => openConfirmModal(
+                                  'ลบครูประจำชั้น', 
+                                  `ต้องการลบครูประจำชั้น ${hr.grade_level} (${hr.teacher_name || 'ไม่ระบุ'}) ใช่หรือไม่?`, 
+                                  async () => { await deleteHomeroomTeacher(hr.id); }
+                                )}
+                                title="ลบครูประจำชั้น"
+                              >
+                                <span>🗑️</span>
+                                ลบ
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        {activeTab === 'grades' && (
+          <div className="content-card">
+            <div className="card-header">
+              <h2><span className="card-icon">📚</span> จัดการชั้นเรียน</h2>
+            </div>
+            <div className="card-content">
+              {/* Web-based Individual Grade Assignment */}
+              <div className="grade-individual-section" style={{ marginBottom: '3rem', paddingBottom: '2rem', borderBottom: '2px solid rgba(102, 126, 234, 0.2)' }}>
+                <h3 style={{ marginTop: 0, marginBottom: '1.5rem', color: '#334155', fontSize: '1.2rem', fontWeight: 700 }}>
+                  ⚡ จัดการแบบแยกรายคน
+                </h3>
+
+                {/* Student Selection */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+                  <div className="admin-form-group">
+                    <label className="admin-form-label">ค้นหาและเลือกนักเรียน</label>
+                    <input 
+                      type="text"
+                      className="admin-form-input"
+                      placeholder="ค้นหาชื่อ, ชื่อผู้ใช้, หรืออีเมล"
+                      value={studentSearchTerm}
+                      onChange={(e) => setStudentSearchTerm(e.target.value)}
+                      style={{ marginBottom: '0.5rem' }}
+                    />
+                    <select 
+                      className="admin-form-input"
+                      value={selectedStudentId}
+                      onChange={(e) => setSelectedStudentId(e.target.value)}
+                      size={Math.min(filteredStudents.length + 1, 5)}
+                      style={{ height: 'auto', minHeight: '100px' }}
+                    >
+                      <option value="">-- เลือกนักเรียน --</option>
+                      {filteredStudents.map(s => (
+                        <option key={s.id} value={s.id}>
+                          {s.full_name} ({s.username}) - ชั้น {s.grade_level || 'ยังไม่ระบุ'}
+                        </option>
+                      ))}
+                    </select>
+                    {studentSearchTerm && filteredStudents.length === 0 && (
+                      <div style={{ padding: '1rem', backgroundColor: '#fef2f2', borderRadius: '8px', color: '#991b1b', fontSize: '0.9rem', marginTop: '0.5rem' }}>
+                        ไม่พบนักเรียนที่ตรงกับการค้นหา
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="admin-form-group">
+                    <label className="admin-form-label">ชั้นเรียน</label>
+                    <input 
+                      type="text"
+                      className="admin-form-input"
+                      placeholder="เช่น ป.1, ม.1, ม.2"
+                      value={selectedGradeLevel}
+                      onChange={(e) => setSelectedGradeLevel(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                {/* Selected Student Info */}
+                {selectedStudentId && (
+                  <div style={{ padding: '1rem', backgroundColor: '#f0fdf4', borderRadius: '10px', border: '1px solid #dcfce7', marginBottom: '1.5rem' }}>
+                    {(() => {
+                      const selected = students.find(s => s.id === Number(selectedStudentId));
+                      return selected ? (
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', fontSize: '0.9rem' }}>
+                          <div>
+                            <div style={{ color: '#64748b', marginBottom: '0.25rem' }}>📝 ชื่อเต็ม</div>
+                            <div style={{ fontWeight: 600, color: '#1e293b' }}>{selected.full_name}</div>
+                          </div>
+                          <div>
+                            <div style={{ color: '#64748b', marginBottom: '0.25rem' }}>📧 อีเมล</div>
+                            <div style={{ fontWeight: 600, color: '#1e293b' }}>{selected.email}</div>
+                          </div>
+                          <div>
+                            <div style={{ color: '#64748b', marginBottom: '0.25rem' }}>🆔 ชื่อผู้ใช้</div>
+                            <div style={{ fontWeight: 600, color: '#1e293b' }}>{selected.username}</div>
+                          </div>
+                          <div>
+                            <div style={{ color: '#64748b', marginBottom: '0.25rem' }}>📚 ชั้นเรียนปัจจุบัน</div>
+                            <div style={{ fontWeight: 600, color: selected.grade_level ? '#15803d' : '#94a3b8' }}>
+                              {selected.grade_level || 'ยังไม่ระบุ'}
+                            </div>
+                          </div>
+                        </div>
+                      ) : null;
+                    })()}
+                  </div>
+                )}
+
+                {/* Assign Button */}
+                <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                  <button 
+                    type="button"
+                    className="admin-btn-primary"
+                    onClick={assignGradeToStudent}
+                    disabled={assigningIndividualGrade || !selectedStudentId || !selectedGradeLevel}
+                    style={{ minWidth: '200px' }}
+                  >
+                    {assigningIndividualGrade ? (
+                      <>
+                        <span style={{ marginRight: '0.5rem' }}>⏳</span>
+                        กำลังอัปเดต...
+                      </>
+                    ) : (
+                      <>
+                        <span style={{ marginRight: '0.5rem' }}>✓</span>
+                        อัปเดตชั้นเรียน
+                      </>
+                    )}
+                  </button>
+                  <button 
+                    type="button"
+                    className="admin-btn-secondary"
+                    onClick={() => {
+                      setSelectedStudentId('');
+                      setSelectedGradeLevel('');
+                      setStudentSearchTerm('');
+                    }}
+                  >
+                    🔄 ล้างข้อมูล
+                  </button>
+                </div>
+              </div>
+
+              {/* Bulk Upload Section */}
+              <div className="grade-assignment-section">
+                <h3 style={{ marginTop: 0, marginBottom: '1.5rem', color: '#334155', fontSize: '1.2rem', fontWeight: 700 }}>
+                  📤 อัปโหลดไฟล์ Excel (สำหรับจำนวนมาก)
+                </h3>
+                <p style={{ marginBottom: '1.5rem', color: '#475569', fontSize: '0.95rem' }}>
+                  อัปโหลดไฟล์ Excel เพื่อเพิ่มชั้นเรียนให้กับนักเรียนที่มีอยู่ในระบบแล้ว หรือสร้างนักเรียนใหม่พร้อมกำหนดชั้นเรียน
+                </p>
+
+                <div className="grade-upload-controls">
+                  <div 
+                    className={`file-upload-area ${gradeDragOver ? 'drag-over' : ''} ${gradeAssignmentFile ? 'has-file' : ''}`}
+                    onDragOver={handleGradeFileDragOver}
+                    onDragLeave={handleGradeFileDragLeave}
+                    onDrop={handleGradeFileDrop}
+                    onClick={() => document.getElementById('grade-assignment-input').click()}
+                  >
+                    <input 
+                      id="grade-assignment-input" 
+                      type="file" 
+                      accept=".xlsx" 
+                      onChange={handleGradeFileChange}
+                      style={{ display: 'none' }}
+                    />
+                    <div className="upload-icon">
+                      {assigningGrades ? '⏳' : gradeAssignmentFile ? '📄' : '📁'}
+                    </div>
+                    <div className="upload-text">
+                      {assigningGrades ? (
+                        <span>กำลังประมวลผล...</span>
+                      ) : gradeAssignmentFile ? (
+                        <>
+                          <span className="file-name">{gradeAssignmentFile.name}</span>
+                          <span className="file-size">({(gradeAssignmentFile.size / 1024).toFixed(1)} KB)</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="primary-text">ลากไฟล์ Excel มาที่นี่ หรือคลิกเพื่อเลือกไฟล์</span>
+                          <span className="secondary-text">รองรับไฟล์ .xlsx เท่านั้น</span>
+                        </>
+                      )}
+                    </div>
+                    {gradeAssignmentFile && !assigningGrades && (
+                      <button 
+                        type="button" 
+                        className="file-remove-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setGradeAssignmentFile(null);
+                          const inp = document.getElementById('grade-assignment-input');
+                          if (inp) inp.value = '';
+                        }}
+                        title="ลบไฟล์"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                  <button 
+                    type="button" 
+                    className="admin-btn-primary" 
+                    onClick={uploadGradeAssignmentFile} 
+                    disabled={assigningGrades || !gradeAssignmentFile}
+                  >
+                    {assigningGrades ? (
+                      <>
+                        <span className="btn-icon" aria-hidden>⏳</span>
+                        กำลังประมวลผล...
+                      </>
+                    ) : (
+                      <>
+                        <span className="btn-icon" aria-hidden>⬆️</span>
+                        อัปโหลดและเพิ่มชั้นเรียน
+                      </>
+                    )}
+                  </button>
+                  <button 
+                    type="button" 
+                    className="admin-btn-secondary" 
+                    onClick={downloadGradeTemplate}
+                  >
+                    📋 ดาวน์โหลดเทมเพลต
+                  </button>
+                </div>
+
+                <div style={{ marginTop: '2rem', padding: '1.5rem', backgroundColor: '#f0f9ff', borderRadius: '12px', border: '1px solid #e0f2fe' }}>
+                  <h4 style={{ marginTop: 0, marginBottom: '1rem', color: '#0369a1' }}>📋 รูปแบบไฟล์ Excel</h4>
+                  <p style={{ marginBottom: '0.5rem', fontSize: '0.9rem', color: '#475569' }}>
+                    ไฟล์ต้องมีคอลัมน์ดังต่อไปนี้ (row แรกเป็น header):
+                  </p>
+                  <ul style={{ marginLeft: '1.5rem', color: '#475569', fontSize: '0.9rem' }}>
+                    <li><strong>username</strong> - ชื่อผู้ใช้ (ต้องมี)</li>
+                    <li><strong>email</strong> - อีเมล (ต้องมี)</li>
+                    <li><strong>full_name</strong> - ชื่อเต็ม (ต้องมี)</li>
+                    <li><strong>grade_level</strong> - ชั้นเรียน เช่น "ป.1", "ม.1" (ต้องมี)</li>
+                  </ul>
+                  <p style={{ marginTop: '1rem', marginBottom: 0, fontSize: '0.85rem', color: '#64748b', fontStyle: 'italic' }}>
+                    💡 หากนักเรียนมีอยู่ในระบบแล้ว จะอัปเดตชั้นเรียน หากยังไม่มี จะสร้างใหม่พร้อมรหัสผ่านชั่วคราว
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        {activeTab === 'absences' && (
+          <AbsenceApproval />
+        )}
         {activeTab === 'announcements' && (
           <div className="content-card">
             <div className="card-header">
@@ -1013,25 +1747,25 @@ function AdminPage() {
               <div className="announcement-form-section">
                 <div className="announcement-form">
                   <form onSubmit={handleAnnouncement}>
-                    <div className="form-row">
-                      <div className="form-group full-width">
-                        <label className="form-label">หัวข้อข่าว</label>
-                        <input className="form-input" type="text" value={title} onChange={e=>setTitle(e.target.value)} required />
+                    <div className="admin-form-row">
+                      <div className="admin-form-group full-width">
+                        <label className="admin-form-label">หัวข้อข่าว</label>
+                        <input className="admin-form-input" type="text" value={title} onChange={e=>setTitle(e.target.value)} required />
                       </div>
                     </div>
-                    <div className="form-row">
-                      <div className="form-group full-width">
-                        <label className="form-label">เนื้อหาข่าว</label>
-                        <textarea className="form-input form-textarea" value={content} onChange={e=>setContent(e.target.value)} required />
+                    <div className="admin-form-row">
+                      <div className="admin-form-group full-width">
+                        <label className="admin-form-label">เนื้อหาข่าว</label>
+                        <textarea className="admin-form-input admin-form-textarea" value={content} onChange={e=>setContent(e.target.value)} required />
                       </div>
                     </div>
-                    <div className="form-row">
-                      <div className="form-group full-width">
-                        <label className="form-label">หมดอายุ (ถ้ามี)</label>
-                        <input className="form-input" type="datetime-local" value={expiry} onChange={e=>setExpiry(e.target.value)} step="60" lang="en-GB" />
+                    <div className="admin-form-row">
+                      <div className="admin-form-group full-width">
+                        <label className="admin-form-label">หมดอายุ (ถ้ามี)</label>
+                        <input className="admin-form-input" type="datetime-local" value={expiry} onChange={e=>setExpiry(e.target.value)} step="60" lang="en-GB" />
                       </div>
                     </div>
-                    <div className="form-actions">
+                    <div className="admin-form-actions">
                       <button type="submit" className="admin-btn-primary btn-announcement" aria-label="ประกาศข่าว">
                         <span className="btn-icon" aria-hidden>📣</span>
                         ประกาศข่าว
@@ -1159,23 +1893,23 @@ function AdminPage() {
       </div>
 
       {showModal && (
-        <div className="modal-overlay">
-          <div className="modal">
-            <div className="modal-header">
+        <div className="admin-modal-overlay">
+          <div className="admin-modal">
+            <div className="admin-modal-header">
               <h3>สร้างผู้ใช้ใหม่</h3>
-              <button className="modal-close" onClick={()=>setShowModal(false)}>×</button>
+              <button className="admin-modal-close" onClick={()=>setShowModal(false)}>×</button>
             </div>
-            <div className="modal-body">
-              <input className="form-input" type="text" value={newUsername} onChange={e=>setNewUsername(e.target.value)} placeholder="Username" required />
-              <input className="form-input" type="email" value={newEmail} onChange={e=>setNewEmail(e.target.value)} placeholder="Email" required />
-              <input className="form-input" type="text" value={newFullName} onChange={e=>setNewFullName(e.target.value)} placeholder="Full name" required />
-              <input className="form-input" type="password" value={newPassword} onChange={e=>setNewPassword(e.target.value)} placeholder="Password" required />
-              <select className="form-input" value={newRole} onChange={e=>setNewRole(e.target.value)}>
+            <div className="admin-modal-body">
+              <input className="admin-form-input" type="text" value={newUsername} onChange={e=>setNewUsername(e.target.value)} placeholder="Username" required />
+              <input className="admin-form-input" type="email" value={newEmail} onChange={e=>setNewEmail(e.target.value)} placeholder="Email" required />
+              <input className="admin-form-input" type="text" value={newFullName} onChange={e=>setNewFullName(e.target.value)} placeholder="Full name" required />
+              <input className="admin-form-input" type="password" value={newPassword} onChange={e=>setNewPassword(e.target.value)} placeholder="Password" required />
+              <select className="admin-form-input" value={newRole} onChange={e=>setNewRole(e.target.value)}>
                 <option value="teacher">Teacher</option>
                 <option value="student">Student</option>
               </select>
             </div>
-            <div className="modal-footer">
+            <div className="admin-modal-footer">
               <button type="button" className="admin-btn-secondary" onClick={()=>setShowModal(false)}>ยกเลิก</button>
               <button type="button" className="admin-btn-primary" disabled={creatingUser} onClick={handleCreateUser}>{creatingUser ? 'กำลังสร้าง...' : 'สร้าง'}</button>
             </div>
@@ -1276,6 +2010,108 @@ function AdminPage() {
         </div>
       )}
     </div>
+
+    {/* Logo Upload Modal */}
+    <LogoUploadModal
+      isOpen={showLogoUploadModal}
+      schoolId={currentUser?.school_id}
+      onClose={() => setShowLogoUploadModal(false)}
+      onSuccess={(school) => {
+        setSchoolData(school);
+        // Refresh school data or update UI as needed
+      }}
+    />
+
+    {/* Homeroom Teacher Modal */}
+    {showHomeroomModal && (
+      <div className="admin-modal-overlay">
+        <div className="modal homeroom-modal">
+          <div className="admin-modal-header">
+            <h3>{editingHomeroom ? 'แก้ไขครูประจำชั้น' : 'กำหนดครูประจำชั้นใหม่'}</h3>
+            <button className="admin-modal-close" onClick={cancelHomeroomModal}>×</button>
+          </div>
+          <div className="admin-modal-body">
+            <div className="admin-form-group">
+              <label className="admin-form-label">ชั้นเรียน</label>
+              {editingHomeroom ? (
+                <input 
+                  className="admin-form-input" 
+                  type="text" 
+                  value={newHomeroomGradeLevel} 
+                  disabled 
+                  style={{ backgroundColor: '#f5f5f5' }}
+                />
+              ) : (
+                <select 
+                  className="admin-form-input"
+                  value={newHomeroomGradeLevel}
+                  onChange={e => setNewHomeroomGradeLevel(e.target.value)}
+                  required
+                >
+                  <option value="">เลือกชั้นเรียน</option>
+                  {availableGradeLevels.map((grade, idx) => (
+                    <option key={idx} value={grade}>
+                      {grade}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {!editingHomeroom && availableGradeLevels.length === 0 && (
+                <div className="form-helper" style={{ color: '#666', fontSize: '12px', marginTop: '4px' }}>
+                  ⚠️ ไม่พบข้อมูลชั้นเรียน - กรุณาเพิ่มนักเรียนและระบุชั้นเรียนก่อน
+                </div>
+              )}
+            </div>
+            
+            <div className="admin-form-group">
+              <label className="admin-form-label">ครูผู้สอน</label>
+              <select 
+                className="admin-form-input"
+                value={newHomeroomTeacherId}
+                onChange={e => setNewHomeroomTeacherId(e.target.value)}
+                required
+              >
+                <option value="">เลือกครู</option>
+                {teachers.filter(t => t.is_active).map((teacher) => {
+                  // Check if this teacher is already assigned to another class
+                  const alreadyAssigned = homeroomTeachers.some(hr => hr.teacher_id === teacher.id && (!editingHomeroom || editingHomeroom.id !== hr.id));
+                  return (
+                    <option key={teacher.id} value={teacher.id} disabled={alreadyAssigned}>
+                      {teacher.full_name || teacher.username} ({teacher.email}){alreadyAssigned ? ' - ประจำชั้น ' + homeroomTeachers.find(hr => hr.teacher_id === teacher.id)?.grade_level : ''}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+
+            <div className="admin-form-group">
+              <label className="admin-form-label">ปีการศึกษา (ไม่บังคับ)</label>
+              <input 
+                className="admin-form-input" 
+                type="text" 
+                value={newHomeroomAcademicYear}
+                onChange={e => setNewHomeroomAcademicYear(e.target.value)}
+                placeholder="เช่น 2567"
+              />
+            </div>
+          </div>
+          <div className="admin-modal-footer">
+            <button type="button" className="admin-btn-secondary" onClick={cancelHomeroomModal}>
+              ยกเลิก
+            </button>
+            <button 
+              type="button" 
+              className="admin-btn-primary" 
+              onClick={editingHomeroom ? updateHomeroomTeacher : createHomeroomTeacher}
+              disabled={!newHomeroomTeacherId || (!editingHomeroom && !newHomeroomGradeLevel)}
+            >
+              {editingHomeroom ? 'บันทึกการแก้ไข' : 'กำหนดครูประจำชั้น'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
 

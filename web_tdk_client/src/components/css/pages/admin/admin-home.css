@@ -82,7 +82,7 @@
   gap: 1rem;
 }
 
-.avatar {
+.admin-avatar {
   width: 75px;
   height: 75px;
   border-radius: 50%;
@@ -108,7 +108,7 @@
   overflow: hidden;
 }
 
-.avatar::before {
+.admin-avatar::before {
   content: '';
   position: absolute;
   top: -50%;
@@ -126,7 +126,7 @@
   animation: rotate 8s linear infinite;
 }
 
-.avatar:hover {
+.admin-avatar:hover {
   transform: scale(1.1) rotate(5deg);
   box-shadow:
     0 16px 45px rgba(102, 126, 234, 0.6),
@@ -170,7 +170,43 @@
   display: flex;
   align-items: center;
   gap: 2rem;
+  position: relative;
 }
+
+/* Hamburger menu button for small screens */
+.header-menu-btn {
+  display: none;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255,255,255,0.2);
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  font-weight: 800;
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+
+.header-menu {
+  display: none;
+  position: absolute;
+  right: 1rem;
+  top: 3.8rem;
+  background: rgba(255,255,255,0.95);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-radius: 12px;
+  border: 1px solid rgba(0,0,0,0.06);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  padding: 0.75rem;
+  z-index: 50;
+  display: grid;
+  gap: 0.5rem;
+  min-width: 180px;
+  transition: opacity 0.18s ease, transform 0.12s ease;
+  opacity: 0;
+  transform: translateY(-6px) scale(0.98);
+}
+
+.header-menu.open { display: grid; opacity: 1; transform: translateY(0) scale(1); }
 
 .account-info {
   text-align: right;
@@ -327,7 +363,7 @@
   opacity: 0;
 }
 
-.stats-card {
+.admin-stats-card {
   background: rgba(255, 255, 255, 0.25);
   backdrop-filter: blur(15px);
   -webkit-backdrop-filter: blur(15px);
@@ -345,7 +381,7 @@
   overflow: hidden;
 }
 
-.stats-card::before {
+.admin-stats-card::before {
   content: '';
   position: absolute;
   top: 0;
@@ -355,32 +391,32 @@
   background: linear-gradient(90deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
 }
 
-.stats-card:hover {
+.admin-stats-card:hover {
   transform: translateY(-8px) scale(1.02);
   box-shadow: 
     0 20px 50px rgba(0, 0, 0, 0.15),
     inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 
-.stats-card {
+.admin-stats-card {
   animation: slideUp 0.6s ease-out forwards;
   opacity: 0;
   transform: translateY(20px);
 }
 
-.stats-card:nth-child(1) {
+.admin-stats-card:nth-child(1) {
   animation-delay: 0s;
 }
 
-.stats-card:nth-child(2) {
+.admin-stats-card:nth-child(2) {
   animation-delay: 0.1s;
 }
 
-.stats-card:nth-child(3) {
+.admin-stats-card:nth-child(3) {
   animation-delay: 0.2s;
 }
 
-.stats-icon {
+.admin-stats-icon {
   font-size: 3.5rem;
   color: #667eea;
   opacity: 1;
@@ -390,11 +426,11 @@
   line-height: 1;
 }
 
-.stats-content {
+.admin-stats-content {
   flex: 1;
 }
 
-.stats-value {
+.admin-stats-value {
   font-size: 3rem;
   font-weight: 800;
   background: linear-gradient(135deg, #2d3748 0%, #4a5568 100%);
@@ -405,7 +441,7 @@
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-.stats-label {
+.admin-stats-label {
   font-size: 1.1rem;
   color: rgba(45, 55, 72, 0.8);
   font-weight: 600;
@@ -423,7 +459,7 @@
   opacity: 0;
 }
 
-.tab-button {
+.admin-tab-button {
   background: rgba(255, 255, 255, 0.2);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
@@ -442,7 +478,7 @@
   overflow: hidden;
 }
 
-.tab-button::before {
+.admin-tab-button::before {
   content: '';
   position: absolute;
   top: 0;
@@ -453,11 +489,11 @@
   transition: left 0.5s;
 }
 
-.tab-button:hover::before {
+.admin-tab-button:hover::before {
   left: 100%;
 }
 
-.tab-button:hover {
+.admin-tab-button:hover {
   background: rgba(255, 255, 255, 0.3);
   color: #1a202c;
   transform: translateY(-2px);
@@ -466,7 +502,7 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.4);
 }
 
-.tab-button.active {
+.admin-tab-button.active {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: #fff;
   box-shadow: 
@@ -476,17 +512,17 @@
   border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-.tab-button {
+.admin-tab-button {
   animation: fadeInScale 0.5s ease-out forwards;
   opacity: 0;
   transform: scale(0.9);
 }
 
-.tab-button:nth-child(1) {
+.admin-tab-button:nth-child(1) {
   animation-delay: 0.3s;
 }
 
-.tab-button:nth-child(2) {
+.admin-tab-button:nth-child(2) {
   animation-delay: 0.4s;
 }
 
@@ -695,27 +731,27 @@
   margin-bottom: 1.5rem;
 }
 
-.form-row {
+.admin-form-row {
   margin-bottom: 1rem;
 }
 
-.form-group {
+.admin-form-group {
   display: flex;
   flex-direction: column;
 }
 
-.form-group.full-width {
+.admin-form-group.full-width {
   width: 100%;
 }
 
-.form-label {
+.admin-form-label {
   font-weight: 700;
   color: #2d3748;
   margin-bottom: 0.75rem;
   font-size: 1rem;
 }
 
-.form-input {
+.admin-form-input {
   padding: 1rem 1.25rem;
   border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: 12px;
@@ -730,7 +766,7 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
 
-.form-input:focus {
+.admin-form-input:focus {
   outline: none;
   border-color: rgba(102, 126, 234, 0.5);
   background: rgba(255, 255, 255, 0.3);
@@ -740,22 +776,22 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.4);
 }
 
-.form-input::placeholder {
+.admin-form-input::placeholder {
   color: rgba(45, 55, 72, 0.6);
 }
 
 /* Force 24-hour format for time and datetime inputs */
-.form-input[type="time"],
-.form-input[type="datetime-local"] {
+.admin-form-input[type="time"],
+.admin-form-input[type="datetime-local"] {
   font-family: 'Courier New', monospace;
 }
 
-.form-textarea {
+.admin-form-textarea {
   resize: vertical;
   min-height: 100px;
 }
 
-.form-actions {
+.admin-form-actions {
   display: flex;
   justify-content: flex-end;
 }
@@ -1158,6 +1194,14 @@
   min-width: 110px;
   justify-content: center;
   cursor: pointer;
+.header-menu .admin-btn-primary,
+.header-menu .admin-btn-secondary,
+.header-menu .admin-btn-danger {
+  width: 100%;
+  justify-content: flex-start;
+  gap: 0.75rem;
+  padding: 0.7rem 0.9rem;
+}
   transition: transform 0.16s ease, box-shadow 0.16s ease, opacity 0.16s ease;
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
   border: 1px solid rgba(0, 0, 0, 0.06);
@@ -1204,7 +1248,7 @@
 }
 
 /* Modal */
-.modal-overlay {
+.admin-modal-overlay {
   position: fixed;
   top: 0;
   left: 0;
@@ -1220,7 +1264,7 @@
   animation: fadeIn 0.3s ease-out;
 }
 
-.modal {
+.admin-modal {
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
@@ -1236,7 +1280,7 @@
   animation: modalSlideIn 0.4s ease-out;
 }
 
-.modal-header {
+.admin-modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -1247,7 +1291,7 @@
   position: relative;
 }
 
-.modal-header::before {
+.admin-modal-header::before {
   content: '';
   position: absolute;
   top: 0;
@@ -1258,7 +1302,7 @@
   border-radius: 25px 25px 0 0;
 }
 
-.modal-header h3 {
+.admin-modal-header h3 {
   margin: 0;
   font-size: 1.75rem;
   font-weight: 800;
@@ -1268,7 +1312,7 @@
   background-clip: text;
 }
 
-.modal-close {
+.admin-modal-close {
   background: rgba(255, 255, 255, 0.2);
   backdrop-filter: blur(5px);
   -webkit-backdrop-filter: blur(5px);
@@ -1285,12 +1329,12 @@
   transition: all 0.3s ease;
 }
 
-.modal-close:hover {
+.admin-modal-close:hover {
   background: rgba(255, 255, 255, 0.3);
   transform: scale(1.1);
 }
 
-.modal-body {
+.admin-modal-body {
   padding: 2.5rem;
   display: flex;
   flex-direction: column;
@@ -1298,7 +1342,7 @@
   background: rgba(255, 255, 255, 0.05);
 }
 
-.modal-footer {
+.admin-modal-footer {
   display: flex;
   justify-content: flex-end;
   gap: 1rem;
@@ -1309,7 +1353,7 @@
 }
 
 /* Stronger, clearer primary button inside modals */
-.modal .admin-btn-primary {
+.admin-modal .admin-btn-primary {
   padding: 0.9rem 1.8rem;
   font-size: 1rem;
   border-radius: 14px;
@@ -1330,7 +1374,7 @@
   border: 1px solid rgba(255,255,255,0.12);
 }
 
-.modal .admin-btn-primary:hover {
+.admin-modal .admin-btn-primary:hover {
   transform: translateY(-3px) scale(1.02);
   box-shadow:
     0 18px 50px rgba(79, 70, 229, 0.32),
@@ -1338,7 +1382,7 @@
 }
 
 /* Make cancel/secondary buttons in modals visually lighter */
-.modal .admin-btn-secondary {
+.admin-modal .admin-btn-secondary {
   padding: 0.75rem 1.25rem;
   border-radius: 12px;
   font-weight: 700;
@@ -1569,7 +1613,7 @@
     align-items: center;
   }
 
-  .avatar {
+  .admin-avatar {
     width: 60px;
     height: 60px;
     font-size: 1.2rem;
@@ -1603,6 +1647,10 @@
     justify-content: center;
   }
 
+  /* Show hamburger and hide default header actions under small width */
+  .header-menu-btn { display: inline-flex; }
+  .header-actions { display: none; }
+
   .stats-section {
     grid-template-columns: 1fr;
     padding: 1rem;
@@ -1626,7 +1674,7 @@
     gap: 1rem;
   }
 
-  .modal-body {
+  .admin-modal-body {
     padding: 1rem;
   }
 
@@ -1646,7 +1694,7 @@
     padding: 0.5rem 0.75rem;
   }
 
-  .tab-button {
+  .admin-tab-button {
     padding: 0.6rem 1.2rem;
     font-size: 0.9rem;
   }
@@ -2701,4 +2749,318 @@
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
+}
+
+/* ==================== Homeroom Teacher Section ==================== */
+.homeroom-section {
+  padding: 1rem 0;
+}
+
+.homeroom-actions {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+}
+
+/* Homeroom Add Button - Separate Distinctive Style */
+.btn-homeroom-add {
+  padding: 1rem 2rem;
+  font-size: 1rem;
+  font-weight: 800;
+  border-radius: 15px;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: linear-gradient(135deg,
+    #f59e0b 0%,
+    #f97316 25%,
+    #ea580c 50%,
+    #dc2626 75%,
+    #b91c1c 100%);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  cursor: pointer;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow:
+    0 10px 30px rgba(249, 115, 22, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-homeroom-add::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.btn-homeroom-add:hover::before {
+  left: 100%;
+}
+
+.btn-homeroom-add:hover {
+  background: linear-gradient(135deg,
+    #f97316 0%,
+    #ea580c 25%,
+    #dc2626 50%,
+    #b91c1c 75%,
+    #991b1b 100%);
+  transform: translateY(-4px) scale(1.03);
+  box-shadow:
+    0 15px 45px rgba(249, 115, 22, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.btn-homeroom-add:active {
+  transform: translateY(-2px) scale(0.98);
+}
+
+.btn-homeroom-add span {
+  font-size: 1.1rem;
+  display: inline-flex;
+  align-items: center;
+}
+
+.homeroom-list h3 {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #334155;
+  margin-bottom: 1.5rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 2px solid rgba(102, 126, 234, 0.2);
+}
+
+.homeroom-table {
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+}
+
+.homeroom-table .table-header {
+  display: grid;
+  grid-template-columns: 1.5fr 2fr 1fr 1fr 1.5fr;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 1rem 1.5rem;
+  font-weight: 700;
+  color: white;
+  font-size: 0.95rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.homeroom-table .table-body {
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.homeroom-table .table-row {
+  display: grid;
+  grid-template-columns: 1.5fr 2fr 1fr 1fr 1.5fr;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid rgba(203, 213, 225, 0.5);
+  align-items: center;
+  transition: all 0.3s ease;
+}
+
+.homeroom-table .table-row:hover {
+  background: rgba(102, 126, 234, 0.08);
+}
+
+.homeroom-table .table-row:last-child {
+  border-bottom: none;
+}
+
+.homeroom-table .table-cell {
+  padding: 0.5rem 0;
+}
+
+.grade-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+
+.teacher-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.teacher-name {
+  font-weight: 600;
+  color: #334155;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.teacher-email {
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+.student-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: rgba(34, 197, 94, 0.15);
+  color: #15803d;
+  padding: 0.35rem 0.75rem;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.cell-year {
+  color: #64748b;
+  font-weight: 500;
+}
+
+.cell-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* Homeroom Empty State */
+.homeroom-empty-state {
+  text-align: center;
+  padding: 4rem 3rem;
+  background: linear-gradient(135deg,
+    rgba(255, 255, 255, 0.1) 0%,
+    rgba(255, 255, 255, 0.05) 100%);
+  border-radius: 20px;
+  border: 2px dashed rgba(102, 126, 234, 0.3);
+  margin: 2rem 0;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow:
+    0 8px 25px rgba(0, 0, 0, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.homeroom-empty-icon {
+  font-size: 4rem;
+  margin-bottom: 1.5rem;
+  opacity: 0.8;
+  display: block;
+  line-height: 1;
+  filter: drop-shadow(0 4px 8px rgba(102, 126, 234, 0.3));
+}
+
+.homeroom-empty-text {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: #475569;
+  margin-bottom: 0.75rem;
+  background: linear-gradient(135deg, #475569 0%, #64748b 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.homeroom-empty-subtitle {
+  font-size: 1.1rem;
+  color: rgba(100, 116, 139, 0.8);
+  font-weight: 600;
+  line-height: 1.5;
+  max-width: 500px;
+  margin: 0 auto;
+}
+
+/* Homeroom Modal */
+.homeroom-modal {
+  max-width: 500px;
+}
+
+.homeroom-modal .admin-form-group {
+  margin-bottom: 1.5rem;
+}
+
+.homeroom-modal .admin-form-label {
+  display: block;
+  font-weight: 600;
+  color: #334155;
+  margin-bottom: 0.5rem;
+  font-size: 0.95rem;
+}
+
+.homeroom-modal .admin-form-input {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 2px solid rgba(203, 213, 225, 0.6);
+  border-radius: 10px;
+  font-size: 1rem;
+  transition: all 0.3s ease;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.homeroom-modal .admin-form-input:focus {
+  border-color: #667eea;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+}
+
+.homeroom-modal .form-helper {
+  margin-top: 0.5rem;
+}
+
+/* Responsive for Homeroom Table */
+@media (max-width: 900px) {
+  .homeroom-table .table-header,
+  .homeroom-table .table-row {
+    grid-template-columns: 1fr 1.5fr 1fr 1.5fr;
+  }
+  
+  .homeroom-table .header-year,
+  .homeroom-table .cell-year {
+    display: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .homeroom-table .table-header {
+    display: none;
+  }
+  
+  .homeroom-table .table-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 1.25rem;
+    border-radius: 12px;
+    margin-bottom: 1rem;
+    background: rgba(255, 255, 255, 0.8);
+    border: 1px solid rgba(203, 213, 225, 0.5);
+  }
+  
+  .homeroom-table .table-cell {
+    width: 100%;
+  }
+  
+  .homeroom-table .cell-actions {
+    justify-content: flex-start;
+    padding-top: 0.5rem;
+    border-top: 1px solid rgba(203, 213, 225, 0.3);
+  }
+  
+  .grade-badge {
+    font-size: 1rem;
+    padding: 0.6rem 1.2rem;
+  }
 }

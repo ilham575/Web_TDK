@@ -366,7 +366,7 @@
   backdrop-filter: blur(10px);
 }
 
-.tab-button {
+.student-subject-tab-button {
   background: none;
   border: none;
   padding: 15px 35px;
@@ -381,7 +381,7 @@
   overflow: hidden;
 }
 
-.tab-button::before {
+.student-subject-tab-button::before {
   content: '';
   position: absolute;
   top: 0;
@@ -392,20 +392,20 @@
   transition: left 0.5s;
 }
 
-.tab-button.active {
+.student-subject-tab-button.active {
   background: linear-gradient(135deg, #667eea, #764ba2);
   color: white;
   box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
   transform: translateY(-2px);
 }
 
-.tab-button:hover:not(.active) {
+.student-subject-tab-button:hover:not(.active) {
   color: #667eea;
   background: rgba(102, 126, 234, 0.1);
   transform: translateY(-1px);
 }
 
-.tab-button:hover::before {
+.student-subject-tab-button:hover::before {
   left: 100%;
 }
 
@@ -637,7 +637,7 @@
     gap: 8px;
   }
 
-  .tab-button {
+  .student-subject-tab-button {
     padding: 12px 25px;
     font-size: 1rem;
   }

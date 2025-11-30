@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import '../css/common/footer.css';
+import { logout } from '../../utils/authUtils';
 
 function decodeToken(token) {
   try {
@@ -35,10 +37,13 @@ const formatDuration = (seconds) => {
 };
 
 export default function Footer() {
+  const navigate = useNavigate();
   const [timeLeft, setTimeLeft] = useState(null);
   const [expired, setExpired] = useState(false);
+  const [shouldRender, setShouldRender] = useState(false);
   const tokenRef = React.useRef(null);
   const expRef = React.useRef(null);
+  const logoutExecutedRef = React.useRef(false);
 
   useEffect(() => {
     // Always compute on tick; this allows detecting token changes in same tab
@@ -50,8 +55,11 @@ export default function Footer() {
         expRef.current = null;
         setTimeLeft(null);
         setExpired(false);
+        setShouldRender(false);
         return;
       }
+
+      setShouldRender(true);
 
       // detect token change
       if (tokenRef.current !== token) {
@@ -69,16 +77,32 @@ export default function Footer() {
       const now = Math.floor(Date.now() / 1000);
       const rem = Math.max(0, expRef.current - now);
       setTimeLeft(rem);
-      setExpired(rem <= 0);
+      
+      // Check if token has expired
+      if (rem <= 0 && !logoutExecutedRef.current) {
+        setExpired(true);
+        // Execute logout
+        logoutExecutedRef.current = true;
+        handleTokenExpired();
+      } else if (rem > 0) {
+        setExpired(false);
+      }
     };
 
     update();
     const id = setInterval(update, 1000);
     return () => clearInterval(id);
-  }, []);
+  }, [navigate]);
+
+  const handleTokenExpired = () => {
+    // Logout using utility (which also resets favicon)
+    logout();
+    // Redirect to signin page
+    navigate('/signin', { state: { expired: true } });
+  };
 
   // If there's no token or unknown timeLeft, don't render anything
-  if (!localStorage.getItem('token') || timeLeft === null) return null;
+  if (!shouldRender || timeLeft === null) return null;
 
   return (
     <footer className="jwt-footer" aria-live="polite">
@@ -86,7 +110,7 @@ export default function Footer() {
         <div className="jwt-footer-left">🔐 JWT Token</div>
         <div className="jwt-footer-right">
           {expired ? (
-            <span className="jwt-expired">หมดอายุแล้ว</span>
+            <span className="jwt-expired">หมดอายุแล้ว - กำลังออกจากระบบ...</span>
           ) : (
             <span className="jwt-countdown">หมดอายุใน: <strong>{formatDuration(timeLeft)}</strong></span>
           )}

@@ -15,9 +15,8 @@ function AttendancePage(){
   // Update document title with school name
   useEffect(() => {
     const schoolName = localStorage.getItem('school_name');
-    if (schoolName && schoolName !== '-') {
-      document.title = `ระบบโรงเรียน${schoolName}`;
-    }
+    const baseTitle = 'ระบบโรงเรียน';
+    document.title = (schoolName && schoolName !== '-') ? `${baseTitle} - ${schoolName}` : baseTitle;
   }, []);
 
   useEffect(()=>{

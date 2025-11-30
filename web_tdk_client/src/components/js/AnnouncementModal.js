@@ -23,21 +23,30 @@ export default function AnnouncementModal({ isOpen, initialData = {}, onClose, o
 
   return (
     <div className="modal-overlay">
-      <div className="modal">
-        <h3 className="modal-title">แก้ไขประกาศข่าว</h3>
-        <div className="modal-content">
-          <label className="form-label">หัวข้อ</label>
-          <input className="form-input" value={title} onChange={e => setTitle(e.target.value)} />
-
-          <label className="form-label" style={{ marginTop: 12 }}>เนื้อหา</label>
-          <textarea className="form-input" value={content} onChange={e=>setContent(e.target.value)} />
-
-          <label className="form-label" style={{ marginTop: 12 }}>หมดอายุ (ถ้ามี)</label>
-          <input className="form-input" type="datetime-local" value={expiry} onChange={e=>setExpiry(e.target.value)} step="60" lang="en-GB" />
+      <div className="modal announcement-modal" role="dialog" aria-modal="true" aria-labelledby="announcement-modal-title">
+        <div className="modal-header">
+          <h3 id="announcement-modal-title">แก้ไขประกาศข่าว</h3>
+          <button className="modal-close" onClick={() => onClose()} aria-label="ปิด">×</button>
         </div>
-        <div className="modal-actions" style={{ marginTop: 12 }}>
+        <div className="modal-body">
+          <div className="announcement-form-group full-width">
+            <label className="announcement-form-label">หัวข้อ</label>
+            <input className="announcement-form-input" value={title} onChange={e => setTitle(e.target.value)} placeholder="เช่น แถลงการณ์สำคัญ" />
+          </div>
+
+          <div className="announcement-form-group full-width">
+            <label className="announcement-form-label">เนื้อหา</label>
+            <textarea className="announcement-form-input form-textarea" value={content} onChange={e => setContent(e.target.value)} placeholder="รายละเอียดประกาศ (สามารถใช้หลายบรรทัดได้)" rows={6} />
+          </div>
+
+          <div className="announcement-form-group">
+            <label className="announcement-form-label">หมดอายุ (ถ้ามี)</label>
+            <input className="announcement-form-input" type="datetime-local" value={expiry} onChange={e => setExpiry(e.target.value)} step="60" lang="en-GB" />
+          </div>
+        </div>
+        <div className="modal-footer">
           <button className="btn-cancel" onClick={() => { onClose(); }}>ยกเลิก</button>
-          <button className="btn-add" onClick={() => onSave({ title, content, expiry })} style={{ marginLeft: 8 }}>บันทึก</button>
+          <button className="btn-add" onClick={() => onSave({ title, content, expiry })} disabled={!title || !content}>{'บันทึก'}</button>
         </div>
       </div>
     </div>

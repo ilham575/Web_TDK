@@ -48,6 +48,7 @@ def bulk_grades(payload: GradesBulk, db: Session = Depends(get_db), current_user
     return { 'detail': 'ok', 'count': len(results) }
 
 
+@router.get('', response_model=List[GradeResponse])
 @router.get('/', response_model=List[GradeResponse])
 def get_grades(subject_id: int = None, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     query = db.query(GradeModel)

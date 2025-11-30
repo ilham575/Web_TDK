@@ -68,12 +68,14 @@ def admin_reset_user_password(user_id: int, db: Session = Depends(get_db), curre
     # Do NOT log the plaintext password in real systems; return it only to caller here
     return { 'detail': 'password reset', 'temp_password': temp_password }
 
+@router.get("", response_model=List[User])
 @router.get("/", response_model=List[User])
 def get_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     """ดึงข้อมูลผู้ใช้งานทั้งหมด"""
     users = db.query(UserModel).offset(skip).limit(limit).all()
     return users
 
+@router.post("", response_model=User, status_code=status.HTTP_201_CREATED)
 @router.post("/", response_model=User, status_code=status.HTTP_201_CREATED)
 def create_user(user: UserCreate, db: Session = Depends(get_db)):
     """เพิ่มผู้ใช้งานใหม่"""
@@ -95,7 +97,8 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
         full_name=user.full_name,
         hashed_password=hashed_password,
         role=user.role,
-        school_id=user.school_id
+        school_id=user.school_id,
+        grade_level=user.grade_level
     )
     
     db.add(db_user)
@@ -256,6 +259,10 @@ def bulk_upload_users(file: UploadFile = File(...), db: Session = Depends(get_db
                     school_id = int(row[idx['school_id']])
                 except Exception:
                     school_id = None
+            
+            grade_level = None
+            if 'grade_level' in idx and row[idx['grade_level']] is not None:
+                grade_level = row[idx['grade_level']].strip()
 
             if not username or not email or not password or role not in ('teacher', 'student'):
                 raise ValueError('Invalid data - required fields missing or role invalid')
@@ -270,7 +277,7 @@ def bulk_upload_users(file: UploadFile = File(...), db: Session = Depends(get_db
                 raise ValueError('Username or email already exists')
 
             hashed = hash_password(password)
-            new_user = UserModel(username=username, email=email, full_name=full_name, hashed_password=hashed, role=role, school_id=school_id)
+            new_user = UserModel(username=username, email=email, full_name=full_name, hashed_password=hashed, role=role, school_id=school_id, grade_level=grade_level)
             db.add(new_user)
             db.flush()
             created.append({'row': r_i, 'username': username, 'id': new_user.id})
@@ -480,6 +487,147 @@ def delete_user(
         raise HTTPException(status_code=500, detail=f'Failed to delete user: {str(e)}')
 
 
+@router.patch("/{user_id}/grade_level")
+def admin_update_student_grade_level(
+    user_id: int,
+    grade_level: str = Body(..., embed=True),
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user)
+):
+    """Admin-only: Update a student's grade level"""
+    if getattr(current_user, 'role', None) != 'admin':
+        raise HTTPException(status_code=403, detail='Only admins can update grade levels')
+    
+    # Check if user exists
+    user = db.query(UserModel).filter(UserModel.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail='ไม่พบผู้ใช้ที่ระบุ')
+    
+    # Allow updating grade level for students (or bulk create new students)
+    if user.role != 'student':
+        raise HTTPException(status_code=400, detail='เฉพาะนักเรียนเท่านั้นที่สามารถเพิ่มชั้นเรียนได้')
+    
+    # Update grade level
+    user.grade_level = grade_level
+    db.commit()
+    db.refresh(user)
+    
+    return {'message': f'อัปเดตชั้นเรียนของ {user.full_name} เป็น {grade_level} เรียบร้อยแล้ว', 'user': user}
+
+
+@router.post("/bulk_assign_grade")
+def bulk_assign_grade_to_students(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user)
+):
+    """Admin-only: Bulk assign grade levels to existing or new students via Excel.
+    
+    Expected columns: username, email, full_name, grade_level
+    If student exists (by username or email), update their grade level.
+    If student doesn't exist, create a new student with temporary password.
+    """
+    if getattr(current_user, 'role', None) != 'admin':
+        raise HTTPException(status_code=403, detail='Not authorized')
+
+    if openpyxl is None:
+        raise HTTPException(status_code=500, detail='Server missing openpyxl dependency')
+
+    content = file.file.read()
+    try:
+        wb = openpyxl.load_workbook(filename=BytesIO(content), read_only=True)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f'Failed to read Excel file: {str(e)}')
+
+    sheet = wb.active
+    rows = list(sheet.iter_rows(values_only=True))
+    if not rows or len(rows) < 2:
+        raise HTTPException(status_code=400, detail='Excel file must contain a header row and at least one data row')
+
+    header = [str(h).strip().lower() if h is not None else '' for h in rows[0]]
+    idx = {name: i for i, name in enumerate(header)}
+    
+    required_cols = ['username', 'email', 'full_name', 'grade_level']
+    for col in required_cols:
+        if col not in idx:
+            raise HTTPException(status_code=400, detail=f'Missing required column: {col}')
+
+    updated = []
+    created = []
+    errors = []
+    
+    for r_i, row in enumerate(rows[1:], start=2):
+        try:
+            username = row[idx['username']].strip() if row[idx['username']] is not None else ''
+            email = row[idx['email']].strip() if row[idx['email']] is not None else ''
+            full_name = row[idx['full_name']].strip() if row[idx['full_name']] is not None else ''
+            grade_level = row[idx['grade_level']].strip() if row[idx['grade_level']] is not None else ''
+
+            if not username or not email or not full_name or not grade_level:
+                raise ValueError('Invalid data - required fields missing')
+
+            # Try to find existing student by username or email
+            existing_student = db.query(UserModel).filter(
+                (UserModel.username == username) | (UserModel.email == email),
+                UserModel.role == 'student'
+            ).first()
+
+            if existing_student:
+                # Update existing student's grade level
+                existing_student.grade_level = grade_level
+                db.flush()
+                updated.append({
+                    'row': r_i,
+                    'username': username,
+                    'id': existing_student.id,
+                    'action': 'updated',
+                    'grade_level': grade_level
+                })
+            else:
+                # Create new student with temporary password
+                temp_password = secrets.token_urlsafe(8)
+                hashed_pass = hash_password(temp_password)
+                
+                new_student = UserModel(
+                    username=username,
+                    email=email,
+                    full_name=full_name,
+                    hashed_password=hashed_pass,
+                    role='student',
+                    school_id=getattr(current_user, 'school_id', None),
+                    grade_level=grade_level,
+                    must_change_password=True
+                )
+                db.add(new_student)
+                db.flush()
+                created.append({
+                    'row': r_i,
+                    'username': username,
+                    'id': new_student.id,
+                    'action': 'created',
+                    'grade_level': grade_level,
+                    'temp_password': temp_password
+                })
+        except Exception as e:
+            errors.append({'row': r_i, 'error': str(e)})
+
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f'Failed to commit: {str(e)}')
+
+    return {
+        'updated_count': len(updated),
+        'created_count': len(created),
+        'error_count': len(errors),
+        'updated': updated,
+        'created': created,
+        'errors': errors,
+        'message': f'อัปเดต {len(updated)} นักเรียน สร้างใหม่ {len(created)} นักเรียน'
+    }
+
+
 @router.patch("/{user_id}/deactivate")
 def deactivate_user(
     user_id: int,
@@ -538,11 +686,11 @@ def download_bulk_template(current_user: UserModel = Depends(get_current_user)):
     wb = Workbook()
     ws = wb.active
     # Header row
-    headers = ['username', 'email', 'full_name', 'password', 'role', 'school_id']
+    headers = ['username', 'email', 'full_name', 'password', 'role', 'school_id', 'grade_level']
     ws.append(headers)
     # Example rows
-    ws.append(['alice', 'alice@example.com', 'Alice A', 'secret123', 'teacher', ''])
-    ws.append(['bob', 'bob@example.com', 'Bob B', 'p@ssw0rd', 'student', ''])
+    ws.append(['alice', 'alice@example.com', 'Alice A', 'secret123', 'teacher', '', ''])
+    ws.append(['bob', 'bob@example.com', 'Bob B', 'p@ssw0rd', 'student', '', 'ป.1'])
 
     stream = BytesIO()
     wb.save(stream)

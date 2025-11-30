@@ -11,6 +11,9 @@ import ConfirmModal from '../../ConfirmModal';
 
 import AlertModal from '../../AlertModal';
 import { API_BASE_URL } from '../../../endpoints';
+import { setSchoolFavicon } from '../../../../utils/faviconUtils';
+import { logout } from '../../../../utils/authUtils';
+
 
 function OwnerPage() {
   const navigate = useNavigate();
@@ -32,6 +35,7 @@ function OwnerPage() {
   // Create school state
   const [newSchoolName, setNewSchoolName] = useState('');
   const [creatingSchool, setCreatingSchool] = useState(false);
+  const [showCreateSchoolModal, setShowCreateSchoolModal] = useState(false);
 
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmTitle, setConfirmTitle] = useState('');
@@ -57,7 +61,7 @@ function OwnerPage() {
       .then(res => res.json())
       .then(data => {
         if (data.role !== 'owner') {
-          localStorage.removeItem('token');
+          logout();
           toast.error('Invalid token or role. Please sign in again.');
           setTimeout(() => navigate('/signin'), 1500);
           return;
@@ -69,9 +73,13 @@ function OwnerPage() {
         } else {
           setCurrentUser(data);
           setIsAuthChecking(false);
+          // ตั้งค่า favicon เป็นโลโก้โรงเรียน (ถ้ามี school_id)
+          if (data?.school_id) {
+            setSchoolFavicon(data.school_id);
+          }
         }
       })
-      .catch(() => { localStorage.removeItem('token'); toast.error('Invalid token or role. Please sign in again.'); setTimeout(() => navigate('/signin'), 1500); });
+      .catch(() => { logout(); toast.error('Invalid token or role. Please sign in again.'); setTimeout(() => navigate('/signin'), 1500); });
   }, [navigate]);
 
   useEffect(() => {
@@ -208,6 +216,7 @@ function OwnerPage() {
       } else {
         toast.success('สร้างโรงเรียนเรียบร้อย');
         setNewSchoolName('');
+        setShowCreateSchoolModal(false);
         loadSchools();
       }
     } catch (err) {
@@ -259,9 +268,9 @@ function OwnerPage() {
   };
 
   const handleSignout = () => {
-    localStorage.removeItem('token');
+    logout();
     navigate('/signin', { state: { signedOut: true } });
-  };
+  }
 
   const openConfirmModal = (title, message, onConfirm) => {
     setConfirmTitle(title);
@@ -382,31 +391,14 @@ function OwnerPage() {
           <div className="content-card">
             <div className="card-header">
               <h2><span className="card-icon">🏫</span> จัดการโรงเรียน</h2>
+              <button 
+                className="owner-btn-create-school" 
+                onClick={() => setShowCreateSchoolModal(true)}
+              >
+                ➕ สร้างโรงเรียนใหม่
+              </button>
             </div>
             <div className="card-content">
-              <div className="create-school-section">
-                <form onSubmit={handleCreateSchool}>
-                  <div className="form-row">
-                    <div className="form-group">
-                      <label className="form-label">ชื่อโรงเรียนใหม่</label>
-                      <input
-                        className="form-input"
-                        type="text"
-                        value={newSchoolName}
-                        onChange={e => setNewSchoolName(e.target.value)}
-                        placeholder="กรอกชื่อโรงเรียน"
-                        required
-                      />
-                    </div>
-                    <div className="form-actions">
-                      <button type="submit" className="owner-btn-create-school" disabled={creatingSchool}>
-                        {creatingSchool ? 'กำลังสร้าง...' : '➕ สร้างโรงเรียน'}
-                      </button>
-                    </div>
-                  </div>
-                </form>
-              </div>
-
               <div className="schools-list">
                 {loadingSchools ? (
                   <Loading message="กำลังโหลดข้อมูลโรงเรียน..." />
@@ -470,7 +462,7 @@ function OwnerPage() {
                 <div className="filter-group">
                   <label className="filter-label">เลือกโรงเรียน</label>
                   <select
-                    className="form-input filter-select"
+                    className="owner-form-input filter-select"
                     value={selectedSchoolForActivities}
                     onChange={e => setSelectedSchoolForActivities(e.target.value)}
                   >
@@ -591,11 +583,11 @@ function OwnerPage() {
             </div>
             <div className="card-content">
               <form onSubmit={handleCreateAdmin}>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label className="form-label">โรงเรียน</label>
+                <div className="owner-form-row">
+                  <div className="owner-form-group">
+                    <label className="owner-form-label">โรงเรียน</label>
                     <select
-                      className="form-input"
+                      className="owner-form-input"
                       value={selectedSchoolId}
                       onChange={e => setSelectedSchoolId(e.target.value)}
                       required
@@ -607,21 +599,21 @@ function OwnerPage() {
                     </select>
                   </div>
                 </div>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label className="form-label">Username</label>
+                <div className="owner-form-row">
+                  <div className="owner-form-group">
+                    <label className="owner-form-label">Username</label>
                     <input
-                      className="form-input"
+                      className="owner-form-input"
                       type="text"
                       value={newUsername}
                       onChange={e => setNewUsername(e.target.value)}
                       required
                     />
                   </div>
-                  <div className="form-group">
-                    <label className="form-label">Email</label>
+                  <div className="owner-form-group">
+                    <label className="owner-form-label">Email</label>
                     <input
-                      className="form-input"
+                      className="owner-form-input"
                       type="email"
                       value={newEmail}
                       onChange={e => setNewEmail(e.target.value)}
@@ -629,21 +621,21 @@ function OwnerPage() {
                     />
                   </div>
                 </div>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label className="form-label">ชื่อเต็ม</label>
+                <div className="owner-form-row">
+                  <div className="owner-form-group">
+                    <label className="owner-form-label">ชื่อเต็ม</label>
                     <input
-                      className="form-input"
+                      className="owner-form-input"
                       type="text"
                       value={newFullName}
                       onChange={e => setNewFullName(e.target.value)}
                       required
                     />
                   </div>
-                  <div className="form-group">
-                    <label className="form-label">รหัสผ่าน</label>
+                  <div className="owner-form-group">
+                    <label className="owner-form-label">รหัสผ่าน</label>
                     <input
-                      className="form-input"
+                      className="owner-form-input"
                       type="password"
                       value={newPassword}
                       onChange={e => setNewPassword(e.target.value)}
@@ -651,7 +643,7 @@ function OwnerPage() {
                     />
                   </div>
                 </div>
-                <div className="form-actions">
+                <div className="owner-form-actions">
                   <button type="submit" className="owner-btn-create-admin" disabled={creatingAdmin}>
                     {creatingAdmin ? 'กำลังสร้าง...' : '👨‍💼 สร้างแอดมิน'}
                   </button>
@@ -743,6 +735,40 @@ function OwnerPage() {
         message={alertMessage}
         onClose={() => setShowAlertModal(false)}
       />
+
+      {/* Create School Modal */}
+      {showCreateSchoolModal && (
+        <div className="modal-overlay">
+          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="create-school-modal-title">
+            <div className="modal-header">
+              <h3 id="create-school-modal-title">🏫 สร้างโรงเรียนใหม่</h3>
+              <button className="modal-close" onClick={() => { setShowCreateSchoolModal(false); setNewSchoolName(''); }} aria-label="ปิด">×</button>
+            </div>
+            <form onSubmit={handleCreateSchool}>
+              <div className="modal-body">
+                <div className="owner-form-group full-width">
+                  <label className="owner-form-label">ชื่อโรงเรียน</label>
+                  <input
+                    className="owner-form-input"
+                    type="text"
+                    value={newSchoolName}
+                    onChange={e => setNewSchoolName(e.target.value)}
+                    placeholder="เช่น โรงเรียนดาวเรือง"
+                    autoFocus
+                    required
+                  />
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn-cancel" onClick={() => { setShowCreateSchoolModal(false); setNewSchoolName(''); }}>ยกเลิก</button>
+                <button type="submit" className="btn-add" disabled={creatingSchool || !newSchoolName.trim()}>
+                  {creatingSchool ? 'กำลังสร้าง...' : '➕ สร้างโรงเรียน'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
         </>
       )}
     </div>

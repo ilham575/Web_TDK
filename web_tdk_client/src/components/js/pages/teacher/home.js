@@ -3,12 +3,16 @@ import { useNavigate } from 'react-router-dom';
 import '../../../css/pages/teacher/teacher-home.css';
 import '../../../css/pages/teacher/schedule-modal.css';
 import ScheduleGrid from '../../ScheduleGrid';
+import AbsenceApproval from '../admin/AbsenceApproval';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import ConfirmModal from '../../ConfirmModal';
 import ExpiryModal from '../../ExpiryModal';
 import AnnouncementModal from '../../AnnouncementModal';
+import BulkEnrollModal from '../../BulkEnrollModal';
 import { API_BASE_URL } from '../../../endpoints';
+import { setSchoolFavicon } from '../../../../utils/faviconUtils';
+import { logout } from '../../../../utils/authUtils';
 
 function TeacherPage() {
   const navigate = useNavigate();
@@ -18,6 +22,7 @@ function TeacherPage() {
   const [subjectStudents, setSubjectStudents] = useState([]);
   const [availableStudents, setAvailableStudents] = useState([]);
   const [showEnrollModal, setShowEnrollModal] = useState(false);
+  const [showBulkEnrollModal, setShowBulkEnrollModal] = useState(false);
   const [selectedStudentId, setSelectedStudentId] = useState('');
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
@@ -58,7 +63,7 @@ function TeacherPage() {
       .then(res => res.json())
       .then(data => {
         if (data.role !== 'teacher') {
-          localStorage.removeItem('token');
+          logout();
           toast.error('Invalid token or role. Please sign in again.');
           setTimeout(() => navigate('/signin'), 1500);
         } else if (data.must_change_password) {
@@ -70,12 +75,16 @@ function TeacherPage() {
           if (schoolName) localStorage.setItem('school_name', schoolName);
           // persist school id (try multiple possible field names) so school-scoped endpoints work
           const sid = data?.school_id || data?.school?.id || data?.school?.school_id || data?.schoolId || null;
-          if (sid) localStorage.setItem('school_id', String(sid));
+          if (sid) {
+            localStorage.setItem('school_id', String(sid));
+            // ตั้งค่า favicon เป็นโลโก้โรงเรียน
+            setSchoolFavicon(sid);
+          }
           setCurrentUser(data);
         }
       })
       .catch(() => {
-        localStorage.removeItem('token');
+        logout();
         toast.error('Invalid token or role. Please sign in again.');
         setTimeout(() => navigate('/signin'), 1500);
       });
@@ -134,13 +143,12 @@ function TeacherPage() {
 
   // Update document title with school name
   useEffect(() => {
-    if (displaySchool && displaySchool !== '-') {
-      document.title = `ระบบโรงเรียน${displaySchool}`;
-    }
+    const baseTitle = 'ระบบโรงเรียน';
+    document.title = (displaySchool && displaySchool !== '-') ? `${baseTitle} - ${displaySchool}` : baseTitle;
   }, [displaySchool]);
 
   const handleSignout = () => {
-    localStorage.removeItem('token');
+    logout();
     toast.success('Signed out successfully!');
     setTimeout(() => navigate('/signin'), 1000);
   };
@@ -203,6 +211,16 @@ function TeacherPage() {
       } else setAvailableStudents([]);
     } catch { setAvailableStudents([]); }
   };
+
+  // Prevent body scroll while modal is visible
+  useEffect(() => {
+    if (showEnrollModal || showBulkEnrollModal) {
+      const prev = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => { document.body.style.overflow = prev; };
+    }
+    return undefined;
+  }, [showEnrollModal, showBulkEnrollModal]);
 
   const enrollStudent = async () => {
     if (!managingSubjectId || !selectedStudentId) { toast.error('เลือกนักเรียนก่อน'); return; }
@@ -586,12 +604,12 @@ function TeacherPage() {
         <div className="teacher-actions">
           <div className="teacher-stats">
             <div className="stats-card floating-effect">
-              <div className="stats-value">{teacherSubjects.length}</div>
-              <div className="stats-label">รายวิชา</div>
+              <div className="teacher-stats-value">{teacherSubjects.length}</div>
+              <div className="teacher-stats-label">รายวิชา</div>
             </div>
             <div className="stats-card floating-effect">
-              <div className="stats-value">{Array.isArray(announcements) ? announcements.length : 0}</div>
-              <div className="stats-label">ข่าวสาร</div>
+              <div className="teacher-stats-value">{Array.isArray(announcements) ? announcements.length : 0}</div>
+              <div className="teacher-stats-label">ข่าวสาร</div>
             </div>
           </div>
           <div className="header-actions">
@@ -603,9 +621,10 @@ function TeacherPage() {
 
       <div className="teacher-body">
         <div className="tabs-header">
-          <button className={`tab-button ${activeTab === 'subjects' ? 'active' : ''}`} onClick={() => setActiveTab('subjects')}>📚 รายวิชา</button>
-          <button className={`tab-button ${activeTab === 'announcements' ? 'active' : ''}`} onClick={() => setActiveTab('announcements')}>📢 ประกาศข่าว</button>
-          <button className={`tab-button ${activeTab === 'schedule' ? 'active' : ''}`} onClick={() => setActiveTab('schedule')}>🗓️ ตารางเรียน</button>
+          <button className={`teacher-tab-button ${activeTab === 'subjects' ? 'active' : ''}`} onClick={() => setActiveTab('subjects')}>📚 รายวิชา</button>
+          <button className={`teacher-tab-button ${activeTab === 'announcements' ? 'active' : ''}`} onClick={() => setActiveTab('announcements')}>📢 ประกาศข่าว</button>
+          <button className={`teacher-tab-button ${activeTab === 'absences' ? 'active' : ''}`} onClick={() => setActiveTab('absences')}>📋 อนุมัติการลา</button>
+          <button className={`teacher-tab-button ${activeTab === 'schedule' ? 'active' : ''}`} onClick={() => setActiveTab('schedule')}>🗓️ ตารางเรียน</button>
         </div>
         <div className="tab-content">
           {activeTab === 'subjects' && (
@@ -670,7 +689,7 @@ function TeacherPage() {
                     lang="en-GB"
                   />
                 </div>
-                <div className="form-actions">
+                <div className="teacher-form-actions">
                   <button type="submit" className="btn-submit" aria-label="ประกาศข่าว">
                     <span className="btn-icon" aria-hidden>📣</span>
                     ประกาศข่าว
@@ -709,6 +728,9 @@ function TeacherPage() {
                 </div>
               )}
             </div>
+          )}
+          {activeTab === 'absences' && (
+            <AbsenceApproval />
           )}
           {activeTab === 'schedule' && (
             <div className="schedule-container">
@@ -759,39 +781,50 @@ function TeacherPage() {
   <AnnouncementModal isOpen={showAnnouncementModal} initialData={modalAnnouncement} onClose={closeAnnouncementModal} onSave={saveAnnouncementFromModal} />
 
   {showEnrollModal && (
-        <div className="modal-overlay">
-          <div className="modal">
-            <h3 className="modal-title">จัดการนักเรียนในรายวิชา</h3>
-            <div className="modal-content">
-              <div className="modal-section">
+        <div className="teacher-modal-overlay">
+          <div className="modal enroll-modal">
+            <div className="teacher-modal-header">
+              <h3 className="modal-title">จัดการนักเรียนในรายวิชา</h3>
+              <button className="teacher-modal-close" onClick={() => { setShowEnrollModal(false); setManagingSubjectId(null); }} title="ปิด">×</button>
+            </div>
+            <div className="teacher-modal-body">
+              <div className="enroll-controls">
                 <label className="modal-label">เพิ่มนักเรียน</label>
-                <select
-                  value={selectedStudentId}
-                  onChange={e => setSelectedStudentId(e.target.value)}
-                  className="modal-select"
-                >
-                  <option value="">-- เลือกนักเรียน --</option>
-                  {availableStudents.map(s => (<option key={s.id} value={s.id}>{s.full_name || s.username} ({s.email})</option>))}
-                </select>
-                <div className="modal-actions">
+                <div className="enroll-input-row">
+                  <select
+                    value={selectedStudentId}
+                    onChange={e => setSelectedStudentId(e.target.value)}
+                    className="modal-select flex-grow"
+                  >
+                    <option value="">-- เลือกนักเรียน --</option>
+                    {availableStudents.map(s => (<option key={s.id} value={s.id}>{s.full_name || s.username} ({s.email})</option>))}
+                  </select>
                   <button className="btn-add" onClick={enrollStudent}>เพิ่ม</button>
-                  <button className="btn-cancel" onClick={() => { setShowEnrollModal(false); setManagingSubjectId(null); }}>ปิด</button>
+                  <button className="btn-bulk-enroll" onClick={() => setShowBulkEnrollModal(true)}>👥 ลงทะเบียน</button>
                 </div>
               </div>
-              <div className="modal-section">
+              <div className="enroll-divider"></div>
+              <div className="enrolled-section">
                 <h4 className="enrolled-title">นักเรียนที่ลงทะเบียนแล้ว</h4>
                 <div className="enrolled-list">
-                      {subjectStudents.length === 0 ? <div className="empty-state">ยังไม่มีนักเรียน</div> : subjectStudents.map(st => (
-                    <div key={st.id} className="enrolled-item">
-                      <div className="student-info">
-                        <div className="student-name">{st.full_name || st.username}</div>
-                        <div className="student-email">{st.email}</div>
+                  {subjectStudents.length === 0 ? (
+                    <div className="empty-state">ยังไม่มีนักเรียน</div>
+                  ) : (
+                    subjectStudents.map(st => (
+                      <div key={st.id} className="enrolled-item">
+                        <div className="student-info">
+                          <div className="student-name">{st.full_name || st.username}</div>
+                          <div className="student-email">{st.email}</div>
+                        </div>
+                        <button className="btn-remove" onClick={() => openConfirmModal('ย้ายออก', 'ต้องการย้ายนักเรียนออกจากรายวิชานี้ใช่หรือไม่?', async () => { await unenrollStudent(st.id); })}>ย้ายออก</button>
                       </div>
-                      <button className="btn-remove" onClick={() => openConfirmModal('ย้ายออก', 'ต้องการย้ายนักเรียนออกจากรายวิชานี้ใช่หรือไม่?', async () => { await unenrollStudent(st.id); })}>ย้ายออก</button>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
               </div>
+            </div>
+            <div className="teacher-modal-footer">
+              <button className="btn-cancel" onClick={() => { setShowEnrollModal(false); setManagingSubjectId(null); }}>ปิด</button>
             </div>
           </div>
         </div>
@@ -918,6 +951,16 @@ function TeacherPage() {
           </div>
         </div>
       )}
+
+      <BulkEnrollModal
+        isOpen={showBulkEnrollModal}
+        subjectId={managingSubjectId}
+        onClose={() => setShowBulkEnrollModal(false)}
+        onSuccess={() => {
+          setShowBulkEnrollModal(false);
+          openManageStudents(managingSubjectId);
+        }}
+      />
 
       <ConfirmModal
         isOpen={showConfirmModal}

@@ -9,6 +9,7 @@ class UserBase(BaseModel):
     full_name: str
     role: str = "student"
     school_id: Optional[int] = None
+    grade_level: Optional[str] = None  # For students: e.g., "ชั้นประถมศึกษาปีที่ 1", "ป.1"
 
 # Schema for creating user
 class UserCreate(UserBase):
@@ -21,6 +22,7 @@ class UserUpdate(BaseModel):
     role: Optional[str] = None
     is_active: Optional[bool] = None
     school_id: Optional[int] = None
+    grade_level: Optional[str] = None
 
 class ChangePasswordRequest(BaseModel):
     current_password: str
