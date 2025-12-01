@@ -8,6 +8,8 @@ from .schedule import ScheduleSlot, SubjectSchedule
 from .admin_request import AdminRequest
 from .absence import Absence
 from .homeroom import HomeroomTeacher
+from .grade import Grade
+from .classroom import Classroom, ClassroomStudent
 
 # Add relationships to User model
 from sqlalchemy.orm import relationship
@@ -18,4 +20,4 @@ User.documents = relationship("Document", back_populates="uploader")
 User.subjects = relationship("Subject", back_populates=None)
 User.enrolled = relationship("SubjectStudent", back_populates=None)
 
-__all__ = ["User", "Announcement", "Document", "School", "Subject", "SubjectStudent", "ScheduleSlot", "SubjectSchedule", "Absence", "HomeroomTeacher"]
+__all__ = ["User", "Announcement", "Document", "School", "Subject", "SubjectStudent", "ScheduleSlot", "SubjectSchedule", "Absence", "HomeroomTeacher", "Classroom", "ClassroomStudent", "Grade"]

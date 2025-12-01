@@ -120,6 +120,34 @@ function AdminPage() {
   const [studentSearchTerm, setStudentSearchTerm] = useState('');
   const [filteredStudents, setFilteredStudents] = useState([]);
 
+  // Grade operation type (update, mid_term, end_of_year)
+  const [gradeOperationType, setGradeOperationType] = useState('update'); // 'update', 'mid_term', or 'end_of_year'
+  
+  // Student promotion state
+  const [promotionType, setPromotionType] = useState('mid_term'); // 'mid_term' or 'end_of_year'
+  const [selectedStudentsForPromotion, setSelectedStudentsForPromotion] = useState(new Set());
+  const [promotingStudents, setPromotingStudents] = useState(false);
+  const [promotionNewGradeLevel, setPromotionNewGradeLevel] = useState('');
+  const [promotionFile, setPromotionFile] = useState(null);
+  const [promotionDragOver, setPromotionDragOver] = useState(false);
+
+  // Classroom management state
+  const [classrooms, setClassrooms] = useState([]);
+  const [showClassroomModal, setShowClassroomModal] = useState(false);
+  const [classroomStep, setClassroomStep] = useState('select'); // 'select', 'add_students', 'promote'
+  const [newClassroomName, setNewClassroomName] = useState('');
+  const [newClassroomGradeLevel, setNewClassroomGradeLevel] = useState('');
+  const [newClassroomRoomNumber, setNewClassroomRoomNumber] = useState('');
+  const [newClassroomSemester, setNewClassroomSemester] = useState(1);
+  const [newClassroomAcademicYear, setNewClassroomAcademicYear] = useState('');
+  const [creatingClassroom, setCreatingClassroom] = useState(false);
+  const [selectedClassroom, setSelectedClassroom] = useState(null);
+  const [classroomStudentsToAdd, setClassroomStudentsToAdd] = useState(new Set());
+  const [addingStudentsToClassroom, setAddingStudentsToClassroom] = useState(false);
+  const [classroomPromotionType, setClassroomPromotionType] = useState('mid_term');
+  const [classroomPromotionNewGrade, setClassroomPromotionNewGrade] = useState('');
+  const [promotingClassroom, setPromotingClassroom] = useState(false);
+
   useEffect(() => {
     const onDocClick = (e) => {
       if (!headerMenuRef.current) return;
@@ -186,6 +214,12 @@ function AdminPage() {
     }).catch(err=>{ console.error('failed to fetch users', err); setUsersError('Failed to load users'); setTeachers([]); setStudents([]); }).finally(()=>setLoadingUsers(false));
 
     fetch(`${API_BASE_URL}/announcements/?school_id=${schoolId}`).then(res=>res.json()).then(data=>{ if (Array.isArray(data)) setAnnouncements(data); else setAnnouncements([]); }).catch(()=>setAnnouncements([]));
+    
+    // โหลด classrooms
+    const token = localStorage.getItem('token');
+    fetch(`${API_BASE_URL}/classrooms/list/${schoolId}`, {
+      headers: { ...(token ? { 'Authorization': `Bearer ${token}` } : {}) }
+    }).then(res=>res.json()).then(data=>{ if (Array.isArray(data)) setClassrooms(data); else setClassrooms([]); }).catch(()=>setClassrooms([]));
   }, [currentUser]);
 
   // Determine school name from multiple possible sources (API shape may vary)
@@ -701,26 +735,15 @@ function AdminPage() {
     }
   };
 
+  // Get unique grade levels from admin-created classrooms
+  const getClassroomGradeLevels = () => {
+    return [...new Set(classrooms.map(c => c.grade_level))].filter(Boolean).sort();
+  };
+
   const loadAvailableGradeLevels = async () => {
-    const schoolId = localStorage.getItem('school_id');
-    if (!schoolId) return;
-    
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE_URL}/homeroom/grade-levels?school_id=${schoolId}`, {
-        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
-      });
-      
-      if (res.ok) {
-        const data = await res.json();
-        setAvailableGradeLevels(Array.isArray(data) ? data : []);
-      } else {
-        setAvailableGradeLevels([]);
-      }
-    } catch (err) {
-      console.error('Failed to load grade levels:', err);
-      setAvailableGradeLevels([]);
-    }
+    // Use grade levels from admin-created classrooms
+    const gradeLevels = getClassroomGradeLevels();
+    setAvailableGradeLevels(gradeLevels);
   };
 
   const createHomeroomTeacher = async () => {
@@ -856,6 +879,33 @@ function AdminPage() {
       loadAvailableGradeLevels();
     }
   }, [activeTab]);
+
+  // Load classrooms when switching to classrooms or promotions tabs
+  React.useEffect(() => {
+    if (activeTab === 'classrooms' || activeTab === 'promotions') {
+      if (currentUser?.school_id) {
+        const token = localStorage.getItem('token');
+        fetch(`${API_BASE_URL}/classrooms/list/${currentUser.school_id}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        })
+          .then(res => res.json())
+          .then(data => {
+            if (Array.isArray(data)) {
+              setClassrooms(data);
+            } else {
+              setClassrooms([]);
+            }
+          })
+          .catch(err => {
+            console.error('Error loading classrooms:', err);
+            setClassrooms([]);
+          });
+      }
+    }
+  }, [activeTab, currentUser?.school_id]);
 
   // Load schedule slots when switching to schedule tab
   React.useEffect(() => {
@@ -995,6 +1045,13 @@ function AdminPage() {
     setAssigningIndividualGrade(true);
 
     try {
+      // ตรวจสอบว่าชั้นเรียนที่เลือกมีในรายการที่แอดมินสร้างไว้หรือไม่
+      const classroomExists = classrooms.some(c => c.grade_level === selectedGradeLevel);
+      if (!classroomExists) {
+        toast.warning(`⚠️ ไม่พบชั้นเรียน "${selectedGradeLevel}" ในรายการ ให้แอดมินสร้างชั้นเรียนก่อน`);
+        return;
+      }
+
       const res = await fetch(`${API_BASE_URL}/users/${selectedStudentId}/grade_level`, {
         method: 'PATCH',
         headers: {
@@ -1008,12 +1065,16 @@ function AdminPage() {
 
       if (res.ok) {
         const student = students.find(s => s.id === Number(selectedStudentId));
-        toast.success(`อัปเดตชั้นเรียนของ ${student?.full_name || 'นักเรียน'} เป็น ${selectedGradeLevel} เรียบร้อยแล้ว`);
+        const classroom = classrooms.find(c => c.grade_level === selectedGradeLevel);
+        toast.success(`✓ กำหนดนักเรียน "${student?.full_name || 'นักเรียน'}" เข้าชั้นเรียน "${classroom?.name || selectedGradeLevel}" สำเร็จ`);
         setSelectedStudentId('');
         setSelectedGradeLevel('');
         // Reload students
         if (currentUser?.school_id) {
-          fetch(`${API_BASE_URL}/users?limit=200`)
+          const reloadToken = localStorage.getItem('token');
+          fetch(`${API_BASE_URL}/users?limit=200`, {
+            headers: { ...(reloadToken ? { 'Authorization': `Bearer ${reloadToken}` } : {}) }
+          })
             .then(res => res.json())
             .then(data => {
               if (Array.isArray(data)) {
@@ -1032,6 +1093,451 @@ function AdminPage() {
     } finally {
       setAssigningIndividualGrade(false);
     }
+  };
+
+  // Student promotion functions
+  const toggleStudentForPromotion = (studentId) => {
+    const newSet = new Set(selectedStudentsForPromotion);
+    if (newSet.has(studentId)) {
+      newSet.delete(studentId);
+    } else {
+      newSet.add(studentId);
+    }
+    setSelectedStudentsForPromotion(newSet);
+  };
+
+  const promoteSelectedStudents = async () => {
+    if (selectedStudentsForPromotion.size === 0) {
+      toast.warning('กรุณาเลือกนักเรียนที่ต้องการเลื่อนชั้น');
+      return;
+    }
+
+    if (promotionType === 'end_of_year' && !promotionNewGradeLevel) {
+      toast.warning('กรุณาระบุชั้นเรียนใหม่');
+      return;
+    }
+
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    setPromotingStudents(true);
+    try {
+      const payload = {
+        promotion_type: promotionType,
+        student_ids: Array.from(selectedStudentsForPromotion),
+      };
+
+      if (promotionType === 'end_of_year') {
+        payload.new_grade_level = promotionNewGradeLevel;
+      }
+
+      const response = await fetch(`${API_BASE_URL}/users/promote_students`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json();
+      
+      if (response.ok) {
+        toast.success(`เลื่อนชั้นสำเร็จ ${data.promoted_count} นักเรียน`);
+        setSelectedStudentsForPromotion(new Set());
+        setPromotionNewGradeLevel('');
+        
+        // Reload students
+        fetch(`${API_BASE_URL}/users?limit=200`, { headers: { Authorization: `Bearer ${token}` } })
+          .then(res => res.json())
+          .then(data => {
+            setTeachers(data.filter(u => u.role === 'teacher'));
+            setStudents(data.filter(u => u.role === 'student'));
+          })
+          .catch(err => console.error('Failed to reload students:', err));
+      } else {
+        toast.error(data.detail || data.message || 'เลื่อนชั้นไม่สำเร็จ');
+      }
+    } catch (err) {
+      console.error('Promote error:', err);
+      toast.error('เกิดข้อผิดพลาดในการเลื่อนชั้น');
+    } finally {
+      setPromotingStudents(false);
+    }
+  };
+
+  const downloadPromoteTemplate = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/users/promote_template`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ promotion_type: promotionType }),
+      });
+
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = promotionType === 'mid_term' ? 'promote_mid_term_template.xlsx' : 'promote_end_of_year_template.xlsx';
+        a.click();
+        window.URL.revokeObjectURL(url);
+      } else {
+        toast.error('ดาวน์โหลด template ไม่สำเร็จ');
+      }
+    } catch (err) {
+      console.error('Download template error:', err);
+      toast.error('เกิดข้อผิดพลาดในการดาวน์โหลด template');
+    }
+  };
+
+  const handlePromotionFileDrop = (e) => {
+    e.preventDefault();
+    setPromotionDragOver(false);
+    const files = e.dataTransfer.files;
+    if (files && files[0]) {
+      setPromotionFile(files[0]);
+    }
+  };
+
+  const handlePromotionFileDragOver = (e) => {
+    e.preventDefault();
+    setPromotionDragOver(true);
+  };
+
+  const handlePromotionFileDragLeave = (e) => {
+    e.preventDefault();
+    setPromotionDragOver(false);
+  };
+
+  const handlePromotionFileChange = (e) => {
+    const f = e.target.files && e.target.files[0];
+    setPromotionFile(f || null);
+  };
+
+  const uploadPromotionFile = async () => {
+    if (!promotionFile) {
+      toast.warning('กรุณาเลือกไฟล์');
+      return;
+    }
+
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    setPromotingStudents(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', promotionFile);
+      formData.append('promotion_type', promotionType);
+
+      if (promotionType === 'end_of_year') {
+        formData.append('new_grade_level', promotionNewGradeLevel);
+      }
+
+      const response = await fetch(`${API_BASE_URL}/users/promote_from_file`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast.success(`เลื่อนชั้นสำเร็จ ${data.promoted_count} นักเรียน`);
+        setPromotionFile(null);
+        setPromotionNewGradeLevel('');
+
+        // Reload students
+        fetch(`${API_BASE_URL}/users?limit=200`, { headers: { Authorization: `Bearer ${token}` } })
+          .then(res => res.json())
+          .then(data => {
+            setTeachers(data.filter(u => u.role === 'teacher'));
+            setStudents(data.filter(u => u.role === 'student'));
+          })
+          .catch(err => console.error('Failed to reload students:', err));
+      } else {
+        toast.error(data.detail || data.message || 'เลื่อนชั้นไม่สำเร็จ');
+      }
+    } catch (err) {
+      console.error('Upload promotion file error:', err);
+      toast.error('เกิดข้อผิดพลาดในการอัปโหลดไฟล์');
+    } finally {
+      setPromotingStudents(false);
+    }
+  };
+
+  // ===== Classroom Management Functions =====
+  const createClassroom = async () => {
+    if (!newClassroomName || !newClassroomGradeLevel) {
+      toast.error('กรุณากรอกชื่อและชั้นเรียน');
+      return;
+    }
+
+    const token = localStorage.getItem('token');
+    setCreatingClassroom(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/classrooms/create`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: newClassroomName,
+          grade_level: newClassroomGradeLevel,
+          room_number: newClassroomRoomNumber,
+          semester: newClassroomSemester,
+          academic_year: newClassroomAcademicYear || new Date().getFullYear().toString(),
+          school_id: currentUser.school_id,
+        }),
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        toast.success('สร้างชั้นเรียนสำเร็จ');
+        setSelectedClassroom(data);
+        setClassroomStep('add_students');
+        setClassroomStudentsToAdd(new Set());
+        // โหลด classrooms ใหม่
+        const refreshToken = localStorage.getItem('token');
+        fetch(`${API_BASE_URL}/classrooms/list/${currentUser.school_id}`, {
+          headers: { ...(refreshToken ? { 'Authorization': `Bearer ${refreshToken}` } : {}) }
+        })
+          .then(res => res.json())
+          .then(data => setClassrooms(Array.isArray(data) ? data : []))
+          .catch(() => {});
+      } else {
+        toast.error(data.detail || 'สร้างชั้นเรียนไม่สำเร็จ');
+      }
+    } catch (err) {
+      console.error('Error creating classroom:', err);
+      toast.error('เกิดข้อผิดพลาดในการสร้างชั้นเรียน');
+    } finally {
+      setCreatingClassroom(false);
+    }
+  };
+
+  const addStudentsToClassroom = async () => {
+    if (classroomStudentsToAdd.size === 0) {
+      toast.warning('กรุณาเลือกนักเรียน');
+      return;
+    }
+
+    const token = localStorage.getItem('token');
+    setAddingStudentsToClassroom(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/classrooms/${selectedClassroom.id}/add-students`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(Array.from(classroomStudentsToAdd)),
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        toast.success(`เพิ่ม ${data.added_count} นักเรียนสำเร็จ`);
+        setClassroomStudentsToAdd(new Set());
+        setClassroomStep('promote');
+        // โหลด classrooms ใหม่
+        const refreshToken = localStorage.getItem('token');
+        fetch(`${API_BASE_URL}/classrooms/list/${currentUser.school_id}`, {
+          headers: { ...(refreshToken ? { 'Authorization': `Bearer ${refreshToken}` } : {}) }
+        })
+          .then(res => res.json())
+          .then(data => setClassrooms(Array.isArray(data) ? data : []))
+          .catch(() => {});
+      } else {
+        if (data.errors && data.errors.length > 0) {
+          toast.error(data.errors.join(', '));
+        } else {
+          toast.error('เพิ่มนักเรียนไม่สำเร็จ');
+        }
+      }
+    } catch (err) {
+      console.error('Error adding students:', err);
+      toast.error('เกิดข้อผิดพลาดในการเพิ่มนักเรียน');
+    } finally {
+      setAddingStudentsToClassroom(false);
+    }
+  };
+
+  const promoteClassroom = async () => {
+    const token = localStorage.getItem('token');
+    setPromotingClassroom(true);
+    try {
+      const payload = {
+        promotion_type: classroomPromotionType,
+        include_grades: true,
+      };
+
+      if (classroomPromotionType === 'end_of_year') {
+        if (!classroomPromotionNewGrade) {
+          toast.error('กรุณาระบุชั้นปีใหม่');
+          setPromotingClassroom(false);
+          return;
+        }
+        payload.new_grade_level = classroomPromotionNewGrade;
+        payload.new_academic_year = (parseInt(selectedClassroom.academic_year) + 1).toString();
+      }
+
+      const response = await fetch(`${API_BASE_URL}/classrooms/${selectedClassroom.id}/promote`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        toast.success(data.message);
+        setShowClassroomModal(false);
+        setClassroomStep('select');
+        setNewClassroomName('');
+        setNewClassroomGradeLevel('');
+        setNewClassroomRoomNumber('');
+        setClassroomStudentsToAdd(new Set());
+        setClassroomPromotionNewGrade('');
+        // โหลด classrooms ใหม่
+        const refreshToken = localStorage.getItem('token');
+        fetch(`${API_BASE_URL}/classrooms/list/${currentUser.school_id}`, {
+          headers: { ...(refreshToken ? { 'Authorization': `Bearer ${refreshToken}` } : {}) }
+        })
+          .then(res => res.json())
+          .then(data => setClassrooms(Array.isArray(data) ? data : []))
+          .catch(() => {});
+      } else {
+        toast.error(data.message || 'เลื่อนชั้นไม่สำเร็จ');
+      }
+    } catch (err) {
+      console.error('Error promoting classroom:', err);
+      toast.error('เกิดข้อผิดพลาดในการเลื่อนชั้น');
+    } finally {
+      setPromotingClassroom(false);
+    }
+  };
+
+  const closeClassroomModal = () => {
+    setShowClassroomModal(false);
+    setClassroomStep('select');
+    setNewClassroomName('');
+    setNewClassroomGradeLevel('');
+    setNewClassroomRoomNumber('');
+    setSelectedClassroom(null);
+    setClassroomStudentsToAdd(new Set());
+    setClassroomPromotionType('mid_term');
+    setClassroomPromotionNewGrade('');
+  };
+
+  const editClassroom = (classroom) => {
+    setSelectedClassroom(classroom);
+    setNewClassroomName(classroom.name);
+    setNewClassroomGradeLevel(classroom.grade_level);
+    setNewClassroomRoomNumber(classroom.room_number || '');
+    setNewClassroomSemester(classroom.semester || 1);
+    setNewClassroomAcademicYear(classroom.academic_year || '');
+    setClassroomStep('edit');
+  };
+
+  const updateClassroom = async () => {
+    if (!selectedClassroom || !newClassroomName || !newClassroomGradeLevel) {
+      toast.error('กรุณากรอกชื่อชั้นเรียนและชั้นปี');
+      return;
+    }
+
+    const token = localStorage.getItem('token');
+    setCreatingClassroom(true);
+    try {
+      const payload = {
+        name: newClassroomName,
+        grade_level: newClassroomGradeLevel,
+        room_number: newClassroomRoomNumber || null,
+        semester: newClassroomSemester,
+        academic_year: newClassroomAcademicYear || new Date().getFullYear().toString(),
+      };
+
+      const response = await fetch(`${API_BASE_URL}/classrooms/${selectedClassroom.id}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        toast.success('✓ แก้ไขชั้นเรียนสำเร็จ');
+        // Refresh classrooms list
+        if (currentUser?.school_id) {
+          const res = await fetch(`${API_BASE_URL}/classrooms/list/${currentUser.school_id}`, {
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+          });
+          if (res.ok) {
+            const classroomData = await res.json();
+            setClassrooms(Array.isArray(classroomData) ? classroomData : []);
+          }
+        }
+        closeClassroomModal();
+      } else {
+        toast.error(data.detail || 'ไม่สามารถแก้ไขชั้นเรียน');
+      }
+    } catch (err) {
+      console.error('Error updating classroom:', err);
+      toast.error('เกิดข้อผิดพลาดในการแก้ไขชั้นเรียน');
+    } finally {
+      setCreatingClassroom(false);
+    }
+  };
+
+  const deleteClassroom = async (classroom) => {
+    openConfirmModal(
+      'ลบชั้นเรียน',
+      `ต้องการลบชั้นเรียน "${classroom.name}" (${classroom.grade_level}) ใช่หรือไม่?\n\n⚠️ หากชั้นเรียนมีนักเรียน การลบอาจไม่สำเร็จ`,
+      async () => {
+        const token = localStorage.getItem('token');
+        try {
+          const response = await fetch(`${API_BASE_URL}/classrooms/${classroom.id}`, {
+            method: 'DELETE',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+          });
+
+          if (response.ok) {
+            toast.success('✓ ลบชั้นเรียนสำเร็จ');
+            // Refresh classrooms list
+            if (currentUser?.school_id) {
+              const res = await fetch(`${API_BASE_URL}/classrooms/list/${currentUser.school_id}`, {
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+              });
+              if (res.ok) {
+                const classroomData = await res.json();
+                setClassrooms(Array.isArray(classroomData) ? classroomData : []);
+              }
+            }
+          } else {
+            const data = await response.json();
+            toast.error(data.detail || 'ไม่สามารถลบชั้นเรียน');
+          }
+        } catch (err) {
+          console.error('Error deleting classroom:', err);
+          toast.error('เกิดข้อผิดพลาดในการลบชั้นเรียน');
+        }
+      }
+    );
   };
 
   return (
@@ -1129,8 +1635,9 @@ function AdminPage() {
 
       <div className="tabs-header">
         <button className={`admin-tab-button ${activeTab === 'users' ? 'active' : ''}`} onClick={() => setActiveTab('users')}>จัดการผู้ใช้</button>
+        <button className={`admin-tab-button ${activeTab === 'classrooms' ? 'active' : ''}`} onClick={() => setActiveTab('classrooms')}>จัดการชั้นเรียน</button>
+        <button className={`admin-tab-button ${activeTab === 'promotions' ? 'active' : ''}`} onClick={() => setActiveTab('promotions')}>เลื่อนชั้นเรียน</button>
         <button className={`admin-tab-button ${activeTab === 'homeroom' ? 'active' : ''}`} onClick={() => setActiveTab('homeroom')}>ครูประจำชั้น</button>
-        <button className={`admin-tab-button ${activeTab === 'grades' ? 'active' : ''}`} onClick={() => setActiveTab('grades')}>จัดการชั้นเรียน</button>
         <button className={`admin-tab-button ${activeTab === 'announcements' ? 'active' : ''}`} onClick={() => setActiveTab('announcements')}>จัดการประกาศข่าว</button>
         <button className={`admin-tab-button ${activeTab === 'absences' ? 'active' : ''}`} onClick={() => setActiveTab('absences')}>อนุมัติการลา</button>
         <button className={`admin-tab-button ${activeTab === 'schedule' ? 'active' : ''}`} onClick={() => setActiveTab('schedule')}>จัดการตารางเรียน</button>
@@ -1421,6 +1928,240 @@ function AdminPage() {
             </div>
           </div>
         )}
+        {activeTab === 'classrooms' && (
+          <div className="content-card">
+            <div className="card-header">
+              <h2><span className="card-icon">🏫</span> จัดการชั้นเรียน (กลุ่ม A)</h2>
+            </div>
+            <div className="card-content">
+              {/* คำอธิบาย */}
+              <div style={{ marginBottom: '2rem', padding: '1.5rem', backgroundColor: '#e3f2fd', borderRadius: '12px', border: '1px solid #90caf9' }}>
+                <h4 style={{ marginTop: 0, marginBottom: '0.5rem', color: '#1565c0' }}>📋 ขั้นตอนการจัดการชั้นเรียน</h4>
+                <ol style={{ margin: 0, paddingLeft: '1.5rem', color: '#37474f' }}>
+                  <li><strong>สร้างชั้นเรียน</strong> - กำหนดชั้นปี เลือกว่าจะมีห้องเดียวหรือหลายห้อง</li>
+                  <li><strong>เพิ่มนักเรียน</strong> - เลือกนักเรียนเข้าชั้นเรียนที่สร้างไว้</li>
+                </ol>
+              </div>
+
+              {/* ปุ่มสร้างชั้นเรียน */}
+              <div style={{ marginBottom: '2rem' }}>
+                <button 
+                  onClick={() => {
+                    setShowClassroomModal(true);
+                    setClassroomStep('select');
+                  }}
+                  style={{
+                    padding: '14px 32px',
+                    fontSize: '1.05rem',
+                    fontWeight: '600',
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '10px',
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 15px rgba(102, 126, 234, 0.4)',
+                    transition: 'all 0.3s ease',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '10px'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.target.style.transform = 'translateY(-2px)';
+                    e.target.style.boxShadow = '0 8px 25px rgba(102, 126, 234, 0.6)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.target.style.transform = 'translateY(0)';
+                    e.target.style.boxShadow = '0 4px 15px rgba(102, 126, 234, 0.4)';
+                  }}
+                >
+                  <span style={{ fontSize: '1.3rem' }}>➕</span>
+                  สร้างชั้นเรียนใหม่
+                </button>
+              </div>
+
+              {/* รายการชั้นเรียน */}
+              <h3 style={{ marginBottom: '1rem', color: '#334155' }}>📚 รายการชั้นเรียนทั้งหมด</h3>
+              {classrooms.length === 0 ? (
+                <div className="empty-state">
+                  <div className="empty-icon">🏫</div>
+                  <div className="empty-text">ยังไม่มีชั้นเรียน</div>
+                  <div className="empty-subtitle">เริ่มต้นโดยการสร้างชั้นเรียนใหม่</div>
+                </div>
+              ) : (
+                <div style={{ overflowX: 'auto' }}>
+                  <table className="admin-table">
+                    <thead>
+                      <tr>
+                        <th>ชื่อชั้นเรียน</th>
+                        <th>ชั้นปี</th>
+                        <th>เทอม</th>
+                        <th>ปีการศึกษา</th>
+                        <th>จำนวนนักเรียน</th>
+                        <th>การจัดการ</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {classrooms.map(classroom => (
+                        <tr key={classroom.id}>
+                          <td>{classroom.name}</td>
+                          <td>{classroom.grade_level}</td>
+                          <td>{classroom.semester ? `เทอม ${classroom.semester}` : '-'}</td>
+                          <td>{classroom.academic_year || '-'}</td>
+                          <td>{classroom.student_count || 0} คน</td>
+                          <td>
+                            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                              <button 
+                                className="admin-btn-small admin-btn-primary"
+                                onClick={() => {
+                                  setSelectedClassroom(classroom);
+                                  setClassroomStudentsToAdd(new Set());
+                                  setShowClassroomModal(true);
+                                  setClassroomStep('add_students');
+                                }}
+                                title="เพิ่มนักเรียน"
+                              >
+                                👨‍🎓 เพิ่มนักเรียน
+                              </button>
+                              <button 
+                                className="admin-btn-small"
+                                onClick={() => {
+                                  // ดูรายชื่อนักเรียน
+                                  setSelectedClassroom(classroom);
+                                  setShowClassroomModal(true);
+                                  setClassroomStep('view_students');
+                                }}
+                                title="ดูรายชื่อนักเรียน"
+                              >
+                                👁️ ดูนักเรียน
+                              </button>
+                              <button 
+                                className="admin-btn-small admin-btn-warning"
+                                onClick={() => {
+                                  editClassroom(classroom);
+                                  setShowClassroomModal(true);
+                                }}
+                                title="แก้ไขชั้นเรียน"
+                              >
+                                ✏️ แก้ไข
+                              </button>
+                              <button 
+                                className="admin-btn-small admin-btn-danger"
+                                onClick={() => deleteClassroom(classroom)}
+                                title="ลบชั้นเรียน"
+                              >
+                                🗑️ ลบ
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+        {activeTab === 'promotions' && (
+          <div className="content-card">
+            <div className="card-header">
+              <h2><span className="card-icon">⬆️</span> เลื่อนชั้นเรียน (กลุ่ม B)</h2>
+            </div>
+            <div className="card-content">
+              {/* คำอธิบาย */}
+              <div style={{ marginBottom: '2rem', padding: '1.5rem', backgroundColor: '#f3e5f5', borderRadius: '12px', border: '1px solid #ce93d8' }}>
+                <h4 style={{ marginTop: 0, marginBottom: '0.5rem', color: '#7b1fa2' }}>📋 ประเภทการเลื่อนชั้น</h4>
+                <ul style={{ margin: 0, paddingLeft: '1.5rem', color: '#4a148c' }}>
+                  <li><strong>เลื่อนกลางปี (เทอม 1 → เทอม 2)</strong> - สร้างชั้นเรียนใหม่ในเทอม 2 โดยดึงคะแนนเทอม 1 มาด้วย</li>
+                  <li><strong>เลื่อนปลายปี</strong> - สร้างชั้นเรียนระดับถัดไป (เช่น ป.1 → ป.2) ในปีการศึกษาใหม่</li>
+                </ul>
+              </div>
+
+              {/* เลือกประเภทการเลื่อนชั้น */}
+              <div style={{ marginBottom: '2rem', padding: '1.5rem', backgroundColor: '#f5f5f5', borderRadius: '12px' }}>
+                <h4 style={{ marginTop: 0, marginBottom: '1rem' }}>เลือกประเภทการเลื่อนชั้น</h4>
+                <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                    <input 
+                      type="radio" 
+                      name="promotionTypeTab" 
+                      value="mid_term"
+                      checked={classroomPromotionType === 'mid_term'}
+                      onChange={e => setClassroomPromotionType(e.target.value)}
+                    />
+                    <span>🔄 เลื่อนกลางปี (เทอม 1 → เทอม 2)</span>
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                    <input 
+                      type="radio" 
+                      name="promotionTypeTab" 
+                      value="end_of_year"
+                      checked={classroomPromotionType === 'end_of_year'}
+                      onChange={e => setClassroomPromotionType(e.target.value)}
+                    />
+                    <span>📈 เลื่อนปลายปี (ขึ้นชั้นใหม่)</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* เลือกชั้นเรียนที่จะเลื่อน */}
+              <h3 style={{ marginBottom: '1rem', color: '#334155' }}>📚 เลือกชั้นเรียนที่ต้องการเลื่อน</h3>
+              {classrooms.filter(c => 
+                classroomPromotionType === 'mid_term' ? c.semester === 1 : true
+              ).length === 0 ? (
+                <div className="empty-state">
+                  <div className="empty-icon">🏫</div>
+                  <div className="empty-text">
+                    {classroomPromotionType === 'mid_term' 
+                      ? 'ไม่พบชั้นเรียนเทอม 1 ที่สามารถเลื่อนได้' 
+                      : 'ยังไม่มีชั้นเรียน'}
+                  </div>
+                </div>
+              ) : (
+                <div style={{ overflowX: 'auto' }}>
+                  <table className="admin-table">
+                    <thead>
+                      <tr>
+                        <th>ชื่อชั้นเรียน</th>
+                        <th>ชั้นปี</th>
+                        <th>เทอม</th>
+                        <th>ปีการศึกษา</th>
+                        <th>จำนวนนักเรียน</th>
+                        <th>การจัดการ</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {classrooms
+                        .filter(c => classroomPromotionType === 'mid_term' ? c.semester === 1 : true)
+                        .map(classroom => (
+                        <tr key={classroom.id}>
+                          <td>{classroom.name}</td>
+                          <td>{classroom.grade_level}</td>
+                          <td>{classroom.semester ? `เทอม ${classroom.semester}` : '-'}</td>
+                          <td>{classroom.academic_year || '-'}</td>
+                          <td>{classroom.student_count || 0} คน</td>
+                          <td>
+                            <button 
+                              className="admin-btn-small admin-btn-success"
+                              onClick={() => {
+                                setSelectedClassroom(classroom);
+                                setShowClassroomModal(true);
+                                setClassroomStep('promote');
+                              }}
+                              title={classroomPromotionType === 'mid_term' ? 'เลื่อนไปเทอม 2' : 'เลื่อนชั้นปลายปี'}
+                            >
+                              ⬆️ {classroomPromotionType === 'mid_term' ? 'เลื่อนไปเทอม 2' : 'เลื่อนชั้น'}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
         {activeTab === 'homeroom' && (
           <div className="content-card">
             <div className="card-header">
@@ -1503,233 +2244,6 @@ function AdminPage() {
                       </div>
                     </div>
                   )}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-        {activeTab === 'grades' && (
-          <div className="content-card">
-            <div className="card-header">
-              <h2><span className="card-icon">📚</span> จัดการชั้นเรียน</h2>
-            </div>
-            <div className="card-content">
-              {/* Web-based Individual Grade Assignment */}
-              <div className="grade-individual-section" style={{ marginBottom: '3rem', paddingBottom: '2rem', borderBottom: '2px solid rgba(102, 126, 234, 0.2)' }}>
-                <h3 style={{ marginTop: 0, marginBottom: '1.5rem', color: '#334155', fontSize: '1.2rem', fontWeight: 700 }}>
-                  ⚡ จัดการแบบแยกรายคน
-                </h3>
-
-                {/* Student Selection */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
-                  <div className="admin-form-group">
-                    <label className="admin-form-label">ค้นหาและเลือกนักเรียน</label>
-                    <input 
-                      type="text"
-                      className="admin-form-input"
-                      placeholder="ค้นหาชื่อ, ชื่อผู้ใช้, หรืออีเมล"
-                      value={studentSearchTerm}
-                      onChange={(e) => setStudentSearchTerm(e.target.value)}
-                      style={{ marginBottom: '0.5rem' }}
-                    />
-                    <select 
-                      className="admin-form-input"
-                      value={selectedStudentId}
-                      onChange={(e) => setSelectedStudentId(e.target.value)}
-                      size={Math.min(filteredStudents.length + 1, 5)}
-                      style={{ height: 'auto', minHeight: '100px' }}
-                    >
-                      <option value="">-- เลือกนักเรียน --</option>
-                      {filteredStudents.map(s => (
-                        <option key={s.id} value={s.id}>
-                          {s.full_name} ({s.username}) - ชั้น {s.grade_level || 'ยังไม่ระบุ'}
-                        </option>
-                      ))}
-                    </select>
-                    {studentSearchTerm && filteredStudents.length === 0 && (
-                      <div style={{ padding: '1rem', backgroundColor: '#fef2f2', borderRadius: '8px', color: '#991b1b', fontSize: '0.9rem', marginTop: '0.5rem' }}>
-                        ไม่พบนักเรียนที่ตรงกับการค้นหา
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="admin-form-group">
-                    <label className="admin-form-label">ชั้นเรียน</label>
-                    <input 
-                      type="text"
-                      className="admin-form-input"
-                      placeholder="เช่น ป.1, ม.1, ม.2"
-                      value={selectedGradeLevel}
-                      onChange={(e) => setSelectedGradeLevel(e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                {/* Selected Student Info */}
-                {selectedStudentId && (
-                  <div style={{ padding: '1rem', backgroundColor: '#f0fdf4', borderRadius: '10px', border: '1px solid #dcfce7', marginBottom: '1.5rem' }}>
-                    {(() => {
-                      const selected = students.find(s => s.id === Number(selectedStudentId));
-                      return selected ? (
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', fontSize: '0.9rem' }}>
-                          <div>
-                            <div style={{ color: '#64748b', marginBottom: '0.25rem' }}>📝 ชื่อเต็ม</div>
-                            <div style={{ fontWeight: 600, color: '#1e293b' }}>{selected.full_name}</div>
-                          </div>
-                          <div>
-                            <div style={{ color: '#64748b', marginBottom: '0.25rem' }}>📧 อีเมล</div>
-                            <div style={{ fontWeight: 600, color: '#1e293b' }}>{selected.email}</div>
-                          </div>
-                          <div>
-                            <div style={{ color: '#64748b', marginBottom: '0.25rem' }}>🆔 ชื่อผู้ใช้</div>
-                            <div style={{ fontWeight: 600, color: '#1e293b' }}>{selected.username}</div>
-                          </div>
-                          <div>
-                            <div style={{ color: '#64748b', marginBottom: '0.25rem' }}>📚 ชั้นเรียนปัจจุบัน</div>
-                            <div style={{ fontWeight: 600, color: selected.grade_level ? '#15803d' : '#94a3b8' }}>
-                              {selected.grade_level || 'ยังไม่ระบุ'}
-                            </div>
-                          </div>
-                        </div>
-                      ) : null;
-                    })()}
-                  </div>
-                )}
-
-                {/* Assign Button */}
-                <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-                  <button 
-                    type="button"
-                    className="admin-btn-primary"
-                    onClick={assignGradeToStudent}
-                    disabled={assigningIndividualGrade || !selectedStudentId || !selectedGradeLevel}
-                    style={{ minWidth: '200px' }}
-                  >
-                    {assigningIndividualGrade ? (
-                      <>
-                        <span style={{ marginRight: '0.5rem' }}>⏳</span>
-                        กำลังอัปเดต...
-                      </>
-                    ) : (
-                      <>
-                        <span style={{ marginRight: '0.5rem' }}>✓</span>
-                        อัปเดตชั้นเรียน
-                      </>
-                    )}
-                  </button>
-                  <button 
-                    type="button"
-                    className="admin-btn-secondary"
-                    onClick={() => {
-                      setSelectedStudentId('');
-                      setSelectedGradeLevel('');
-                      setStudentSearchTerm('');
-                    }}
-                  >
-                    🔄 ล้างข้อมูล
-                  </button>
-                </div>
-              </div>
-
-              {/* Bulk Upload Section */}
-              <div className="grade-assignment-section">
-                <h3 style={{ marginTop: 0, marginBottom: '1.5rem', color: '#334155', fontSize: '1.2rem', fontWeight: 700 }}>
-                  📤 อัปโหลดไฟล์ Excel (สำหรับจำนวนมาก)
-                </h3>
-                <p style={{ marginBottom: '1.5rem', color: '#475569', fontSize: '0.95rem' }}>
-                  อัปโหลดไฟล์ Excel เพื่อเพิ่มชั้นเรียนให้กับนักเรียนที่มีอยู่ในระบบแล้ว หรือสร้างนักเรียนใหม่พร้อมกำหนดชั้นเรียน
-                </p>
-
-                <div className="grade-upload-controls">
-                  <div 
-                    className={`file-upload-area ${gradeDragOver ? 'drag-over' : ''} ${gradeAssignmentFile ? 'has-file' : ''}`}
-                    onDragOver={handleGradeFileDragOver}
-                    onDragLeave={handleGradeFileDragLeave}
-                    onDrop={handleGradeFileDrop}
-                    onClick={() => document.getElementById('grade-assignment-input').click()}
-                  >
-                    <input 
-                      id="grade-assignment-input" 
-                      type="file" 
-                      accept=".xlsx" 
-                      onChange={handleGradeFileChange}
-                      style={{ display: 'none' }}
-                    />
-                    <div className="upload-icon">
-                      {assigningGrades ? '⏳' : gradeAssignmentFile ? '📄' : '📁'}
-                    </div>
-                    <div className="upload-text">
-                      {assigningGrades ? (
-                        <span>กำลังประมวลผล...</span>
-                      ) : gradeAssignmentFile ? (
-                        <>
-                          <span className="file-name">{gradeAssignmentFile.name}</span>
-                          <span className="file-size">({(gradeAssignmentFile.size / 1024).toFixed(1)} KB)</span>
-                        </>
-                      ) : (
-                        <>
-                          <span className="primary-text">ลากไฟล์ Excel มาที่นี่ หรือคลิกเพื่อเลือกไฟล์</span>
-                          <span className="secondary-text">รองรับไฟล์ .xlsx เท่านั้น</span>
-                        </>
-                      )}
-                    </div>
-                    {gradeAssignmentFile && !assigningGrades && (
-                      <button 
-                        type="button" 
-                        className="file-remove-btn"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setGradeAssignmentFile(null);
-                          const inp = document.getElementById('grade-assignment-input');
-                          if (inp) inp.value = '';
-                        }}
-                        title="ลบไฟล์"
-                      >
-                        ✕
-                      </button>
-                    )}
-                  </div>
-                  <button 
-                    type="button" 
-                    className="admin-btn-primary" 
-                    onClick={uploadGradeAssignmentFile} 
-                    disabled={assigningGrades || !gradeAssignmentFile}
-                  >
-                    {assigningGrades ? (
-                      <>
-                        <span className="btn-icon" aria-hidden>⏳</span>
-                        กำลังประมวลผล...
-                      </>
-                    ) : (
-                      <>
-                        <span className="btn-icon" aria-hidden>⬆️</span>
-                        อัปโหลดและเพิ่มชั้นเรียน
-                      </>
-                    )}
-                  </button>
-                  <button 
-                    type="button" 
-                    className="admin-btn-secondary" 
-                    onClick={downloadGradeTemplate}
-                  >
-                    📋 ดาวน์โหลดเทมเพลต
-                  </button>
-                </div>
-
-                <div style={{ marginTop: '2rem', padding: '1.5rem', backgroundColor: '#f0f9ff', borderRadius: '12px', border: '1px solid #e0f2fe' }}>
-                  <h4 style={{ marginTop: 0, marginBottom: '1rem', color: '#0369a1' }}>📋 รูปแบบไฟล์ Excel</h4>
-                  <p style={{ marginBottom: '0.5rem', fontSize: '0.9rem', color: '#475569' }}>
-                    ไฟล์ต้องมีคอลัมน์ดังต่อไปนี้ (row แรกเป็น header):
-                  </p>
-                  <ul style={{ marginLeft: '1.5rem', color: '#475569', fontSize: '0.9rem' }}>
-                    <li><strong>username</strong> - ชื่อผู้ใช้ (ต้องมี)</li>
-                    <li><strong>email</strong> - อีเมล (ต้องมี)</li>
-                    <li><strong>full_name</strong> - ชื่อเต็ม (ต้องมี)</li>
-                    <li><strong>grade_level</strong> - ชั้นเรียน เช่น "ป.1", "ม.1" (ต้องมี)</li>
-                  </ul>
-                  <p style={{ marginTop: '1rem', marginBottom: 0, fontSize: '0.85rem', color: '#64748b', fontStyle: 'italic' }}>
-                    💡 หากนักเรียนมีอยู่ในระบบแล้ว จะอัปเดตชั้นเรียน หากยังไม่มี จะสร้างใหม่พร้อมรหัสผ่านชั่วคราว
-                  </p>
                 </div>
               </div>
             </div>
@@ -2005,6 +2519,499 @@ function AdminPage() {
                 <span>{editingSchedule ? '✏️' : '➕'}</span>
                 {editingSchedule ? 'แก้ไขช่วงเวลา' : 'เพิ่มช่วงเวลา'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Classroom Management Modal */}
+      {showClassroomModal && (
+        <div className="admin-modal-overlay">
+          <div className="modal" style={{ maxWidth: '800px', maxHeight: '90vh', overflowY: 'auto' }}>
+            {/* Header with group indicator */}
+            <div className="admin-modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flex: 1 }}>
+                <div>
+                  <h3 style={{ margin: 0 }}>
+                    {(classroomStep === 'select' || classroomStep === 'add_students' || classroomStep === 'view_students') && '🏫 จัดการชั้นเรียน (กลุ่ม A)'}
+                    {classroomStep === 'promote' && '⬆️ เลื่อนชั้นเรียน (กลุ่ม B)'}
+                    {classroomStep === 'edit' && '✏️ แก้ไขชั้นเรียน'}
+                  </h3>
+                  <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>
+                    {classroomStep === 'select' && 'ขั้นที่ 1: สร้างชั้นเรียนใหม่'}
+                    {classroomStep === 'add_students' && 'ขั้นที่ 2: เพิ่มนักเรียน'}
+                    {classroomStep === 'view_students' && 'ดูรายชื่อนักเรียน'}
+                    {classroomStep === 'promote' && 'เลื่อนชั้นเรียนไปยังเทอมหรือชั้นปีถัดไป'}
+                    {classroomStep === 'edit' && 'แก้ไขข้อมูลชั้นเรียน'}
+                  </div>
+                </div>
+              </div>
+              <button className="admin-modal-close" onClick={closeClassroomModal}>×</button>
+            </div>
+
+            {/* Progress indicator for Group A */}
+            {(classroomStep === 'select' || classroomStep === 'add_students' || classroomStep === 'view_students') && (
+              <div style={{ padding: '1rem', backgroundColor: '#f0f7ff', borderBottom: '1px solid #e0e0e0', display: 'flex', gap: '1rem', justifyContent: 'center', alignItems: 'center' }}>
+                <div style={{ 
+                  padding: '8px 16px', 
+                  backgroundColor: classroomStep === 'select' ? '#1976d2' : '#e0e0e0',
+                  color: classroomStep === 'select' ? 'white' : '#666',
+                  borderRadius: '4px',
+                  fontSize: '14px',
+                  fontWeight: 'bold',
+                  cursor: classroomStep !== 'select' ? 'pointer' : 'default'
+                }}>
+                  1️⃣ สร้าง
+                </div>
+                <div style={{ color: '#999' }}>→</div>
+                <div style={{ 
+                  padding: '8px 16px', 
+                  backgroundColor: classroomStep === 'add_students' ? '#1976d2' : '#e0e0e0',
+                  color: classroomStep === 'add_students' ? 'white' : '#666',
+                  borderRadius: '4px',
+                  fontSize: '14px',
+                  fontWeight: 'bold',
+                  cursor: classroomStep === 'add_students' ? 'pointer' : 'default'
+                }}>
+                  2️⃣ เพิ่มนักเรียน
+                </div>
+                <div style={{ color: '#999' }}>→</div>
+                <div style={{ 
+                  padding: '8px 16px', 
+                  backgroundColor: classroomStep === 'view_students' ? '#1976d2' : '#e0e0e0',
+                  color: classroomStep === 'view_students' ? 'white' : '#666',
+                  borderRadius: '4px',
+                  fontSize: '14px',
+                  fontWeight: 'bold',
+                  cursor: classroomStep === 'view_students' ? 'pointer' : 'default'
+                }}>
+                  3️⃣ ตรวจสอบ
+                </div>
+              </div>
+            )}
+
+            <div className="admin-modal-body">
+              {classroomStep === 'select' && (
+                <>
+                  {/* Instructions box */}
+                  <div style={{ marginBottom: '1.5rem', padding: '1rem', backgroundColor: '#e3f2fd', borderLeft: '4px solid #1976d2', borderRadius: '4px' }}>
+                    <p style={{ margin: 0, color: '#1565c0', fontSize: '14px' }}>
+                      📝 กรุณากรอกรายละเอียดชั้นเรียนใหม่ ตัวอย่างเช่น ป.1/1, ป.1/2, ป.1/3 เป็นต้น
+                    </p>
+                  </div>
+
+                  <div className="admin-form-group">
+                    <label className="admin-form-label">ชื่อชั้นเรียน <span style={{ color: 'red' }}>*</span></label>
+                    <input 
+                      className="admin-form-input" 
+                      type="text" 
+                      value={newClassroomName}
+                      onChange={e => setNewClassroomName(e.target.value)}
+                      placeholder="เช่น ป.1/1, ป.2/2"
+                    />
+                    <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>จำนวนห้องสามารถใส่เลขหรือตัวอักษรได้ เช่น 1, 2, 3 หรือ A, B, C</div>
+                  </div>
+
+                  <div className="admin-form-group">
+                    <label className="admin-form-label">ชั้นปี <span style={{ color: 'red' }}>*</span></label>
+                    <input 
+                      className="admin-form-input"
+                      type="text"
+                      value={newClassroomGradeLevel}
+                      onChange={e => setNewClassroomGradeLevel(e.target.value)}
+                      placeholder="เช่น ป.1, ม.1 (พิมพ์เพิ่มได้)"
+                      list="gradeListA"
+                    />
+                    <datalist id="gradeListA">
+                      {getClassroomGradeLevels().map(grade => (
+                        <option key={grade} value={grade} />
+                      ))}
+                    </datalist>
+                    <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>เลือกจากรายชื่อชั้นเรียนที่แอดมินสร้างไว้ หรือพิมพ์ชั้นปีใหม่ได้</div>
+                  </div>
+
+                  <div className="admin-form-group">
+                    <label className="admin-form-label">ห้องที่</label>
+                    <input 
+                      className="admin-form-input" 
+                      type="text" 
+                      value={newClassroomRoomNumber}
+                      onChange={e => setNewClassroomRoomNumber(e.target.value)}
+                      placeholder="เช่น 1, 2 หรือ ห้อง A"
+                    />
+                  </div>
+                  <div className="admin-form-group">
+                    <label className="admin-form-label">เทอม</label>
+                    <select 
+                      className="admin-form-input"
+                      value={newClassroomSemester}
+                      onChange={e => setNewClassroomSemester(parseInt(e.target.value))}
+                    >
+                      <option value={1}>เทอม 1</option>
+                      <option value={2}>เทอม 2</option>
+                    </select>
+                  </div>
+                  <div className="admin-form-group">
+                    <label className="admin-form-label">ปีการศึกษา</label>
+                    <input 
+                      className="admin-form-input" 
+                      type="text" 
+                      value={newClassroomAcademicYear}
+                      onChange={e => setNewClassroomAcademicYear(e.target.value)}
+                      placeholder={new Date().getFullYear().toString()}
+                    />
+                  </div>
+                </>
+              )}
+
+              {classroomStep === 'add_students' && (
+                <>
+                  {/* Instructions box */}
+                  <div style={{ marginBottom: '1.5rem', padding: '1rem', backgroundColor: '#f3e5f5', borderLeft: '4px solid #7b1fa2', borderRadius: '4px' }}>
+                    <p style={{ margin: 0, color: '#6a1b9a', fontSize: '14px' }}>
+                      ✓ เลือกนักเรียนที่ต้องการเพิ่มเข้าในชั้นเรียน {selectedClassroom?.name}
+                    </p>
+                  </div>
+
+                  <div style={{ marginBottom: '1rem' }}>
+                    <h4 style={{ color: '#1976d2', marginBottom: '0.5rem' }}>📚 รายชื่อนักเรียน ({classroomStudentsToAdd.size} คนที่เลือก)</h4>
+                    <div style={{ maxHeight: '400px', overflowY: 'auto', border: '1px solid #ddd', borderRadius: '4px', padding: '1rem' }}>
+                      {students.length === 0 ? (
+                        <div style={{ textAlign: 'center', color: '#999' }}>ไม่มีนักเรียน</div>
+                      ) : (
+                        students.map(student => (
+                          <div key={student.id} style={{ padding: '0.75rem', marginBottom: '0.5rem', backgroundColor: classroomStudentsToAdd.has(student.id) ? '#e8f5e9' : '#fff', borderBottom: '1px solid #eee', borderRadius: '4px', cursor: 'pointer', transition: 'background-color 0.2s' }}>
+                            <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                              <input 
+                                type="checkbox" 
+                                checked={classroomStudentsToAdd.has(student.id)}
+                                onChange={() => {
+                                  const newSet = new Set(classroomStudentsToAdd);
+                                  if (newSet.has(student.id)) {
+                                    newSet.delete(student.id);
+                                  } else {
+                                    newSet.add(student.id);
+                                  }
+                                  setClassroomStudentsToAdd(newSet);
+                                }}
+                              />
+                              <div style={{ flex: 1 }}>
+                                <div style={{ fontWeight: 'bold', color: '#333' }}>{student.full_name || student.username}</div>
+                                <div style={{ fontSize: '12px', color: '#999' }}>📧 {student.email}</div>
+                              </div>
+                            </label>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                    <div style={{ marginTop: '1rem', padding: '0.75rem', backgroundColor: '#f5f5f5', borderRadius: '4px', color: '#666', fontSize: '14px' }}>
+                      <strong>✓ เลือกแล้ว:</strong> {classroomStudentsToAdd.size} คน
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {classroomStep === 'view_students' && (
+                <>
+                  <div style={{ marginBottom: '1rem' }}>
+                    <div style={{ backgroundColor: '#e8f5e9', padding: '1rem', borderRadius: '8px', marginBottom: '1rem' }}>
+                      <div><strong>ชั้นเรียน:</strong> {selectedClassroom?.name}</div>
+                      <div><strong>ชั้นปี:</strong> {selectedClassroom?.grade_level}</div>
+                      <div><strong>เทอม:</strong> {selectedClassroom?.semester}</div>
+                      <div><strong>ปีการศึกษา:</strong> {selectedClassroom?.academic_year}</div>
+                    </div>
+                    <h4 style={{ color: '#2e7d32', marginBottom: '0.5rem' }}>รายชื่อนักเรียนในชั้นเรียน</h4>
+                    <div style={{ maxHeight: '400px', overflowY: 'auto', border: '1px solid #ddd', borderRadius: '4px' }}>
+                      {students.filter(s => {
+                        // แสดงนักเรียนที่มี grade_level ตรงกับชั้นเรียนนี้
+                        return s.grade_level === selectedClassroom?.grade_level;
+                      }).length === 0 ? (
+                        <div style={{ padding: '2rem', textAlign: 'center', color: '#999' }}>
+                          ยังไม่มีนักเรียนในชั้นเรียนนี้
+                        </div>
+                      ) : (
+                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                          <thead>
+                            <tr style={{ backgroundColor: '#f5f5f5' }}>
+                              <th style={{ padding: '10px', textAlign: 'left', borderBottom: '1px solid #ddd' }}>#</th>
+                              <th style={{ padding: '10px', textAlign: 'left', borderBottom: '1px solid #ddd' }}>ชื่อ-นามสกุล</th>
+                              <th style={{ padding: '10px', textAlign: 'left', borderBottom: '1px solid #ddd' }}>อีเมล</th>
+                              <th style={{ padding: '10px', textAlign: 'left', borderBottom: '1px solid #ddd' }}>สถานะ</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {students.filter(s => s.grade_level === selectedClassroom?.grade_level).map((student, idx) => (
+                              <tr key={student.id}>
+                                <td style={{ padding: '10px', borderBottom: '1px solid #eee' }}>{idx + 1}</td>
+                                <td style={{ padding: '10px', borderBottom: '1px solid #eee' }}>{student.full_name || student.username}</td>
+                                <td style={{ padding: '10px', borderBottom: '1px solid #eee' }}>{student.email}</td>
+                                <td style={{ padding: '10px', borderBottom: '1px solid #eee' }}>
+                                  <span style={{ 
+                                    padding: '4px 8px', 
+                                    borderRadius: '4px', 
+                                    fontSize: '12px',
+                                    backgroundColor: student.is_active ? '#e8f5e9' : '#ffebee',
+                                    color: student.is_active ? '#2e7d32' : '#c62828'
+                                  }}>
+                                    {student.is_active ? 'ใช้งาน' : 'ปิดใช้งาน'}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                    <div style={{ marginTop: '1rem', color: '#666', fontSize: '14px' }}>
+                      จำนวนนักเรียน: {students.filter(s => s.grade_level === selectedClassroom?.grade_level).length} คน
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {classroomStep === 'edit' && (
+                <>
+                  {/* Instructions box */}
+                  <div style={{ marginBottom: '1.5rem', padding: '1rem', backgroundColor: '#fff3e0', borderLeft: '4px solid #f57c00', borderRadius: '4px' }}>
+                    <p style={{ margin: 0, color: '#e65100', fontSize: '14px' }}>
+                      ✏️ แก้ไขข้อมูลชั้นเรียน {selectedClassroom?.name}
+                    </p>
+                  </div>
+
+                  <div className="admin-form-group">
+                    <label className="admin-form-label">ชื่อชั้นเรียน <span style={{ color: 'red' }}>*</span></label>
+                    <input 
+                      className="admin-form-input" 
+                      type="text" 
+                      value={newClassroomName}
+                      onChange={e => setNewClassroomName(e.target.value)}
+                      placeholder="เช่น ป.1/1, ป.2/2"
+                    />
+                  </div>
+
+                  <div className="admin-form-group">
+                    <label className="admin-form-label">ชั้นปี <span style={{ color: 'red' }}>*</span></label>
+                    <input 
+                      className="admin-form-input"
+                      type="text"
+                      value={newClassroomGradeLevel}
+                      onChange={e => setNewClassroomGradeLevel(e.target.value)}
+                      placeholder="เช่น ป.1, ม.1"
+                      list="gradeListEdit"
+                    />
+                    <datalist id="gradeListEdit">
+                      {getClassroomGradeLevels().map(grade => (
+                        <option key={grade} value={grade} />
+                      ))}
+                    </datalist>
+                  </div>
+
+                  <div className="admin-form-group">
+                    <label className="admin-form-label">ห้องที่</label>
+                    <input 
+                      className="admin-form-input" 
+                      type="text" 
+                      value={newClassroomRoomNumber}
+                      onChange={e => setNewClassroomRoomNumber(e.target.value)}
+                      placeholder="เช่น 1, 2 หรือ ห้อง A"
+                    />
+                  </div>
+                  <div className="admin-form-group">
+                    <label className="admin-form-label">เทอม</label>
+                    <select 
+                      className="admin-form-input"
+                      value={newClassroomSemester}
+                      onChange={e => setNewClassroomSemester(parseInt(e.target.value))}
+                    >
+                      <option value={1}>เทอม 1</option>
+                      <option value={2}>เทอม 2</option>
+                    </select>
+                  </div>
+                  <div className="admin-form-group">
+                    <label className="admin-form-label">ปีการศึกษา</label>
+                    <input 
+                      className="admin-form-input" 
+                      type="text" 
+                      value={newClassroomAcademicYear}
+                      onChange={e => setNewClassroomAcademicYear(e.target.value)}
+                      placeholder={new Date().getFullYear().toString()}
+                    />
+                  </div>
+                </>
+              )}
+
+              {classroomStep === 'promote' && (
+                <>
+                  {/* Instructions box */}
+                  <div style={{ marginBottom: '1.5rem', padding: '1rem', backgroundColor: '#f3e5f5', borderLeft: '4px solid #7b1fa2', borderRadius: '4px' }}>
+                    <p style={{ margin: 0, color: '#6a1b9a', fontSize: '14px' }}>
+                      📌 เลือกประเภทการเลื่อนชั้นและยืนยันการดำเนินการ นักเรียนและคะแนนจะถูกย้ายไปชั้นใหม่
+                    </p>
+                  </div>
+
+                  <div style={{ backgroundColor: '#e3f2fd', padding: '1.25rem', borderRadius: '8px', marginBottom: '1.5rem', border: '2px solid #1976d2' }}>
+                    <h4 style={{ marginTop: 0, marginBottom: '0.75rem', color: '#1565c0', fontSize: '16px' }}>🏫 ชั้นเรียนปัจจุบัน</h4>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', fontSize: '14px' }}>
+                      <div>
+                        <span style={{ color: '#666' }}>ชื่อชั้น:</span><br />
+                        <strong style={{ fontSize: '16px', color: '#1976d2' }}>{selectedClassroom?.name}</strong>
+                      </div>
+                      <div>
+                        <span style={{ color: '#666' }}>จำนวนนักเรียน:</span><br />
+                        <strong style={{ fontSize: '16px', color: '#1976d2' }}>👨‍🎓 {selectedClassroom?.student_count || 0} คน</strong>
+                      </div>
+                      <div>
+                        <span style={{ color: '#666' }}>ชั้นปี:</span><br />
+                        <strong>{selectedClassroom?.grade_level}</strong>
+                      </div>
+                      <div>
+                        <span style={{ color: '#666' }}>เทอม:</span><br />
+                        <strong>เทอม {selectedClassroom?.semester}</strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="admin-form-group">
+                    <label className="admin-form-label">ประเภทการเลื่อนชั้น <span style={{ color: 'red' }}>*</span></label>
+                    <div style={{ display: 'flex', gap: '2rem', marginTop: '0.75rem', flexWrap: 'wrap' }}>
+                      <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem', backgroundColor: classroomPromotionType === 'mid_term' ? '#e8f5e9' : '#f5f5f5', borderRadius: '6px', flex: 'auto', minWidth: '200px' }}>
+                        <input 
+                          type="radio" 
+                          name="classroomPromotion" 
+                          value="mid_term"
+                          checked={classroomPromotionType === 'mid_term'}
+                          onChange={e => setClassroomPromotionType(e.target.value)}
+                        />
+                        <div>
+                          <strong>🔄 เลื่อนกลางปี</strong><br />
+                          <span style={{ fontSize: '12px', color: '#666' }}>เทอม 1 → เทอม 2</span>
+                        </div>
+                      </label>
+                      <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem', backgroundColor: classroomPromotionType === 'end_of_year' ? '#e8f5e9' : '#f5f5f5', borderRadius: '6px', flex: 'auto', minWidth: '200px' }}>
+                        <input 
+                          type="radio" 
+                          name="classroomPromotion" 
+                          value="end_of_year"
+                          checked={classroomPromotionType === 'end_of_year'}
+                          onChange={e => setClassroomPromotionType(e.target.value)}
+                        />
+                        <div>
+                          <strong>📈 เลื่อนปลายปี</strong><br />
+                          <span style={{ fontSize: '12px', color: '#666' }}>ขึ้นชั้นใหม่</span>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+
+                  {classroomPromotionType === 'end_of_year' && (
+                    <div className="admin-form-group">
+                      <label className="admin-form-label">ชั้นปีใหม่ <span style={{ color: 'red' }}>*</span></label>
+                      <input 
+                        className="admin-form-input"
+                        type="text"
+                        value={classroomPromotionNewGrade}
+                        onChange={e => setClassroomPromotionNewGrade(e.target.value)}
+                        placeholder="เช่น ป.2, ม.1 (พิมพ์เพิ่มได้)"
+                        list="gradeListB"
+                      />
+                      <datalist id="gradeListB">
+                        {getClassroomGradeLevels().map(grade => (
+                          <option key={grade} value={grade} />
+                        ))}
+                      </datalist>
+                      <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>ระบุชั้นปีที่ต้องการเลื่อนขึ้น (จากชั้นเรียนที่แอดมินสร้าง)</div>
+                    </div>
+                  )}
+
+                  <div style={{ backgroundColor: '#fff3e0', padding: '1.25rem', borderRadius: '8px', marginTop: '1.5rem', border: '1px solid #ffb74d' }}>
+                    <h4 style={{ marginTop: 0, marginBottom: '0.75rem', color: '#e65100', fontSize: '16px' }}>✓ สรุปการเลื่อนชั้น</h4>
+                    <ul style={{ margin: 0, paddingLeft: '1.5rem', fontSize: '14px', color: '#333', lineHeight: '1.8' }}>
+                      <li><strong>👨‍🎓 จำนวน:</strong> {selectedClassroom?.student_count || 0} นักเรียนจะเลื่อนไป</li>
+                      <li><strong>📊 คะแนน:</strong> จะคัดลอกคะแนนทั้งหมดจากชั้นเรียนปัจจุบัน</li>
+                      <li><strong>📚 เก็บข้อมูล:</strong> ชั้นเรียนเดิมจะยังคงอยู่ในระบบเพื่ออ้างอิง</li>
+                      <li><strong>⏰ ปีการศึกษา:</strong> {classroomPromotionType === 'end_of_year' ? `${parseInt(selectedClassroom?.academic_year || '0') + 1}` : selectedClassroom?.academic_year}</li>
+                    </ul>
+                  </div>
+                </>
+              )}
+            </div>
+            <div className="admin-modal-footer">
+              {classroomStep !== 'select' && classroomStep !== 'view_students' && (
+                <button 
+                  type="button" 
+                  className="admin-btn-secondary"
+                  onClick={() => {
+                    if (classroomStep === 'add_students') {
+                      setClassroomStep('select');
+                    } else if (classroomStep === 'promote') {
+                      setShowClassroomModal(false);
+                    }
+                  }}
+                >
+                  ← ย้อนกลับ
+                </button>
+              )}
+              <button 
+                type="button" 
+                className="admin-btn-secondary" 
+                onClick={closeClassroomModal}
+              >
+                {classroomStep === 'view_students' ? 'ปิด' : 'ยกเลิก'}
+              </button>
+              {classroomStep === 'select' && (
+                <button 
+                  type="button" 
+                  className="admin-btn-primary" 
+                  onClick={createClassroom}
+                  disabled={creatingClassroom || !newClassroomName || !newClassroomGradeLevel}
+                >
+                  {creatingClassroom ? 'กำลังสร้าง...' : 'ถัดไป →'}
+                </button>
+              )}
+              {classroomStep === 'add_students' && (
+                <button 
+                  type="button" 
+                  className="admin-btn-primary" 
+                  onClick={addStudentsToClassroom}
+                  disabled={addingStudentsToClassroom || classroomStudentsToAdd.size === 0}
+                >
+                  {addingStudentsToClassroom ? 'กำลังเพิ่ม...' : `เพิ่ม ${classroomStudentsToAdd.size} นักเรียน`}
+                </button>
+              )}
+              {classroomStep === 'view_students' && (
+                <button 
+                  type="button" 
+                  className="admin-btn-primary"
+                  onClick={() => {
+                    setClassroomStudentsToAdd(new Set());
+                    setClassroomStep('add_students');
+                  }}
+                >
+                  👨‍🎓 เพิ่มนักเรียนเพิ่ม
+                </button>
+              )}
+              {classroomStep === 'edit' && (
+                <button 
+                  type="button" 
+                  className="admin-btn-primary" 
+                  onClick={updateClassroom}
+                  disabled={creatingClassroom}
+                  style={{ backgroundColor: '#ff9800' }}
+                >
+                  {creatingClassroom ? 'กำลังแก้ไข...' : '✓ บันทึกการแก้ไข'}
+                </button>
+              )}
+              {classroomStep === 'promote' && (
+                <button 
+                  type="button" 
+                  className="admin-btn-primary" 
+                  onClick={promoteClassroom}
+                  disabled={promotingClassroom || (classroomPromotionType === 'end_of_year' && !classroomPromotionNewGrade)}
+                  style={{ backgroundColor: '#4caf50' }}
+                >
+                  {promotingClassroom ? 'กำลังเลื่อน...' : `✓ ยืนยันการเลื่อนชั้น`}
+                </button>
+              )}
             </div>
           </div>
         </div>

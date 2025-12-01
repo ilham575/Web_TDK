@@ -1,6 +1,7 @@
 from database.connection import engine, Base
 from models import user, school, announcement, document, grade, subject, schedule
 from models import homeroom  # เพิ่ม homeroom model
+from models import classroom  # เพิ่ม classroom model
 
 from sqlalchemy import inspect, text
 from sqlalchemy import types as sqltypes

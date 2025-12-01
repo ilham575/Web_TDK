@@ -3064,3 +3064,300 @@
     padding: 0.6rem 1.2rem;
   }
 }
+
+/* ==================== Grade Assignment Button Styles ==================== */
+
+/* Button: Update Individual Student Grade */
+.btn-update-class {
+  padding: 0.95rem 1.8rem;
+  font-size: 1rem;
+  font-weight: 800;
+  border-radius: 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  background: linear-gradient(135deg,
+    #4f46e5 0%,
+    #7c3aed 30%,
+    #6d28d9 60%,
+    #5b21b6 100%);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  cursor: pointer;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow:
+    0 10px 30px rgba(79, 70, 229, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  position: relative;
+  overflow: hidden;
+  min-width: 200px;
+}
+
+.btn-update-class::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.btn-update-class:hover::before {
+  left: 100%;
+}
+
+.btn-update-class:hover:not(:disabled) {
+  background: linear-gradient(135deg,
+    #7c3aed 0%,
+    #6d28d9 30%,
+    #5b21b6 60%,
+    #4c1d95 100%);
+  transform: translateY(-4px) scale(1.02);
+  box-shadow:
+    0 15px 45px rgba(79, 70, 229, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.btn-update-class:active:not(:disabled) {
+  transform: translateY(-2px) scale(0.98);
+  box-shadow:
+    0 8px 25px rgba(79, 70, 229, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.btn-update-class:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  filter: grayscale(10%);
+}
+
+.btn-update-class:focus {
+  outline: 3px solid rgba(79, 70, 229, 0.3);
+  outline-offset: 2px;
+}
+
+/* Button: Upload and Add Class */
+.btn-upload-class {
+  padding: 0.95rem 1.8rem;
+  font-size: 1rem;
+  font-weight: 800;
+  border-radius: 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  background: linear-gradient(135deg,
+    #0891b2 0%,
+    #06b6d4 25%,
+    #22d3ee 50%,
+    #0ea5e9 75%,
+    #3b82f6 100%);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  cursor: pointer;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow:
+    0 10px 30px rgba(6, 182, 212, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-upload-class::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.btn-upload-class:hover::before {
+  left: 100%;
+}
+
+.btn-upload-class:hover:not(:disabled) {
+  background: linear-gradient(135deg,
+    #06b6d4 0%,
+    #22d3ee 25%,
+    #0ea5e9 50%,
+    #3b82f6 75%,
+    #2563eb 100%);
+  transform: translateY(-4px) scale(1.02);
+  box-shadow:
+    0 15px 45px rgba(6, 182, 212, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.btn-upload-class:active:not(:disabled) {
+  transform: translateY(-2px) scale(0.98);
+  box-shadow:
+    0 8px 25px rgba(6, 182, 212, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.btn-upload-class:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  filter: grayscale(15%);
+}
+
+.btn-upload-class:focus {
+  outline: 3px solid rgba(6, 182, 212, 0.3);
+  outline-offset: 2px;
+}
+
+/* Responsive Design for Grade Buttons */
+@media (max-width: 768px) {
+  .btn-update-class,
+  .btn-upload-class {
+    padding: 0.85rem 1.5rem;
+    font-size: 0.95rem;
+    min-width: auto;
+  }
+
+  .grade-upload-controls {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .btn-upload-class {
+    width: 100%;
+  }
+}
+
+/* Classroom Management Table Styles */
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.admin-table:hover {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.admin-table thead {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.admin-table thead th {
+  padding: 1rem 0.75rem;
+  text-align: left;
+  font-weight: 700;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.admin-table tbody tr {
+  border-bottom: 1px solid #e5e7eb;
+  transition: background 0.2s ease;
+}
+
+.admin-table tbody tr:hover {
+  background-color: rgba(102, 126, 234, 0.05);
+}
+
+.admin-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+.admin-table tbody td {
+  padding: 0.875rem 0.75rem;
+  font-size: 0.9rem;
+  color: #2d3748;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.admin-table tbody td:first-child {
+  font-weight: 600;
+  color: #1f2937;
+}
+
+/* Classroom Table Action Buttons */
+.admin-table tbody td:last-child > div {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.admin-table .admin-btn-small {
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  white-space: nowrap;
+}
+
+.admin-table .admin-btn-small:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Responsive Table */
+@media (max-width: 1200px) {
+  .admin-table thead th,
+  .admin-table tbody td {
+    padding: 0.75rem 0.5rem;
+    font-size: 0.85rem;
+  }
+
+  .admin-table .admin-btn-small {
+    padding: 0.4rem 0.6rem;
+    font-size: 0.75rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .admin-table {
+    display: block;
+  }
+
+  .admin-table thead {
+    display: none;
+  }
+
+  .admin-table tbody,
+  .admin-table tbody tr,
+  .admin-table tbody td {
+    display: block;
+    width: 100%;
+  }
+
+  .admin-table tbody tr {
+    margin-bottom: 1rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 0.5rem;
+  }
+
+  .admin-table tbody td {
+    padding: 0.5rem;
+    border-bottom: 1px solid #f3f4f6;
+  }
+
+  .admin-table tbody td:last-child {
+    border-bottom: none;
+  }
+
+  .admin-table tbody td:last-child > div {
+    justify-content: center;
+  }
+}

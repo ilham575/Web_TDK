@@ -13,6 +13,7 @@ from routers.schedule import router as schedule_router
 from routers.owner import router as owner_router
 from routers.absence import router as absence_router
 from routers.homeroom import router as homeroom_router
+from routers.classroom import router as classroom_router
 import os
 
 # import ฟังก์ชันสร้างตาราง
@@ -66,6 +67,7 @@ app.include_router(schedule_router)
 app.include_router(owner_router)
 app.include_router(absence_router)
 app.include_router(homeroom_router)
+app.include_router(classroom_router)
 
 @app.get("/", tags=["root"])
 def read_root():

@@ -701,3 +701,257 @@ def download_bulk_template(current_user: UserModel = Depends(get_current_user)):
         'Content-Disposition': f'attachment; filename="{filename}"'
     }
     return StreamingResponse(stream, media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', headers=headers)
+
+
+@router.post("/promote_students")
+def promote_students(
+    promotion_type: str = Body(..., embed=True),  # "mid_term" or "end_of_year"
+    student_ids: List[int] = Body(..., embed=True),
+    new_grade_level: str = Body(None, embed=True),  # Required for end_of_year, optional for mid_term
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user)
+):
+    """
+    Promote students to next semester or next grade level
+    
+    promotion_type: 
+      - "mid_term": move to next semester (same academic year)
+      - "end_of_year": move to next grade level (new academic year)
+    
+    new_grade_level: Required for end_of_year promotion
+    """
+    # Only admins can promote students
+    if getattr(current_user, 'role', None) != 'admin':
+        raise HTTPException(status_code=403, detail='Only admins can promote students')
+    
+    if not student_ids:
+        raise HTTPException(status_code=400, detail='No students selected')
+    
+    if promotion_type not in ['mid_term', 'end_of_year']:
+        raise HTTPException(status_code=400, detail='Invalid promotion_type. Must be "mid_term" or "end_of_year"')
+    
+    if promotion_type == 'end_of_year' and not new_grade_level:
+        raise HTTPException(status_code=400, detail='new_grade_level is required for end_of_year promotion')
+    
+    promoted_count = 0
+    failed_count = 0
+    errors = []
+    promoted_students = []
+    
+    try:
+        for student_id in student_ids:
+            try:
+                student = db.query(UserModel).filter(
+                    UserModel.id == student_id,
+                    UserModel.role == 'student'
+                ).first()
+                
+                if not student:
+                    failed_count += 1
+                    errors.append({
+                        'student_id': student_id,
+                        'error': 'Student not found or not a student role'
+                    })
+                    continue
+                
+                old_grade = student.grade_level or 'ไม่ระบุ'
+                
+                if promotion_type == 'mid_term':
+                    # For mid_term: append "(เทอม 2)" or change from "เทอม 1" to "เทอม 2"
+                    if 'เทอม 2' not in str(student.grade_level or ''):
+                        if 'เทอม 1' in str(student.grade_level or ''):
+                            student.grade_level = str(student.grade_level).replace('เทอม 1', 'เทอม 2')
+                        else:
+                            student.grade_level = f"{student.grade_level} (เทอม 2)" if student.grade_level else "เทอม 2"
+                    
+                elif promotion_type == 'end_of_year':
+                    # For end_of_year: set to new grade level (remove semester info)
+                    student.grade_level = new_grade_level
+                
+                db.add(student)
+                db.flush()
+                promoted_count += 1
+                promoted_students.append({
+                    'id': student.id,
+                    'username': student.username,
+                    'full_name': student.full_name,
+                    'old_grade': old_grade,
+                    'new_grade': student.grade_level
+                })
+                
+            except Exception as e:
+                failed_count += 1
+                errors.append({
+                    'student_id': student_id,
+                    'error': str(e)
+                })
+        
+        # Commit all changes
+        db.commit()
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f'Failed to promote students: {str(e)}')
+    
+    return {
+        'success': True,
+        'promotion_type': promotion_type,
+        'promoted_count': promoted_count,
+        'failed_count': failed_count,
+        'promoted_students': promoted_students,
+        'errors': errors,
+        'message': f'เลื่อนชั้นเรียนสำเร็จ {promoted_count} นักเรียน, ล้มเหลว {failed_count} นักเรียน'
+    }
+
+
+@router.post("/promote_template")
+def download_promote_template(
+    promotion_type: str = Body(..., embed=True),  # "mid_term" or "end_of_year"
+    current_user: UserModel = Depends(get_current_user)
+):
+    """Generate and download Excel template for promoting students"""
+    if getattr(current_user, 'role', None) != 'admin':
+        raise HTTPException(status_code=403, detail='Not authorized')
+    
+    if openpyxl is None:
+        raise HTTPException(status_code=500, detail='Server missing openpyxl dependency')
+    
+    if promotion_type not in ['mid_term', 'end_of_year']:
+        raise HTTPException(status_code=400, detail='Invalid promotion_type')
+    
+    wb = Workbook()
+    ws = wb.active
+    ws.title = 'Promote'
+    
+    if promotion_type == 'mid_term':
+        ws['A1'] = 'คำแนะนำ: ใส่ ID ของนักเรียนที่ต้องการเลื่อนไปเทอม 2'
+        ws['A2'] = 'student_id'
+        ws.append(['1', 'ตัวอย่าง: ID นักเรียนที่ต้องการเลื่อน'])
+        headers = ['student_id']
+        filename = 'promote_mid_term_template.xlsx'
+    else:  # end_of_year
+        ws['A1'] = 'คำแนะนำ: ใส่ ID ของนักเรียนและชั้นเรียนใหม่'
+        ws['A2'] = 'student_id'
+        ws['B2'] = 'new_grade_level'
+        ws.append(['1', 'ป.2', 'ตัวอย่าง: ID และชั้นเรียนใหม่'])
+        headers = ['student_id', 'new_grade_level']
+        filename = 'promote_end_of_year_template.xlsx'
+    
+    stream = BytesIO()
+    wb.save(stream)
+    stream.seek(0)
+    
+    headers = {
+        'Content-Disposition': f'attachment; filename="{filename}"'
+    }
+    return StreamingResponse(stream, media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', headers=headers)
+
+
+@router.post("/promote_from_file")
+def promote_students_from_file(
+    file: UploadFile = File(...),
+    promotion_type: str = None,
+    new_grade_level: str = None,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user)
+):
+    """Promote students from Excel file"""
+    if getattr(current_user, 'role', None) != 'admin':
+        raise HTTPException(status_code=403, detail='Only admins can promote students')
+    
+    if openpyxl is None:
+        raise HTTPException(status_code=500, detail='Server missing openpyxl dependency')
+    
+    if promotion_type not in ['mid_term', 'end_of_year']:
+        raise HTTPException(status_code=400, detail='Invalid promotion_type')
+    
+    if promotion_type == 'end_of_year' and not new_grade_level:
+        raise HTTPException(status_code=400, detail='new_grade_level is required for end_of_year promotion')
+    
+    try:
+        content = file.file.read()
+        file.file.seek(0)
+        
+        wb = openpyxl.load_workbook(BytesIO(content))
+        ws = wb.active
+        
+        promoted_count = 0
+        failed_count = 0
+        errors = []
+        promoted_students = []
+        
+        # Get header row
+        header_row = list(ws.iter_rows(min_row=1, max_row=1, values_only=True))[0]
+        idx = {col: i for i, col in enumerate(header_row)}
+        
+        # Process data rows (skip header)
+        for r_i, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+            try:
+                # Get student_id
+                student_id = None
+                if 'student_id' in idx and row[idx['student_id']] is not None:
+                    student_id = int(row[idx['student_id']])
+                
+                if not student_id:
+                    failed_count += 1
+                    errors.append({'row': r_i, 'error': 'Missing or invalid student_id'})
+                    continue
+                
+                student = db.query(UserModel).filter(
+                    UserModel.id == student_id,
+                    UserModel.role == 'student'
+                ).first()
+                
+                if not student:
+                    failed_count += 1
+                    errors.append({'row': r_i, 'error': f'Student ID {student_id} not found'})
+                    continue
+                
+                old_grade = student.grade_level or 'ไม่ระบุ'
+                
+                if promotion_type == 'mid_term':
+                    # Move to semester 2
+                    if 'เทอม 2' not in str(student.grade_level or ''):
+                        if 'เทอม 1' in str(student.grade_level or ''):
+                            student.grade_level = str(student.grade_level).replace('เทอม 1', 'เทอม 2')
+                        else:
+                            student.grade_level = f"{student.grade_level} (เทอม 2)" if student.grade_level else "เทอม 2"
+                
+                elif promotion_type == 'end_of_year':
+                    # Set new grade level
+                    new_grade = new_grade_level
+                    if 'new_grade_level' in idx and row[idx['new_grade_level']] is not None:
+                        new_grade = str(row[idx['new_grade_level']]).strip()
+                    
+                    student.grade_level = new_grade
+                
+                db.add(student)
+                db.flush()
+                promoted_count += 1
+                promoted_students.append({
+                    'id': student.id,
+                    'username': student.username,
+                    'full_name': student.full_name,
+                    'old_grade': old_grade,
+                    'new_grade': student.grade_level
+                })
+                
+            except Exception as e:
+                failed_count += 1
+                errors.append({'row': r_i, 'error': str(e)})
+        
+        db.commit()
+        
+        return {
+            'success': True,
+            'promotion_type': promotion_type,
+            'promoted_count': promoted_count,
+            'failed_count': failed_count,
+            'promoted_students': promoted_students,
+            'errors': errors,
+            'message': f'เลื่อนชั้นเรียนสำเร็จ {promoted_count} นักเรียน, ล้มเหลว {failed_count} นักเรียน'
+        }
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f'Failed to process file: {str(e)}')

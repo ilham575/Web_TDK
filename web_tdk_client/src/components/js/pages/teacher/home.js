@@ -789,12 +789,12 @@ function TeacherPage() {
             </div>
             <div className="teacher-modal-body">
               <div className="enroll-controls">
-                <label className="modal-label">เพิ่มนักเรียน</label>
+                <label className="teacher-modal-label">เพิ่มนักเรียน</label>
                 <div className="enroll-input-row">
                   <select
                     value={selectedStudentId}
                     onChange={e => setSelectedStudentId(e.target.value)}
-                    className="modal-select flex-grow"
+                    className="teacher-modal-select"
                   >
                     <option value="">-- เลือกนักเรียน --</option>
                     {availableStudents.map(s => (<option key={s.id} value={s.id}>{s.full_name || s.username} ({s.email})</option>))}

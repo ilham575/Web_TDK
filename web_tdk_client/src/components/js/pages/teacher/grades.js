@@ -634,32 +634,32 @@ function GradesPage(){
         {/* Create Assignment Modal */}
         {showCreateModal && (
           <div className="grades-modal-overlay" onClick={cancelCreateAssignment}>
-            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="grades-modal-content" onClick={(e) => e.stopPropagation()}>
               <div className="grades-modal-header">
-                <h3 className="modal-title">สร้างหัวข้องานใหม่</h3>
-                <button className="modal-close" onClick={cancelCreateAssignment}>×</button>
+                <h3 className="grades-modal-title">สร้างหัวข้องานใหม่</h3>
+                <button className="grades-modal-close" onClick={cancelCreateAssignment}>×</button>
               </div>
               <div className="grades-modal-body">
-                <div className="modal-field">
-                  <label htmlFor="new-assignment-title" className="modal-label">หัวข้องาน:</label>
+                <div className="grades-modal-field">
+                  <label htmlFor="new-assignment-title" className="grades-modal-label">หัวข้องาน:</label>
                   <input
                     type="text"
                     id="new-assignment-title"
                     value={newAssignmentTitle}
                     onChange={(e) => setNewAssignmentTitle(e.target.value)}
-                    className="modal-input"
+                    className="grades-modal-input"
                     placeholder="เช่น แบบฝึกหัดที่ 1"
                     autoFocus
                   />
                 </div>
-                <div className="modal-field">
-                  <label htmlFor="new-max-score" className="modal-label">คะแนนเต็ม:</label>
+                <div className="grades-modal-field">
+                  <label htmlFor="new-max-score" className="grades-modal-label">คะแนนเต็ม:</label>
                   <input
                     type="number"
                     id="new-max-score"
                     value={newAssignmentMaxScore}
                     onChange={(e) => setNewAssignmentMaxScore(Number(e.target.value))}
-                    className="modal-input"
+                    className="grades-modal-input"
                     min="1"
                     max="1000"
                   />
@@ -676,32 +676,32 @@ function GradesPage(){
         {/* Edit Assignment Modal */}
         {showEditModal && editingAssignment && (
           <div className="grades-modal-overlay" onClick={cancelEditAssignment}>
-            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="grades-modal-content" onClick={(e) => e.stopPropagation()}>
               <div className="grades-modal-header">
-                <h3 className="modal-title">แก้ไขหัวข้องาน</h3>
-                <button className="modal-close" onClick={cancelEditAssignment}>×</button>
+                <h3 className="grades-modal-title">แก้ไขหัวข้องาน</h3>
+                <button className="grades-modal-close" onClick={cancelEditAssignment}>×</button>
               </div>
               <div className="grades-modal-body">
-                <div className="modal-field">
-                  <label htmlFor="edit-assignment-title" className="modal-label">หัวข้องาน:</label>
+                <div className="grades-modal-field">
+                  <label htmlFor="edit-assignment-title" className="grades-modal-label">หัวข้องาน:</label>
                   <input
                     type="text"
                     id="edit-assignment-title"
                     value={editAssignmentTitle}
                     onChange={(e) => setEditAssignmentTitle(e.target.value)}
-                    className="modal-input"
+                    className="grades-modal-input"
                     placeholder="เช่น แบบฝึกหัดที่ 1"
                     autoFocus
                   />
                 </div>
-                <div className="modal-field">
-                  <label htmlFor="edit-max-score" className="modal-label">คะแนนเต็ม:</label>
+                <div className="grades-modal-field">
+                  <label htmlFor="edit-max-score" className="grades-modal-label">คะแนนเต็ม:</label>
                   <input
                     type="number"
                     id="edit-max-score"
                     value={editAssignmentMaxScore}
                     onChange={(e) => setEditAssignmentMaxScore(Number(e.target.value))}
-                    className="modal-input"
+                    className="grades-modal-input"
                     min="1"
                     max="1000"
                   />
@@ -718,10 +718,10 @@ function GradesPage(){
         {/* Delete Assignment Modal */}
         {showDeleteModal && deletingAssignment && (
           <div className="grades-modal-overlay" onClick={cancelDeleteAssignment}>
-            <div className="modal-content delete-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="grades-modal-content delete-modal" onClick={(e) => e.stopPropagation()}>
               <div className="grades-modal-header">
-                <h3 className="modal-title">ลบหัวข้องาน</h3>
-                <button className="modal-close" onClick={cancelDeleteAssignment}>×</button>
+                <h3 className="grades-modal-title">ลบหัวข้องาน</h3>
+                <button className="grades-modal-close" onClick={cancelDeleteAssignment}>×</button>
               </div>
               <div className="grades-modal-body">
                 <div className="delete-warning">
