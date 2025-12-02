@@ -101,7 +101,10 @@ async def create_classroom(
             academic_year=classroom.academic_year,
             school_id=classroom.school_id,
             is_active=classroom.is_active,
-            student_count=0
+            parent_classroom_id=classroom.parent_classroom_id,
+            student_count=0,
+            created_at=classroom.created_at,
+            updated_at=classroom.updated_at
         )
     except Exception as e:
         db.rollback()
@@ -114,11 +117,6 @@ async def create_classroom(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
-        parent_classroom_id=classroom.parent_classroom_id,
-        student_count=0,
-        created_at=classroom.created_at,
-        updated_at=classroom.updated_at
-    )
 
 
 @router.post("/bulk-create", response_model=List[ClassroomResponse])
@@ -380,11 +378,11 @@ async def delete_classroom(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """ลบชั้นเรียน (soft delete)"""
+    """ลบชั้นเรียน (hard delete)"""
     verify_admin_or_owner(current_user)
     classroom = get_classroom_or_404(classroom_id, db)
 
-    classroom.is_active = False
+    db.delete(classroom)
     db.commit()
 
     return {"message": "ลบชั้นเรียนเรียบร้อยแล้ว"}
@@ -428,8 +426,12 @@ async def add_students_to_classroom(
             if existing.is_active:
                 already_enrolled.append(student_id)
             else:
-                # Re-activate
-                existing.is_active = True
+                # Re-activate - ใช้ update() เพื่อหลีกเลี่ยงปัญหา SQLAlchemy setting all columns
+                db.query(ClassroomStudent).filter(
+                    ClassroomStudent.id == existing.id
+                ).update({
+                    ClassroomStudent.is_active: True
+                })
                 added_count += 1
             continue
 

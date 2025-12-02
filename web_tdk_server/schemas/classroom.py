@@ -19,6 +19,7 @@ class ClassroomCreate(BaseModel):
 class ClassroomUpdate(BaseModel):
     """อัปเดตชั้นเรียน"""
     name: Optional[str] = None
+    grade_level: Optional[str] = None
     room_number: Optional[str] = None
     semester: Optional[int] = None
     is_active: Optional[bool] = None
