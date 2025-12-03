@@ -9,6 +9,7 @@ from models.subject import Subject as SubjectModel
 from models.grade import Grade as GradeModel
 from models.user import User as UserModel
 from models.subject_student import SubjectStudent as SubjectStudentModel
+from models.classroom import ClassroomStudent as ClassroomStudentModel
 from schemas.grade import GradesBulk, GradeResponse, AssignmentCreate, AssignmentUpdate, AssignmentResponse
 
 router = APIRouter(prefix="/grades", tags=["grades"])
@@ -25,7 +26,21 @@ def bulk_grades(payload: GradesBulk, db: Session = Depends(get_db), current_user
 
     results = []
     for entry in payload.grades:
-        g = db.query(GradeModel).filter(GradeModel.subject_id == payload.subject_id, GradeModel.student_id == entry.student_id, GradeModel.title == payload.title).first()
+        # Filter by subject_id, student_id, title and classroom if provided
+        if payload.classroom_id is not None:
+            g = db.query(GradeModel).filter(
+                GradeModel.subject_id == payload.subject_id,
+                GradeModel.student_id == entry.student_id,
+                GradeModel.title == payload.title,
+                GradeModel.classroom_id == payload.classroom_id
+            ).first()
+        else:
+            g = db.query(GradeModel).filter(
+                GradeModel.subject_id == payload.subject_id,
+                GradeModel.student_id == entry.student_id,
+                GradeModel.title == payload.title,
+                GradeModel.classroom_id.is_(None)
+            ).first()
         if g:
             g.title = payload.title
             g.max_score = payload.max_score
@@ -39,7 +54,8 @@ def bulk_grades(payload: GradesBulk, db: Session = Depends(get_db), current_user
                 student_id=entry.student_id,
                 title=payload.title,
                 max_score=payload.max_score,
-                grade=entry.grade
+                grade=entry.grade,
+                classroom_id=payload.classroom_id
             )
             db.add(new)
             db.commit()
@@ -50,16 +66,19 @@ def bulk_grades(payload: GradesBulk, db: Session = Depends(get_db), current_user
 
 @router.get('', response_model=List[GradeResponse])
 @router.get('/', response_model=List[GradeResponse])
-def get_grades(subject_id: int = None, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+def get_grades(subject_id: int = None, classroom_id: int = None, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     query = db.query(GradeModel)
     if subject_id is not None:
         query = query.filter(GradeModel.subject_id == subject_id)
+    if classroom_id is not None:
+        # include class-specific grades and global grades (without classroom)
+        query = query.filter((GradeModel.classroom_id == classroom_id) | (GradeModel.classroom_id.is_(None)))
     rows = query.all()
     return rows
 
 
 @router.get('/assignments/{subject_id}', response_model=List[AssignmentResponse])
-def get_assignments(subject_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+def get_assignments(subject_id: int, classroom_id: int = None, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     subj = db.query(SubjectModel).filter(SubjectModel.id == subject_id).first()
     if not subj:
         raise HTTPException(status_code=404, detail='Subject not found')
@@ -84,21 +103,27 @@ def get_assignments(subject_id: int, db: Session = Depends(get_db), current_user
         raise HTTPException(status_code=403, detail='Not authorized to view assignments for this subject')
 
     # Get distinct assignments (unique title + max_score combinations)
-    assignments = db.query(
+    query = db.query(
         GradeModel.title,
-        GradeModel.max_score
+        GradeModel.max_score,
+        GradeModel.classroom_id
     ).filter(
         GradeModel.subject_id == subject_id,
         GradeModel.title.isnot(None)
-    ).distinct().all()
+    )
+    if classroom_id is not None:
+        # include assignments created for this classroom or global (NULL classroom_id)
+        query = query.filter((GradeModel.classroom_id == classroom_id) | (GradeModel.classroom_id.is_(None)))
+    assignments = query.distinct().all()
 
     # Convert to response format with generated IDs
     result = []
-    for idx, (title, max_score) in enumerate(assignments, 1):
+    for idx, (title, max_score, classroom_id) in enumerate(assignments, 1):
         result.append({
             'id': idx,  # Use index as ID since we don't have assignment table
             'title': title,
-            'max_score': max_score
+            'max_score': max_score,
+            'classroom_id': classroom_id
         })
 
     return result
@@ -115,18 +140,38 @@ def create_assignment(subject_id: int, assignment: AssignmentCreate, db: Session
         raise HTTPException(status_code=403, detail='Not authorized to create assignments for this subject')
 
     # Check if assignment with same title already exists
-    existing = db.query(GradeModel).filter(
-        GradeModel.subject_id == subject_id,
-        GradeModel.title == assignment.title
-    ).first()
+    # Check if assignment with same title already exists for the same classroom (or globally if classroom_id is None)
+    if assignment.classroom_id is not None:
+        existing = db.query(GradeModel).filter(
+            GradeModel.subject_id == subject_id,
+            GradeModel.title == assignment.title,
+            GradeModel.classroom_id == assignment.classroom_id
+        ).first()
+    else:
+        existing = db.query(GradeModel).filter(
+            GradeModel.subject_id == subject_id,
+            GradeModel.title == assignment.title,
+            GradeModel.classroom_id.is_(None)
+        ).first()
 
     if existing:
         raise HTTPException(status_code=400, detail='Assignment with this title already exists')
 
-    # Get all students enrolled in this subject
-    students = db.query(UserModel).join(
-        SubjectStudentModel, UserModel.id == SubjectStudentModel.student_id
-    ).filter(SubjectStudentModel.subject_id == subject_id).all()
+    # Get all students enrolled in this subject; optionally filter by classroom
+    if assignment.classroom_id is not None:
+        students = db.query(UserModel).join(
+            SubjectStudentModel, UserModel.id == SubjectStudentModel.student_id
+        ).join(
+            ClassroomStudentModel, UserModel.id == ClassroomStudentModel.student_id
+        ).filter(
+            SubjectStudentModel.subject_id == subject_id,
+            ClassroomStudentModel.classroom_id == assignment.classroom_id,
+            ClassroomStudentModel.is_active == True
+        ).all()
+    else:
+        students = db.query(UserModel).join(
+            SubjectStudentModel, UserModel.id == SubjectStudentModel.student_id
+        ).filter(SubjectStudentModel.subject_id == subject_id).all()
 
     if not students:
         raise HTTPException(status_code=400, detail='No students enrolled in this subject')
@@ -139,7 +184,8 @@ def create_assignment(subject_id: int, assignment: AssignmentCreate, db: Session
             student_id=student.id,
             title=assignment.title,
             max_score=assignment.max_score,
-            grade=None  # No grade yet
+            grade=None,  # No grade yet
+            classroom_id=assignment.classroom_id
         )
         db.add(grade)
         created_grades.append(grade)
@@ -154,11 +200,12 @@ def create_assignment(subject_id: int, assignment: AssignmentCreate, db: Session
         ).distinct().all()),
         'title': assignment.title,
         'max_score': assignment.max_score
+        , 'classroom_id': assignment.classroom_id
     }
 
 
 @router.put('/assignments/{subject_id}/{assignment_title}', response_model=AssignmentResponse)
-def update_assignment(subject_id: int, assignment_title: str, assignment: AssignmentUpdate, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+def update_assignment(subject_id: int, assignment_title: str, assignment: AssignmentUpdate, classroom_id: int = None, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     subj = db.query(SubjectModel).filter(SubjectModel.id == subject_id).first()
     if not subj:
         raise HTTPException(status_code=404, detail='Subject not found')
@@ -168,10 +215,18 @@ def update_assignment(subject_id: int, assignment_title: str, assignment: Assign
         raise HTTPException(status_code=403, detail='Not authorized to update assignments for this subject')
 
     # Check if assignment exists
-    existing_grades = db.query(GradeModel).filter(
-        GradeModel.subject_id == subject_id,
-        GradeModel.title == assignment_title
-    ).all()
+    if classroom_id is not None:
+        existing_grades = db.query(GradeModel).filter(
+            GradeModel.subject_id == subject_id,
+            GradeModel.title == assignment_title,
+            GradeModel.classroom_id == classroom_id
+        ).all()
+    else:
+        existing_grades = db.query(GradeModel).filter(
+            GradeModel.subject_id == subject_id,
+            GradeModel.title == assignment_title,
+            GradeModel.classroom_id.is_(None)
+        ).all()
 
     if not existing_grades:
         raise HTTPException(status_code=404, detail='Assignment not found')
@@ -182,10 +237,18 @@ def update_assignment(subject_id: int, assignment_title: str, assignment: Assign
 
     # Check if new title conflicts with other assignments (if title is being changed)
     if assignment.title is not None and assignment.title != assignment_title:
-        conflict = db.query(GradeModel).filter(
-            GradeModel.subject_id == subject_id,
-            GradeModel.title == assignment.title
-        ).first()
+        if classroom_id is not None:
+            conflict = db.query(GradeModel).filter(
+                GradeModel.subject_id == subject_id,
+                GradeModel.title == assignment.title,
+                GradeModel.classroom_id == classroom_id
+            ).first()
+        else:
+            conflict = db.query(GradeModel).filter(
+                GradeModel.subject_id == subject_id,
+                GradeModel.title == assignment.title,
+                GradeModel.classroom_id.is_(None)
+            ).first()
         if conflict:
             raise HTTPException(status_code=400, detail='Assignment with this title already exists')
 
@@ -195,20 +258,27 @@ def update_assignment(subject_id: int, assignment_title: str, assignment: Assign
             grade.title = assignment.title
         if assignment.max_score is not None:
             grade.max_score = assignment.max_score
+        # allow moving assignment to different classroom if specified
+        if assignment.classroom_id is not None:
+            grade.classroom_id = assignment.classroom_id
         grade.updated_at = func.now()
 
     db.commit()
+
+    # Determine classroom_id for response
+    new_classroom_id = assignment.classroom_id if assignment.classroom_id is not None else (existing_grades[0].classroom_id if existing_grades else None)
 
     # Return updated assignment info
     return {
         'id': 0,  # Not used in frontend
         'title': new_title,
-        'max_score': new_max_score
+        'max_score': new_max_score,
+        'classroom_id': new_classroom_id
     }
 
 
 @router.delete('/assignments/{subject_id}/{assignment_title}')
-def delete_assignment(subject_id: int, assignment_title: str, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+def delete_assignment(subject_id: int, assignment_title: str, classroom_id: int = None, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     subj = db.query(SubjectModel).filter(SubjectModel.id == subject_id).first()
     if not subj:
         raise HTTPException(status_code=404, detail='Subject not found')
@@ -218,10 +288,18 @@ def delete_assignment(subject_id: int, assignment_title: str, db: Session = Depe
         raise HTTPException(status_code=403, detail='Not authorized to delete assignments for this subject')
 
     # Check if assignment exists
-    existing_grades = db.query(GradeModel).filter(
-        GradeModel.subject_id == subject_id,
-        GradeModel.title == assignment_title
-    ).all()
+    if classroom_id is not None:
+        existing_grades = db.query(GradeModel).filter(
+            GradeModel.subject_id == subject_id,
+            GradeModel.title == assignment_title,
+            GradeModel.classroom_id == classroom_id
+        ).all()
+    else:
+        existing_grades = db.query(GradeModel).filter(
+            GradeModel.subject_id == subject_id,
+            GradeModel.title == assignment_title,
+            GradeModel.classroom_id.is_(None)
+        ).all()
 
     if not existing_grades:
         raise HTTPException(status_code=404, detail='Assignment not found')

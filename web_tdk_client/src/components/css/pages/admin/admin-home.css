@@ -1,6 +1,5 @@
 /* Admin Home Page Styles */
 .admin-dashboard {
-  min-height: 100vh;
   background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 30%, #cbd5e1 70%, #f1f5f9 100%);
   font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   color: #2d3748;
@@ -3241,6 +3240,49 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
+/* Specific styles for subjects table to ensure header and cell alignment */
+.subjects-table {
+  table-layout: fixed; /* enforce column widths to align correctly */
+}
+.subjects-table th,
+.subjects-table td {
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+}
+.subjects-table .subject-meta-mobile {
+  display: none;
+  color: #666;
+  font-size: 0.9rem;
+  margin-top: 6px;
+}
+.subject-name {
+  display: inline-block;
+  max-width: calc(100% - 10px);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.teacher-cell {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.subjects-table td.subject-credit {
+  font-weight: 700;
+  color: #111;
+  text-align: center;
+}
+.subjects-table th:nth-child(1), .subjects-table td:nth-child(1) { width: 30%; }
+.subjects-table th:nth-child(2), .subjects-table td:nth-child(2) { width: 6%; text-align: center; }
+.subjects-table th:nth-child(3), .subjects-table td:nth-child(3) { width: 8%; text-align: center; }
+.subjects-table th:nth-child(4), .subjects-table td:nth-child(4) { width: 8%; text-align: center; }
+.subjects-table th:nth-child(5), .subjects-table td:nth-child(5) { width: 22%; }
+.subjects-table th:nth-child(6), .subjects-table td:nth-child(6) { width: 8%; text-align: center; }
+.subjects-table th:nth-child(7), .subjects-table td:nth-child(7) { width: 8%; text-align: center; }
+.subjects-table th:nth-child(8), .subjects-table td:nth-child(8) { width: 10%; text-align: center; }
+
 .admin-table:hover {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
 }
@@ -3359,5 +3401,17 @@
 
   .admin-table tbody td:last-child > div {
     justify-content: center;
+  }
+
+  /* Responsive hiding for subjects table: hide some columns and show the credit meta inline in the subject cell */
+  .subjects-table td:nth-child(2), .subjects-table td:nth-child(3), .subjects-table td:nth-child(5), .subjects-table td:nth-child(6), .subjects-table td:nth-child(7) {
+    display: none;
+  }
+  .subjects-table td.subject-credit {
+    display: none; /* hide the dedicated credit cell on small screens, mobile shows inline */
+  }
+  /* Show inline meta within the subject title for small screens */
+  .subjects-table .subject-meta-mobile {
+    display: inline-block !important;
   }
 }

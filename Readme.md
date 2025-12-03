@@ -18,6 +18,16 @@ This project contains both frontend (React) and backend (FastAPI) applications f
 - **Role-based Schedule Access**: Different interfaces for admin, teacher, and student roles  
 - **Responsive Design**: Full mobile and tablet compatibility for schedule displays
 - **Modern UI**: Glassmorphism design with smooth animations and transitions
+- **📚 Centralized Subject Management**: Admin creates subjects with type classification (main/activity), assigns classrooms, automatic student enrollment
+
+### 📚 Subject Management System (New)
+- **Admin-Centralized**: Move from teacher-based to admin-managed subjects
+- **Subject Types**: Classify subjects as หลัก (main) or กิจกรรม (activity)
+- **Classroom Assignment**: Assign multiple classrooms to single subject
+- **Auto-Enrollment**: Students automatically enrolled when classroom is assigned
+- **Teacher Assignment**: Assign teachers to subjects at subject level
+
+For detailed implementation, see: `SUBJECT_MANAGEMENT_SUMMARY.md` and `SUBJECT_MANAGEMENT_IMPLEMENTATION.md`
 
 ### Prerequisites
 - Node.js 16+ and npm (for frontend)

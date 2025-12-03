@@ -9,18 +9,25 @@ function GradesPage(){
   const { id } = useParams(); // subject id
   const navigate = useNavigate();
   const [students, setStudents] = useState([]);
+  // classes: [{ key: 'id:123' | 'label:ป.1-1', id: number|null, label: string }]
+  const [classes, setClasses] = useState([]);
+  const [selectedClass, setSelectedClass] = useState(null); // selectedClass will be a class object from classes array
+  const selectedClassId = selectedClass ? selectedClass.id : null;
   const [assignments, setAssignments] = useState([]);
   const [selectedAssignmentId, setSelectedAssignmentId] = useState(null);
   const [title, setTitle] = useState('');
   const [maxScore, setMaxScore] = useState(100);
+  const [subjectName, setSubjectName] = useState('');
   const [grades, setGrades] = useState({}); // { assignmentId: { studentId: grade, ... }, ... }
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newAssignmentTitle, setNewAssignmentTitle] = useState('');
   const [newAssignmentMaxScore, setNewAssignmentMaxScore] = useState(100);
+  const [newAssignmentClassroomId, setNewAssignmentClassroomId] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingAssignment, setEditingAssignment] = useState(null);
   const [editAssignmentTitle, setEditAssignmentTitle] = useState('');
   const [editAssignmentMaxScore, setEditAssignmentMaxScore] = useState(100);
+  const [editAssignmentClassroomId, setEditAssignmentClassroomId] = useState(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deletingAssignment, setDeletingAssignment] = useState(null);
   const [showSummaryModal, setShowSummaryModal] = useState(false);
@@ -58,12 +65,88 @@ function GradesPage(){
         const token = localStorage.getItem('token');
         const res = await fetch(`${API_BASE_URL}/subjects/${id}/students`, { headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
         const data = await res.json();
-        if (Array.isArray(data)) setStudents(data);
-        else setStudents([]);
+        if (Array.isArray(data)){
+          setStudents(data);
+
+          const getClassIdentifier = (s) => {
+            if (!s) return 'Default';
+            if (s.classroom && (s.classroom.name || s.classroom.id)) return s.classroom.name || String(s.classroom.id);
+            if (s.classroom_name) return s.classroom_name;
+            if (s.class_name) return s.class_name;
+            if (s.grade_level && s.section) return `${s.grade_level} ${s.section}`;
+            if (s.grade_level) return String(s.grade_level);
+            if (s.homeroom) return s.homeroom;
+            if (s.section) return s.section;
+            return 'Default';
+          };
+
+          // Build class objects (key + id + label) for better mapping
+          const makeClassObj = (s) => {
+            let id = null;
+            let label = 'Default';
+            if (s.classroom && (s.classroom.name || s.classroom.id)) {
+              label = s.classroom.name || String(s.classroom.id);
+              id = s.classroom.id || null;
+            } else if (s.classroom_name) {
+              label = s.classroom_name;
+            } else if (s.class_name) {
+              label = s.class_name;
+            } else if (s.grade_level && s.section) {
+              label = `${s.grade_level} ${s.section}`;
+            } else if (s.grade_level) {
+              label = String(s.grade_level);
+            } else if (s.homeroom) {
+              label = s.homeroom;
+            } else if (s.section) {
+              label = s.section;
+            }
+            const key = id ? `id:${id}` : `label:${label}`;
+            return { key, id, label };
+          };
+
+          const classMap = {};
+          data.forEach(s => {
+            const c = makeClassObj(s);
+            classMap[c.key] = c;
+          });
+          const distinct = Object.values(classMap);
+          setClasses(distinct);
+          setSelectedClass(distinct.length > 1 ? distinct[0] : null);
+        } else setStudents([]);
       }catch(err){ setStudents([]); }
     };
     load();
   },[id]);
+
+  // load subject details (to display subject name)
+  useEffect(() => {
+    const loadSubject = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const headers = { ...(token?{Authorization:`Bearer ${token}`}:{}) };
+        const res = await fetch(`${API_BASE_URL}/subjects/${id}`, { headers });
+        if (res.ok) {
+          const data = await res.json();
+          const name = data.name || data.title || data.subject_name || '';
+          if (name) setSubjectName(name);
+        } else {
+          // fallback to student payload if available
+          if (students && students.length > 0) {
+            const s = students[0];
+            const fallbackName = (s && (s.subject_name || (s.subject && (s.subject.name || s.subject.title)))) || '';
+            if (fallbackName) setSubjectName(fallbackName);
+          }
+        }
+      } catch (err) {
+        if (students && students.length > 0) {
+          const s = students[0];
+          const fallbackName = (s && (s.subject_name || (s.subject && (s.subject.name || s.subject.title)))) || '';
+          if (fallbackName) setSubjectName(fallbackName);
+        }
+      }
+    };
+    if (id) loadSubject();
+  }, [id, students]);
 
   // Load assignments and grades for this subject
   useEffect(()=>{
@@ -71,23 +154,26 @@ function GradesPage(){
       try{
         const token = localStorage.getItem('token');
         
-        // First load assignments
-        const assignmentsRes = await fetch(`${API_BASE_URL}/grades/assignments/${id}`, { headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
+        // First load assignments (filter by class when selectedClassId exists)
+        const assignmentUrl = `${API_BASE_URL}/grades/assignments/${id}${selectedClassId ? `?classroom_id=${selectedClassId}` : ''}`;
+        const assignmentsRes = await fetch(assignmentUrl, { headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
         if (!assignmentsRes.ok) return;
         const assignmentsData = await assignmentsRes.json();
         
         // Convert assignments to use title as id for consistency with existing code
         const assignmentList = assignmentsData.map(assignment => ({
-          id: assignment.title,
+          id: assignment.classroom_id ? `${assignment.title}::${assignment.classroom_id}` : assignment.title,
           title: assignment.title,
           max_score: assignment.max_score,
+          classroom_id: assignment.classroom_id || null,
           created_at: new Date().toISOString() // We don't have created_at from API
         }));
         
         setAssignments(assignmentList);
         
-        // Then load all grades for this subject
-        const gradesRes = await fetch(`${API_BASE_URL}/grades/?subject_id=${id}`, { headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
+        // Then load all grades for this subject (filter by class when selectedClassId exists)
+        const gradesUrl = `${API_BASE_URL}/grades/?subject_id=${id}${selectedClassId ? `&classroom_id=${selectedClassId}` : ''}`;
+        const gradesRes = await fetch(gradesUrl, { headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
         if (!gradesRes.ok) return;
         const gradesData = await gradesRes.json();
         
@@ -96,10 +182,11 @@ function GradesPage(){
         if (Array.isArray(gradesData)){
           gradesData.forEach(record => {
             if (record.title) {
-              if (!gradesMap[record.title]) {
-                gradesMap[record.title] = {};
-              }
-              gradesMap[record.title][record.student_id] = record.grade;
+                const assignmentKey = record.classroom_id ? `${record.title}::${record.classroom_id}` : record.title;
+                if (!gradesMap[assignmentKey]) {
+                  gradesMap[assignmentKey] = {};
+                }
+                gradesMap[assignmentKey][record.student_id] = record.grade;
             }
           });
         }
@@ -122,7 +209,7 @@ function GradesPage(){
       }catch(err){ console.error('Failed to load assignments and grades:', err); }
     };
     loadAssignmentsAndGrades();
-  },[id]);
+  },[id, selectedClassId]);
 
   const setGrade = (sid, value) => {
     // Validate that the grade doesn't exceed max score
@@ -171,10 +258,12 @@ function GradesPage(){
 
     try{
       const token = localStorage.getItem('token');
+      const selectedAssignmentObjForSave = assignments.find(a => a.id === selectedAssignmentId);
       const payload = {
         subject_id: Number(id),
         title: title.trim(),
         max_score: Number(maxScore),
+        classroom_id: selectedAssignmentObjForSave ? selectedAssignmentObjForSave.classroom_id || null : (selectedClassId || null),
         grades: Object.entries(currentGrades).map(([student_id, grade])=>({
           student_id: Number(student_id),
           grade: grade ? Number(grade) : null
@@ -196,6 +285,8 @@ function GradesPage(){
 
   const createNewAssignment = () => {
     setShowCreateModal(true);
+    // default classroom for the new assignment is the currently selected class (if any)
+    setNewAssignmentClassroomId(selectedClassId || null);
   };
 
   const handleCreateAssignment = async () => {
@@ -219,7 +310,8 @@ function GradesPage(){
       const token = localStorage.getItem('token');
       const payload = {
         title: newAssignmentTitle.trim(),
-        max_score: newAssignmentMaxScore
+        max_score: newAssignmentMaxScore,
+        classroom_id: newAssignmentClassroomId || null
       };
       
       const res = await fetch(`${API_BASE_URL}/grades/assignments/${id}`, { 
@@ -241,9 +333,10 @@ function GradesPage(){
       
       // Add new assignment to state
       setAssignments(prev => [...prev, {
-        id: newAssignment.title, // Use title as ID for consistency
+        id: newAssignment.classroom_id ? `${newAssignment.title}::${newAssignment.classroom_id}` : newAssignment.title,
         title: newAssignment.title,
         max_score: newAssignment.max_score,
+        classroom_id: newAssignment.classroom_id || null,
         created_at: new Date().toISOString()
       }]);
       
@@ -254,13 +347,15 @@ function GradesPage(){
       }));
       
       // Select the new assignment
-      setSelectedAssignmentId(newAssignment.title);
+      const newAssignmentId = newAssignment.classroom_id ? `${newAssignment.title}::${newAssignment.classroom_id}` : newAssignment.title;
+      setSelectedAssignmentId(newAssignmentId);
       setTitle(newAssignment.title);
       setMaxScore(newAssignment.max_score);
       
       // Reset modal
       setNewAssignmentTitle('');
       setNewAssignmentMaxScore(100);
+      setNewAssignmentClassroomId(null);
       setShowCreateModal(false);
       
       toast.success('สร้างหัวข้องานใหม่เรียบร้อยแล้ว');
@@ -273,6 +368,7 @@ function GradesPage(){
   const cancelCreateAssignment = () => {
     setNewAssignmentTitle('');
     setNewAssignmentMaxScore(100);
+    setNewAssignmentClassroomId(null);
     setShowCreateModal(false);
   };
 
@@ -282,6 +378,7 @@ function GradesPage(){
       setEditingAssignment(assignment);
       setEditAssignmentTitle(assignment.title);
       setEditAssignmentMaxScore(assignment.max_score);
+      setEditAssignmentClassroomId(assignment.classroom_id || null);
       setShowEditModal(true);
     }
   };
@@ -310,10 +407,12 @@ function GradesPage(){
       const token = localStorage.getItem('token');
       const payload = {
         title: editAssignmentTitle.trim(),
-        max_score: editAssignmentMaxScore
+        max_score: editAssignmentMaxScore,
+        classroom_id: editAssignmentClassroomId || null
       };
       
-      const res = await fetch(`${API_BASE_URL}/grades/assignments/${id}/${editingAssignment.title}`, { 
+      const editUrl = `${API_BASE_URL}/grades/assignments/${id}/${editingAssignment.title}${editingAssignment.classroom_id ? `?classroom_id=${editingAssignment.classroom_id}` : ''}`;
+      const res = await fetch(editUrl, { 
         method: 'PUT', 
         headers: { 
           'Content-Type': 'application/json', 
@@ -331,11 +430,11 @@ function GradesPage(){
       const updatedAssignment = await res.json();
       
       // Update assignment in state
-      setAssignments(prev => prev.map(assignment => 
-        assignment.id === editingAssignment.id 
-          ? { ...assignment, title: updatedAssignment.title, max_score: updatedAssignment.max_score }
-          : assignment
-      ));
+      setAssignments(prev => prev.map(assignment => {
+        if (assignment.id !== editingAssignment.id) return assignment;
+        const updatedId = updatedAssignment.classroom_id ? `${updatedAssignment.title}::${updatedAssignment.classroom_id}` : updatedAssignment.title;
+        return { ...assignment, id: updatedId, title: updatedAssignment.title, max_score: updatedAssignment.max_score, classroom_id: updatedAssignment.classroom_id || assignment.classroom_id };
+      }));
       
       // Update grades key if title changed
       if (updatedAssignment.title !== editingAssignment.title) {
@@ -347,8 +446,9 @@ function GradesPage(){
         });
         
         // Update selected assignment if it was the one being edited
+        const updatedAssignmentId = updatedAssignment.classroom_id ? `${updatedAssignment.title}::${updatedAssignment.classroom_id}` : updatedAssignment.title;
         if (selectedAssignmentId === editingAssignment.id) {
-          setSelectedAssignmentId(updatedAssignment.title);
+          setSelectedAssignmentId(updatedAssignmentId);
           setTitle(updatedAssignment.title);
         }
       } else {
@@ -362,6 +462,7 @@ function GradesPage(){
       setEditingAssignment(null);
       setEditAssignmentTitle('');
       setEditAssignmentMaxScore(100);
+      setEditAssignmentClassroomId(null);
       setShowEditModal(false);
       
       toast.success('แก้ไขหัวข้องานเรียบร้อยแล้ว');
@@ -389,7 +490,7 @@ function GradesPage(){
   const confirmDeleteAssignment = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE_URL}/grades/assignments/${id}/${deletingAssignment.title}`, { 
+      const res = await fetch(`${API_BASE_URL}/grades/assignments/${id}/${deletingAssignment.title}${deletingAssignment.classroom_id ? `?classroom_id=${deletingAssignment.classroom_id}` : ''}`, { 
         method: 'DELETE', 
         headers: { 
           ...(token ? { Authorization: `Bearer ${token}` } : {}) 
@@ -484,11 +585,43 @@ function GradesPage(){
       overallGrade,
       assignmentDetails
     };
-  };  return (
+  };
+
+  // compute visible students according to selectedClass
+  const getClassIdentifier = (s) => {
+    if (!s) return 'Default';
+    if (s.classroom && (s.classroom.name || s.classroom.id)) return s.classroom.name || String(s.classroom.id);
+    if (s.classroom_name) return s.classroom_name;
+    if (s.class_name) return s.class_name;
+    if (s.grade_level && s.section) return `${s.grade_level} ${s.section}`;
+    if (s.grade_level) return String(s.grade_level);
+    if (s.homeroom) return s.homeroom;
+    if (s.section) return s.section;
+    return 'Default';
+  };
+
+  const getClassKey = (s) => {
+    if (!s) return 'label:Default';
+    if (s.classroom && (s.classroom.name || s.classroom.id)) return s.classroom.id ? `id:${s.classroom.id}` : `label:${s.classroom.name || String(s.classroom.id)}`;
+    if (s.classroom_name) return `label:${s.classroom_name}`;
+    if (s.class_name) return `label:${s.class_name}`;
+    if (s.grade_level && s.section) return `label:${s.grade_level} ${s.section}`;
+    if (s.grade_level) return `label:${s.grade_level}`;
+    if (s.homeroom) return `label:${s.homeroom}`;
+    if (s.section) return `label:${s.section}`;
+    return 'label:Default';
+  };
+
+  const visibleStudents = selectedClass ? students.filter(s => getClassKey(s) === selectedClass.key) : students;
+
+  const selectedAssignmentObj = assignments.find(a => a.id === selectedAssignmentId);
+  const selectedAssignmentClassLabel = selectedAssignmentObj ? (selectedAssignmentObj.classroom_id ? (classes.find(c => c.id === selectedAssignmentObj.classroom_id)?.label || `#${selectedAssignmentObj.classroom_id}`) : 'ทุกชั้น') : '';
+
+  return (
     <div className="grades-container">
       <ToastContainer />
       <div className="grades-header">
-        <h2 className="grades-title">ให้คะแนน - วิชา #{id}</h2>
+        <h2 className="grades-title">ให้คะแนน - {subjectName ? `${subjectName} (วิชา #${id})` : `วิชา #${id}`}</h2>
         <div className="grades-actions">
           <button onClick={()=>navigate(-1)} className="btn-back">กลับ</button>
           <button onClick={openSummaryModal} className="btn-summary" disabled={assignments.length === 0}>
@@ -520,9 +653,16 @@ function GradesPage(){
                 >
                   <option value="">เลือกหัวข้องาน</option>
                   {assignments.map(assignment => (
-                    <option key={assignment.id} value={assignment.id}>
-                      {assignment.title} (เต็ม {assignment.max_score} คะแนน)
-                    </option>
+                      <option key={assignment.id} value={assignment.id}>
+                        {assignment.title}
+                        {assignment.classroom_id ? (
+                          ` (ชั้น ${(() => {
+                            const c = classes.find(x => x.id === assignment.classroom_id);
+                            return c ? c.label : `#${assignment.classroom_id}`;
+                          })()})`
+                        ) : ` (ทุกชั้น)`}
+                        {` (เต็ม ${assignment.max_score} คะแนน)`}
+                      </option>
                   ))}
                 </select>
               </div>
@@ -561,13 +701,34 @@ function GradesPage(){
                   <label className="field-label">คะแนนเต็ม:</label>
                   <span className="assignment-display">{maxScore} คะแนน</span>
                 </div>
+                <div className="assignment-field">
+                  <label className="field-label">ชั้นเรียน:</label>
+                  <span className="assignment-display">{selectedAssignmentClassLabel}</span>
+                </div>
               </div>
             )}
           </>
         )}
 
-        {selectedAssignmentId && students.length > 0 && (
-          <table className="grades-table">
+        {selectedAssignmentId && visibleStudents.length > 0 && (
+          <>
+            {classes.length > 1 && (
+              <div className="class-filter" style={{ margin: '0.75rem 0' }}>
+                <label style={{ marginRight: '0.5rem' }}>ชั้นเรียน:</label>
+                <select
+                  value={selectedClass ? selectedClass.key : ''}
+                  onChange={(e) => {
+                    const selectedKey = e.target.value;
+                    const found = classes.find(c => c.key === selectedKey);
+                    setSelectedClass(found || null);
+                  }}
+                >
+                  {classes.map(c => (<option key={c.key} value={c.key}>{c.label}</option>))}
+                </select>
+              </div>
+            )}
+
+            <table className="grades-table">
             <thead>
               <tr>
                 <th>นักเรียน</th>
@@ -577,7 +738,7 @@ function GradesPage(){
               </tr>
             </thead>
             <tbody>
-              {students.map(s=> {
+              {visibleStudents.map(s=> {
                 const currentGrades = grades[selectedAssignmentId] || {};
                 const score = currentGrades[s.id] ? Number(currentGrades[s.id]) : null;
                 const percentage = score !== null ? calculatePercentage(score, maxScore) : null;
@@ -625,9 +786,10 @@ function GradesPage(){
               })}
             </tbody>
           </table>
+            </>
         )}
 
-        {selectedAssignmentId && students.length === 0 && (
+        {selectedAssignmentId && visibleStudents.length === 0 && (
           <div className="grades-empty">ไม่มีนักเรียนในวิชานี้</div>
         )}
 
@@ -640,18 +802,34 @@ function GradesPage(){
                 <button className="grades-modal-close" onClick={cancelCreateAssignment}>×</button>
               </div>
               <div className="grades-modal-body">
-                <div className="grades-modal-field">
-                  <label htmlFor="new-assignment-title" className="grades-modal-label">หัวข้องาน:</label>
-                  <input
-                    type="text"
-                    id="new-assignment-title"
-                    value={newAssignmentTitle}
-                    onChange={(e) => setNewAssignmentTitle(e.target.value)}
-                    className="grades-modal-input"
-                    placeholder="เช่น แบบฝึกหัดที่ 1"
-                    autoFocus
-                  />
-                </div>
+                        <div className="grades-modal-field">
+                          <label htmlFor="new-assignment-title" className="grades-modal-label">หัวข้องาน:</label>
+                          <input
+                            type="text"
+                            id="new-assignment-title"
+                            value={newAssignmentTitle}
+                            onChange={(e) => setNewAssignmentTitle(e.target.value)}
+                            className="grades-modal-input"
+                            placeholder="เช่น แบบฝึกหัดที่ 1"
+                            autoFocus
+                          />
+                        </div>
+                        <div className="grades-modal-field">
+                          <label htmlFor="new-assignment-classroom" className="grades-modal-label">ชั้นเรียน (เลือกเพื่อกำหนดเฉพาะชั้น):</label>
+                          <select
+                            id="new-assignment-classroom"
+                            className={`grades-modal-select ${newAssignmentClassroomId ? 'has-classroom' : ''}`}
+                            value={newAssignmentClassroomId || ''}
+                            onChange={(e) => setNewAssignmentClassroomId(e.target.value ? Number(e.target.value) : null)}
+                          >
+                            <option value="">ทุกชั้น (Global)</option>
+                            {classes.map(c => (
+                              <option key={c.key} value={c.id || ''} disabled={!c.id} title={!c.id ? 'ชั้นเรียนนี้ยังไม่มีในระบบ (ต้องสร้าง classroom ก่อน)' : ''}>
+                                {c.label}{!c.id && ' (ยังไม่ได้สร้างในระบบ)'}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                 <div className="grades-modal-field">
                   <label htmlFor="new-max-score" className="grades-modal-label">คะแนนเต็ม:</label>
                   <input
@@ -693,6 +871,22 @@ function GradesPage(){
                     placeholder="เช่น แบบฝึกหัดที่ 1"
                     autoFocus
                   />
+                </div>
+                <div className="grades-modal-field">
+                  <label htmlFor="edit-assignment-classroom" className="grades-modal-label">ชั้นเรียน (เลือกเพื่อกำหนดเฉพาะชั้น):</label>
+                  <select
+                    id="edit-assignment-classroom"
+                    className={`grades-modal-select ${editAssignmentClassroomId ? 'has-classroom' : ''}`}
+                    value={editAssignmentClassroomId || ''}
+                    onChange={(e) => setEditAssignmentClassroomId(e.target.value ? Number(e.target.value) : null)}
+                  >
+                    <option value="">ทุกชั้น (Global)</option>
+                    {classes.map(c => (
+                      <option key={c.key} value={c.id || ''} disabled={!c.id} title={!c.id ? 'ชั้นเรียนนี้ยังไม่มีในระบบ (ต้องสร้าง classroom ก่อน)' : ''}>
+                        {c.label}{!c.id && ' (ยังไม่ได้สร้างในระบบ)'}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div className="grades-modal-field">
                   <label htmlFor="edit-max-score" className="grades-modal-label">คะแนนเต็ม:</label>
@@ -751,7 +945,7 @@ function GradesPage(){
                 <button className="modal-close" onClick={closeSummaryModal}>×</button>
               </div>
               <div className="grades-modal-body">
-                {students.length === 0 ? (
+                {visibleStudents.length === 0 ? (
                   <div className="summary-empty">ไม่มีนักเรียนในวิชานี้</div>
                 ) : (
                   <div className="summary-content">
@@ -765,7 +959,7 @@ function GradesPage(){
                         </div>
                         <div className="stat-item">
                           <span className="stat-label">จำนวนนักเรียน:</span>
-                          <span className="stat-value">{students.length}</span>
+                          <span className="stat-value">{visibleStudents.length}</span>
                         </div>
                       </div>
                     </div>
@@ -793,7 +987,7 @@ function GradesPage(){
                             </tr>
                           </thead>
                           <tbody>
-                            {students.map(student => {
+                            {visibleStudents.map(student => {
                               const summary = calculateStudentSummary(student.id);
                               return (
                                 <tr key={student.id}>

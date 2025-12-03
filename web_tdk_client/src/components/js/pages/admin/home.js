@@ -19,6 +19,7 @@ import PromoteStudentModal from './PromoteStudentModal';
 import CreateClassroomModal from './CreateClassroomModal';
 import EditClassroomModal from './EditClassroomModal';
 import AddStudentsModal from './AddStudentsModal';
+import SubjectManagementModal from '../../SubjectManagementModal';
 import { API_BASE_URL } from '../../../endpoints';
 import { setSchoolFavicon } from '../../../../utils/faviconUtils';
 import { logout } from '../../../../utils/authUtils';
@@ -168,6 +169,15 @@ function AdminPage() {
   const [newPasswordForReset, setNewPasswordForReset] = useState('');
   const [selectedResetRequest, setSelectedResetRequest] = useState(null);
   const [showResetPasswordModal, setShowResetPasswordModal] = useState(false);
+
+  // Subject management state
+  const [subjects, setSubjects] = useState([]);
+  const [loadingSubjects, setLoadingSubjects] = useState(false);
+  const [showSubjectModal, setShowSubjectModal] = useState(false);
+  const [selectedSubject, setSelectedSubject] = useState(null);
+  const [subjectSearchTerm, setSubjectSearchTerm] = useState('');
+  const [subjectTypeFilter, setSubjectTypeFilter] = useState('all');
+  const [subjectCurrentPage, setSubjectCurrentPage] = useState(1);
 
   useEffect(() => {
     const onDocClick = (e) => {
@@ -1102,6 +1112,13 @@ function AdminPage() {
     }
   }, [activeTab]);
 
+  // Load subjects when switching to subjects tab
+  React.useEffect(() => {
+    if (activeTab === 'subjects') {
+      loadSubjects();
+    }
+  }, [activeTab, currentUser?.school_id]);
+
   // Grade level assignment functions
   const handleGradeFileDrop = (e) => {
     e.preventDefault();
@@ -1565,6 +1582,9 @@ function AdminPage() {
     const token = localStorage.getItem('token');
     setPromotingClassroom(true);
     try {
+      if (selectedClassroom) {
+        toast.info(`⏳ เริ่มการเลื่อนชั้นของชั้นเรียน ${selectedClassroom.name}...`);
+      }
       const payload = {
         promotion_type: classroomPromotionType,
         include_grades: true,
@@ -1594,7 +1614,7 @@ function AdminPage() {
 
       const data = await response.json();
       if (response.ok) {
-        toast.success(data.message);
+        toast.success(data.message || `✅ เลื่อนชั้น ${selectedClassroom?.name || ''} สำเร็จ`);
         setShowClassroomModal(false);
         setClassroomStep('select');
         setClassroomPromotionNewGrade('');
@@ -1605,22 +1625,32 @@ function AdminPage() {
       }
     } catch (err) {
       console.error('Error promoting classroom:', err);
-      toast.error('เกิดข้อผิดพลาดในการเลื่อนชั้น');
+      toast.error(`❌ เลื่อนชั้นไม่สำเร็จ: ${err.message || 'เกิดข้อผิดพลาด'}`);
     } finally {
       setPromotingClassroom(false);
     }
   };
 
-  const promoteClassroomSemesterOnly = async () => {
+  const promoteClassroomSemesterOnly = async (classroomParam) => {
     const token = localStorage.getItem('token');
     setPromotingClassroom(true);
     try {
+      const classroomToUse = classroomParam || selectedClassroom;
+      if (!classroomToUse) {
+        toast.error('กรุณาเลือกชั้นเรียนก่อน');
+        setPromotingClassroom(false);
+        return;
+      }
+
       const payload = {
         promotion_type: 'mid_term',
         include_grades: true,
       };
 
-      const response = await fetch(`${API_BASE_URL}/classrooms/${selectedClassroom.id}/promote`, {
+      // notify start
+      toast.info(`⏳ เริ่มเลื่อนเทอมของชั้นเรียน ${classroomToUse.name}...`);
+
+      const response = await fetch(`${API_BASE_URL}/classrooms/${classroomToUse.id}/promote`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -1631,17 +1661,17 @@ function AdminPage() {
 
       const data = await response.json();
       if (response.ok) {
-        toast.success(data.message || '✓ เลื่อนเทอมสำเร็จ');
+        toast.success(data.message || `✅ เลื่อนเทอมของ ${classroomToUse.name} สำเร็จ`);
         setShowClassroomModal(false);
         setClassroomStep('select');
         // รีเฟรชรายการชั้นเรียน
         await refreshClassrooms();
       } else {
-        toast.error(data.message || 'เลื่อนเทอมไม่สำเร็จ');
+        toast.error(data.message || `❌ เลื่อนเทอมของ ${classroomToUse.name} ไม่สำเร็จ`);
       }
     } catch (err) {
       console.error('Error promoting semester:', err);
-      toast.error('เกิดข้อผิดพลาดในการเลื่อนเทอม');
+      toast.error(`❌ เลื่อนเทอมล้มเหลว: ${err.message || 'เกิดข้อผิดพลาด'}`);
     } finally {
       setPromotingClassroom(false);
     }
@@ -1745,6 +1775,77 @@ function AdminPage() {
     );
   };
 
+  // ===== Subject Management Functions =====
+
+  const loadSubjects = async () => {
+    if (!currentUser?.school_id) return;
+    setLoadingSubjects(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE_URL}/subjects/school/${currentUser.school_id}/all`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSubjects(Array.isArray(data) ? data : []);
+      } else {
+        setSubjects([]);
+      }
+    } catch (err) {
+      console.error('Error loading subjects:', err);
+      setSubjects([]);
+    } finally {
+      setLoadingSubjects(false);
+    }
+  };
+
+  const handleDeleteSubject = async (subject) => {
+    openConfirmModal(
+      'ลบรายวิชา',
+      `ต้องการลบรายวิชา "${subject.name}" หรือไม่? โปรดทราบว่าโปรแกรมจะต้องสิ้นสุดรายวิชาก่อนที่จะลบได้`,
+      async () => {
+        try {
+          const token = localStorage.getItem('token');
+          
+          // First, end the subject if not already ended
+          if (!subject.is_ended) {
+            await fetch(`${API_BASE_URL}/subjects/${subject.id}/end`, {
+              method: 'PATCH',
+              headers: { Authorization: `Bearer ${token}` }
+            });
+          }
+          
+          // Then delete
+          const res = await fetch(`${API_BASE_URL}/subjects/${subject.id}`, {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          
+          if (res.ok) {
+            toast.success(`ลบรายวิชา "${subject.name}" สำเร็จ`);
+            loadSubjects();
+          } else {
+            const error = await res.json();
+            toast.error(error.detail || 'ไม่สามารถลบรายวิชาได้');
+          }
+        } catch (err) {
+          console.error('Error deleting subject:', err);
+          toast.error('เกิดข้อผิดพลาดในการลบรายวิชา');
+        }
+      }
+    );
+  };
+
+  const handleEditSubject = (subject) => {
+    setSelectedSubject(subject);
+    setShowSubjectModal(true);
+  };
+
+  const handleCreateSubject = () => {
+    setSelectedSubject(null);
+    setShowSubjectModal(true);
+  };
+
   // เปิด modal เลื่อนนักเรียนรายบุคคล
   const openPromoteStudentModal = async (classroom) => {
     setClassroomForStudentPromotion(classroom);
@@ -1811,18 +1912,18 @@ function AdminPage() {
   return (
     <>
       <div className="admin-dashboard">
-      <ToastContainer />
+        <ToastContainer />
 
-      <div className="admin-header">
-        <div className="header-left">
-          <div className="admin-avatar" aria-hidden>{initials(currentUser?.full_name || currentUser?.username)}</div>
-          <div className="user-info">
-            <h1>{`สวัสดี, ${currentUser ? (currentUser.full_name || currentUser.username) : 'Admin'}! 👋`}</h1>
-            <div className="user-info-subtitle">
-              🏫 จัดการผู้ใช้และประกาศของโรงเรียน{displaySchool !== '-' ? displaySchool : ''}
+        <div className="admin-header">
+          <div className="header-left">
+            <div className="admin-avatar" aria-hidden>{initials(currentUser?.full_name || currentUser?.username)}</div>
+            <div className="user-info">
+              <h1>{`สวัสดี, ${currentUser ? (currentUser.full_name || currentUser.username) : 'Admin'}! 👋`}</h1>
+              <div className="user-info-subtitle">
+                🏫 จัดการผู้ใช้และประกาศของโรงเรียน{displaySchool !== '-' ? displaySchool : ''}
+              </div>
             </div>
           </div>
-        </div>
 
           <div className="header-right">
             <button
@@ -1833,12 +1934,7 @@ function AdminPage() {
             >
               ☰
             </button>
-          <div className="account-info">
-            <div className="account-label">บัญชี</div>
-            <div className="account-email">{currentUser?.email || ''}</div>
-            {/* Dropdown menu for small screens */}
-            <div ref={headerMenuRef} role="menu" className={`header-menu ${showHeaderMenu ? 'open' : ''}`}>
-              <button role="menuitem" className="admin-btn-primary" onClick={() => { setShowLogoUploadModal(true); setShowHeaderMenu(false); }}>📸 อัพโหลดโลโก้</button>
+            <div className="header-menu" style={{ display: showHeaderMenu ? 'block' : 'none' }}>
               <button role="menuitem" className="admin-btn-primary" onClick={() => { setShowModal(true); setShowHeaderMenu(false); }}>➕ เพิ่มผู้ใช้ใหม่</button>
               <button role="menuitem" className="admin-btn-secondary" onClick={() => { navigate('/profile'); setShowHeaderMenu(false); }}>👤 โปรไฟล์</button>
               <button role="menuitem" className="admin-btn-danger" onClick={() => { handleSignout(); setShowHeaderMenu(false); }}>🚪 ออกจากระบบ</button>
@@ -1906,6 +2002,7 @@ function AdminPage() {
         <button className={`admin-tab-button ${activeTab === 'classrooms' ? 'active' : ''}`} onClick={() => setActiveTab('classrooms')}>จัดการชั้นเรียน</button>
         <button className={`admin-tab-button ${activeTab === 'promotions' ? 'active' : ''}`} onClick={() => setActiveTab('promotions')}>เลื่อนชั้นเรียน</button>
         <button className={`admin-tab-button ${activeTab === 'homeroom' ? 'active' : ''}`} onClick={() => setActiveTab('homeroom')}>ครูประจำชั้น</button>
+        <button className={`admin-tab-button ${activeTab === 'subjects' ? 'active' : ''}`} onClick={() => setActiveTab('subjects')}>📚 จัดการรายวิชา</button>
         <button className={`admin-tab-button ${activeTab === 'announcements' ? 'active' : ''}`} onClick={() => setActiveTab('announcements')}>จัดการประกาศข่าว</button>
         <button className={`admin-tab-button ${activeTab === 'absences' ? 'active' : ''}`} onClick={() => setActiveTab('absences')}>อนุมัติการลา</button>
         <button className={`admin-tab-button ${activeTab === 'schedule' ? 'active' : ''}`} onClick={() => setActiveTab('schedule')}>จัดการตารางเรียน</button>
@@ -2661,12 +2758,17 @@ function AdminPage() {
                             <button 
                               className="admin-btn-small admin-btn-warning"
                               onClick={() => {
-                                setSelectedClassroom(classroom);
-                                promoteClassroomSemesterOnly();
+                                // Confirm before promoting semester-only
+                                openConfirmModal(
+                                  'ยืนยัน: เลื่อนเทอม',
+                                  `ต้องการเลื่อนเทอมของชั้นเรียน \"${classroom.name}\" (ชั้น ${classroom.grade_level}) จากเทอม ${classroom.semester} เป็นเทอม ${classroom.semester === 1 ? 2 : 1} หรือไม่?`,
+                                  async () => { await promoteClassroomSemesterOnly(classroom); }
+                                );
                               }}
                               title="เลื่อนเทอมเท่านั้น (เทอม 1 → เทอม 2)"
+                              disabled={promotingClassroom}
                             >
-                              📅 เลื่อนเทอม
+                              {promotingClassroom ? '⏳ กำลังเลื่อน...' : '📅 เลื่อนเทอม'}
                             </button>
                             <button
                               className="admin-btn-small admin-btn-info"
@@ -2927,6 +3029,191 @@ function AdminPage() {
             </div>
           </div>
         )}
+
+        {activeTab === 'subjects' && (
+          <div className="content-card">
+            <div className="card-header">
+              <h2><span className="card-icon">📚</span> จัดการรายวิชา</h2>
+            </div>
+            <div className="card-content">
+              {loadingSubjects && <Loading message="กำลังโหลดข้อมูลรายวิชา..." />}
+
+              <div className="list-header" style={{ marginBottom: '1.5rem' }}>
+                <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap', marginBottom: '1rem' }}>
+                  <button 
+                    className="btn-action btn-success"
+                    onClick={handleCreateSubject}
+                    style={{
+                      padding: '10px 16px',
+                      backgroundColor: '#4CAF50',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontWeight: '600',
+                      fontSize: '0.95rem'
+                    }}
+                  >
+                    ➕ สร้างรายวิชาใหม่
+                  </button>
+                  <input
+                    type="text"
+                    placeholder="🔍 ค้นหารายวิชา"
+                    value={subjectSearchTerm}
+                    onChange={(e) => {
+                      setSubjectSearchTerm(e.target.value);
+                      setSubjectCurrentPage(1);
+                    }}
+                    style={{
+                      flex: 1,
+                      minWidth: '200px',
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid #ddd',
+                      fontSize: '0.95rem'
+                    }}
+                  />
+                  <select
+                    value={subjectTypeFilter}
+                    onChange={(e) => {
+                      setSubjectTypeFilter(e.target.value);
+                      setSubjectCurrentPage(1);
+                    }}
+                    style={{
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid #ddd',
+                      cursor: 'pointer',
+                      fontSize: '0.95rem'
+                    }}
+                  >
+                    <option value="all">ทั้งหมด</option>
+                    <option value="main">📖 รายวิชาหลัก</option>
+                    <option value="activity">🎯 รายวิชากิจกรรม</option>
+                  </select>
+                </div>
+              </div>
+
+              {subjects.length === 0 ? (
+                <div className="empty-state">
+                  <div className="empty-icon">📚</div>
+                  <div className="empty-text">ยังไม่มีรายวิชา</div>
+                  <div className="empty-subtitle">สร้างรายวิชาใหม่เพื่อเริ่มต้น</div>
+                </div>
+              ) : (() => {
+                const filtered = subjects.filter(s => {
+                  const matchSearch = !subjectSearchTerm || s.name.toLowerCase().includes(subjectSearchTerm.toLowerCase());
+                  const matchType = subjectTypeFilter === 'all' || s.subject_type === subjectTypeFilter;
+                  return matchSearch && matchType;
+                });
+
+                const ITEMS_PER_PAGE_SUBJECTS = 10;
+                const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE_SUBJECTS);
+                const startIdx = (subjectCurrentPage - 1) * ITEMS_PER_PAGE_SUBJECTS;
+                const paginated = filtered.slice(startIdx, startIdx + ITEMS_PER_PAGE_SUBJECTS);
+
+                return (
+                  <>
+                    <div style={{ overflowX: 'auto', marginBottom: '1rem' }}>
+                      <table className="admin-table subjects-table" style={{ minWidth: '100%' }}>
+                        <thead>
+                          <tr>
+                            <th>ชื่อรายวิชา</th>
+                            <th>รหัส</th>
+                            <th>ประเภท</th>
+                            <th>หน่วยกิต / เปอร์เซ็นต์</th>
+                            <th>ครูผู้สอน</th>
+                            <th style={{ textAlign: 'center' }}>ชั้นเรียน</th>
+                            <th style={{ textAlign: 'center' }}>นักเรียน</th>
+                            <th style={{ width: '200px' }}>การจัดการ</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {paginated.map(subject => (
+                            <tr key={subject.id}>
+                              <td>
+                                <div className="subject-name"><strong>{subject.name}</strong></div>
+                                {/* Mobile small mention for credits/percentage */}
+                                <div className="subject-meta-mobile">
+                                  {subject.subject_type === 'main' ? (subject.credits != null ? `${subject.credits} กิต` : '-') : (subject.activity_percentage != null ? `${subject.activity_percentage}%` : '-')}
+                                </div>
+                              </td>
+                              <td>{subject.code || '-'}</td>
+                              <td>{subject.subject_type === 'main' ? '📖 รายวิชาหลัก' : '🎯 รายวิชากิจกรรม'}</td>
+                              <td className="subject-credit" style={{ textAlign: 'center' }}>
+                                {subject.subject_type === 'main' ? (subject.credits != null ? `${subject.credits} กิต` : '-') : (subject.activity_percentage != null ? `${subject.activity_percentage}%` : '-')}
+                              </td>
+                              <td><div className="teacher-cell">{subject.teacher_name || 'ยังไม่มีครู'}</div></td>
+                              <td style={{ textAlign: 'center' }}>{subject.classroom_count}</td>
+                              <td style={{ textAlign: 'center' }}>{subject.student_count}</td>
+                              <td style={{ display: 'flex', gap: '0.5rem' }}>
+                                <button
+                                  style={{
+                                    flex: '0 0 auto',
+                                    minWidth: '84px',
+                                    padding: '8px 12px',
+                                    backgroundColor: '#2196F3',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '4px',
+                                    cursor: 'pointer',
+                                    fontSize: '0.9rem',
+                                    fontWeight: '600'
+                                  }}
+                                  onClick={() => handleEditSubject(subject)}
+                                >
+                                  ✏️ แก้ไข
+                                </button>
+                                <button
+                                  style={{
+                                    flex: '0 0 auto',
+                                    minWidth: '84px',
+                                    padding: '8px 12px',
+                                    backgroundColor: '#f44336',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '4px',
+                                    cursor: 'pointer',
+                                    fontSize: '0.9rem',
+                                    fontWeight: '600'
+                                  }}
+                                  onClick={() => handleDeleteSubject(subject)}
+                                >
+                                  🗑️ ลบ
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    {totalPages > 1 && (
+                      <div className="pagination" style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+                        {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                          <button
+                            key={page}
+                            style={{
+                              padding: '8px 12px',
+                              border: subjectCurrentPage === page ? '2px solid #2196F3' : '1px solid #ddd',
+                              backgroundColor: subjectCurrentPage === page ? '#e3f2fd' : 'white',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              fontWeight: subjectCurrentPage === page ? '600' : '400',
+                              color: subjectCurrentPage === page ? '#2196F3' : '#666'
+                            }}
+                            onClick={() => setSubjectCurrentPage(page)}
+                          >
+                            {page}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+        )}
       </div>
 
       {showModal && (
@@ -3121,7 +3408,6 @@ function AdminPage() {
           </div>
         </div>
       )}
-      </div>
 
       {/* Classroom Management Modal - แยกเป็น 3 modal */}
       <CreateClassroomModal
@@ -3289,6 +3575,17 @@ function AdminPage() {
         </div>
       </div>
     )}
+
+    {/* Subject Management Modal */}
+    <SubjectManagementModal
+      isOpen={showSubjectModal}
+      onClose={() => setShowSubjectModal(false)}
+      onSave={loadSubjects}
+      subject={selectedSubject}
+      teachers={teachers}
+      classrooms={classrooms}
+      currentSchoolId={currentUser?.school_id}
+    />
     </>
   );
 }

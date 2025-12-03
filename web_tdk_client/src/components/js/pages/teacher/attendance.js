@@ -9,6 +9,9 @@ function AttendancePage(){
   const { id } = useParams(); // subject id
   const navigate = useNavigate();
   const [students, setStudents] = useState([]);
+  const [classes, setClasses] = useState([]);
+  const [selectedClass, setSelectedClass] = useState(null);
+  const [subjectName, setSubjectName] = useState('');
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0,10));
   const [attendance, setAttendance] = useState({}); // student_id -> status ("present", "absent", "sick_leave", "other")
 
@@ -25,12 +28,61 @@ function AttendancePage(){
         const token = localStorage.getItem('token');
         const res = await fetch(`${API_BASE_URL}/subjects/${id}/students`, { headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
         const data = await res.json();
-        if (Array.isArray(data)) setStudents(data);
-        else setStudents([]);
+        if (Array.isArray(data)){
+          setStudents(data);
+
+          // derive classes/groupings from student objects
+          const getClassIdentifier = (s) => {
+            if (!s) return 'Default';
+            if (s.classroom && (s.classroom.name || s.classroom.id)) return s.classroom.name || String(s.classroom.id);
+            if (s.classroom_name) return s.classroom_name;
+            if (s.class_name) return s.class_name;
+            if (s.grade_level && s.section) return `${s.grade_level} ${s.section}`;
+            if (s.grade_level) return String(s.grade_level);
+            if (s.homeroom) return s.homeroom;
+            if (s.section) return s.section;
+            return 'Default';
+          };
+
+          const distinct = Array.from(new Set(data.map(getClassIdentifier)));
+          setClasses(distinct);
+          // only select a class when there are multiple groups; otherwise show all
+          setSelectedClass(distinct.length > 1 ? distinct[0] : null);
+        } else setStudents([]);
       }catch(err){ setStudents([]); }
     };
     load();
   },[id]);
+
+  // load subject details (to display subject name)
+  useEffect(() => {
+    const loadSubject = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const res = await fetch(`${API_BASE_URL}/subjects/${id}`, { headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
+        if (!res.ok) {
+          // Fallback: try to derive from students if available
+          if (students && students.length > 0) {
+            const s = students[0];
+            const fallbackName = (s && (s.subject_name || (s.subject && (s.subject.name || s.subject.title)))) || '';
+            if (fallbackName) setSubjectName(fallbackName);
+          }
+          return;
+        }
+        const data = await res.json();
+        const name = data.name || data.title || data.subject_name || '';
+        if (name) setSubjectName(name);
+      } catch (err) {
+        // Silent fallback to students payload
+        if (students && students.length > 0) {
+          const s = students[0];
+          const fallbackName = (s && (s.subject_name || (s.subject && (s.subject.name || s.subject.title)))) || '';
+          if (fallbackName) setSubjectName(fallbackName);
+        }
+      }
+    };
+    if (id) loadSubject();
+  }, [id, students]);
 
   // load attendance for selected date
   useEffect(()=>{
@@ -76,7 +128,7 @@ function AttendancePage(){
     <div className="attendance-container">
       <ToastContainer />
       <div className="attendance-header">
-        <h2 className="attendance-title">เช็คชื่อ - วิชา #{id}</h2>
+        <h2 className="attendance-title">เช็คชื่อ - {subjectName ? `${subjectName} (วิชา #${id})` : `วิชา #${id}`}</h2>
         <div className="attendance-controls">
           <div className="date-picker">
             <label htmlFor="attendance-date">วันที่: </label>
@@ -97,7 +149,17 @@ function AttendancePage(){
 
       <div className="attendance-content">
         {students.length===0 ? <div className="attendance-empty">ไม่มีนักเรียนในวิชานี้</div> : (
-          <table className="attendance-table">
+          <>
+            {classes.length > 1 && (
+              <div className="class-filter">
+                <label>ชั้นเรียน:</label>
+                <select value={selectedClass} onChange={(e) => setSelectedClass(e.target.value)}>
+                  {classes.map(c => (<option key={c} value={c}>{c}</option>))}
+                </select>
+              </div>
+            )}
+
+            <table className="attendance-table">
             <thead>
               <tr>
                 <th>นักเรียน</th>
@@ -105,7 +167,22 @@ function AttendancePage(){
               </tr>
             </thead>
             <tbody>
-              {students.map(s=> (
+              {(
+                (selectedClass ? students.filter(s => {
+                  const getClassIdentifier = (s) => {
+                    if (!s) return 'Default';
+                    if (s.classroom && (s.classroom.name || s.classroom.id)) return s.classroom.name || String(s.classroom.id);
+                    if (s.classroom_name) return s.classroom_name;
+                    if (s.class_name) return s.class_name;
+                    if (s.grade_level && s.section) return `${s.grade_level} ${s.section}`;
+                    if (s.grade_level) return String(s.grade_level);
+                    if (s.homeroom) return s.homeroom;
+                    if (s.section) return s.section;
+                    return 'Default';
+                  };
+                  return getClassIdentifier(s) === selectedClass;
+                }) : students)
+              ).map(s=> (
                 <tr key={s.id}>
                   <td>
                     <div className="attendance-student-info">
@@ -131,6 +208,7 @@ function AttendancePage(){
               ))}
             </tbody>
           </table>
+          </>
         )}
       </div>
     </div>

@@ -5,7 +5,9 @@ from typing import List
 from schemas.subject import Subject, SubjectCreate
 from models.subject import Subject as SubjectModel
 from models.subject_student import SubjectStudent as SubjectStudentModel
+from models.classroom_subject import ClassroomSubject as ClassroomSubjectModel
 from models.user import User as UserModel
+from models.classroom import Classroom as ClassroomModel, ClassroomStudent as ClassroomStudentModel
 from database.connection import get_db
 from routers.user import get_current_user
 from schemas.user import User as UserSchema
@@ -28,13 +30,53 @@ def create_subject(subject: SubjectCreate, db: Session = Depends(get_db), curren
 
     new_sub = SubjectModel(
         name=subject.name,
+        code=subject.code,
+        subject_type=subject.subject_type or 'main',
         teacher_id=subject.teacher_id,
-        school_id=school_id
+        school_id=school_id,
+        credits=getattr(subject, 'credits', None),
+        activity_percentage=getattr(subject, 'activity_percentage', None)
     )
     db.add(new_sub)
     db.commit()
     db.refresh(new_sub)
     return new_sub
+
+
+@router.patch("/{subject_id}", response_model=Subject)
+def update_subject(subject_id: int, subject: SubjectCreate, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    """Update an existing subject"""
+    # Only admin can update subjects
+    role = getattr(current_user, 'role', None)
+    if role != 'admin':
+        raise HTTPException(status_code=403, detail="Not authorized to update subjects")
+    
+    subj = db.query(SubjectModel).filter(SubjectModel.id == subject_id).first()
+    if not subj:
+        raise HTTPException(status_code=404, detail="Subject not found")
+    
+    # Verify school ownership
+    if getattr(current_user, 'school_id', None) is not None and subj.school_id is not None and int(subj.school_id) != int(current_user.school_id):
+        raise HTTPException(status_code=403, detail="Cannot update subject for different school")
+    
+    # Update fields
+    if subject.name:
+        subj.name = subject.name
+    if subject.code:
+        subj.code = subject.code
+    if subject.subject_type:
+        subj.subject_type = subject.subject_type
+    if subject.teacher_id is not None:
+        subj.teacher_id = subject.teacher_id
+    # optional new fields
+    if getattr(subject, 'credits', None) is not None:
+        subj.credits = subject.credits
+    if getattr(subject, 'activity_percentage', None) is not None:
+        subj.activity_percentage = subject.activity_percentage
+    
+    db.commit()
+    db.refresh(subj)
+    return subj
 
 
 @router.get("", response_model=List[Subject])
@@ -44,6 +86,15 @@ def list_subjects(db: Session = Depends(get_db), school_id: int = None):
     if school_id is not None:
         query = query.filter(SubjectModel.school_id == school_id)
     return query.order_by(SubjectModel.created_at.desc()).all()
+
+
+@router.get("/{subject_id}", response_model=Subject)
+def get_subject(subject_id: int, db: Session = Depends(get_db)):
+    """Get a single subject by ID"""
+    subject = db.query(SubjectModel).filter(SubjectModel.id == subject_id).first()
+    if not subject:
+        raise HTTPException(status_code=404, detail="Subject not found")
+    return subject
 
 
 @router.get("/teacher/{teacher_id}", response_model=List[Subject])
@@ -270,3 +321,152 @@ def unend_subject(subject_id: int, db: Session = Depends(get_db), current_user=D
     db.commit()
     db.refresh(subj)
     return subj
+
+
+# ===== Classroom Subject Management Endpoints =====
+
+@router.post("/{subject_id}/assign-classroom", status_code=status.HTTP_201_CREATED)
+def assign_classroom_to_subject(subject_id: int, classroom_id: int = Body(..., embed=True), db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    """Assign a classroom to a subject and auto-enroll all students in that classroom"""
+    # Only admin can assign classrooms
+    if getattr(current_user, 'role', None) != 'admin':
+        raise HTTPException(status_code=403, detail="Only admin can assign classrooms to subjects")
+    
+    # Verify subject exists
+    subject = db.query(SubjectModel).filter(SubjectModel.id == subject_id).first()
+    if not subject:
+        raise HTTPException(status_code=404, detail="Subject not found")
+    
+    # Verify classroom exists
+    classroom = db.query(ClassroomModel).filter(ClassroomModel.id == classroom_id).first()
+    if not classroom:
+        raise HTTPException(status_code=404, detail="Classroom not found")
+    
+    # Check if already assigned
+    existing = db.query(ClassroomSubjectModel).filter(
+        ClassroomSubjectModel.subject_id == subject_id,
+        ClassroomSubjectModel.classroom_id == classroom_id
+    ).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Classroom already assigned to this subject")
+    
+    # Create assignment
+    assignment = ClassroomSubjectModel(subject_id=subject_id, classroom_id=classroom_id)
+    db.add(assignment)
+    db.commit()
+    
+    # Auto-enroll all active students in this classroom
+    students = db.query(ClassroomStudentModel).filter(
+        ClassroomStudentModel.classroom_id == classroom_id,
+        ClassroomStudentModel.is_active == True
+    ).all()
+    
+    enrolled_count = 0
+    for cs in students:
+        # Check if already enrolled in subject
+        existing_enrollment = db.query(SubjectStudentModel).filter(
+            SubjectStudentModel.subject_id == subject_id,
+            SubjectStudentModel.student_id == cs.student_id
+        ).first()
+        
+        if not existing_enrollment:
+            enrollment = SubjectStudentModel(subject_id=subject_id, student_id=cs.student_id)
+            db.add(enrollment)
+            enrolled_count += 1
+    
+    db.commit()
+    
+    return {
+        'detail': 'Classroom assigned successfully',
+        'subject_id': subject_id,
+        'classroom_id': classroom_id,
+        'students_enrolled': enrolled_count
+    }
+
+
+@router.delete("/{subject_id}/unassign-classroom/{classroom_id}", status_code=status.HTTP_204_NO_CONTENT)
+def unassign_classroom_from_subject(subject_id: int, classroom_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    """Unassign a classroom from a subject (does not unenroll students)"""
+    # Only admin can unassign
+    if getattr(current_user, 'role', None) != 'admin':
+        raise HTTPException(status_code=403, detail="Only admin can unassign classrooms from subjects")
+    
+    assignment = db.query(ClassroomSubjectModel).filter(
+        ClassroomSubjectModel.subject_id == subject_id,
+        ClassroomSubjectModel.classroom_id == classroom_id
+    ).first()
+    
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Classroom not assigned to this subject")
+    
+    db.delete(assignment)
+    db.commit()
+    return
+
+
+@router.get("/{subject_id}/classrooms")
+def get_subject_classrooms(subject_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    """Get all classrooms assigned to a subject"""
+    subject = db.query(SubjectModel).filter(SubjectModel.id == subject_id).first()
+    if not subject:
+        raise HTTPException(status_code=404, detail="Subject not found")
+    
+    # Only admin or the assigned teacher can view
+    if getattr(current_user, 'role', None) != 'admin' and subject.teacher_id != getattr(current_user, 'id', None):
+        raise HTTPException(status_code=403, detail="Not authorized to view classrooms for this subject")
+    
+    classrooms = db.query(ClassroomModel).join(
+        ClassroomSubjectModel, ClassroomSubjectModel.classroom_id == ClassroomModel.id
+    ).filter(ClassroomSubjectModel.subject_id == subject_id).all()
+    
+    return {
+        'subject_id': subject_id,
+        'classrooms': classrooms
+    }
+
+
+@router.get("/school/{school_id}/all")
+def get_all_subjects_by_school(school_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    """Get all subjects for a school with their classroom and teacher info"""
+    # Only admin of that school can access
+    if getattr(current_user, 'role', None) != 'admin' or int(getattr(current_user, 'school_id', None)) != int(school_id):
+        raise HTTPException(status_code=403, detail="Not authorized to view subjects for this school")
+    
+    subjects = db.query(SubjectModel).filter(SubjectModel.school_id == school_id).all()
+    
+    result = []
+    for subj in subjects:
+        # Count classrooms
+        classroom_count = db.query(ClassroomSubjectModel).filter(
+            ClassroomSubjectModel.subject_id == subj.id
+        ).count()
+        
+        # Count enrolled students
+        student_count = db.query(SubjectStudentModel).filter(
+            SubjectStudentModel.subject_id == subj.id
+        ).count()
+        
+        # Get teacher info
+        teacher_name = None
+        if subj.teacher_id:
+            teacher = db.query(UserModel).filter(UserModel.id == subj.teacher_id).first()
+            if teacher:
+                teacher_name = teacher.full_name or teacher.username
+        
+        result.append({
+            'id': subj.id,
+            'name': subj.name,
+            'code': subj.code,
+            'subject_type': subj.subject_type,
+            'credits': getattr(subj, 'credits', None),
+            'activity_percentage': getattr(subj, 'activity_percentage', None),
+            'teacher_id': subj.teacher_id,
+            'teacher_name': teacher_name,
+            'classroom_count': classroom_count,
+            'student_count': student_count,
+            'is_ended': subj.is_ended,
+            'created_at': subj.created_at
+        })
+    
+    return result
+

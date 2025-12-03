@@ -9,7 +9,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import ConfirmModal from '../../ConfirmModal';
 import ExpiryModal from '../../ExpiryModal';
 import AnnouncementModal from '../../AnnouncementModal';
-import BulkEnrollModal from '../../BulkEnrollModal';
+// import BulkEnrollModal from '../../BulkEnrollModal';
 import { API_BASE_URL } from '../../../endpoints';
 import { setSchoolFavicon } from '../../../../utils/faviconUtils';
 import { logout } from '../../../../utils/authUtils';
@@ -18,12 +18,8 @@ function TeacherPage() {
   const navigate = useNavigate();
   const [teacherSubjects, setTeacherSubjects] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
-  const [managingSubjectId, setManagingSubjectId] = useState(null);
-  const [subjectStudents, setSubjectStudents] = useState([]);
-  const [availableStudents, setAvailableStudents] = useState([]);
-  const [showEnrollModal, setShowEnrollModal] = useState(false);
-  const [showBulkEnrollModal, setShowBulkEnrollModal] = useState(false);
-  const [selectedStudentId, setSelectedStudentId] = useState('');
+  
+
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [expiry, setExpiry] = useState('');
@@ -112,6 +108,37 @@ function TeacherPage() {
     fetchTeacherSubjects();
   }, [currentUser]);
 
+  // Note: Student enrollment/management by teachers has been disabled.
+
+  const handleDeleteSubject = async (id) => {
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`${API_BASE_URL}/subjects/${id}`, { method: 'DELETE', headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+      if (res.status === 204 || res.ok) { setTeacherSubjects(prev => prev.filter(s => s.id !== id)); toast.success('ลบรายวิชาเรียบร้อย'); }
+      else { const data = await res.json(); toast.error(data.detail || 'ลบไม่สำเร็จ'); }
+    } catch { toast.error('เกิดข้อผิดพลาด'); }
+  };
+
+  const handleEndSubject = async (id) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE_URL}/subjects/${id}/end`, { method: 'PATCH', headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+      if (!res.ok) { const data = await res.json(); toast.error(data.detail || 'จบคอร์สไม่สำเร็จ'); return; }
+      setTeacherSubjects(prev => prev.map(s => s.id === id ? { ...s, is_ended: true } : s));
+      toast.success('จบคอร์สเรียบร้อยแล้ว');
+    } catch { toast.error('เกิดข้อผิดพลาด'); }
+  };
+
+  const handleUnendSubject = async (id) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE_URL}/subjects/${id}/unend`, { method: 'PATCH', headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+      if (!res.ok) { const data = await res.json(); toast.error(data.detail || 'ยกเลิกจบคอร์สไม่สำเร็จ'); return; }
+      setTeacherSubjects(prev => prev.map(s => s.id === id ? { ...s, is_ended: false } : s));
+      toast.success('ยกเลิกจบคอร์สเรียบร้อยแล้ว');
+    } catch { toast.error('เกิดข้อผิดพลาด'); }
+  };
+
   // Determine school name from multiple possible sources (API shape may vary)
   const displaySchool = currentUser?.school_name || currentUser?.school?.name || localStorage.getItem('school_name') || '-';
 
@@ -190,103 +217,15 @@ function TeacherPage() {
     } catch { toast.error('เกิดข้อผิดพลาดในการลบข่าว'); }
   };
 
-  const openManageStudents = async (subjectId) => {
-    setManagingSubjectId(subjectId);
-    setShowEnrollModal(true);
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE_URL}/subjects/${subjectId}/students`, { headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
-      const data = await res.json();
-      if (res.ok && Array.isArray(data)) setSubjectStudents(data); else setSubjectStudents([]);
-    } catch { setSubjectStudents([]); }
-    try {
-      const schoolId = localStorage.getItem('school_id');
-      if (!schoolId) { setAvailableStudents([]); return; }
-      const res2 = await fetch(`${API_BASE_URL}/users?limit=500`);
-      const all = await res2.json();
-      if (Array.isArray(all)) {
-        const avail = all.filter(u => u.role === 'student' && String(u.school_id) === String(schoolId));
-        const enrolledIds = new Set(subjectStudents.map(s => s.id));
-        setAvailableStudents(avail.filter(a => !enrolledIds.has(a.id)));
-      } else setAvailableStudents([]);
-    } catch { setAvailableStudents([]); }
-  };
 
-  // Prevent body scroll while modal is visible
-  useEffect(() => {
-    if (showEnrollModal || showBulkEnrollModal) {
-      const prev = document.body.style.overflow;
-      document.body.style.overflow = 'hidden';
-      return () => { document.body.style.overflow = prev; };
-    }
-    return undefined;
-  }, [showEnrollModal, showBulkEnrollModal]);
 
-  const enrollStudent = async () => {
-    if (!managingSubjectId || !selectedStudentId) { toast.error('เลือกนักเรียนก่อน'); return; }
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE_URL}/subjects/${managingSubjectId}/enroll`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ student_id: Number(selectedStudentId) })
-      });
-      const data = await res.json();
-      if (!res.ok) toast.error(data.detail || 'ไม่สามารถเพิ่มนักเรียนได้'); else { toast.success('เพิ่มนักเรียนเข้ารายวิชาสำเร็จ'); openManageStudents(managingSubjectId); setSelectedStudentId(''); }
-    } catch (err) { console.error(err); toast.error('เกิดข้อผิดพลาด'); }
-  };
 
-  const unenrollStudent = async (studentId) => {
-    if (!managingSubjectId) return;
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE_URL}/subjects/${managingSubjectId}/enroll/${studentId}`, { method: 'DELETE', headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
-      if (res.status === 204 || res.ok) { toast.success('ลบนักเรียนออกจากรายวิชาเรียบร้อย'); openManageStudents(managingSubjectId); }
-      else { const data = await res.json(); toast.error(data.detail || 'ไม่สามารถลบนักเรียนได้'); }
-    } catch (err) { console.error(err); toast.error('เกิดข้อผิดพลาด'); }
-  };
 
-  const handleDeleteSubject = async (id) => {
-    const token = localStorage.getItem('token');
-    try {
-      const res = await fetch(`${API_BASE_URL}/subjects/${id}`, { method: 'DELETE', headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
-      if (res.status === 204 || res.ok) { setTeacherSubjects(prev => prev.filter(s => s.id !== id)); toast.success('ลบรายวิชาเรียบร้อย'); }
-      else { const data = await res.json(); toast.error(data.detail || 'ลบไม่สำเร็จ'); }
-    } catch { toast.error('เกิดข้อผิดพลาด'); }
-  };
 
-  const handleEndSubject = async (id) => {
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE_URL}/subjects/${id}/end`, { method: 'PATCH', headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
-      if (!res.ok) {
-        const data = await res.json();
-        toast.error(data.detail || 'จบคอร์สไม่สำเร็จ');
-        return;
-      }
-      // update local state
-      setTeacherSubjects(prev => prev.map(s => s.id === id ? { ...s, is_ended: true } : s));
-      toast.success('จบคอร์สเรียบร้อยแล้ว');
-    } catch {
-      toast.error('เกิดข้อผิดพลาด');
-    }
-  };
 
-  const handleUnendSubject = async (id) => {
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE_URL}/subjects/${id}/unend`, { method: 'PATCH', headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
-      if (!res.ok) {
-        const data = await res.json();
-        toast.error(data.detail || 'ยกเลิกจบคอร์สไม่สำเร็จ');
-        return;
-      }
-      // update local state
-      setTeacherSubjects(prev => prev.map(s => s.id === id ? { ...s, is_ended: false } : s));
-      toast.success('ยกเลิกจบคอร์สเรียบร้อยแล้ว');
-    } catch {
-      toast.error('เกิดข้อผิดพลาด');
-    }
-  };
+
+
+
 
   const initials = (name) => (name ? name.split(' ').map(n=>n[0]).slice(0,2).join('').toUpperCase() : 'T');
 
@@ -619,218 +558,175 @@ function TeacherPage() {
         </div>
       </div>
 
-      <div className="teacher-body">
+      <div className="tabs-container">
         <div className="tabs-header">
           <button className={`teacher-tab-button ${activeTab === 'subjects' ? 'active' : ''}`} onClick={() => setActiveTab('subjects')}>📚 รายวิชา</button>
           <button className={`teacher-tab-button ${activeTab === 'announcements' ? 'active' : ''}`} onClick={() => setActiveTab('announcements')}>📢 ประกาศข่าว</button>
           <button className={`teacher-tab-button ${activeTab === 'absences' ? 'active' : ''}`} onClick={() => setActiveTab('absences')}>📋 อนุมัติการลา</button>
           <button className={`teacher-tab-button ${activeTab === 'schedule' ? 'active' : ''}`} onClick={() => setActiveTab('schedule')}>🗓️ ตารางเรียน</button>
         </div>
-        <div className="tab-content">
-          {activeTab === 'subjects' && (
-            <section className="teacher-section">
-              <h3 className="section-title">📚 รายวิชาของฉัน</h3>
-              <p className="section-description">✨ จัดการรายวิชาและนักเรียน พร้อมเครื่องมือที่ครบครัน สำหรับการเรียนการสอนที่มีประสิทธิภาพ</p>
-              {Array.isArray(teacherSubjects) && teacherSubjects.length === 0 && <div className="empty-state">ยังไม่มีรายวิชา</div>}
-              {Array.isArray(teacherSubjects) && teacherSubjects.map(sub => (
-                <div key={sub.id} className="subject-item">
-                  <div className="subject-info">
-                    <div className="subject-name">{sub.name}</div>
-                    <div className="subject-id">ID: {sub.id}</div>
-                  </div>
-                  <div className="subject-actions">
-                    <button className="btn-manage" onClick={() => openManageStudents(sub.id)}>จัดการนักเรียน</button>
-                    {sub.is_ended ? (
-                      <>
-                        <button className="btn-unend" onClick={() => handleUnendSubject(sub.id)}>ยกเลิกจบคอร์ส</button>
-                        {currentUser?.role === 'admin' && (
-                          <button className="btn-delete" onClick={() => openConfirmModal('ลบรายวิชา', 'ต้องการลบรายวิชานี้ใช่หรือไม่?', async () => { await handleDeleteSubject(sub.id); })}>ลบ</button>
-                        )}
-                      </>
-                    ) : (
-                      <button className="btn-end" onClick={() => openConfirmModal('จบคอร์ส', 'ต้องการจบคอร์สนี้ใช่หรือไม่? หลังจากจบคอร์สแล้วจะไม่สามารถแก้ไขข้อมูลได้อีก', async () => { await handleEndSubject(sub.id); })}>จบคอร์ส</button>
-                    )}
-                    {!sub.is_ended && (
-                      <>
-                        <button className="btn-attendance" onClick={() => navigate(`/teacher/subject/${sub.id}/attendance`)}>เช็คชื่อ</button>
-                        <button className="btn-grades" onClick={() => navigate(`/teacher/subject/${sub.id}/grades`)}>ให้คะแนน</button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </section>
-          )}
-          {activeTab === 'announcements' && (
-            <div className="announcements-container">
-              <form onSubmit={handleAnnouncement} className="announcement-form">
-                <input
-                  type="text"
-                  placeholder="หัวข้อข่าว"
-                  value={title}
-                  onChange={e=>setTitle(e.target.value)}
-                  className="announcement-input"
-                />
-                <textarea
-                  placeholder="เนื้อหาข่าว"
-                  value={content}
-                  onChange={e=>setContent(e.target.value)}
-                  className="announcement-textarea"
-                />
-                <div style={{ marginTop: 8 }}>
-                  <label style={{ fontSize: 12, color: '#666' }}>Expire at (optional)</label>
-                  <input
-                    type="datetime-local"
-                    value={expiry}
-                    onChange={e => setExpiry(e.target.value)}
-                    className="announcement-input"
-                    style={{ marginTop: 6 }}
-                    step="60"
-                    lang="en-GB"
-                  />
-                </div>
-                <div className="teacher-form-actions">
-                  <button type="submit" className="btn-submit" aria-label="ประกาศข่าว">
-                    <span className="btn-icon" aria-hidden>📣</span>
-                    ประกาศข่าว
-                  </button>
-                </div>
-              </form>
-
-              <hr className="divider" />
-              <h4 className="announcements-title">ข่าวสารโรงเรียน</h4>
-              {(!Array.isArray(announcements) || announcements.length === 0) ? (
-                <div className="empty-state">ไม่มีข้อมูลข่าวสาร</div>
-              ) : (
-                <div className="announcements-list">
-                  {announcements.filter(item => !isExpired(item) || ownedBy(item)).map(item => (
-                    <div key={item.id} className="announcement-card">
-                      <div className="announcement-header">
-                        <div className="announcement-title">{item.title}</div>
-                            <div className="announcement-meta">
-                              <div className="announcement-date">{item.created_at ? parseLocalDatetime(item.created_at).toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' }) : ''}</div>
-                              {/** show expiry if present **/}
-                              {(item.expires_at || item.expire_at || item.expiresAt) ? (
-                                <div className="announcement-expiry">หมดอายุ: {parseLocalDatetime(item.expires_at || item.expire_at || item.expiresAt).toLocaleString('th-TH')}</div>
-                              ) : null}
-                                  {ownedBy(item) ? (
-                                    <>
-                                      <button className="teacher-btn-secondary teacher-btn-small" onClick={() => openAnnouncementModal(item)}>แก้ไข</button>
-                                      <button className="teacher-btn-secondary teacher-btn-small" onClick={() => openExpiryModal(item)}>ตั้งเป็นหมดอายุ</button>
-                                      <button onClick={() => openConfirmModal('ลบข่าว', 'ต้องการลบข่าวนี้ใช่หรือไม่?', async () => { await deleteAnnouncement(item.id); })} className="btn-delete-announcement">ลบ</button>
-                                    </>
-                                  ) : null}
-                            </div>
-                      </div>
-                      <div className="announcement-content">{item.content}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-          {activeTab === 'absences' && (
-            <AbsenceApproval />
-          )}
-          {activeTab === 'schedule' && (
-            <div className="schedule-container">
-              <div className="schedule-actions">
-                <button 
-                  className="teacher-btn-primary" 
-                  onClick={() => { loadScheduleSlots(); setShowScheduleModal(true); }}
-                  title="กำหนดเวลาเรียนสำหรับรายวิชา"
-                >
-                  ➕ กำหนดเวลาเรียน
-                </button>
-              </div>
-
-              <div className="schedule-content">
-                <h3 className="section-title">🗓️ ตารางเรียนของฉัน</h3>
-                
-                {subjectSchedules.length === 0 ? (
-                  <div className="empty-state">
-                    <div className="empty-icon">🗓️</div>
-                    <div className="empty-text">ยังไม่มีตารางเรียน</div>
-                    <div className="empty-subtitle">เริ่มต้นโดยการกำหนดเวลาเรียนสำหรับรายวิชาของคุณ</div>
-                  </div>
-                ) : (
-                  <ScheduleGrid
-                    operatingHours={scheduleSlots}
-                    schedules={subjectSchedules}
-                    role="teacher"
-                    onActionDelete={(id) => { openConfirmModal('ยกเลิกเวลาเรียน', 'ต้องการยกเลิกเวลาเรียนใช่หรือไม่?', async () => { await deleteSubjectSchedule(id); }); }}
-                    onActionEdit={(item) => {
-                      // prefill modal for editing
-                      setEditingAssignment(item);
-                      setSelectedSubjectId(item.subject_id || item.subjectId || (item.subject && item.subject.id) || '');
-                      setScheduleDay(String(item.day_of_week));
-                      setScheduleStartTime(item.start_time);
-                      setScheduleEndTime(item.end_time);
-                      setShowScheduleModal(true);
-                    }}
-                  />
-                )}
-              </div>
-            </div>
-          )}
-        </div>
       </div>
 
-  <ExpiryModal isOpen={showExpiryModal} initialValue={expiryModalValue} onClose={() => setShowExpiryModal(false)} onSave={saveExpiry} title="ตั้งวันหมดอายุ" />
-
-  <AnnouncementModal isOpen={showAnnouncementModal} initialData={modalAnnouncement} onClose={closeAnnouncementModal} onSave={saveAnnouncementFromModal} />
-
-  {showEnrollModal && (
-        <div className="teacher-modal-overlay">
-          <div className="modal enroll-modal">
-            <div className="teacher-modal-header">
-              <h3 className="modal-title">จัดการนักเรียนในรายวิชา</h3>
-              <button className="teacher-modal-close" onClick={() => { setShowEnrollModal(false); setManagingSubjectId(null); }} title="ปิด">×</button>
-            </div>
-            <div className="teacher-modal-body">
-              <div className="enroll-controls">
-                <label className="teacher-modal-label">เพิ่มนักเรียน</label>
-                <div className="enroll-input-row">
-                  <select
-                    value={selectedStudentId}
-                    onChange={e => setSelectedStudentId(e.target.value)}
-                    className="teacher-modal-select"
-                  >
-                    <option value="">-- เลือกนักเรียน --</option>
-                    {availableStudents.map(s => (<option key={s.id} value={s.id}>{s.full_name || s.username} ({s.email})</option>))}
-                  </select>
-                  <button className="btn-add" onClick={enrollStudent}>เพิ่ม</button>
-                  <button className="btn-bulk-enroll" onClick={() => setShowBulkEnrollModal(true)}>👥 ลงทะเบียน</button>
+      <div className="tab-content">
+        {activeTab === 'subjects' && (
+          <section className="teacher-section">
+            <h3 className="section-title">📚 รายวิชาของฉัน</h3>
+            <p className="section-description">✨ จัดการรายวิชาและนักเรียน พร้อมเครื่องมือที่ครบครัน สำหรับการเรียนการสอนที่มีประสิทธิภาพ</p>
+            {Array.isArray(teacherSubjects) && teacherSubjects.length === 0 && <div className="empty-state">ยังไม่มีรายวิชา</div>}
+            {Array.isArray(teacherSubjects) && teacherSubjects.map(sub => (
+              <div key={sub.id} className="subject-item">
+                <div className="subject-info">
+                  <div className="subject-name">{sub.name}</div>
+                  <div className="subject-id">ID: {sub.id}</div>
+                  <div className="subject-meta" style={{ color: '#666', fontSize: '0.9rem', marginTop: '6px' }}>
+                    {sub.subject_type === 'main' ? (
+                      sub.credits != null ? `${sub.credits} หน่วนกิต` : ''
+                    ) : (
+                      sub.activity_percentage != null ? `${sub.activity_percentage}%` : ''
+                    )}
+                  </div>
                 </div>
-              </div>
-              <div className="enroll-divider"></div>
-              <div className="enrolled-section">
-                <h4 className="enrolled-title">นักเรียนที่ลงทะเบียนแล้ว</h4>
-                <div className="enrolled-list">
-                  {subjectStudents.length === 0 ? (
-                    <div className="empty-state">ยังไม่มีนักเรียน</div>
+                <div className="subject-actions">
+                  {/* Student management is handled by admin; teachers cannot add students */}
+                  {sub.is_ended ? (
+                    <>
+                      <button className="btn-unend" onClick={() => handleUnendSubject(sub.id)}>ยกเลิกจบคอร์ส</button>
+                      {currentUser?.role === 'admin' && (
+                        <button className="btn-delete" onClick={() => openConfirmModal('ลบรายวิชา', 'ต้องการลบรายวิชานี้ใช่หรือไม่?', async () => { await handleDeleteSubject(sub.id); })}>ลบ</button>
+                      )}
+                    </>
                   ) : (
-                    subjectStudents.map(st => (
-                      <div key={st.id} className="enrolled-item">
-                        <div className="student-info">
-                          <div className="student-name">{st.full_name || st.username}</div>
-                          <div className="student-email">{st.email}</div>
-                        </div>
-                        <button className="btn-remove" onClick={() => openConfirmModal('ย้ายออก', 'ต้องการย้ายนักเรียนออกจากรายวิชานี้ใช่หรือไม่?', async () => { await unenrollStudent(st.id); })}>ย้ายออก</button>
-                      </div>
-                    ))
+                    <button className="btn-end" onClick={() => openConfirmModal('จบคอร์ส', 'ต้องการจบคอร์สนี้ใช่หรือไม่? หลังจากจบคอร์สแล้วจะไม่สามารถแก้ไขข้อมูลได้อีก', async () => { await handleEndSubject(sub.id); })}>จบคอร์ส</button>
+                  )}
+                  {!sub.is_ended && (
+                    <>
+                      <button className="btn-attendance" onClick={() => navigate(`/teacher/subject/${sub.id}/attendance`)}>เช็คชื่อ</button>
+                      <button className="btn-grades" onClick={() => navigate(`/teacher/subject/${sub.id}/grades`)}>ให้คะแนน</button>
+                    </>
                   )}
                 </div>
               </div>
+            ))}
+          </section>
+        )}
+        {activeTab === 'announcements' && (
+          <div className="announcements-container">
+            <form onSubmit={handleAnnouncement} className="announcement-form">
+              <input
+                type="text"
+                placeholder="หัวข้อข่าว"
+                value={title}
+                onChange={e=>setTitle(e.target.value)}
+                className="announcement-input"
+              />
+              <textarea
+                placeholder="เนื้อหาข่าว"
+                value={content}
+                onChange={e=>setContent(e.target.value)}
+                className="announcement-textarea"
+              />
+              <div style={{ marginTop: 8 }}>
+                <label style={{ fontSize: 12, color: '#666' }}>Expire at (optional)</label>
+                <input
+                  type="datetime-local"
+                  value={expiry}
+                  onChange={e => setExpiry(e.target.value)}
+                  className="announcement-input"
+                  style={{ marginTop: 6 }}
+                  step="60"
+                  lang="en-GB"
+                />
+              </div>
+              <div className="teacher-form-actions">
+                <button type="submit" className="btn-submit" aria-label="ประกาศข่าว">
+                  <span className="btn-icon" aria-hidden>📣</span>
+                  ประกาศข่าว
+                </button>
+              </div>
+            </form>
+
+            <hr className="divider" />
+            <h4 className="announcements-title">ข่าวสารโรงเรียน</h4>
+            {(!Array.isArray(announcements) || announcements.length === 0) ? (
+              <div className="empty-state">ไม่มีข้อมูลข่าวสาร</div>
+            ) : (
+              <div className="announcements-list">
+                {announcements.filter(item => !isExpired(item) || ownedBy(item)).map(item => (
+                  <div key={item.id} className="announcement-card">
+                    <div className="announcement-header">
+                      <div className="announcement-title">{item.title}</div>
+                      <div className="announcement-meta">
+                        <div className="announcement-date">{item.created_at ? parseLocalDatetime(item.created_at).toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' }) : ''}</div>
+                        {/** show expiry if present **/}
+                        {(item.expires_at || item.expire_at || item.expiresAt) ? (
+                          <div className="announcement-expiry">หมดอายุ: {parseLocalDatetime(item.expires_at || item.expire_at || item.expiresAt).toLocaleString('th-TH')}</div>
+                        ) : null}
+                        {ownedBy(item) ? (
+                          <>
+                            <button className="teacher-btn-secondary teacher-btn-small" onClick={() => openAnnouncementModal(item)}>แก้ไข</button>
+                            <button className="teacher-btn-secondary teacher-btn-small" onClick={() => openExpiryModal(item)}>ตั้งเป็นหมดอายุ</button>
+                            <button onClick={() => openConfirmModal('ลบข่าว', 'ต้องการลบข่าวนี้ใช่หรือไม่?', async () => { await deleteAnnouncement(item.id); })} className="btn-delete-announcement">ลบ</button>
+                          </>
+                        ) : null}
+                      </div>
+                    </div>
+                    <div className="announcement-content">{item.content}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+        {activeTab === 'absences' && (
+          <AbsenceApproval />
+        )}
+        {activeTab === 'schedule' && (
+          <div className="schedule-container">
+            <div className="schedule-actions">
+              <button 
+                className="teacher-btn-primary" 
+                onClick={() => { loadScheduleSlots(); setShowScheduleModal(true); }}
+                title="กำหนดเวลาเรียนสำหรับรายวิชา"
+              >
+                ➕ กำหนดเวลาเรียน
+              </button>
             </div>
-            <div className="teacher-modal-footer">
-              <button className="btn-cancel" onClick={() => { setShowEnrollModal(false); setManagingSubjectId(null); }}>ปิด</button>
+
+            <div className="schedule-content">
+              <h3 className="section-title">🗓️ ตารางเรียนของฉัน</h3>
+              
+              {subjectSchedules.length === 0 ? (
+                <div className="empty-state">
+                  <div className="empty-icon">🗓️</div>
+                  <div className="empty-text">ยังไม่มีตารางเรียน</div>
+                  <div className="empty-subtitle">เริ่มต้นโดยการกำหนดเวลาเรียนสำหรับรายวิชาของคุณ</div>
+                </div>
+              ) : (
+                <ScheduleGrid
+                  operatingHours={scheduleSlots}
+                  schedules={subjectSchedules}
+                  role="teacher"
+                  onActionDelete={(id) => { openConfirmModal('ยกเลิกเวลาเรียน', 'ต้องการยกเลิกเวลาเรียนใช่หรือไม่?', async () => { await deleteSubjectSchedule(id); }); }}
+                  onActionEdit={(item) => {
+                    // prefill modal for editing
+                    setEditingAssignment(item);
+                    setSelectedSubjectId(item.subject_id || item.subjectId || (item.subject && item.subject.id) || '');
+                    setScheduleDay(String(item.day_of_week));
+                    setScheduleStartTime(item.start_time);
+                    setScheduleEndTime(item.end_time);
+                    setShowScheduleModal(true);
+                  }}
+                />
+              )}
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
-      {/* Schedule Assignment Modal */}
+      <ExpiryModal isOpen={showExpiryModal} initialValue={expiryModalValue} onClose={() => setShowExpiryModal(false)} onSave={saveExpiry} title="ตั้งวันหมดอายุ" />
+
+      <AnnouncementModal isOpen={showAnnouncementModal} initialData={modalAnnouncement} onClose={closeAnnouncementModal} onSave={saveAnnouncementFromModal} />
+      {/* Student enrollment modal removed — admin manages enrollments */}
       {showScheduleModal && (
         <div className="schedule-modal-overlay">
           <div className="schedule-modal">
@@ -952,7 +848,7 @@ function TeacherPage() {
         </div>
       )}
 
-      <BulkEnrollModal
+      {/* <BulkEnrollModal
         isOpen={showBulkEnrollModal}
         subjectId={managingSubjectId}
         onClose={() => setShowBulkEnrollModal(false)}
@@ -960,7 +856,7 @@ function TeacherPage() {
           setShowBulkEnrollModal(false);
           openManageStudents(managingSubjectId);
         }}
-      />
+      /> */}
 
       <ConfirmModal
         isOpen={showConfirmModal}

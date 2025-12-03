@@ -9,6 +9,7 @@ class Grade(Base):
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=False, index=True)
     student_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    classroom_id = Column(Integer, ForeignKey("classrooms.id"), nullable=True, index=True)
     title = Column(String(255), nullable=True)  # Assignment title
     max_score = Column(Float, nullable=True, default=100.0)  # Maximum possible score
     grade = Column(Float, nullable=True)  # Actual score obtained

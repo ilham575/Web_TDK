@@ -4,9 +4,13 @@ from datetime import datetime
 
 class SubjectBase(BaseModel):
     name: str
+    code: Optional[str] = None
+    subject_type: Optional[str] = 'main'  # 'main' or 'activity'
     teacher_id: Optional[int] = None
     school_id: Optional[int] = None
     is_ended: Optional[bool] = False
+    credits: Optional[int] = None
+    activity_percentage: Optional[int] = None
 
 class SubjectCreate(SubjectBase):
     pass
@@ -18,3 +22,4 @@ class Subject(SubjectBase):
 
     class Config:
         from_attributes = True
+
