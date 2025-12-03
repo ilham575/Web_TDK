@@ -4,13 +4,15 @@ from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from typing import List
 from fastapi import Body
+from sqlalchemy.exc import IntegrityError
 import os
 import smtplib
 from email.message import EmailMessage
 from datetime import timedelta
 
-from schemas.user import User, UserCreate, UserUpdate, Token, ChangePasswordRequest
+from schemas.user import User, UserCreate, UserUpdate, Token, ChangePasswordRequest, PasswordResetRequestCreate, PasswordResetRequestResponse, PasswordResetByAdminRequest
 from models.user import User as UserModel
+from models.password_reset_request import PasswordResetRequest as PasswordResetRequestModel
 from database.connection import get_db
 from utils.security import hash_password, verify_password, create_access_token, decode_access_token
 from typing import List
@@ -26,6 +28,22 @@ except Exception:
 
 # สร้าง router พร้อมกำหนด prefix
 router = APIRouter(prefix="/users", tags=["users"])
+
+
+def _validate_no_null_classroom_student(db: Session):
+    """
+    ตรวจสอบใน session ว่ามี ClassroomStudent ที่ถูกสร้าง/แก้ไขโดยยังไม่มี classroom_id หรือไม่
+    """
+    # import locally to avoid circular imports at module load
+    try:
+        from models.classroom import ClassroomStudent as _CS
+    except Exception:
+        _CS = None
+
+    for obj in list(db.new) + list(db.dirty):
+        if _CS and isinstance(obj, _CS):
+            if getattr(obj, 'classroom_id', None) is None:
+                raise HTTPException(status_code=400, detail=f'พบการอัปเดต enrollment ที่ไม่มี classroom_id (id={getattr(obj, "id", None)})')
 
 # กำหนด OAuth2 Security Scheme
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/users/login")
@@ -186,6 +204,194 @@ def forgot_password(email: str = Body(..., embed=True), db: Session = Depends(ge
     return generic
 
 
+@router.post('/request_password_reset')
+def request_password_reset(request_data: PasswordResetRequestCreate, db: Session = Depends(get_db)):
+    """
+    Request password reset by username.
+    - Teacher/Student: Request goes to admin of their school
+    - Admin: Request goes to owner
+    """
+    username = request_data.username
+    user = db.query(UserModel).filter(UserModel.username == username).first()
+    
+    # Generic response to avoid username enumeration
+    generic_success = {"detail": "หากชื่อผู้ใช้ถูกต้อง คำขอรีเซ็ตรหัสผ่านจะถูกส่งไปยังผู้ดูแลระบบ", "success": True}
+    
+    if not user:
+        return generic_success
+    
+    # Check if there's already a pending request
+    existing_request = db.query(PasswordResetRequestModel).filter(
+        PasswordResetRequestModel.user_id == user.id,
+        PasswordResetRequestModel.status == "pending"
+    ).first()
+    
+    if existing_request:
+        return {"detail": "คุณมีคำขอรีเซ็ตรหัสผ่านที่รอดำเนินการอยู่แล้ว กรุณารอผู้ดูแลระบบอนุมัติ", "success": True}
+    
+    # Create password reset request
+    reset_request = PasswordResetRequestModel(
+        user_id=user.id,
+        username=user.username,
+        full_name=user.full_name,
+        email=user.email,
+        role=user.role,
+        school_id=user.school_id,
+        status="pending"
+    )
+    
+    db.add(reset_request)
+    db.commit()
+    db.refresh(reset_request)
+    
+    # Determine who should handle this request
+    if user.role in ['teacher', 'student']:
+        return {
+            "detail": "คำขอรีเซ็ตรหัสผ่านถูกส่งไปยังแอดมินของโรงเรียนแล้ว กรุณารอการอนุมัติ",
+            "success": True,
+            "target": "admin"
+        }
+    elif user.role == 'admin':
+        return {
+            "detail": "คำขอรีเซ็ตรหัสผ่านถูกส่งไปยัง Owner แล้ว กรุณารอการอนุมัติ",
+            "success": True,
+            "target": "owner"
+        }
+    
+    return generic_success
+
+
+@router.get('/password_reset_requests', response_model=List[PasswordResetRequestResponse])
+def get_password_reset_requests(
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user)
+):
+    """
+    Get pending password reset requests.
+    - Admin: sees requests from teacher/student in their school
+    - Owner: sees requests from admins
+    """
+    role = getattr(current_user, 'role', None)
+    
+    if role == 'admin':
+        # Admin sees requests from teachers/students in their school
+        requests = db.query(PasswordResetRequestModel).filter(
+            PasswordResetRequestModel.school_id == current_user.school_id,
+            PasswordResetRequestModel.role.in_(['teacher', 'student']),
+            PasswordResetRequestModel.status == "pending"
+        ).order_by(PasswordResetRequestModel.created_at.desc()).all()
+    elif role == 'owner':
+        # Owner sees requests from admins
+        requests = db.query(PasswordResetRequestModel).filter(
+            PasswordResetRequestModel.role == 'admin',
+            PasswordResetRequestModel.status == "pending"
+        ).order_by(PasswordResetRequestModel.created_at.desc()).all()
+    else:
+        raise HTTPException(status_code=403, detail="ไม่มีสิทธิ์เข้าถึง")
+    
+    return requests
+
+
+@router.post('/password_reset_requests/{request_id}/approve')
+def approve_password_reset(
+    request_id: int,
+    reset_data: PasswordResetByAdminRequest,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user)
+):
+    """
+    Approve a password reset request and set new password.
+    - Admin: can approve requests from teacher/student in their school
+    - Owner: can approve requests from admins
+    """
+    role = getattr(current_user, 'role', None)
+    
+    reset_request = db.query(PasswordResetRequestModel).filter(
+        PasswordResetRequestModel.id == request_id
+    ).first()
+    
+    if not reset_request:
+        raise HTTPException(status_code=404, detail="ไม่พบคำขอรีเซ็ตรหัสผ่าน")
+    
+    if reset_request.status != "pending":
+        raise HTTPException(status_code=400, detail="คำขอนี้ถูกดำเนินการไปแล้ว")
+    
+    # Check authorization
+    if role == 'admin':
+        if reset_request.role not in ['teacher', 'student']:
+            raise HTTPException(status_code=403, detail="ไม่มีสิทธิ์อนุมัติคำขอนี้")
+        if reset_request.school_id != current_user.school_id:
+            raise HTTPException(status_code=403, detail="ไม่มีสิทธิ์อนุมัติคำขอจากโรงเรียนอื่น")
+    elif role == 'owner':
+        if reset_request.role != 'admin':
+            raise HTTPException(status_code=403, detail="ไม่มีสิทธิ์อนุมัติคำขอนี้")
+    else:
+        raise HTTPException(status_code=403, detail="ไม่มีสิทธิ์อนุมัติคำขอ")
+    
+    # Find the user and reset their password
+    user = db.query(UserModel).filter(UserModel.id == reset_data.user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="ไม่พบผู้ใช้")
+    
+    # Update password
+    user.hashed_password = hash_password(reset_data.new_password)
+    user.must_change_password = True
+    
+    # Update request status
+    reset_request.status = "approved"
+    
+    db.commit()
+    
+    return {
+        "detail": f"รีเซ็ตรหัสผ่านสำหรับ {user.username} เรียบร้อยแล้ว",
+        "success": True,
+        "username": user.username
+    }
+
+
+@router.post('/password_reset_requests/{request_id}/reject')
+def reject_password_reset(
+    request_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user)
+):
+    """
+    Reject a password reset request.
+    """
+    role = getattr(current_user, 'role', None)
+    
+    reset_request = db.query(PasswordResetRequestModel).filter(
+        PasswordResetRequestModel.id == request_id
+    ).first()
+    
+    if not reset_request:
+        raise HTTPException(status_code=404, detail="ไม่พบคำขอรีเซ็ตรหัสผ่าน")
+    
+    if reset_request.status != "pending":
+        raise HTTPException(status_code=400, detail="คำขอนี้ถูกดำเนินการไปแล้ว")
+    
+    # Check authorization
+    if role == 'admin':
+        if reset_request.role not in ['teacher', 'student']:
+            raise HTTPException(status_code=403, detail="ไม่มีสิทธิ์ปฏิเสธคำขอนี้")
+        if reset_request.school_id != current_user.school_id:
+            raise HTTPException(status_code=403, detail="ไม่มีสิทธิ์ปฏิเสธคำขอจากโรงเรียนอื่น")
+    elif role == 'owner':
+        if reset_request.role != 'admin':
+            raise HTTPException(status_code=403, detail="ไม่มีสิทธิ์ปฏิเสธคำขอนี้")
+    else:
+        raise HTTPException(status_code=403, detail="ไม่มีสิทธิ์ปฏิเสธคำขอ")
+    
+    # Update request status
+    reset_request.status = "rejected"
+    db.commit()
+    
+    return {
+        "detail": "ปฏิเสธคำขอรีเซ็ตรหัสผ่านเรียบร้อยแล้ว",
+        "success": True
+    }
+
+
 @router.post('/reset_password')
 def reset_password(token: str = Body(...), new_password: str = Body(...), db: Session = Depends(get_db)):
     """Reset a user's password using a valid reset token."""
@@ -227,7 +433,8 @@ def bulk_upload_users(file: UploadFile = File(...), db: Session = Depends(get_db
 
     content = file.file.read()
     try:
-        wb = openpyxl.load_workbook(filename=BytesIO(content), read_only=True)
+        # data_only=True reads calculated formula values instead of formula strings
+        wb = openpyxl.load_workbook(filename=BytesIO(content), data_only=True)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f'Failed to read Excel file: {str(e)}')
 
@@ -248,11 +455,11 @@ def bulk_upload_users(file: UploadFile = File(...), db: Session = Depends(get_db
     errors = []
     for r_i, row in enumerate(rows[1:], start=2):
         try:
-            username = row[idx['username']].strip() if row[idx['username']] is not None else ''
-            email = row[idx['email']].strip() if row[idx['email']] is not None else ''
-            full_name = row[idx['full_name']].strip() if row[idx['full_name']] is not None else ''
-            password = row[idx['password']].strip() if row[idx['password']] is not None else ''
-            role = row[idx['role']].strip() if row[idx['role']] is not None else ''
+            username = str(row[idx['username']]).strip() if row[idx['username']] is not None else ''
+            email = str(row[idx['email']]).strip() if row[idx['email']] is not None else ''
+            full_name = str(row[idx['full_name']]).strip() if row[idx['full_name']] is not None else ''
+            password = str(row[idx['password']]).strip() if row[idx['password']] is not None else ''
+            role = str(row[idx['role']]).strip() if row[idx['role']] is not None else ''
             school_id = None
             if 'school_id' in idx and row[idx['school_id']] is not None:
                 try:
@@ -262,7 +469,7 @@ def bulk_upload_users(file: UploadFile = File(...), db: Session = Depends(get_db
             
             grade_level = None
             if 'grade_level' in idx and row[idx['grade_level']] is not None:
-                grade_level = row[idx['grade_level']].strip()
+                grade_level = str(row[idx['grade_level']]).strip()
 
             if not username or not email or not password or role not in ('teacher', 'student'):
                 raise ValueError('Invalid data - required fields missing or role invalid')
@@ -535,7 +742,8 @@ def bulk_assign_grade_to_students(
 
     content = file.file.read()
     try:
-        wb = openpyxl.load_workbook(filename=BytesIO(content), read_only=True)
+        # data_only=True reads calculated formula values instead of formula strings
+        wb = openpyxl.load_workbook(filename=BytesIO(content), data_only=True)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f'Failed to read Excel file: {str(e)}')
 
@@ -705,21 +913,27 @@ def download_bulk_template(current_user: UserModel = Depends(get_current_user)):
 
 @router.post("/promote_students")
 def promote_students(
-    promotion_type: str = Body(..., embed=True),  # "mid_term" or "end_of_year"
+    promotion_type: str = Body(..., embed=True),  # "mid_term", "mid_term_with_promotion" or "end_of_year"
     student_ids: List[int] = Body(..., embed=True),
-    new_grade_level: str = Body(None, embed=True),  # Required for end_of_year, optional for mid_term
+    new_grade_level: str = Body(None, embed=True),  # Required for mid_term_with_promotion and end_of_year
+    new_academic_year: str = Body(None, embed=True),  # For end_of_year
     db: Session = Depends(get_db),
     current_user: UserModel = Depends(get_current_user)
 ):
     """
-    Promote students to next semester or next grade level
+    Promote individual students
     
     promotion_type: 
       - "mid_term": move to next semester (same academic year)
-      - "end_of_year": move to next grade level (new academic year)
+      - "mid_term_with_promotion": move to next semester + new grade level (same academic year)
+      - "end_of_year": move to new grade level (new academic year)
     
-    new_grade_level: Required for end_of_year promotion
+    new_grade_level: Required for mid_term_with_promotion and end_of_year promotion
+    new_academic_year: For end_of_year, auto +1 if not provided
     """
+    from models.classroom import ClassroomStudent, Classroom
+    from sqlalchemy import and_
+    
     # Only admins can promote students
     if getattr(current_user, 'role', None) != 'admin':
         raise HTTPException(status_code=403, detail='Only admins can promote students')
@@ -727,11 +941,17 @@ def promote_students(
     if not student_ids:
         raise HTTPException(status_code=400, detail='No students selected')
     
-    if promotion_type not in ['mid_term', 'end_of_year']:
-        raise HTTPException(status_code=400, detail='Invalid promotion_type. Must be "mid_term" or "end_of_year"')
+    if promotion_type not in ['mid_term', 'mid_term_with_promotion', 'end_of_year']:
+        raise HTTPException(
+            status_code=400, 
+            detail='Invalid promotion_type. Must be "mid_term", "mid_term_with_promotion", or "end_of_year"'
+        )
     
-    if promotion_type == 'end_of_year' and not new_grade_level:
-        raise HTTPException(status_code=400, detail='new_grade_level is required for end_of_year promotion')
+    if (promotion_type in ['mid_term_with_promotion', 'end_of_year']) and not new_grade_level:
+        raise HTTPException(
+            status_code=400, 
+            detail=f'new_grade_level is required for {promotion_type} promotion'
+        )
     
     promoted_count = 0
     failed_count = 0
@@ -748,24 +968,79 @@ def promote_students(
                 
                 if not student:
                     failed_count += 1
-                    errors.append({
-                        'student_id': student_id,
-                        'error': 'Student not found or not a student role'
-                    })
+                    errors.append(f'⚠️ ไม่พบนักเรียน ID {student_id}')
                     continue
                 
                 old_grade = student.grade_level or 'ไม่ระบุ'
                 
+                # ดึงข้อมูลชั้นเรียนปัจจุบันของนักเรียน - ดึงแค่ ID และข้อมูลที่จำเป็น
+                enrollment_data = db.query(
+                    ClassroomStudent.id,
+                    ClassroomStudent.classroom_id,
+                    Classroom.semester
+                ).join(
+                    Classroom, ClassroomStudent.classroom_id == Classroom.id
+                ).filter(
+                    ClassroomStudent.student_id == student_id,
+                    ClassroomStudent.is_active == True
+                ).first()
+                
                 if promotion_type == 'mid_term':
-                    # For mid_term: append "(เทอม 2)" or change from "เทอม 1" to "เทอม 2"
+                    # ต้องมีข้อมูลชั้นเรียนเพื่อเลื่อนเทอม
+                    if not enrollment_data:
+                        failed_count += 1
+                        errors.append(f'⚠️ นักเรียน ID {student_id} ไม่อยู่ในชั้นเรียนใด')
+                        continue
+
+                    # enrollment_data is (enrollment_id, classroom_id, semester)
+                    enrollment_id, classroom_id, current_semester = enrollment_data
+                    if current_semester == 2:
+                        failed_count += 1
+                        errors.append(f'⚠️ นักเรียน ID {student_id} อยู่เทอม 2 แล้ว')
+                        continue
+                    
+                    # อัพเดต grade_level: เทอม 1 → เทอม 2
                     if 'เทอม 2' not in str(student.grade_level or ''):
                         if 'เทอม 1' in str(student.grade_level or ''):
                             student.grade_level = str(student.grade_level).replace('เทอม 1', 'เทอม 2')
                         else:
                             student.grade_level = f"{student.grade_level} (เทอม 2)" if student.grade_level else "เทอม 2"
                     
-                elif promotion_type == 'end_of_year':
-                    # For end_of_year: set to new grade level (remove semester info)
+                elif promotion_type in ['mid_term_with_promotion', 'end_of_year']:
+                    # ต้องมีข้อมูลชั้นเรียนเพื่อเลื่อน
+                    if not enrollment_data:
+                        failed_count += 1
+                        errors.append(f'⚠️ นักเรียน ID {student_id} ไม่อยู่ในชั้นเรียนใด')
+                        continue
+                    
+                    # enrollment_data is (enrollment_id, classroom_id, semester)
+                    enrollment_id, classroom_id, current_semester = enrollment_data
+                    
+                    if promotion_type == 'mid_term_with_promotion':
+                        if current_semester == 2:
+                            failed_count += 1
+                            errors.append(f'⚠️ นักเรียน ID {student_id} อยู่เทอม 2 แล้ว')
+                            continue
+                        
+                        # ลบออกจากชั้นเรียนเดิม (เทอม 1)
+                        # จะเข้าไปในชั้นเรียนเทอม 2 โดยการเลื่อนชั้นเรียนทั้งห้อง
+                        db.query(ClassroomStudent).filter(
+                            ClassroomStudent.id == enrollment_id
+                        ).update(
+                            {ClassroomStudent.is_active: False},
+                            synchronize_session=False
+                        )
+                    
+                    elif promotion_type == 'end_of_year':
+                        # ลบออกจากชั้นเรียนเดิม (ปีเดิม)
+                        db.query(ClassroomStudent).filter(
+                            ClassroomStudent.id == enrollment_id
+                        ).update(
+                            {ClassroomStudent.is_active: False},
+                            synchronize_session=False
+                        )
+                    
+                    # อัพเดต grade_level
                     student.grade_level = new_grade_level
                 
                 db.add(student)
@@ -781,13 +1056,22 @@ def promote_students(
                 
             except Exception as e:
                 failed_count += 1
-                errors.append({
-                    'student_id': student_id,
-                    'error': str(e)
-                })
+                errors.append(f'⚠️ นักเรียน ID {student_id}: {str(e)}')
         
-        # Commit all changes
-        db.commit()
+        # Validate session objects and commit all changes
+        _validate_no_null_classroom_student(db)
+        
+        # Log all ClassroomStudent changes before commit (temporary debugging)
+        from models.classroom import ClassroomStudent as _CS_log
+        for obj in list(db.new) + list(db.dirty):
+            if isinstance(obj, _CS_log):
+                print(f'[DEBUG PROMOTE_STUDENTS] ClassroomStudent change: id={obj.id}, classroom_id={obj.classroom_id}, student_id={obj.student_id}, is_active={obj.is_active}, state={"new" if obj in db.new else "dirty"}')
+        
+        try:
+            db.commit()
+        except IntegrityError as e:
+            db.rollback()
+            raise HTTPException(status_code=500, detail=f'Database integrity error during student promotion: {str(e)}')
         
     except Exception as e:
         db.rollback()
@@ -800,7 +1084,7 @@ def promote_students(
         'failed_count': failed_count,
         'promoted_students': promoted_students,
         'errors': errors,
-        'message': f'เลื่อนชั้นเรียนสำเร็จ {promoted_count} นักเรียน, ล้มเหลว {failed_count} นักเรียน'
+        'message': f'✓ เลื่อนชั้นเรียนสำเร็จ {promoted_count} นักเรียน' + (f', ล้มเหลว {failed_count} นักเรียน' if failed_count > 0 else '')
     }
 
 
@@ -872,7 +1156,8 @@ def promote_students_from_file(
         content = file.file.read()
         file.file.seek(0)
         
-        wb = openpyxl.load_workbook(BytesIO(content))
+        # data_only=True reads calculated formula values instead of formula strings
+        wb = openpyxl.load_workbook(BytesIO(content), data_only=True)
         ws = wb.active
         
         promoted_count = 0

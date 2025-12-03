@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
+from sqlalchemy.exc import IntegrityError
 from typing import List, Optional
 from database.connection import get_db
 from models.classroom import Classroom, ClassroomStudent
@@ -14,6 +15,7 @@ from schemas.classroom import (
     AddStudentsRequest,
     AddStudentsResponse,
     StudentInClassroom,
+    AvailableStudent,
     PromoteClassroomRequest,
     PromoteClassroomResponse,
     BulkClassroomCreate
@@ -21,6 +23,21 @@ from schemas.classroom import (
 from utils.security import get_current_user
 
 router = APIRouter(prefix="/classrooms", tags=["classrooms"])
+
+
+def _validate_no_null_classroom_student(db: Session):
+    """
+    ตรวจสอบใน session ว่ามี ClassroomStudent ที่ถูกสร้าง/แก้ไขโดยยังไม่มี classroom_id หรือไม่
+    ป้องกันการ commit ที่จะทำให้เกิด IntegrityError ใน DB
+    """
+    for obj in list(db.new) + list(db.dirty):
+        # ตาราง ClassroomStudent ถูก import at module top
+        if isinstance(obj, ClassroomStudent):
+            if getattr(obj, 'classroom_id', None) is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f'พบการอัปเดต enrollment ที่ไม่มี classroom_id (id={getattr(obj, "id", None)})'
+                )
 
 
 # ===== Helper Functions =====
@@ -159,7 +176,19 @@ async def bulk_create_classrooms(
         db.add(classroom)
         created_classrooms.append(classroom)
 
-    db.commit()
+    # Validate in-memory session objects to avoid committing an enrollment with null classroom_id
+    _validate_no_null_classroom_student(db)
+    
+    # Log all ClassroomStudent changes before commit (temporary debugging)
+    for obj in list(db.new) + list(db.dirty):
+        if isinstance(obj, ClassroomStudent):
+            print(f'[DEBUG PROMOTE_CLASSROOM] ClassroomStudent change: id={obj.id}, classroom_id={obj.classroom_id}, student_id={obj.student_id}, is_active={obj.is_active}, state={"new" if obj in db.new else "dirty"}')
+    
+    try:
+        db.commit()
+    except IntegrityError as e:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'Database integrity error during promotion: {str(e)}')
 
     # Refresh และ return
     result = []
@@ -382,6 +411,12 @@ async def delete_classroom(
     verify_admin_or_owner(current_user)
     classroom = get_classroom_or_404(classroom_id, db)
 
+    # ลบ ClassroomStudent ที่เกี่ยวข้องก่อน (ป้องกัน IntegrityError)
+    db.query(ClassroomStudent).filter(
+        ClassroomStudent.classroom_id == classroom_id
+    ).delete(synchronize_session=False)
+    
+    # ลบ classroom
     db.delete(classroom)
     db.commit()
 
@@ -389,6 +424,53 @@ async def delete_classroom(
 
 
 # ===== Student Management =====
+
+@router.get("/{classroom_id}/available-students", response_model=List[AvailableStudent])
+async def get_available_students(
+    classroom_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    ดึงรายชื่อนักเรียนที่สามารถเพิ่มเข้าชั้นเรียนได้
+    (นักเรียนที่ยังไม่ลงทะเบียนในชั้นเรียนใดเลยในปีการศึกษาเดียวกันและโรงเรียนเดียวกัน)
+    """
+    verify_admin_or_owner(current_user)
+    classroom = get_classroom_or_404(classroom_id, db)
+
+    # ดึงรายชื่อนักเรียนทั้งหมดในโรงเรียน
+    all_students = db.query(User).filter(
+        User.role == "student",
+        User.school_id == classroom.school_id
+    ).all()
+
+    # ดึงรายชื่อนักเรียนที่ลงทะเบียนอยู่แล้ว (active) ในโรงเรียนเดียวกัน
+    # NOTE: เปลี่ยนเป็นไม่ตรวจสอบเฉพาะปีการศึกษา เพื่อบังคับให้นักเรียนมีได้เพียง 1 ชั้นเรียนเท่านั้น
+    enrolled_student_ids = db.query(ClassroomStudent.student_id).join(
+        Classroom, ClassroomStudent.classroom_id == Classroom.id
+    ).filter(
+        Classroom.school_id == classroom.school_id,
+        ClassroomStudent.is_active == True
+    ).all()
+    
+    # ทำให้เป็นเซต id
+    enrolled_ids = {row[0] for row in enrolled_student_ids}
+
+    # ตัวกรองนักเรียนที่ยังไม่ลงทะเบียน
+    available_students = [
+        AvailableStudent(
+            id=student.id,
+            full_name=student.full_name,
+            username=student.username,
+            email=student.email,
+            grade_level=student.grade_level
+        )
+        for student in all_students
+        if student.id not in enrolled_ids
+    ]
+
+    return available_students
+
 
 @router.post("/{classroom_id}/add-students", response_model=AddStudentsResponse)
 async def add_students_to_classroom(
@@ -404,6 +486,7 @@ async def add_students_to_classroom(
     added_count = 0
     already_enrolled = []
     errors = []
+    enrolled_in_other_class = []
 
     for student_id in student_ids:
         # ตรวจสอบว่ามีนักเรียนนี้หรือไม่
@@ -416,7 +499,7 @@ async def add_students_to_classroom(
             errors.append(f"ไม่พบนักเรียน ID {student_id}")
             continue
 
-        # ตรวจสอบว่าลงทะเบียนแล้วหรือยัง
+        # ตรวจสอบว่ากำลังลงทะเบียนในชั้นเรียนนี้แล้วหรือไม่
         existing = db.query(ClassroomStudent).filter(
             ClassroomStudent.classroom_id == classroom_id,
             ClassroomStudent.student_id == student_id
@@ -429,10 +512,33 @@ async def add_students_to_classroom(
                 # Re-activate - ใช้ update() เพื่อหลีกเลี่ยงปัญหา SQLAlchemy setting all columns
                 db.query(ClassroomStudent).filter(
                     ClassroomStudent.id == existing.id
-                ).update({
-                    ClassroomStudent.is_active: True
-                })
+                ).update(
+                    {ClassroomStudent.is_active: True},
+                    synchronize_session=False
+                )
                 added_count += 1
+            continue
+
+        # ตรวจสอบว่านักเรียนมีชั้นเรียนอื่นในปีการศึกษาเดียวกันหรือไม่
+        # นักเรียน 1 คนสามารถมีชั้นเรียนได้แค่ 1 ชั้นต่อ academic year
+        existing_in_year = db.query(ClassroomStudent).join(
+            Classroom, ClassroomStudent.classroom_id == Classroom.id
+        ).filter(
+            ClassroomStudent.student_id == student_id,
+            Classroom.academic_year == classroom.academic_year,
+            Classroom.school_id == classroom.school_id,
+            ClassroomStudent.is_active == True
+        ).first()
+
+        if existing_in_year:
+            # นักเรียนมีชั้นเรียนอื่นแล้วในปีนี้
+            other_classroom = db.query(Classroom).filter(
+                Classroom.id == existing_in_year.classroom_id
+            ).first()
+            enrolled_in_other_class.append({
+                'student_id': student_id,
+                'existing_classroom': other_classroom.name if other_classroom else f"ชั้นเรียน ID {existing_in_year.classroom_id}"
+            })
             continue
 
         # เพิ่มนักเรียนใหม่
@@ -448,6 +554,10 @@ async def add_students_to_classroom(
         added_count += 1
 
     db.commit()
+
+    # สร้าง error messages สำหรับนักเรียนที่มีชั้นเรียนอื่นแล้ว
+    for item in enrolled_in_other_class:
+        errors.append(f"⚠️ นักเรียน ID {item['student_id']} มีชั้นเรียนอื่นแล้ว: {item['existing_classroom']} (ค้นหา: academic_year={classroom.academic_year})")
 
     return AddStudentsResponse(
         added_count=added_count,
@@ -538,10 +648,10 @@ async def promote_classroom(
     verify_admin_or_owner(current_user)
     classroom = get_classroom_or_404(classroom_id, db)
 
-    if data.promotion_type not in ["mid_term", "end_of_year"]:
+    if data.promotion_type not in ["mid_term", "mid_term_with_promotion", "end_of_year"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="promotion_type ต้องเป็น 'mid_term' หรือ 'end_of_year'"
+            detail="promotion_type ต้องเป็น 'mid_term', 'mid_term_with_promotion' หรือ 'end_of_year'"
         )
 
     # กำหนดค่าสำหรับชั้นเรียนใหม่
@@ -557,6 +667,25 @@ async def promote_classroom(
         new_grade_level = classroom.grade_level
         new_room = classroom.room_number
         new_name = classroom.name if not classroom.room_number else f"{classroom.grade_level}/{classroom.room_number}"
+
+    elif data.promotion_type == "mid_term_with_promotion":
+        if classroom.semester == 2:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="ชั้นเรียนนี้อยู่เทอม 2 แล้ว ไม่สามารถเลื่อนได้"
+            )
+        
+        if not data.new_grade_level:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="ต้องระบุ new_grade_level สำหรับการเลื่อนเทอม + ชั้น"
+            )
+        
+        new_semester = 2
+        new_academic_year = classroom.academic_year
+        new_grade_level = data.new_grade_level
+        new_room = classroom.room_number
+        new_name = new_grade_level if not new_room else f"{new_grade_level}/{new_room}"
 
     else:  # end_of_year
         if not data.new_grade_level:

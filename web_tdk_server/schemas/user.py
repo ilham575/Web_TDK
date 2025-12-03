@@ -56,3 +56,26 @@ class AdminRequestCreate(BaseModel):
     full_name: str
     password: str
     school_name: str
+
+# Password reset request schemas
+class PasswordResetRequestCreate(BaseModel):
+    username: str
+
+class PasswordResetRequestResponse(BaseModel):
+    id: int
+    user_id: int
+    username: str
+    full_name: Optional[str]
+    email: Optional[str]
+    role: str
+    school_id: Optional[int]
+    status: str
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+class PasswordResetByAdminRequest(BaseModel):
+    user_id: int
+    new_password: str

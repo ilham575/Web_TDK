@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import ConfirmModal from '../../ConfirmModal';
 import ReactDOM from 'react-dom';
 import '../../../css/pages/student/AbsenceManager.css';
 import { API_BASE_URL } from '../../../endpoints';
@@ -175,8 +176,19 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
   };
 
   // Delete absence
-  const handleDelete = async (absenceId) => {
-    if (!window.confirm('Are you sure you want to delete this absence?')) return;
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [pendingDeleteAbsenceId, setPendingDeleteAbsenceId] = useState(null);
+
+  const confirmDeleteAbsence = (absenceId) => {
+    setPendingDeleteAbsenceId(absenceId);
+    setShowDeleteConfirm(true);
+  };
+
+  const handleDelete = async () => {
+    const absenceId = pendingDeleteAbsenceId;
+    setShowDeleteConfirm(false);
+    setPendingDeleteAbsenceId(null);
+    if (!absenceId) return;
 
     try {
       const token = localStorage.getItem('token');
@@ -274,7 +286,7 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
                 {absence.status === 'pending' && (
                   <button
                     className="absence-btn delete"
-                    onClick={() => handleDelete(absence.id)}
+                    onClick={() => confirmDeleteAbsence(absence.id)}
                   >
                     ลบ
                   </button>
@@ -415,6 +427,15 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
         </div>,
         document.body
       )}
+
+      {/* Global confirm modal for delete absence */}
+      <ConfirmModal
+        isOpen={showDeleteConfirm}
+        title="ยืนยันการลบคำขอการลา"
+        message="คุณต้องการลบคำขอนี้ใช่หรือไม่? การลบจะไม่สามารถกู้คืนได้"
+        onConfirm={handleDelete}
+        onCancel={() => setShowDeleteConfirm(false)}
+      />
     </section>
   );
 }

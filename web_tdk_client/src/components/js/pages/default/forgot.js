@@ -6,7 +6,7 @@ import AlertModal from '../../AlertModal';
 import { API_BASE_URL } from '../../../endpoints';
 
 function ForgotPage() {
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const [showAlertModal, setShowAlertModal] = useState(false);
@@ -28,27 +28,27 @@ function ForgotPage() {
     e.preventDefault();
     setIsLoading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/users/forgot_password`, {
+      const res = await fetch(`${API_BASE_URL}/users/request_password_reset`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email })
+        body: JSON.stringify({ username })
       });
       const data = await res.json();
       if (!res.ok) {
-        toast.error(data.detail || 'Failed to request password reset');
+        toast.error(data.detail || 'ไม่สามารถส่งคำขอรีเซ็ตรหัสผ่านได้');
       } else {
-        if (data.reset_token) {
-          // dev convenience: show token
-          toast.success('Reset token returned (dev): copy it somewhere safe.');
-          // show token in a modal so developer can copy
-          openAlertModal('Reset Token (Dev)', 'Reset token (dev):\n' + data.reset_token);
+        toast.success(data.detail || 'คำขอรีเซ็ตรหัสผ่านถูกส่งไปยังผู้ดูแลระบบแล้ว');
+        // Show info based on target
+        if (data.target === 'admin') {
+          openAlertModal('คำขอถูกส่งแล้ว', 'คำขอรีเซ็ตรหัสผ่านถูกส่งไปยังแอดมินของโรงเรียนแล้ว\n\nกรุณารอการอนุมัติและรับรหัสผ่านใหม่จากแอดมิน');
+        } else if (data.target === 'owner') {
+          openAlertModal('คำขอถูกส่งแล้ว', 'คำขอรีเซ็ตรหัสผ่านถูกส่งไปยัง Owner แล้ว\n\nกรุณารอการอนุมัติและรับรหัสผ่านใหม่จาก Owner');
         } else {
-          toast.success('If an account exists, an email has been sent with reset instructions.');
+          openAlertModal('คำขอถูกส่งแล้ว', 'คำขอรีเซ็ตรหัสผ่านถูกส่งเรียบร้อยแล้ว\n\nกรุณารอการอนุมัติจากผู้ดูแลระบบ');
         }
-        navigate('/signin');
       }
     } catch (err) {
-      toast.error('Request failed. Try again later.');
+      toast.error('เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง');
     } finally {
       setIsLoading(false);
     }
@@ -58,15 +58,29 @@ function ForgotPage() {
     <div style={{ display: 'flex', justifyContent: 'center', marginTop: '3rem' }}>
       <ToastContainer position="top-center" />
       <div style={{ width: 400, padding: 20, border: '1px solid #ddd', borderRadius: 6 }}>
-        <h3>Forgot Password</h3>
+        <h3>ลืมรหัสผ่าน</h3>
+        <p style={{ fontSize: '0.9rem', color: '#666', marginBottom: '1rem' }}>
+          กรอกชื่อผู้ใช้ของคุณเพื่อส่งคำขอรีเซ็ตรหัสผ่านไปยังผู้ดูแลระบบ
+        </p>
         <form onSubmit={handleSubmit}>
           <div style={{ marginBottom: 12 }}>
-            <label>Email</label>
-            <input type="email" value={email} onChange={e => setEmail(e.target.value)} required style={{ width: '100%', padding: 8, marginTop: 6 }} />
+            <label>ชื่อผู้ใช้ (Username)</label>
+            <input 
+              type="text" 
+              value={username} 
+              onChange={e => setUsername(e.target.value)} 
+              required 
+              placeholder="กรอกชื่อผู้ใช้ของคุณ"
+              style={{ width: '100%', padding: 8, marginTop: 6 }} 
+            />
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button type="submit" disabled={isLoading} className="button-signin">{isLoading ? 'Sending...' : 'Send Reset Link'}</button>
-            <button type="button" onClick={() => navigate('/signin')} style={{ background: '#6c757d', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: 4 }}>Cancel</button>
+            <button type="submit" disabled={isLoading} className="button-signin">
+              {isLoading ? 'กำลังส่ง...' : 'ส่งคำขอรีเซ็ตรหัสผ่าน'}
+            </button>
+            <button type="button" onClick={() => navigate('/signin')} style={{ background: '#6c757d', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: 4 }}>
+              ยกเลิก
+            </button>
           </div>
         </form>
       </div>
@@ -74,7 +88,10 @@ function ForgotPage() {
         isOpen={showAlertModal}
         title={alertTitle}
         message={alertMessage}
-        onClose={() => setShowAlertModal(false)}
+        onClose={() => {
+          setShowAlertModal(false);
+          navigate('/signin');
+        }}
       />
     </div>
   );

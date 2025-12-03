@@ -176,6 +176,11 @@
   padding: 8px;
 }
 
+.current-logo img {
+  max-height: 120px;
+  border-radius: 8px;
+}
+
 .preview-name {
   font-size: 0.9em;
   color: #666;
@@ -232,6 +237,18 @@
   transform: translateY(-2px);
   box-shadow: 0 6px 16px rgba(255, 152, 0, 0.4);
   background: linear-gradient(135deg, #F57C00 0%, #E65100 100%);
+}
+
+.logo-upload-btn.delete {
+  background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%);
+  color: white;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+.logo-upload-btn.delete:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(239, 68, 68, 0.4);
+  background: linear-gradient(135deg, #DC2626 0%, #B91C1C 100%);
 }
 
 .logo-upload-btn.submit {

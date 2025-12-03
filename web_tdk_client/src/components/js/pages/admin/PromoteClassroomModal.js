@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 
 const PromoteClassroomModal = ({
   isOpen,
@@ -12,6 +12,33 @@ const PromoteClassroomModal = ({
   onPromote,
   onClose,
 }) => {
+  // Extract numeric part from grade level (e.g., "ป.1" -> 1, "ม.1" -> 1, "มัธยม 1" -> 1)
+  const extractGradeNumber = (gradeString) => {
+    const match = gradeString?.match(/\d+/);
+    return match ? parseInt(match[0]) : 0;
+  };
+
+  // Get available next grade levels based on current grade (for end_of_year promotion)
+  const availableNextGrades = useMemo(() => {
+    // Classroom promotion is always end_of_year
+    if (!selectedClassroom) {
+      return [];
+    }
+
+    const currentGradeNum = extractGradeNumber(selectedClassroom.grade_level);
+    const allGrades = getClassroomGradeLevels();
+
+    // Filter grades with higher numeric values first
+    let filtered = allGrades.filter(grade => extractGradeNumber(grade) > currentGradeNum);
+    
+    // If no higher grades exist, allow selecting from all grades (excluding current)
+    if (filtered.length === 0) {
+      filtered = allGrades.filter(grade => grade !== selectedClassroom.grade_level);
+    }
+    
+    return filtered.sort((a, b) => extractGradeNumber(a) - extractGradeNumber(b));
+  }, [selectedClassroom, getClassroomGradeLevels]);
+
   if (!isOpen) return null;
 
   return (
@@ -64,59 +91,66 @@ const PromoteClassroomModal = ({
             </div>
           </div>
 
-          {/* Promotion Type Selection */}
+          {/* Promotion Type - Fixed to end_of_year for classroom promotion */}
           <div className="admin-form-group">
-            <label className="admin-form-label">ประเภทการเลื่อนชั้น <span style={{ color: 'red' }}>*</span></label>
+            <label className="admin-form-label">ประเภทการเลื่อนชั้น</label>
             <div style={{ display: 'flex', gap: '2rem', marginTop: '0.75rem', flexWrap: 'wrap' }}>
-              <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem', backgroundColor: classroomPromotionType === 'mid_term' ? '#e8f5e9' : '#f5f5f5', borderRadius: '6px', flex: 'auto', minWidth: '200px' }}>
-                <input 
-                  type="radio" 
-                  name="classroomPromotion" 
-                  value="mid_term"
-                  checked={classroomPromotionType === 'mid_term'}
-                  onChange={e => setClassroomPromotionType(e.target.value)}
-                />
-                <div>
-                  <strong>🔄 เลื่อนกลางปี</strong><br />
-                  <span style={{ fontSize: '12px', color: '#666' }}>เทอม 1 → เทอม 2</span>
+              <div style={{ padding: '1rem', backgroundColor: '#e8f5e9', borderRadius: '8px', border: '2px solid #4caf50', flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <span style={{ fontSize: '24px' }}>📈</span>
+                  <div>
+                    <strong style={{ color: '#2e7d32' }}>เลื่อนปลายปี (End of Year)</strong><br />
+                    <span style={{ fontSize: '12px', color: '#666' }}>ปีการศึกษาใหม่ + ชั้นปีใหม่</span>
+                  </div>
                 </div>
-              </label>
-              <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem', backgroundColor: classroomPromotionType === 'end_of_year' ? '#e8f5e9' : '#f5f5f5', borderRadius: '6px', flex: 'auto', minWidth: '200px' }}>
-                <input 
-                  type="radio" 
-                  name="classroomPromotion" 
-                  value="end_of_year"
-                  checked={classroomPromotionType === 'end_of_year'}
-                  onChange={e => setClassroomPromotionType(e.target.value)}
-                />
-                <div>
-                  <strong>📈 เลื่อนปลายปี</strong><br />
-                  <span style={{ fontSize: '12px', color: '#666' }}>ขึ้นชั้นใหม่</span>
-                </div>
-              </label>
+              </div>
+            </div>
+            <div style={{ fontSize: '12px', color: '#1976d2', marginTop: '0.5rem', backgroundColor: '#e3f2fd', padding: '0.5rem 0.75rem', borderRadius: '4px' }}>
+              💡 <strong>หมายเหตุ:</strong> การเลื่อนชั้นรายชั้นปีใช้ได้เฉพาะ "เลื่อนปลายปี" เท่านั้น<br />
+              &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;หากต้องการเลื่อนแบบอื่น กรุณาใช้ "เลื่อนชั้นรายบุคคล"
             </div>
           </div>
 
-          {/* New Grade Level Input (for end_of_year) */}
-          {classroomPromotionType === 'end_of_year' && (
-            <div className="admin-form-group">
-              <label className="admin-form-label">ชั้นปีใหม่ <span style={{ color: 'red' }}>*</span></label>
-              <input 
-                className="admin-form-input"
-                type="text"
-                value={classroomPromotionNewGrade}
-                onChange={e => setClassroomPromotionNewGrade(e.target.value)}
-                placeholder="เช่น ป.2, ม.1 (พิมพ์เพิ่มได้)"
-                list="gradeListB"
-              />
-              <datalist id="gradeListB">
-                {getClassroomGradeLevels().map(grade => (
-                  <option key={grade} value={grade} />
-                ))}
-              </datalist>
-              <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>ระบุชั้นปีที่ต้องการเลื่อนขึ้น (จากชั้นเรียนที่แอดมินสร้าง)</div>
+          {/* New Grade Level Selection (always shown for classroom promotion) */}
+          <div className="admin-form-group">
+            <label className="admin-form-label">
+              ชั้นปีใหม่ <span style={{ color: 'red' }}>*</span>
+              <span style={{ fontSize: '12px', color: '#666', fontWeight: '400', marginLeft: '0.5rem' }}>
+                (เลือกจากชั้นปีที่สูงกว่า)
+              </span>
+            </label>
+              {availableNextGrades.length > 0 ? (
+                <select 
+                  className="admin-form-input"
+                  value={classroomPromotionNewGrade}
+                  onChange={e => setClassroomPromotionNewGrade(e.target.value)}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <option value="">-- เลือกชั้นปีใหม่ --</option>
+                  {availableNextGrades.map(grade => (
+                    <option key={grade} value={grade}>
+                      {grade} (ชั้นปีที่ {extractGradeNumber(grade)})
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <div style={{
+                  padding: '1rem',
+                  backgroundColor: '#fff3cd',
+                  borderRadius: '4px',
+                  color: '#856404',
+                  fontSize: '14px'
+                }}>
+                  ⚠️ ไม่พบชั้นปีอื่นในระบบ<br />
+                  <span style={{ fontSize: '12px', marginTop: '0.5rem', display: 'block' }}>
+                    กรุณาสร้างชั้นเรียนใหม่ก่อนทำการเลื่อนชั้น
+                  </span>
+                </div>
+              )}
+              <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>
+                ระบบจะเลือกชั้นปีอื่นที่มีในระบบ
+              </div>
             </div>
-          )}
 
           {/* Summary Box */}
           <div style={{ backgroundColor: '#fff3e0', padding: '1.25rem', borderRadius: '8px', marginTop: '1.5rem', border: '1px solid #ffb74d' }}>
@@ -125,7 +159,9 @@ const PromoteClassroomModal = ({
               <li><strong>👨‍🎓 จำนวน:</strong> {selectedClassroom?.student_count || 0} นักเรียนจะเลื่อนไป</li>
               <li><strong>📊 คะแนน:</strong> จะคัดลอกคะแนนทั้งหมดจากชั้นเรียนปัจจุบัน</li>
               <li><strong>📚 เก็บข้อมูล:</strong> ชั้นเรียนเดิมจะยังคงอยู่ในระบบเพื่ออ้างอิง</li>
-              <li><strong>⏰ ปีการศึกษา:</strong> {classroomPromotionType === 'end_of_year' ? `${parseInt(selectedClassroom?.academic_year || '0') + 1}` : selectedClassroom?.academic_year}</li>
+              <li><strong>📝 รายละเอียด:</strong>
+                {` ปี ${selectedClassroom?.academic_year} → ปี ${parseInt(selectedClassroom?.academic_year || '0') + 1} ชั้นปี ${classroomPromotionNewGrade}`}
+              </li>
             </ul>
           </div>
         </div>
@@ -143,7 +179,7 @@ const PromoteClassroomModal = ({
             type="button" 
             className="admin-btn-primary" 
             onClick={onPromote}
-            disabled={promotingClassroom || (classroomPromotionType === 'end_of_year' && !classroomPromotionNewGrade)}
+            disabled={promotingClassroom || !classroomPromotionNewGrade}
             style={{ backgroundColor: '#4caf50' }}
           >
             {promotingClassroom ? 'กำลังเลื่อน...' : `✓ ยืนยันการเลื่อนชั้น`}

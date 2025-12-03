@@ -206,6 +206,17 @@
   transform: translateY(-1px);
 }
 
+.profile-btn-warning {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  color: white;
+  box-shadow: 0 4px 16px rgba(245, 87, 108, 0.3);
+}
+
+.profile-btn-warning:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(245, 87, 108, 0.4);
+}
+
 .profile-status-badge {
   display: inline-flex;
   align-items: center;

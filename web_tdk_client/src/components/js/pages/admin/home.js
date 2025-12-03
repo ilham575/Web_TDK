@@ -15,6 +15,7 @@ import LogoUploadModal from '../../LogoUploadModal';
 import ScheduleGrid from '../../ScheduleGrid';
 import AbsenceApproval from './AbsenceApproval';
 import PromoteClassroomModal from './PromoteClassroomModal';
+import PromoteStudentModal from './PromoteStudentModal';
 import CreateClassroomModal from './CreateClassroomModal';
 import EditClassroomModal from './EditClassroomModal';
 import AddStudentsModal from './AddStudentsModal';
@@ -142,9 +143,31 @@ function AdminPage() {
   const [creatingClassroom, setCreatingClassroom] = useState(false);
   const [selectedClassroom, setSelectedClassroom] = useState(null);
   const [addingStudentsToClassroom, setAddingStudentsToClassroom] = useState(false);
-  const [classroomPromotionType, setClassroomPromotionType] = useState('mid_term');
+  const [classroomPromotionType, setClassroomPromotionType] = useState('end_of_year');
   const [classroomPromotionNewGrade, setClassroomPromotionNewGrade] = useState('');
   const [promotingClassroom, setPromotingClassroom] = useState(false);
+
+  // Individual student promotion state
+  const [showPromoteStudentModal, setShowPromoteStudentModal] = useState(false);
+  const [classroomForStudentPromotion, setClassroomForStudentPromotion] = useState(null);
+  const [classroomStudents, setClassroomStudents] = useState([]);
+  const [promotingIndividualStudents, setPromotingIndividualStudents] = useState(false);
+
+  // User management search and filter state
+  const [teacherSearchTerm, setTeacherSearchTerm] = useState('');
+  const [studentSearchTermUsers, setStudentSearchTermUsers] = useState('');
+  const [teacherStatusFilter, setTeacherStatusFilter] = useState('all'); // 'all', 'active', 'inactive'
+  const [studentStatusFilter, setStudentStatusFilter] = useState('all');
+  const [teacherCurrentPage, setTeacherCurrentPage] = useState(1);
+  const [studentCurrentPage, setStudentCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 5;
+
+  // Password reset requests state
+  const [passwordResetRequests, setPasswordResetRequests] = useState([]);
+  const [loadingResetRequests, setLoadingResetRequests] = useState(false);
+  const [newPasswordForReset, setNewPasswordForReset] = useState('');
+  const [selectedResetRequest, setSelectedResetRequest] = useState(null);
+  const [showResetPasswordModal, setShowResetPasswordModal] = useState(false);
 
   useEffect(() => {
     const onDocClick = (e) => {
@@ -249,6 +272,26 @@ function AdminPage() {
     tryResolveSchoolName();
   }, [currentUser]);
 
+  // Load full school data (including logo) for current user if available
+  useEffect(() => {
+    const loadSchoolData = async () => {
+      const sid = currentUser?.school_id || localStorage.getItem('school_id');
+      if (!sid) return;
+      try {
+        const token = localStorage.getItem('token');
+        const res = await fetch(`${API_BASE_URL}/schools/${sid}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        setSchoolData(data);
+      } catch (err) {
+        // ignore
+      }
+    };
+    loadSchoolData();
+  }, [currentUser?.school_id]);
+
   // Update document title with school name
   useEffect(() => {
     const baseTitle = 'ระบบโรงเรียน';
@@ -295,6 +338,20 @@ function AdminPage() {
 
   const handleFileChange = (e) => { const f = e.target.files && e.target.files[0]; setUploadFile(f || null); };
 
+  // ฟังก์ชันแปลง error objects เป็นข้อความที่อ่านง่าย
+  const formatErrorMessages = (errors) => {
+    if (!Array.isArray(errors)) return '';
+    return errors
+      .map(err => {
+        if (typeof err === 'string') return `• ${err}`;
+        if (err.row && err.error) return `• แถว ${err.row}: ${err.error}`;
+        if (err.error) return `• ${err.error}`;
+        return `• ${JSON.stringify(err)}`;
+      })
+      .slice(0, 20)
+      .join('\n');
+  };
+
   const handleUpload = async () => {
     if (!uploadFile) { toast.error('Please select an Excel (.xlsx) file first'); return; }
     const token = localStorage.getItem('token');
@@ -302,8 +359,42 @@ function AdminPage() {
     try {
       const res = await fetch(`${API_BASE_URL}/users/bulk_upload`, { method:'POST', headers:{ ...(token?{Authorization:`Bearer ${token}`}:{}) }, body:form });
       const data = await res.json();
-      if (!res.ok) toast.error(data.detail || 'Upload failed'); else { const created = data.created_count || 0; const errCount = (data.errors && data.errors.length) || 0; toast.success(`Upload finished: ${created} created, ${errCount} errors`); if (currentUser) setCurrentUser({...currentUser}); }
-    } catch (err) { console.error('upload error', err); toast.error('Upload failed'); } finally { setUploading(false); setUploadFile(null); const inp = document.getElementById('bulk-upload-input'); if (inp) inp.value = ''; }
+      if (!res.ok) {
+        // แสดง error ใน modal เพื่อให้ admin เห็นรายละเอียด error ได้ชัดเจน
+        const errorMsg = data.detail || 'Upload failed';
+        const errorDetails = formatErrorMessages(data.errors);
+        openAlertModal(
+          '❌ อัพโหลดผู้ใช้ไม่สำเร็จ',
+          errorDetails ? `${errorMsg}\n\n${errorDetails}` : errorMsg
+        );
+      } else {
+        const created = data.created_count || 0;
+        const errCount = (data.errors && data.errors.length) || 0;
+        if (errCount > 0) {
+          // ถ้ามี error บางส่วน แสดง warning modal พร้อมรายละเอียด
+          const errorDetails = formatErrorMessages(data.errors);
+          const moreMsg = data.errors.length > 20 ? `\n... และอีก ${data.errors.length - 20} รายการ` : '';
+          openAlertModal(
+            '⚠️ อัพโหลดสำเร็จบางส่วน',
+            `✓ เพิ่ม ${created} นักเรียน สำเร็จ\n✗ Error ${errCount} รายการ:\n\n${errorDetails}${moreMsg}`
+          );
+        } else {
+          toast.success(`✓ อัพโหลดสำเร็จ: ${created} นักเรียน`);
+        }
+        if (currentUser) setCurrentUser({...currentUser});
+      }
+    } catch (err) {
+      console.error('upload error', err);
+      openAlertModal(
+        '❌ เกิดข้อผิดพลาด',
+        `ไม่สามารถอัพโหลดไฟล์ได้: ${err.message || 'Unknown error'}`
+      );
+    } finally {
+      setUploading(false);
+      setUploadFile(null);
+      const inp = document.getElementById('bulk-upload-input');
+      if (inp) inp.value = '';
+    }
   };
 
   const handleSignout = () => {
@@ -397,6 +488,82 @@ function AdminPage() {
       }
     } catch (err) { console.error(err); toast.error('เกิดข้อผิดพลาดในการลบผู้ใช้'); }
   };
+
+  // Password Reset Request Functions
+  const fetchPasswordResetRequests = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    setLoadingResetRequests(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/users/password_reset_requests`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPasswordResetRequests(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch password reset requests', err);
+    } finally {
+      setLoadingResetRequests(false);
+    }
+  };
+
+  const approvePasswordReset = async (requestId, userId, newPassword) => {
+    const token = localStorage.getItem('token');
+    if (!token) { toast.error('กรุณาเข้าสู่ระบบ'); return; }
+    try {
+      const res = await fetch(`${API_BASE_URL}/users/password_reset_requests/${requestId}/approve`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ user_id: userId, new_password: newPassword })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.detail || 'อนุมัติไม่สำเร็จ');
+      } else {
+        toast.success(data.detail || 'อนุมัติเรียบร้อยแล้ว');
+        setShowResetPasswordModal(false);
+        setNewPasswordForReset('');
+        setSelectedResetRequest(null);
+        fetchPasswordResetRequests();
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('เกิดข้อผิดพลาด');
+    }
+  };
+
+  const rejectPasswordReset = async (requestId) => {
+    const token = localStorage.getItem('token');
+    if (!token) { toast.error('กรุณาเข้าสู่ระบบ'); return; }
+    try {
+      const res = await fetch(`${API_BASE_URL}/users/password_reset_requests/${requestId}/reject`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.detail || 'ปฏิเสธไม่สำเร็จ');
+      } else {
+        toast.success(data.detail || 'ปฏิเสธเรียบร้อยแล้ว');
+        fetchPasswordResetRequests();
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('เกิดข้อผิดพลาด');
+    }
+  };
+
+  // Fetch password reset requests when tab changes to users
+  useEffect(() => {
+    if (activeTab === 'users' && currentUser) {
+      fetchPasswordResetRequests();
+    }
+  }, [activeTab, currentUser]);
 
   const initials = (name) => (name ? name.split(' ').map(n=>n[0]).slice(0,2).join('').toUpperCase() : 'A');
 
@@ -735,7 +902,13 @@ function AdminPage() {
 
   // Get unique grade levels from admin-created classrooms
   const getClassroomGradeLevels = () => {
-    return [...new Set(classrooms.map(c => c.grade_level))].filter(Boolean).sort();
+    const grades = [...new Set(classrooms.map(c => c.grade_level))].filter(Boolean);
+    // Sort numerically by extracting numbers
+    return grades.sort((a, b) => {
+      const numA = parseInt(a?.match(/\d+/)?.[0] || 0);
+      const numB = parseInt(b?.match(/\d+/)?.[0] || 0);
+      return numA - numB;
+    });
   };
 
   const loadAvailableGradeLevels = async () => {
@@ -1273,6 +1446,23 @@ function AdminPage() {
   };
 
   // ===== Classroom Management Functions =====
+  const refreshClassrooms = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/classrooms/list/${currentUser.school_id}`, {
+        headers: { ...(token ? { 'Authorization': `Bearer ${token}` } : {}) }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (Array.isArray(data)) {
+          setClassrooms(data);
+        }
+      }
+    } catch (err) {
+      console.error('Error refreshing classrooms:', err);
+    }
+  };
+
   const createClassroom = async (formData) => {
     if (!formData.name || !formData.gradeLevel) {
       toast.error('กรุณากรอกชื่อและชั้นเรียน');
@@ -1306,6 +1496,8 @@ function AdminPage() {
         // ปิด modal หลังสร้างสำเร็จ
         setShowClassroomModal(false);
         setClassroomStep('select');
+        // รีเฟรชรายการชั้นเรียนเพื่อให้แน่ใจว่าข้อมูลถูกต้อง
+        await refreshClassrooms();
       } else {
         toast.error(data.detail || 'สร้างชั้นเรียนไม่สำเร็จ');
       }
@@ -1337,11 +1529,26 @@ function AdminPage() {
 
       const data = await response.json();
       if (response.ok) {
-        toast.success(`เพิ่ม ${data.added_count} นักเรียนสำเร็จ`);
+        // แสดง success message
+        let successMsg = `✓ เพิ่ม ${data.added_count} นักเรียนสำเร็จ`;
+        if (data.already_enrolled && data.already_enrolled.length > 0) {
+          successMsg += ` (${data.already_enrolled.length} คนลงทะเบียนแล้ว)`;
+        }
+        toast.success(successMsg);
         setClassroomStep('view_students');
+
+        // แสดง error messages ถ้ามี
+        if (data.errors && data.errors.length > 0) {
+          setTimeout(() => {
+            data.errors.forEach(err => toast.warning(err));
+          }, 1000);
+        }
+
+        // รีเฟรชรายการชั้นเรียนเพื่ออัปเดตจำนวนนักเรียน
+        await refreshClassrooms();
       } else {
         if (data.errors && data.errors.length > 0) {
-          toast.error(data.errors.join(', '));
+          toast.error(data.errors.join('\n'));
         } else {
           toast.error('เพิ่มนักเรียนไม่สำเร็จ');
         }
@@ -1363,13 +1570,16 @@ function AdminPage() {
         include_grades: true,
       };
 
-      if (classroomPromotionType === 'end_of_year') {
+      if (classroomPromotionType === 'mid_term_with_promotion' || classroomPromotionType === 'end_of_year') {
         if (!classroomPromotionNewGrade) {
           toast.error('กรุณาระบุชั้นปีใหม่');
           setPromotingClassroom(false);
           return;
         }
         payload.new_grade_level = classroomPromotionNewGrade;
+      }
+
+      if (classroomPromotionType === 'end_of_year') {
         payload.new_academic_year = (parseInt(selectedClassroom.academic_year) + 1).toString();
       }
 
@@ -1388,14 +1598,8 @@ function AdminPage() {
         setShowClassroomModal(false);
         setClassroomStep('select');
         setClassroomPromotionNewGrade('');
-        // โหลด classrooms ใหม่
-        const refreshToken = localStorage.getItem('token');
-        fetch(`${API_BASE_URL}/classrooms/list/${currentUser.school_id}`, {
-          headers: { ...(refreshToken ? { 'Authorization': `Bearer ${refreshToken}` } : {}) }
-        })
-          .then(res => res.json())
-          .then(data => setClassrooms(Array.isArray(data) ? data : []))
-          .catch(() => {});
+        // รีเฟรชรายการชั้นเรียน
+        await refreshClassrooms();
       } else {
         toast.error(data.message || 'เลื่อนชั้นไม่สำเร็จ');
       }
@@ -1407,11 +1611,47 @@ function AdminPage() {
     }
   };
 
+  const promoteClassroomSemesterOnly = async () => {
+    const token = localStorage.getItem('token');
+    setPromotingClassroom(true);
+    try {
+      const payload = {
+        promotion_type: 'mid_term',
+        include_grades: true,
+      };
+
+      const response = await fetch(`${API_BASE_URL}/classrooms/${selectedClassroom.id}/promote`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        toast.success(data.message || '✓ เลื่อนเทอมสำเร็จ');
+        setShowClassroomModal(false);
+        setClassroomStep('select');
+        // รีเฟรชรายการชั้นเรียน
+        await refreshClassrooms();
+      } else {
+        toast.error(data.message || 'เลื่อนเทอมไม่สำเร็จ');
+      }
+    } catch (err) {
+      console.error('Error promoting semester:', err);
+      toast.error('เกิดข้อผิดพลาดในการเลื่อนเทอม');
+    } finally {
+      setPromotingClassroom(false);
+    }
+  };
+
   const closeClassroomModal = () => {
     setShowClassroomModal(false);
     setClassroomStep('select');
     setSelectedClassroom(null);
-    setClassroomPromotionType('mid_term');
+    setClassroomPromotionType('end_of_year');
     setClassroomPromotionNewGrade('');
   };
 
@@ -1457,6 +1697,8 @@ function AdminPage() {
         setShowClassroomModal(false);
         setClassroomStep('select');
         setSelectedClassroom(null);
+        // รีเฟรชรายการชั้นเรียนเพื่อให้แน่ใจว่าข้อมูลล่าสุด
+        await refreshClassrooms();
       } else {
         toast.error(data.detail || 'ไม่สามารถแก้ไขชั้นเรียน');
       }
@@ -1489,6 +1731,8 @@ function AdminPage() {
             setClassrooms(prevClassrooms =>
               prevClassrooms.filter(c => c.id !== classroom.id)
             );
+            // รีเฟรชรายการชั้นเรียน
+            refreshClassrooms();
           } else {
             const data = await response.json();
             toast.error(data.detail || 'ไม่สามารถลบชั้นเรียน');
@@ -1499,6 +1743,69 @@ function AdminPage() {
         }
       }
     );
+  };
+
+  // เปิด modal เลื่อนนักเรียนรายบุคคล
+  const openPromoteStudentModal = async (classroom) => {
+    setClassroomForStudentPromotion(classroom);
+    setShowPromoteStudentModal(true);
+    
+    // ดึงข้อมูลนักเรียนในชั้นเรียน
+    const token = localStorage.getItem('token');
+    try {
+      const response = await fetch(`${API_BASE_URL}/classrooms/${classroom.id}/students`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setClassroomStudents(data);
+      } else {
+        toast.error('ไม่สามารถดึงข้อมูลนักเรียน');
+      }
+    } catch (err) {
+      console.error('Error fetching classroom students:', err);
+      toast.error('เกิดข้อผิดพลาดในการดึงข้อมูลนักเรียน');
+    }
+  };
+
+  // เลื่อนนักเรียนรายบุคคล
+  const promoteIndividualStudents = async (payload) => {
+    const token = localStorage.getItem('token');
+    setPromotingIndividualStudents(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/users/promote_students`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        // แสดง success message
+        toast.success(data.message || `✓ เลื่อนชั้น ${data.promoted_count} นักเรียนสำเร็จ`);
+        
+        // แสดง error/warning messages ถ้ามี
+        if (data.errors && data.errors.length > 0) {
+          setTimeout(() => {
+            data.errors.forEach(err => toast.warning(err));
+          }, 1000);
+        }
+        
+        setShowPromoteStudentModal(false);
+        setClassroomStudents([]);
+        setClassroomForStudentPromotion(null);
+      } else {
+        toast.error(data.detail || 'เลื่อนชั้นไม่สำเร็จ');
+      }
+    } catch (err) {
+      console.error('Error promoting students:', err);
+      toast.error('เกิดข้อผิดพลาดในการเลื่อนชั้น');
+    } finally {
+      setPromotingIndividualStudents(false);
+    }
   };
 
   return (
@@ -1610,198 +1917,375 @@ function AdminPage() {
               <h2><span className="card-icon">👥</span> จัดการผู้ใช้</h2>
             </div>
             <div className="card-content">
+              {loadingUsers && <Loading message="กำลังโหลดข้อมูลผู้ใช้..." />}
+              {usersError && <div className="error-message">❌ {usersError}</div>}
+
               <div className="user-management">
+                {/* ===== Render UserTableSection for Teachers ===== */}
                 <div className="user-section">
                   <h3><span className="card-icon">👨‍🏫</span> ครูผู้สอน ({teachers.length} คน)</h3>
-                  {loadingUsers && <Loading message="กำลังโหลดข้อมูลผู้ใช้..." />}
-                  {usersError && <div className="error-message">❌ {usersError}</div>}
-                  {teachers.length === 0 && !loadingUsers ? (
+                  
+                  {/* Search, Filter, and Stats */}
+                  <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
+                    <input
+                      type="text"
+                      placeholder="🔍 ค้นหาชื่อ หรือ email"
+                      value={teacherSearchTerm}
+                      onChange={(e) => {
+                        setTeacherSearchTerm(e.target.value);
+                        setTeacherCurrentPage(1);
+                      }}
+                      style={{
+                        flex: 1,
+                        minWidth: '200px',
+                        padding: '10px 12px',
+                        borderRadius: '8px',
+                        border: '1px solid #ddd',
+                        fontSize: '0.95rem'
+                      }}
+                    />
+                    <select
+                      value={teacherStatusFilter}
+                      onChange={(e) => {
+                        setTeacherStatusFilter(e.target.value);
+                        setTeacherCurrentPage(1);
+                      }}
+                      style={{
+                        padding: '10px 12px',
+                        borderRadius: '8px',
+                        border: '1px solid #ddd',
+                        fontSize: '0.95rem',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <option value="all">📊 ทั้งหมด</option>
+                      <option value="active">✅ ใช้งาน</option>
+                      <option value="inactive">🚫 ปิดใช้งาน</option>
+                    </select>
+                  </div>
+
+                  {teachers.length === 0 ? (
                     <div className="empty-state">
                       <div className="empty-icon">👨‍🏫</div>
                       <div className="empty-text">ยังไม่มีครูผู้สอน</div>
                       <div className="empty-subtitle">เริ่มต้นโดยการเพิ่มครูผู้สอนใหม่</div>
                     </div>
-                  ) : (
-                    <ul className="user-list">
-                      {teachers.map((teacher)=> (
-                        <li key={teacher.id} className="user-item">
-                          <div className="user-info">
-                            <div className="user-name">
-                              👤 {teacher.full_name || teacher.username}
-                              {!teacher.is_active && <span style={{ color: 'red', fontSize: '12px', marginLeft: '8px' }}>(ปิดใช้งาน)</span>}
-                              {deletionStatuses[teacher.id] && (
-                                <span style={{ 
-                                  color: deletionStatuses[teacher.id].can_delete ? 'green' : 'orange', 
-                                  fontSize: '12px', 
-                                  marginLeft: '8px',
-                                  fontWeight: 'bold'
-                                }}>
-                                  {deletionStatuses[teacher.id].can_delete ? '✅ พร้อมลบ' : '⚠️ ยังลบไม่ได้'}
-                                </span>
-                              )}
-                            </div>
-                            <div className="user-email">📧 {teacher.email}</div>
-                            {deletionStatuses[teacher.id] && !deletionStatuses[teacher.id].can_delete && (
-                              <div className="deletion-reasons" style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
-                                {deletionStatuses[teacher.id].reasons.map((reason, idx) => (
-                                  <div key={idx}>• {reason}</div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                          <div className="user-actions">
-                            <button 
-                              className="admin-btn-small" 
-                              onClick={() => navigate(`/admin/teacher/${teacher.id}`)}
-                              title="ดูรายละเอียดครู"
+                  ) : (() => {
+                    const filteredTeachers = teachers.filter(t => {
+                      const matchSearch = !teacherSearchTerm || 
+                        (t.full_name && t.full_name.toLowerCase().includes(teacherSearchTerm.toLowerCase())) ||
+                        (t.username && t.username.toLowerCase().includes(teacherSearchTerm.toLowerCase())) ||
+                        (t.email && t.email.toLowerCase().includes(teacherSearchTerm.toLowerCase()));
+                      const matchStatus = teacherStatusFilter === 'all' ||
+                        (teacherStatusFilter === 'active' && t.is_active) ||
+                        (teacherStatusFilter === 'inactive' && !t.is_active);
+                      return matchSearch && matchStatus;
+                    });
+
+                    const totalPages = Math.ceil(filteredTeachers.length / ITEMS_PER_PAGE);
+                    const startIdx = (teacherCurrentPage - 1) * ITEMS_PER_PAGE;
+                    const paginatedTeachers = filteredTeachers.slice(startIdx, startIdx + ITEMS_PER_PAGE);
+
+                    return (
+                      <>
+                        <div style={{ overflowX: 'auto', marginBottom: '1.5rem' }}>
+                          <table className="admin-table" style={{ minWidth: '100%', fontSize: '0.95rem' }}>
+                            <thead>
+                              <tr>
+                                <th>ชื่อ</th>
+                                <th>Email</th>
+                                <th>Username</th>
+                                <th style={{ textAlign: 'center' }}>สถานะ</th>
+                                <th style={{ width: '280px' }}>การจัดการ</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {paginatedTeachers.map(teacher => (
+                                <tr key={teacher.id}>
+                                  <td><strong>{teacher.full_name || teacher.username}</strong></td>
+                                  <td>{teacher.email}</td>
+                                  <td style={{ color: '#666' }}>{teacher.username}</td>
+                                  <td style={{ textAlign: 'center' }}>
+                                    {teacher.is_active ? <span style={{ color: 'green', fontWeight: 'bold' }}>✅ ใช้งาน</span> : <span style={{ color: 'red', fontWeight: 'bold' }}>🚫 ปิด</span>}
+                                  </td>
+                                  <td>
+                                    <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                                      <button 
+                                        className="admin-btn-small" 
+                                        onClick={() => navigate(`/admin/teacher/${teacher.id}`)}
+                                        title="ดูรายละเอียด"
+                                      >
+                                        👁️
+                                      </button>
+                                      <button 
+                                        className="admin-btn-small admin-btn-warning" 
+                                        onClick={() => openConfirmModal('รีเซ็ต', `รีเซ็ตรหัสผ่านของ "${teacher.full_name || teacher.username}"?`, async () => {
+                                          const token = localStorage.getItem('token');
+                                          try {
+                                            const res = await fetch(`${API_BASE_URL}/users/${teacher.id}/admin_reset`, { method:'POST', headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
+                                            const data = await res.json();
+                                            if (!res.ok) { toast.error(data.detail || 'รีเซ็ตไม่สำเร็จ'); } else { openAlertModal('รหัสผ่านชั่วคราว', `${teacher.username || teacher.email || ''}\n\n🔑 ${data.temp_password}`); toast.success('รีเซ็ตสำเร็จ'); }
+                                          } catch (err) { console.error(err); toast.error('เกิดข้อผิดพลาด'); }
+                                        })}
+                                        title="รีเซ็ตรหัสผ่าน"
+                                      >
+                                        🔄
+                                      </button>
+                                      {teacher.is_active ? (
+                                        <button 
+                                          className="admin-btn-small admin-btn-secondary" 
+                                          onClick={() => openConfirmModal('ปิดใช้งาน', `ปิดใช้งาน "${teacher.full_name || teacher.username}"?`, async () => { await deactivateUser(teacher.id, teacher.full_name || teacher.username); })}
+                                          title="ปิดใช้งาน"
+                                        >
+                                          🚫
+                                        </button>
+                                      ) : (
+                                        <button 
+                                          className="admin-btn-small admin-btn-success" 
+                                          onClick={() => openConfirmModal('เปิดใช้งาน', `เปิดใช้งาน "${teacher.full_name || teacher.username}"?`, async () => { await activateUser(teacher.id, teacher.full_name || teacher.username); })}
+                                          title="เปิดใช้งาน"
+                                        >
+                                          ✅
+                                        </button>
+                                      )}
+                                      {!teacher.is_active && deletionStatuses[teacher.id]?.can_delete && (
+                                        <button 
+                                          className="admin-btn-small admin-btn-danger" 
+                                          onClick={() => openConfirmModal('ลบ', `ลบ "${teacher.full_name || teacher.username}"?`, async () => { await deleteUser(teacher.id, teacher.full_name || teacher.username); })}
+                                          title="ลบผู้ใช้"
+                                        >
+                                          🗑️
+                                        </button>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {/* Pagination */}
+                        {totalPages > 1 && (
+                          <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem', alignItems: 'center', marginBottom: '2rem' }}>
+                            <button
+                              onClick={() => setTeacherCurrentPage(p => Math.max(1, p - 1))}
+                              disabled={teacherCurrentPage === 1}
+                              style={{ padding: '6px 10px', cursor: teacherCurrentPage === 1 ? 'not-allowed' : 'pointer', opacity: teacherCurrentPage === 1 ? 0.5 : 1 }}
                             >
-                              👁️ ดูรายละเอียด
+                              ← ก่อนหน้า
                             </button>
-                            <button 
-                              className="admin-btn-small admin-btn-warning" 
-                              onClick={() => openConfirmModal('รีเซ็ตรหัสผ่าน', `ต้องการรีเซ็ตรหัสผ่านของ "${teacher.full_name || teacher.username}" ใช่หรือไม่?`, async () => {
-                                const token = localStorage.getItem('token');
-                                try {
-                                  const res = await fetch(`${API_BASE_URL}/users/${teacher.id}/admin_reset`, { method:'POST', headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
-                                  const data = await res.json();
-                                  if (!res.ok) { toast.error(data.detail || 'รีเซ็ตรหัสผ่านไม่สำเร็จ'); } else { openAlertModal('รหัสผ่านชั่วคราว', `รหัสผ่านชั่วคราวสำหรับ: ${teacher.username || teacher.email || ''}\n\n🔑 ${data.temp_password}`); toast.success('รีเซ็ตรหัสผ่านสำเร็จ'); }
-                                } catch (err) { console.error(err); toast.error('เกิดข้อผิดพลาดในการรีเซ็ตรหัสผ่าน'); }
-                              })}
-                              title="รีเซ็ตรหัสผ่าน"
+                            {Array.from({ length: totalPages }, (_, i) => (
+                              <button
+                                key={i + 1}
+                                onClick={() => setTeacherCurrentPage(i + 1)}
+                                style={{
+                                  padding: '6px 10px',
+                                  backgroundColor: teacherCurrentPage === i + 1 ? '#667eea' : '#f0f0f0',
+                                  color: teacherCurrentPage === i + 1 ? 'white' : 'black',
+                                  borderRadius: '4px',
+                                  border: 'none',
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                {i + 1}
+                              </button>
+                            ))}
+                            <button
+                              onClick={() => setTeacherCurrentPage(p => Math.min(totalPages, p + 1))}
+                              disabled={teacherCurrentPage === totalPages}
+                              style={{ padding: '6px 10px', cursor: teacherCurrentPage === totalPages ? 'not-allowed' : 'pointer', opacity: teacherCurrentPage === totalPages ? 0.5 : 1 }}
                             >
-                              🔄 รีเซ็ต
+                              ถัดไป →
                             </button>
-                            {teacher.is_active ? (
-                              <button 
-                                className="admin-btn-small admin-btn-secondary" 
-                                onClick={() => openConfirmModal('ปิดใช้งานผู้ใช้', `ต้องการปิดใช้งาน "${teacher.full_name || teacher.username}" ใช่หรือไม่?`, async () => {
-                                  await deactivateUser(teacher.id, teacher.full_name || teacher.username);
-                                })}
-                                title="ปิดใช้งานผู้ใช้"
-                              >
-                                🚫 ปิดใช้งาน
-                              </button>
-                            ) : (
-                              <button 
-                                className="admin-btn-small admin-btn-success" 
-                                onClick={() => openConfirmModal('เปิดใช้งานผู้ใช้', `ต้องการเปิดใช้งาน "${teacher.full_name || teacher.username}" ใช่หรือไม่?`, async () => {
-                                  await activateUser(teacher.id, teacher.full_name || teacher.username);
-                                })}
-                                title="เปิดใช้งานผู้ใช้"
-                              >
-                                ✅ เปิดใช้งาน
-                              </button>
-                            )}
-                            {!teacher.is_active && deletionStatuses[teacher.id] && deletionStatuses[teacher.id].can_delete && (
-                              <button 
-                                className="admin-btn-small admin-btn-danger" 
-                                onClick={() => openConfirmModal('ลบผู้ใช้', `⚠️ คำเตือน: การลบผู้ใช้จะไม่สามารถกู้คืนได้!\n\nต้องการลบ "${teacher.full_name || teacher.username}" ใช่หรือไม่?\n\nเกณฑ์การลบ:\n- ผู้ใช้ต้องถูกปิดใช้งานแล้ว\n- ครูต้องไม่มีรายวิชาที่ยังใช้งาน\n- นักเรียนต้องไม่มีการลงทะเบียนรายวิชา`, async () => {
-                                  await deleteUser(teacher.id, teacher.full_name || teacher.username);
-                                })}
-                                title="ลบผู้ใช้ (เฉพาะที่ปิดใช้งานแล้ว)"
-                              >
-                                🗑️ ลบ
-                              </button>
-                            )}
+                            <span style={{ marginLeft: '1rem', color: '#666' }}>หน้า {teacherCurrentPage} / {totalPages} ({filteredTeachers.length} คน)</span>
                           </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
 
+                {/* ===== Students Section ===== */}
                 <div className="user-section">
                   <h3><span className="card-icon">👨‍🎓</span> นักเรียน ({students.length} คน)</h3>
-                  {students.length === 0 && !loadingUsers ? (
+
+                  {/* Search, Filter */}
+                  <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
+                    <input
+                      type="text"
+                      placeholder="🔍 ค้นหาชื่อ หรือ email"
+                      value={studentSearchTermUsers}
+                      onChange={(e) => {
+                        setStudentSearchTermUsers(e.target.value);
+                        setStudentCurrentPage(1);
+                      }}
+                      style={{
+                        flex: 1,
+                        minWidth: '200px',
+                        padding: '10px 12px',
+                        borderRadius: '8px',
+                        border: '1px solid #ddd',
+                        fontSize: '0.95rem'
+                      }}
+                    />
+                    <select
+                      value={studentStatusFilter}
+                      onChange={(e) => {
+                        setStudentStatusFilter(e.target.value);
+                        setStudentCurrentPage(1);
+                      }}
+                      style={{
+                        padding: '10px 12px',
+                        borderRadius: '8px',
+                        border: '1px solid #ddd',
+                        fontSize: '0.95rem',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <option value="all">📊 ทั้งหมด</option>
+                      <option value="active">✅ ใช้งาน</option>
+                      <option value="inactive">🚫 ปิดใช้งาน</option>
+                    </select>
+                  </div>
+
+                  {students.length === 0 ? (
                     <div className="empty-state">
                       <div className="empty-icon">👨‍🎓</div>
                       <div className="empty-text">ยังไม่มีนักเรียน</div>
                       <div className="empty-subtitle">เริ่มต้นโดยการเพิ่มนักเรียนใหม่</div>
                     </div>
-                  ) : (
-                    <ul className="user-list">
-                      {students.map(student => (
-                        <li key={student.id} className="user-item">
-                          <div className="user-info">
-                            <div className="user-name">
-                              👤 {student.full_name || student.username}
-                              {!student.is_active && <span style={{ color: 'red', fontSize: '12px', marginLeft: '8px' }}>(ปิดใช้งาน)</span>}
-                              {deletionStatuses[student.id] && (
-                                <span style={{ 
-                                  color: deletionStatuses[student.id].can_delete ? 'green' : 'orange', 
-                                  fontSize: '12px', 
-                                  marginLeft: '8px',
-                                  fontWeight: 'bold'
-                                }}>
-                                  {deletionStatuses[student.id].can_delete ? '✅ พร้อมลบ' : '⚠️ ยังลบไม่ได้'}
-                                </span>
-                              )}
-                            </div>
-                            <div className="user-email">📧 {student.email}</div>
-                            {deletionStatuses[student.id] && !deletionStatuses[student.id].can_delete && (
-                              <div className="deletion-reasons" style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
-                                {deletionStatuses[student.id].reasons.map((reason, idx) => (
-                                  <div key={idx}>• {reason}</div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                          <div className="user-actions">
-                            <button 
-                              className="admin-btn-small admin-btn-warning" 
-                              onClick={() => openConfirmModal('รีเซ็ตรหัสผ่าน', `ต้องการรีเซ็ตรหัสผ่านของ "${student.full_name || student.username}" ใช่หรือไม่?`, async () => {
-                                const token = localStorage.getItem('token');
-                                try {
-                                  const res = await fetch(`${API_BASE_URL}/users/${student.id}/admin_reset`, { method:'POST', headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
-                                  const data = await res.json();
-                                  if (!res.ok) { toast.error(data.detail || 'รีเซ็ตรหัสผ่านไม่สำเร็จ'); } else { openAlertModal('รหัสผ่านชั่วคราว', `รหัสผ่านชั่วคราวสำหรับ: ${student.username || student.email || ''}\n\n🔑 ${data.temp_password}`); toast.success('รีเซ็ตรหัสผ่านสำเร็จ'); }
-                                } catch (err) { console.error(err); toast.error('เกิดข้อผิดพลาดในการรีเซ็ตรหัสผ่าน'); }
-                              })}
-                              title="รีเซ็ตรหัสผ่าน"
+                  ) : (() => {
+                    const filteredStudents = students.filter(s => {
+                      const matchSearch = !studentSearchTermUsers ||
+                        (s.full_name && s.full_name.toLowerCase().includes(studentSearchTermUsers.toLowerCase())) ||
+                        (s.username && s.username.toLowerCase().includes(studentSearchTermUsers.toLowerCase())) ||
+                        (s.email && s.email.toLowerCase().includes(studentSearchTermUsers.toLowerCase()));
+                      const matchStatus = studentStatusFilter === 'all' ||
+                        (studentStatusFilter === 'active' && s.is_active) ||
+                        (studentStatusFilter === 'inactive' && !s.is_active);
+                      return matchSearch && matchStatus;
+                    });
+
+                    const totalPages = Math.ceil(filteredStudents.length / ITEMS_PER_PAGE);
+                    const startIdx = (studentCurrentPage - 1) * ITEMS_PER_PAGE;
+                    const paginatedStudents = filteredStudents.slice(startIdx, startIdx + ITEMS_PER_PAGE);
+
+                    return (
+                      <>
+                        <div style={{ overflowX: 'auto', marginBottom: '1.5rem' }}>
+                          <table className="admin-table" style={{ minWidth: '100%', fontSize: '0.95rem' }}>
+                            <thead>
+                              <tr>
+                                <th>ชื่อ</th>
+                                <th>Email</th>
+                                <th>Username</th>
+                                <th style={{ textAlign: 'center' }}>สถานะ</th>
+                                <th style={{ width: '260px' }}>การจัดการ</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {paginatedStudents.map(student => (
+                                <tr key={student.id}>
+                                  <td><strong>{student.full_name || student.username}</strong></td>
+                                  <td>{student.email}</td>
+                                  <td style={{ color: '#666' }}>{student.username}</td>
+                                  <td style={{ textAlign: 'center' }}>
+                                    {student.is_active ? <span style={{ color: 'green', fontWeight: 'bold' }}>✅ ใช้งาน</span> : <span style={{ color: 'red', fontWeight: 'bold' }}>🚫 ปิด</span>}
+                                  </td>
+                                  <td>
+                                    <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                                      <button 
+                                        className="admin-btn-small admin-btn-warning" 
+                                        onClick={() => openConfirmModal('รีเซ็ต', `รีเซ็ตรหัสผ่านของ "${student.full_name || student.username}"?`, async () => {
+                                          const token = localStorage.getItem('token');
+                                          try {
+                                            const res = await fetch(`${API_BASE_URL}/users/${student.id}/admin_reset`, { method:'POST', headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
+                                            const data = await res.json();
+                                            if (!res.ok) { toast.error(data.detail || 'รีเซ็ตไม่สำเร็จ'); } else { openAlertModal('รหัสผ่านชั่วคราว', `${student.username || student.email || ''}\n\n🔑 ${data.temp_password}`); toast.success('รีเซ็ตสำเร็จ'); }
+                                          } catch (err) { console.error(err); toast.error('เกิดข้อผิดพลาด'); }
+                                        })}
+                                        title="รีเซ็ตรหัสผ่าน"
+                                      >
+                                        🔄
+                                      </button>
+                                      {student.is_active ? (
+                                        <button 
+                                          className="admin-btn-small admin-btn-secondary" 
+                                          onClick={() => openConfirmModal('ปิดใช้งาน', `ปิดใช้งาน "${student.full_name || student.username}"?`, async () => { await deactivateUser(student.id, student.full_name || student.username); })}
+                                          title="ปิดใช้งาน"
+                                        >
+                                          🚫
+                                        </button>
+                                      ) : (
+                                        <button 
+                                          className="admin-btn-small admin-btn-success" 
+                                          onClick={() => openConfirmModal('เปิดใช้งาน', `เปิดใช้งาน "${student.full_name || student.username}"?`, async () => { await activateUser(student.id, student.full_name || student.username); })}
+                                          title="เปิดใช้งาน"
+                                        >
+                                          ✅
+                                        </button>
+                                      )}
+                                      {!student.is_active && deletionStatuses[student.id]?.can_delete && (
+                                        <button 
+                                          className="admin-btn-small admin-btn-danger" 
+                                          onClick={() => openConfirmModal('ลบ', `ลบ "${student.full_name || student.username}"?`, async () => { await deleteUser(student.id, student.full_name || student.username); })}
+                                          title="ลบผู้ใช้"
+                                        >
+                                          🗑️
+                                        </button>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {/* Pagination */}
+                        {totalPages > 1 && (
+                          <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem', alignItems: 'center', marginBottom: '2rem' }}>
+                            <button
+                              onClick={() => setStudentCurrentPage(p => Math.max(1, p - 1))}
+                              disabled={studentCurrentPage === 1}
+                              style={{ padding: '6px 10px', cursor: studentCurrentPage === 1 ? 'not-allowed' : 'pointer', opacity: studentCurrentPage === 1 ? 0.5 : 1 }}
                             >
-                              🔄 รีเซ็ต
+                              ← ก่อนหน้า
                             </button>
-                            {student.is_active ? (
-                              <button 
-                                className="admin-btn-small admin-btn-secondary" 
-                                onClick={() => openConfirmModal('ปิดใช้งานผู้ใช้', `ต้องการปิดใช้งาน "${student.full_name || student.username}" ใช่หรือไม่?`, async () => {
-                                  await deactivateUser(student.id, student.full_name || student.username);
-                                })}
-                                title="ปิดใช้งานผู้ใช้"
+                            {Array.from({ length: totalPages }, (_, i) => (
+                              <button
+                                key={i + 1}
+                                onClick={() => setStudentCurrentPage(i + 1)}
+                                style={{
+                                  padding: '6px 10px',
+                                  backgroundColor: studentCurrentPage === i + 1 ? '#667eea' : '#f0f0f0',
+                                  color: studentCurrentPage === i + 1 ? 'white' : 'black',
+                                  borderRadius: '4px',
+                                  border: 'none',
+                                  cursor: 'pointer'
+                                }}
                               >
-                                🚫 ปิดใช้งาน
+                                {i + 1}
                               </button>
-                            ) : (
-                              <button 
-                                className="admin-btn-small admin-btn-success" 
-                                onClick={() => openConfirmModal('เปิดใช้งานผู้ใช้', `ต้องการเปิดใช้งาน "${student.full_name || student.username}" ใช่หรือไม่?`, async () => {
-                                  await activateUser(student.id, student.full_name || student.username);
-                                })}
-                                title="เปิดใช้งานผู้ใช้"
-                              >
-                                ✅ เปิดใช้งาน
-                              </button>
-                            )}
-                            {!student.is_active && deletionStatuses[student.id] && deletionStatuses[student.id].can_delete && (
-                              <button 
-                                className="admin-btn-small admin-btn-danger" 
-                                onClick={() => openConfirmModal('ลบผู้ใช้', `⚠️ คำเตือน: การลบผู้ใช้จะไม่สามารถกู้คืนได้!\n\nต้องการลบ "${student.full_name || student.username}" ใช่หรือไม่?\n\nเกณฑ์การลบ:\n- ผู้ใช้ต้องถูกปิดใช้งานแล้ว\n- ครูต้องไม่มีรายวิชาที่ยังใช้งาน\n- นักเรียนต้องไม่มีการลงทะเบียนรายวิชา`, async () => {
-                                  await deleteUser(student.id, student.full_name || student.username);
-                                })}
-                                title="ลบผู้ใช้ (เฉพาะที่ปิดใช้งานแล้ว)"
-                              >
-                                🗑️ ลบ
-                              </button>
-                            )}
+                            ))}
+                            <button
+                              onClick={() => setStudentCurrentPage(p => Math.min(totalPages, p + 1))}
+                              disabled={studentCurrentPage === totalPages}
+                              style={{ padding: '6px 10px', cursor: studentCurrentPage === totalPages ? 'not-allowed' : 'pointer', opacity: studentCurrentPage === totalPages ? 0.5 : 1 }}
+                            >
+                              ถัดไป →
+                            </button>
+                            <span style={{ marginLeft: '1rem', color: '#666' }}>หน้า {studentCurrentPage} / {totalPages} ({filteredStudents.length} คน)</span>
                           </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
 
-                <div className="bulk-upload-section">
-                  <label className="bulk-upload-label">หรืออัปโหลดผู้ใช้จำนวนมาก (.xlsx)</label>
+                <div className="bulk-upload-section" style={{ marginTop: '3rem', paddingTop: '2rem', borderTop: '2px solid #e5e7eb' }}>
+                  <h3 style={{ marginBottom: '1rem' }}>📤 หรืออัปโหลดผู้ใช้จำนวนมาก (.xlsx)</h3>
                   <div className="upload-controls">
                     <div 
                       className={`file-upload-area ${dragOver ? 'drag-over' : ''} ${uploadFile ? 'has-file' : ''}`}
@@ -1884,6 +2368,99 @@ function AdminPage() {
                       📋 ดาวน์โหลดเทมเพลต
                     </button>
                   </div>
+                </div>
+
+                {/* Password Reset Requests Section */}
+                <div className="password-reset-section" style={{ marginTop: '3rem', paddingTop: '2rem', borderTop: '2px solid #e5e7eb' }}>
+                  <h3 style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span>🔐</span> คำขอรีเซ็ตรหัสผ่าน
+                    {passwordResetRequests.length > 0 && (
+                      <span style={{ 
+                        backgroundColor: '#ef4444', 
+                        color: 'white', 
+                        padding: '2px 8px', 
+                        borderRadius: '12px', 
+                        fontSize: '0.85rem' 
+                      }}>
+                        {passwordResetRequests.length}
+                      </span>
+                    )}
+                  </h3>
+                  
+                  {loadingResetRequests ? (
+                    <div style={{ padding: '1rem', textAlign: 'center', color: '#666' }}>
+                      ⏳ กำลังโหลด...
+                    </div>
+                  ) : passwordResetRequests.length === 0 ? (
+                    <div style={{ padding: '1.5rem', textAlign: 'center', backgroundColor: '#f0fdf4', borderRadius: '12px', border: '1px solid #86efac' }}>
+                      <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>✅</div>
+                      <div style={{ color: '#166534' }}>ไม่มีคำขอรีเซ็ตรหัสผ่านที่รอดำเนินการ</div>
+                    </div>
+                  ) : (
+                    <div style={{ overflowX: 'auto' }}>
+                      <table className="admin-table" style={{ minWidth: '100%', fontSize: '0.95rem' }}>
+                        <thead>
+                          <tr>
+                            <th>ชื่อผู้ใช้</th>
+                            <th>ชื่อ-นามสกุล</th>
+                            <th>Email</th>
+                            <th>บทบาท</th>
+                            <th>วันที่ขอ</th>
+                            <th style={{ width: '200px' }}>การจัดการ</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {passwordResetRequests.map(req => (
+                            <tr key={req.id}>
+                              <td><strong>{req.username}</strong></td>
+                              <td>{req.full_name || '-'}</td>
+                              <td>{req.email || '-'}</td>
+                              <td>
+                                <span style={{ 
+                                  padding: '2px 8px', 
+                                  borderRadius: '12px',
+                                  fontSize: '0.85rem',
+                                  backgroundColor: req.role === 'teacher' ? '#dbeafe' : '#fef3c7',
+                                  color: req.role === 'teacher' ? '#1e40af' : '#92400e'
+                                }}>
+                                  {req.role === 'teacher' ? '👨‍🏫 ครู' : '👨‍🎓 นักเรียน'}
+                                </span>
+                              </td>
+                              <td style={{ color: '#666' }}>
+                                {new Date(req.created_at).toLocaleDateString('th-TH', { 
+                                  day: 'numeric', month: 'short', year: 'numeric', 
+                                  hour: '2-digit', minute: '2-digit' 
+                                })}
+                              </td>
+                              <td>
+                                <div style={{ display: 'flex', gap: '0.4rem' }}>
+                                  <button 
+                                    className="admin-btn-small admin-btn-success" 
+                                    onClick={() => {
+                                      setSelectedResetRequest(req);
+                                      setShowResetPasswordModal(true);
+                                    }}
+                                    title="อนุมัติและตั้งรหัสผ่านใหม่"
+                                  >
+                                    ✅ อนุมัติ
+                                  </button>
+                                  <button 
+                                    className="admin-btn-small admin-btn-danger" 
+                                    onClick={() => openConfirmModal('ปฏิเสธ', `ปฏิเสธคำขอรีเซ็ตรหัสผ่านของ "${req.full_name || req.username}"?`, async () => {
+                                      await rejectPasswordReset(req.id);
+                                    })}
+                                    title="ปฏิเสธคำขอ"
+                                  >
+                                    ❌ ปฏิเสธ
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -2028,51 +2605,25 @@ function AdminPage() {
               {/* คำอธิบาย */}
               <div style={{ marginBottom: '2rem', padding: '1.5rem', backgroundColor: '#f3e5f5', borderRadius: '12px', border: '1px solid #ce93d8' }}>
                 <h4 style={{ marginTop: 0, marginBottom: '0.5rem', color: '#7b1fa2' }}>📋 ประเภทการเลื่อนชั้น</h4>
-                <ul style={{ margin: 0, paddingLeft: '1.5rem', color: '#4a148c' }}>
-                  <li><strong>เลื่อนกลางปี (เทอม 1 → เทอม 2)</strong> - สร้างชั้นเรียนใหม่ในเทอม 2 โดยดึงคะแนนเทอม 1 มาด้วย</li>
-                  <li><strong>เลื่อนปลายปี</strong> - สร้างชั้นเรียนระดับถัดไป (เช่น ป.1 → ป.2) ในปีการศึกษาใหม่</li>
+                <ul style={{ margin: 0, paddingLeft: '1.5rem', color: '#4a148c', lineHeight: '1.8' }}>
+                  <li><strong>📅 เลื่อนเทอมเท่านั้น</strong> - เลื่อนนักเรียนจากเทอม 1 ไปเทอม 2 (ไม่เปลี่ยนชั้นปีและปีการศึกษา)</li>
+                  <li><strong>🏫 เลื่อนทั้งชั้น (ปลายปี)</strong> - เลื่อนนักเรียนทั้งชั้นไปปีการศึกษาใหม่ + ชั้นปีใหม่</li>
+                  <li><strong>👥 เลื่อนรายบุคคล</strong> - เลือกนักเรียนเฉพาะคน มี 3 ตัวเลือก:
+                    <ul style={{ marginTop: '0.25rem', color: '#6a1b9a' }}>
+                      <li>เลื่อนเทอม (เทอม 1 → เทอม 2)</li>
+                      <li>เลื่อนเทอม + ชั้น (กลางปี ขึ้นชั้น)</li>
+                      <li>เลื่อนปลายปี (ปีใหม่ + ชั้นใหม่)</li>
+                    </ul>
+                  </li>
                 </ul>
-              </div>
-
-              {/* เลือกประเภทการเลื่อนชั้น */}
-              <div style={{ marginBottom: '2rem', padding: '1.5rem', backgroundColor: '#f5f5f5', borderRadius: '12px' }}>
-                <h4 style={{ marginTop: 0, marginBottom: '1rem' }}>เลือกประเภทการเลื่อนชั้น</h4>
-                <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
-                    <input 
-                      type="radio" 
-                      name="promotionTypeTab" 
-                      value="mid_term"
-                      checked={classroomPromotionType === 'mid_term'}
-                      onChange={e => setClassroomPromotionType(e.target.value)}
-                    />
-                    <span>🔄 เลื่อนกลางปี (เทอม 1 → เทอม 2)</span>
-                  </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
-                    <input 
-                      type="radio" 
-                      name="promotionTypeTab" 
-                      value="end_of_year"
-                      checked={classroomPromotionType === 'end_of_year'}
-                      onChange={e => setClassroomPromotionType(e.target.value)}
-                    />
-                    <span>📈 เลื่อนปลายปี (ขึ้นชั้นใหม่)</span>
-                  </label>
-                </div>
               </div>
 
               {/* เลือกชั้นเรียนที่จะเลื่อน */}
               <h3 style={{ marginBottom: '1rem', color: '#334155' }}>📚 เลือกชั้นเรียนที่ต้องการเลื่อน</h3>
-              {classrooms.filter(c => 
-                classroomPromotionType === 'mid_term' ? c.semester === 1 : true
-              ).length === 0 ? (
+              {classrooms.length === 0 ? (
                 <div className="empty-state">
                   <div className="empty-icon">🏫</div>
-                  <div className="empty-text">
-                    {classroomPromotionType === 'mid_term' 
-                      ? 'ไม่พบชั้นเรียนเทอม 1 ที่สามารถเลื่อนได้' 
-                      : 'ยังไม่มีชั้นเรียน'}
-                  </div>
+                  <div className="empty-text">ยังไม่มีชั้นเรียน</div>
                 </div>
               ) : (
                 <div style={{ overflowX: 'auto' }}>
@@ -2088,9 +2639,7 @@ function AdminPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {classrooms
-                        .filter(c => classroomPromotionType === 'mid_term' ? c.semester === 1 : true)
-                        .map(classroom => (
+                      {classrooms.map(classroom => (
                         <tr key={classroom.id}>
                           <td>{classroom.name}</td>
                           <td>{classroom.grade_level}</td>
@@ -2105,9 +2654,26 @@ function AdminPage() {
                                 setShowClassroomModal(true);
                                 setClassroomStep('promote');
                               }}
-                              title={classroomPromotionType === 'mid_term' ? 'เลื่อนไปเทอม 2' : 'เลื่อนชั้นปลายปี'}
+                              title="เลื่อนนักเรียนทั้งชั้น (ปลายปี)"
                             >
-                              ⬆️ {classroomPromotionType === 'mid_term' ? 'เลื่อนไปเทอม 2' : 'เลื่อนชั้น'}
+                              🏫 เลื่อนทั้งชั้น
+                            </button>
+                            <button 
+                              className="admin-btn-small admin-btn-warning"
+                              onClick={() => {
+                                setSelectedClassroom(classroom);
+                                promoteClassroomSemesterOnly();
+                              }}
+                              title="เลื่อนเทอมเท่านั้น (เทอม 1 → เทอม 2)"
+                            >
+                              📅 เลื่อนเทอม
+                            </button>
+                            <button
+                              className="admin-btn-small admin-btn-info"
+                              onClick={() => openPromoteStudentModal(classroom)}
+                              title="เลื่อนนักเรียนรายบุคคล (เลือก 3 ประเภท)"
+                            >
+                              👥 รายบุคคล
                             </button>
                           </td>
                         </tr>
@@ -2406,6 +2972,81 @@ function AdminPage() {
         onClose={() => setShowAlertModal(false)}
       />
 
+      {/* Password Reset Approval Modal */}
+      {showResetPasswordModal && selectedResetRequest && (
+        <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
+          <div className="modal-content" style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '12px', maxWidth: '450px', width: '90%', boxShadow: '0 10px 40px rgba(0,0,0,0.3)' }}>
+            <h3 style={{ marginTop: 0, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span>🔐</span> อนุมัติรีเซ็ตรหัสผ่าน
+            </h3>
+            <div style={{ marginBottom: '1.5rem', padding: '1rem', backgroundColor: '#f3f4f6', borderRadius: '8px' }}>
+              <div><strong>ชื่อผู้ใช้:</strong> {selectedResetRequest.username}</div>
+              <div><strong>ชื่อ:</strong> {selectedResetRequest.full_name || '-'}</div>
+              <div><strong>บทบาท:</strong> {selectedResetRequest.role === 'teacher' ? 'ครู' : 'นักเรียน'}</div>
+            </div>
+            <div style={{ marginBottom: '1.5rem' }}>
+              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600' }}>รหัสผ่านใหม่</label>
+              <input
+                type="text"
+                value={newPasswordForReset}
+                onChange={(e) => setNewPasswordForReset(e.target.value)}
+                placeholder="กรอกรหัสผ่านใหม่"
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid #ddd',
+                  fontSize: '1rem'
+                }}
+              />
+              <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: '#666' }}>
+                💡 แนะนำ: ใช้รหัสผ่านที่ง่ายต่อการจำ และแจ้งให้ผู้ใช้เปลี่ยนรหัสผ่านหลังเข้าสู่ระบบ
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => {
+                  setShowResetPasswordModal(false);
+                  setSelectedResetRequest(null);
+                  setNewPasswordForReset('');
+                }}
+                style={{
+                  padding: '10px 20px',
+                  borderRadius: '8px',
+                  border: '1px solid #ddd',
+                  backgroundColor: '#f3f4f6',
+                  cursor: 'pointer',
+                  fontWeight: '500'
+                }}
+              >
+                ยกเลิก
+              </button>
+              <button
+                onClick={() => {
+                  if (!newPasswordForReset.trim()) {
+                    toast.error('กรุณากรอกรหัสผ่านใหม่');
+                    return;
+                  }
+                  approvePasswordReset(selectedResetRequest.id, selectedResetRequest.user_id, newPasswordForReset);
+                }}
+                disabled={!newPasswordForReset.trim()}
+                style={{
+                  padding: '10px 20px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  backgroundColor: newPasswordForReset.trim() ? '#22c55e' : '#9ca3af',
+                  color: 'white',
+                  cursor: newPasswordForReset.trim() ? 'pointer' : 'not-allowed',
+                  fontWeight: '500'
+                }}
+              >
+                ✅ อนุมัติ
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Schedule Modal */}
       {showScheduleModal && (
         <div className="schedule-modal-overlay">
@@ -2527,15 +3168,31 @@ function AdminPage() {
         setShowClassroomModal(false);
         setClassroomStep('select');
         setSelectedClassroom(null);
-        setClassroomPromotionType('mid_term');
+        setClassroomPromotionType('end_of_year');
         setClassroomPromotionNewGrade('');
       }}
+    />
+
+    {/* Promote Individual Students Modal */}
+    <PromoteStudentModal
+      isOpen={showPromoteStudentModal}
+      classroom={classroomForStudentPromotion}
+      students={classroomStudents}
+      onPromoteStudents={promoteIndividualStudents}
+      onClose={() => {
+        setShowPromoteStudentModal(false);
+        setClassroomForStudentPromotion(null);
+        setClassroomStudents([]);
+      }}
+      isPromoting={promotingIndividualStudents}
+      getClassroomGradeLevels={getClassroomGradeLevels}
     />
 
     {/* Logo Upload Modal */}
     <LogoUploadModal
       isOpen={showLogoUploadModal}
       schoolId={currentUser?.school_id}
+      school={schoolData}
       onClose={() => setShowLogoUploadModal(false)}
       onSuccess={(school) => {
         setSchoolData(school);

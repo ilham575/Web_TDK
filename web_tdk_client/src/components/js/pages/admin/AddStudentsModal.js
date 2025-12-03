@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8000';
+
 const AddStudentsModal = ({
   isOpen,
   classroomStep,
@@ -14,20 +16,83 @@ const AddStudentsModal = ({
   const [selectedStudentIds, setSelectedStudentIds] = useState(new Set());
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredStudents, setFilteredStudents] = useState([]);
+  const [availableStudents, setAvailableStudents] = useState([]);
+  const [loadingAvailable, setLoadingAvailable] = useState(false);
+  const [classroomStudents, setClassroomStudents] = useState([]);
+  const [loadingClassroomStudents, setLoadingClassroomStudents] = useState(false);
+
+  // ดึงข้อมูลนักเรียนที่สามารถเพิ่มได้เมื่อ modal เปิด
+  useEffect(() => {
+    console.log('[AddStudentsModal] isOpen:', isOpen, 'classroomStep:', classroomStep, 'selectedClassroom:', selectedClassroom);
+    
+    if (isOpen && selectedClassroom && classroomStep === 'add_students') {
+      console.log('[AddStudentsModal] Fetching available students for classroom:', selectedClassroom.id);
+      setLoadingAvailable(true);
+      const token = localStorage.getItem('token');
+      fetch(`${API_BASE_URL}/classrooms/${selectedClassroom.id}/available-students`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        }
+      })
+        .then(res => res.json())
+        .then(data => {
+          console.log('[AddStudentsModal] Available students:', data);
+          if (Array.isArray(data)) {
+            setAvailableStudents(data);
+          }
+        })
+        .catch(err => {
+          console.error('Error fetching available students:', err);
+          // Fallback: use all students from props
+          setAvailableStudents(students);
+        })
+        .finally(() => setLoadingAvailable(false));
+    }
+    
+    // Fetch classroom students when in view mode
+    if (isOpen && selectedClassroom && classroomStep === 'view_students') {
+      console.log('[AddStudentsModal] Fetching classroom students for classroom:', selectedClassroom.id);
+      setLoadingClassroomStudents(true);
+      const token = localStorage.getItem('token');
+      fetch(`${API_BASE_URL}/classrooms/${selectedClassroom.id}/students`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        }
+      })
+        .then(res => res.json())
+        .then(data => {
+          console.log('[AddStudentsModal] Classroom students response:', data);
+          if (Array.isArray(data)) {
+            setClassroomStudents(data);
+            console.log('[AddStudentsModal] Classroom students set to:', data);
+          }
+        })
+        .catch(err => {
+          console.error('Error fetching classroom students:', err);
+          // Fallback: empty list
+          setClassroomStudents([]);
+        })
+        .finally(() => setLoadingClassroomStudents(false));
+    }
+  }, [isOpen, selectedClassroom, classroomStep]);
 
   useEffect(() => {
+    const sourceStudents = classroomStep === 'add_students' ? availableStudents : classroomStudents;
+    console.log('[AddStudentsModal] useEffect filter: classroomStep:', classroomStep, 'sourceStudents:', sourceStudents, 'searchTerm:', searchTerm);
+    
     if (searchTerm.trim() === '') {
-      setFilteredStudents(students);
+      setFilteredStudents(sourceStudents);
+      console.log('[AddStudentsModal] No search term, using all sourceStudents:', sourceStudents);
     } else {
-      setFilteredStudents(
-        students.filter(s =>
-          (s.full_name && s.full_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-          (s.username && s.username.toLowerCase().includes(searchTerm.toLowerCase())) ||
-          (s.email && s.email.toLowerCase().includes(searchTerm.toLowerCase()))
-        )
+      const filtered = sourceStudents.filter(s =>
+        (s.full_name && s.full_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (s.username && s.username.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (s.email && s.email.toLowerCase().includes(searchTerm.toLowerCase()))
       );
+      setFilteredStudents(filtered);
+      console.log('[AddStudentsModal] Filtered students:', filtered);
     }
-  }, [searchTerm, students]);
+  }, [searchTerm, availableStudents, classroomStudents, classroomStep]);
 
   // Reset form เมื่อ modal ปิด
   useEffect(() => {
@@ -36,6 +101,17 @@ const AddStudentsModal = ({
       setSearchTerm('');
     }
   }, [isOpen]);
+
+  // เมื่อ modal เปิดหรือเปลี่ยน selectedClassroom/classroomStep ให้ล้างข้อมูลเก่า
+  useEffect(() => {
+    if (isOpen) {
+      setAvailableStudents([]);
+      setClassroomStudents([]);
+      setFilteredStudents([]);
+      setSelectedStudentIds(new Set());
+      setSearchTerm('');
+    }
+  }, [isOpen, selectedClassroom, classroomStep]);
 
   const handleAddStudents = async () => {
     await onAddStudents(Array.from(selectedStudentIds));
@@ -67,76 +143,95 @@ const AddStudentsModal = ({
 
         {/* Body */}
         <div className="admin-modal-body">
-          {/* Search box */}
-          <div style={{ marginBottom: '1.5rem' }}>
-            <input 
-              type="text"
-              placeholder="🔍 ค้นหาชื่อ, username, หรือ email"
-              className="admin-form-input"
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              style={{ width: '100%' }}
-            />
-          </div>
-
-          {/* Students list */}
-          <div style={{ maxHeight: '400px', overflowY: 'auto', border: '1px solid #e0e0e0', borderRadius: '4px' }}>
-            {filteredStudents.length === 0 ? (
-              <div style={{ padding: '2rem', textAlign: 'center', color: '#999' }}>
-                {students.length === 0 ? 'ไม่มีนักเรียนในระบบ' : 'ไม่พบผลการค้นหา'}
-              </div>
-            ) : (
-              <div>
-                {filteredStudents.map(student => (
-                  <div 
-                    key={student.id}
-                    style={{
-                      padding: '1rem',
-                      borderBottom: '1px solid #f0f0f0',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '1rem',
-                      backgroundColor: selectedStudentIds.has(student.id) ? '#f0f7ff' : 'white'
-                    }}
-                  >
-                    <input 
-                      type="checkbox"
-                      checked={selectedStudentIds.has(student.id)}
-                      onChange={e => {
-                        if (e.target.checked) {
-                          setSelectedStudentIds(new Set([...selectedStudentIds, student.id]));
-                        } else {
-                          const newSet = new Set(selectedStudentIds);
-                          newSet.delete(student.id);
-                          setSelectedStudentIds(newSet);
-                        }
-                      }}
-                    />
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: '600', fontSize: '14px' }}>
-                        {student.full_name || student.username}
-                      </div>
-                      <div style={{ fontSize: '12px', color: '#666' }}>
-                        📧 {student.email}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Selection summary */}
-          {selectedStudentIds.size > 0 && (
+          {/* Loading indicator */}
+          {((classroomStep === 'add_students' && loadingAvailable) || (classroomStep === 'view_students' && loadingClassroomStudents)) && (
             <div style={{
-              marginTop: '1rem',
-              padding: '1rem',
-              backgroundColor: '#e8f5e9',
-              borderRadius: '4px',
-              color: '#2e7d32'
+              padding: '2rem',
+              textAlign: 'center',
+              color: '#666'
             }}>
-              ✓ เลือกแล้ว {selectedStudentIds.size} นักเรียน
+              ⏳ กำลังโหลดรายชื่อนักเรียน...
             </div>
+          )}
+
+          {(!((classroomStep === 'add_students' && loadingAvailable) || (classroomStep === 'view_students' && loadingClassroomStudents))) && (
+            <>
+              {/* Search box */}
+              <div style={{ marginBottom: '1.5rem' }}>
+                <input 
+                  type="text"
+                  placeholder="🔍 ค้นหาชื่อ, username, หรือ email"
+                  className="admin-form-input"
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  style={{ width: '100%' }}
+                />
+              </div>
+
+              {/* Students list */}
+              <div style={{ maxHeight: '400px', overflowY: 'auto', border: '1px solid #e0e0e0', borderRadius: '4px' }}>
+                {filteredStudents.length === 0 ? (
+                  <div style={{ padding: '2rem', textAlign: 'center', color: '#999' }}>
+                    {(classroomStep === 'add_students' ? availableStudents.length === 0 : classroomStudents.length === 0)
+                      ? (classroomStep === 'add_students' ? '✓ นักเรียนทั้งหมดลงทะเบียนแล้ว' : 'ไม่มีนักเรียนในชั้นเรียนนี้')
+                      : 'ไม่พบผลการค้นหา'}
+                  </div>
+                ) : (
+                  <div>
+                    {filteredStudents.map(student => (
+                      <div 
+                        key={student.id}
+                        style={{
+                          padding: '1rem',
+                          borderBottom: '1px solid #f0f0f0',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '1rem',
+                          backgroundColor: selectedStudentIds.has(student.id) ? '#f0f7ff' : 'white'
+                        }}
+                      >
+                        { !isViewMode && (
+                          <input 
+                            type="checkbox"
+                            checked={selectedStudentIds.has(student.id)}
+                            onChange={e => {
+                              if (e.target.checked) {
+                                setSelectedStudentIds(new Set([...selectedStudentIds, student.id]));
+                              } else {
+                                const newSet = new Set(selectedStudentIds);
+                                newSet.delete(student.id);
+                                setSelectedStudentIds(newSet);
+                              }
+                            }}
+                          />
+                        )}
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: '600', fontSize: '14px' }}>
+                            {student.full_name || student.username}
+                          </div>
+                          <div style={{ fontSize: '12px', color: '#666' }}>
+                            📧 {student.email}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Selection summary */}
+              {selectedStudentIds.size > 0 && (
+                <div style={{
+                  marginTop: '1rem',
+                  padding: '1rem',
+                  backgroundColor: '#e8f5e9',
+                  borderRadius: '4px',
+                  color: '#2e7d32'
+                }}>
+                  ✓ เลือกแล้ว {selectedStudentIds.size} นักเรียน
+                </div>
+              )}
+            </>
           )}
         </div>
 
@@ -145,18 +240,20 @@ const AddStudentsModal = ({
           <button 
             type="button" 
             className="admin-btn-secondary"
-            onClick={onBack}
+            onClick={onClose}
           >
-            ← ย้อนกลับ
+            ✕ ปิด
           </button>
-          <button 
-            type="button" 
-            className="admin-btn-primary"
-            onClick={handleAddStudents}
-            disabled={addingStudentsToClassroom || selectedStudentIds.size === 0}
-          >
-            {addingStudentsToClassroom ? 'กำลังเพิ่ม...' : `✓ เพิ่ม ${selectedStudentIds.size} นักเรียน`}
-          </button>
+          { !isViewMode && (
+            <button 
+              type="button" 
+              className="admin-btn-primary"
+              onClick={handleAddStudents}
+              disabled={addingStudentsToClassroom || selectedStudentIds.size === 0}
+            >
+              {addingStudentsToClassroom ? 'กำลังเพิ่ม...' : `✓ เพิ่ม ${selectedStudentIds.size} นักเรียน`}
+            </button>
+          )}
         </div>
       </div>
     </div>

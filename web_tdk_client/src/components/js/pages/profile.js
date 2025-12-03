@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import Loading from '../Loading';
+import ChangePasswordModal from '../ChangePasswordModal';
 import '../../css/pages/profile.css';
 import { API_BASE_URL } from '../../endpoints';
 
@@ -14,6 +15,7 @@ function ProfilePage() {
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState({});
   const [isSaving, setIsSaving] = useState(false);
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -316,6 +318,12 @@ function ProfilePage() {
                 ✏️ แก้ไข
               </button>
               <button 
+                className="profile-btn profile-btn-warning" 
+                onClick={() => setShowChangePasswordModal(true)}
+              >
+                🔐 เปลี่ยนรหัสผ่าน
+              </button>
+              <button 
                 className="profile-btn profile-btn-secondary" 
                 onClick={() => navigate(-1)}
               >
@@ -325,6 +333,10 @@ function ProfilePage() {
           )}
         </div>
       </div>
+      <ChangePasswordModal 
+        isOpen={showChangePasswordModal}
+        onClose={() => setShowChangePasswordModal(false)}
+      />
       <ToastContainer />
     </div>
   );

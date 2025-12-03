@@ -15,6 +15,8 @@ SECRET_KEY = "your_secret_key"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
+
+
 # สร้าง context สำหรับการเข้ารหัสรหัสผ่าน
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 
@@ -28,6 +30,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 # ฟังก์ชันสำหรับสร้าง JWT
 def create_access_token(data: dict, expires_delta: timedelta = None):
+    expires_delta = expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode = data.copy()
     if expires_delta:
         expire = datetime.utcnow() + expires_delta

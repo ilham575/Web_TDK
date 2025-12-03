@@ -54,6 +54,13 @@ function OwnerPage() {
   // Activities filter state
   const [selectedSchoolForActivities, setSelectedSchoolForActivities] = useState('all');
 
+  // Password reset requests state
+  const [passwordResetRequests, setPasswordResetRequests] = useState([]);
+  const [loadingResetRequests, setLoadingResetRequests] = useState(false);
+  const [newPasswordForReset, setNewPasswordForReset] = useState('');
+  const [selectedResetRequest, setSelectedResetRequest] = useState(null);
+  const [showResetPasswordModal, setShowResetPasswordModal] = useState(false);
+
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) { navigate('/signin'); return; }
@@ -90,6 +97,8 @@ function OwnerPage() {
       loadActivities();
     } else if (activeTab === 'admin_requests') {
       loadAdminRequests();
+    } else if (activeTab === 'password_reset_requests') {
+      fetchPasswordResetRequests();
     }
   }, [currentUser, activeTab]);
 
@@ -152,6 +161,75 @@ function OwnerPage() {
       toast.error('Failed to load admin requests');
     } finally {
       setLoadingRequests(false);
+    }
+  };
+
+  // Password Reset Request Functions
+  const fetchPasswordResetRequests = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    setLoadingResetRequests(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/users/password_reset_requests`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPasswordResetRequests(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch password reset requests', err);
+    } finally {
+      setLoadingResetRequests(false);
+    }
+  };
+
+  const approvePasswordReset = async (requestId, userId, newPassword) => {
+    const token = localStorage.getItem('token');
+    if (!token) { toast.error('กรุณาเข้าสู่ระบบ'); return; }
+    try {
+      const res = await fetch(`${API_BASE_URL}/users/password_reset_requests/${requestId}/approve`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ user_id: userId, new_password: newPassword })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.detail || 'อนุมัติไม่สำเร็จ');
+      } else {
+        toast.success(data.detail || 'อนุมัติเรียบร้อยแล้ว');
+        setShowResetPasswordModal(false);
+        setNewPasswordForReset('');
+        setSelectedResetRequest(null);
+        fetchPasswordResetRequests();
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('เกิดข้อผิดพลาด');
+    }
+  };
+
+  const rejectPasswordReset = async (requestId) => {
+    const token = localStorage.getItem('token');
+    if (!token) { toast.error('กรุณาเข้าสู่ระบบ'); return; }
+    try {
+      const res = await fetch(`${API_BASE_URL}/users/password_reset_requests/${requestId}/reject`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.detail || 'ปฏิเสธไม่สำเร็จ');
+      } else {
+        toast.success(data.detail || 'ปฏิเสธเรียบร้อยแล้ว');
+        fetchPasswordResetRequests();
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('เกิดข้อผิดพลาด');
     }
   };
 
@@ -384,6 +462,21 @@ function OwnerPage() {
         <button className={`tab-button ${activeTab === 'activities' ? 'active' : ''}`} onClick={() => setActiveTab('activities')}>กิจกรรมล่าสุด</button>
         <button className={`tab-button ${activeTab === 'create_admin' ? 'active' : ''}`} onClick={() => setActiveTab('create_admin')}>เพิ่มแอดมิน</button>
         <button className={`tab-button ${activeTab === 'admin_requests' ? 'active' : ''}`} onClick={() => setActiveTab('admin_requests')}>คำขอสร้างแอดมิน</button>
+        <button className={`tab-button ${activeTab === 'password_reset_requests' ? 'active' : ''}`} onClick={() => setActiveTab('password_reset_requests')}>
+          🔐 รีเซ็ตรหัสผ่าน
+          {passwordResetRequests.length > 0 && (
+            <span style={{ 
+              backgroundColor: '#ef4444', 
+              color: 'white', 
+              padding: '2px 6px', 
+              borderRadius: '10px', 
+              fontSize: '0.75rem',
+              marginLeft: '0.5rem'
+            }}>
+              {passwordResetRequests.length}
+            </span>
+          )}
+        </button>
       </div>
 
       <div className="tab-content">
@@ -462,7 +555,7 @@ function OwnerPage() {
                 <div className="filter-group">
                   <label className="filter-label">เลือกโรงเรียน</label>
                   <select
-                    className="owner-form-input filter-select"
+                    className="filter-select"
                     value={selectedSchoolForActivities}
                     onChange={e => setSelectedSchoolForActivities(e.target.value)}
                   >
@@ -583,11 +676,11 @@ function OwnerPage() {
             </div>
             <div className="card-content">
               <form onSubmit={handleCreateAdmin}>
-                <div className="owner-form-row">
-                  <div className="owner-form-group">
-                    <label className="owner-form-label">โรงเรียน</label>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="form-label">โรงเรียน</label>
                     <select
-                      className="owner-form-input"
+                      className="form-input"
                       value={selectedSchoolId}
                       onChange={e => setSelectedSchoolId(e.target.value)}
                       required
@@ -599,21 +692,21 @@ function OwnerPage() {
                     </select>
                   </div>
                 </div>
-                <div className="owner-form-row">
-                  <div className="owner-form-group">
-                    <label className="owner-form-label">Username</label>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="form-label">Username</label>
                     <input
-                      className="owner-form-input"
+                      className="form-input"
                       type="text"
                       value={newUsername}
                       onChange={e => setNewUsername(e.target.value)}
                       required
                     />
                   </div>
-                  <div className="owner-form-group">
-                    <label className="owner-form-label">Email</label>
+                  <div className="form-group">
+                    <label className="form-label">Email</label>
                     <input
-                      className="owner-form-input"
+                      className="form-input"
                       type="email"
                       value={newEmail}
                       onChange={e => setNewEmail(e.target.value)}
@@ -621,21 +714,21 @@ function OwnerPage() {
                     />
                   </div>
                 </div>
-                <div className="owner-form-row">
-                  <div className="owner-form-group">
-                    <label className="owner-form-label">ชื่อเต็ม</label>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="form-label">ชื่อเต็ม</label>
                     <input
-                      className="owner-form-input"
+                      className="form-input"
                       type="text"
                       value={newFullName}
                       onChange={e => setNewFullName(e.target.value)}
                       required
                     />
                   </div>
-                  <div className="owner-form-group">
-                    <label className="owner-form-label">รหัสผ่าน</label>
+                  <div className="form-group">
+                    <label className="form-label">รหัสผ่าน</label>
                     <input
-                      className="owner-form-input"
+                      className="form-input"
                       type="password"
                       value={newPassword}
                       onChange={e => setNewPassword(e.target.value)}
@@ -643,7 +736,7 @@ function OwnerPage() {
                     />
                   </div>
                 </div>
-                <div className="owner-form-actions">
+                <div className="form-actions">
                   <button type="submit" className="owner-btn-create-admin" disabled={creatingAdmin}>
                     {creatingAdmin ? 'กำลังสร้าง...' : '👨‍💼 สร้างแอดมิน'}
                   </button>
@@ -719,6 +812,80 @@ function OwnerPage() {
             </div>
           </div>
         )}
+
+        {activeTab === 'password_reset_requests' && (
+          <div className="content-card">
+            <div className="card-header">
+              <h2><span className="card-icon">🔐</span> คำขอรีเซ็ตรหัสผ่านจากแอดมิน</h2>
+            </div>
+            <div className="card-content">
+              {loadingResetRequests ? (
+                <Loading message="กำลังโหลดคำขอ..." />
+              ) : passwordResetRequests.length === 0 ? (
+                <div className="empty-state">
+                  <div className="empty-icon">✅</div>
+                  <div className="empty-text">ไม่มีคำขอรีเซ็ตรหัสผ่าน</div>
+                  <div className="empty-subtitle">คำขอใหม่จะปรากฏที่นี่เมื่อแอดมินลืมรหัสผ่าน</div>
+                </div>
+              ) : (
+                <div className="requests-list">
+                  {passwordResetRequests.map(request => (
+                    <div key={request.id} className="request-item">
+                      <div className="request-header">
+                        <div className="request-info">
+                          <h4>{request.full_name || request.username}</h4>
+                          <div className="request-meta">
+                            <span className="request-username">@{request.username}</span>
+                            <span className="request-email">{request.email || '-'}</span>
+                            <span className="request-role" style={{ 
+                              backgroundColor: '#dbeafe', 
+                              color: '#1e40af',
+                              padding: '2px 8px',
+                              borderRadius: '10px',
+                              fontSize: '0.8rem'
+                            }}>
+                              👨‍💼 แอดมิน
+                            </span>
+                          </div>
+                        </div>
+                        <div className="request-status status-pending">
+                          ⏳ รอดำเนินการ
+                        </div>
+                      </div>
+                      <div className="request-date">
+                        ขอเมื่อ: {new Date(request.created_at).toLocaleDateString('th-TH', { 
+                          day: 'numeric', month: 'short', year: 'numeric', 
+                          hour: '2-digit', minute: '2-digit' 
+                        })}
+                      </div>
+                      <div className="request-actions">
+                        <button 
+                          className="owner-btn-success" 
+                          onClick={() => {
+                            setSelectedResetRequest(request);
+                            setShowResetPasswordModal(true);
+                          }}
+                        >
+                          ✅ อนุมัติ
+                        </button>
+                        <button 
+                          className="owner-btn-danger" 
+                          onClick={() => openConfirmModal(
+                            'ปฏิเสธคำขอ',
+                            `คุณต้องการปฏิเสธคำขอรีเซ็ตรหัสผ่านของ ${request.full_name || request.username} ใช่หรือไม่?`,
+                            () => rejectPasswordReset(request.id)
+                          )}
+                        >
+                          ❌ ปฏิเสธ
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       <ConfirmModal
@@ -736,6 +903,81 @@ function OwnerPage() {
         onClose={() => setShowAlertModal(false)}
       />
 
+      {/* Password Reset Approval Modal */}
+      {showResetPasswordModal && selectedResetRequest && (
+        <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
+          <div className="modal-content" style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '12px', maxWidth: '450px', width: '90%', boxShadow: '0 10px 40px rgba(0,0,0,0.3)' }}>
+            <h3 style={{ marginTop: 0, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span>🔐</span> อนุมัติรีเซ็ตรหัสผ่าน
+            </h3>
+            <div style={{ marginBottom: '1.5rem', padding: '1rem', backgroundColor: '#f3f4f6', borderRadius: '8px' }}>
+              <div><strong>ชื่อผู้ใช้:</strong> {selectedResetRequest.username}</div>
+              <div><strong>ชื่อ:</strong> {selectedResetRequest.full_name || '-'}</div>
+              <div><strong>บทบาท:</strong> แอดมิน</div>
+            </div>
+            <div style={{ marginBottom: '1.5rem' }}>
+              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600' }}>รหัสผ่านใหม่</label>
+              <input
+                type="text"
+                value={newPasswordForReset}
+                onChange={(e) => setNewPasswordForReset(e.target.value)}
+                placeholder="กรอกรหัสผ่านใหม่"
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid #ddd',
+                  fontSize: '1rem'
+                }}
+              />
+              <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: '#666' }}>
+                💡 แนะนำ: ใช้รหัสผ่านที่ง่ายต่อการจำ และแจ้งให้แอดมินเปลี่ยนรหัสผ่านหลังเข้าสู่ระบบ
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => {
+                  setShowResetPasswordModal(false);
+                  setSelectedResetRequest(null);
+                  setNewPasswordForReset('');
+                }}
+                style={{
+                  padding: '10px 20px',
+                  borderRadius: '8px',
+                  border: '1px solid #ddd',
+                  backgroundColor: '#f3f4f6',
+                  cursor: 'pointer',
+                  fontWeight: '500'
+                }}
+              >
+                ยกเลิก
+              </button>
+              <button
+                onClick={() => {
+                  if (!newPasswordForReset.trim()) {
+                    toast.error('กรุณากรอกรหัสผ่านใหม่');
+                    return;
+                  }
+                  approvePasswordReset(selectedResetRequest.id, selectedResetRequest.user_id, newPasswordForReset);
+                }}
+                disabled={!newPasswordForReset.trim()}
+                style={{
+                  padding: '10px 20px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  backgroundColor: newPasswordForReset.trim() ? '#22c55e' : '#9ca3af',
+                  color: 'white',
+                  cursor: newPasswordForReset.trim() ? 'pointer' : 'not-allowed',
+                  fontWeight: '500'
+                }}
+              >
+                ✅ อนุมัติ
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Create School Modal */}
       {showCreateSchoolModal && (
         <div className="modal-overlay">
@@ -746,10 +988,10 @@ function OwnerPage() {
             </div>
             <form onSubmit={handleCreateSchool}>
               <div className="modal-body">
-                <div className="owner-form-group full-width">
-                  <label className="owner-form-label">ชื่อโรงเรียน</label>
+                <div className="form-group full-width">
+                  <label className="form-label">ชื่อโรงเรียน</label>
                   <input
-                    className="owner-form-input"
+                    className="form-input"
                     type="text"
                     value={newSchoolName}
                     onChange={e => setNewSchoolName(e.target.value)}

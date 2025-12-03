@@ -80,6 +80,15 @@ class StudentInClassroom(BaseModel):
     is_active: bool
 
 
+class AvailableStudent(BaseModel):
+    """ข้อมูลนักเรียนที่สามารถเพิ่มเข้าชั้นเรียนได้"""
+    id: int
+    full_name: str
+    username: str
+    email: str
+    grade_level: Optional[str] = None
+
+
 # ===== Promotion Schemas =====
 
 class PromoteClassroomRequest(BaseModel):

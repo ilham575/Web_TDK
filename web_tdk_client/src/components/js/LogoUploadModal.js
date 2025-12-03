@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
+import ConfirmModal from './ConfirmModal';
 import { toast } from 'react-toastify';
 import { API_BASE_URL } from '../endpoints';
-import { setSchoolFavicon } from '../../utils/faviconUtils';
+import { setSchoolFavicon, resetFavicon } from '../../utils/faviconUtils';
 import '../css/LogoUploadModal.css';
 
-function LogoUploadModal({ isOpen, schoolId, onClose, onSuccess }) {
+function LogoUploadModal({ isOpen, schoolId, onClose, onSuccess, school }) {
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [preview, setPreview] = useState(null);
@@ -114,6 +115,46 @@ function LogoUploadModal({ isOpen, schoolId, onClose, onSuccess }) {
     setPreview(null);
   };
 
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  const handleDeleteLogo = async () => {
+    // called after confirm
+    if (!schoolId) return;
+    setUploading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE_URL}/schools/${schoolId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ logo_url: null }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.detail || 'ไม่สามารถลบโลโก้ได้');
+        return;
+      }
+
+      toast.success('ลบโลโก้สำเร็จ');
+      // Reset UI state and favicon
+      setSelectedFile(null);
+      setPreview(null);
+      resetFavicon();
+
+      if (onSuccess) onSuccess(data);
+      onClose();
+    } catch (err) {
+      console.error('Error deleting logo:', err);
+      toast.error('เกิดข้อผิดพลาดในการลบโลโก้');
+    } finally {
+      setUploading(false);
+      setShowDeleteConfirm(false);
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -131,6 +172,27 @@ function LogoUploadModal({ isOpen, schoolId, onClose, onSuccess }) {
         </div>
 
         <div className="logo-upload-content">
+          {/* Current logo preview */}
+          {school?.logo_url && (
+            <div style={{ width: '100%', marginBottom: '1rem', textAlign: 'center' }}>
+              <div style={{ fontSize: '12px', color: '#666', marginBottom: '8px' }}>โลโก้ปัจจุบัน</div>
+              <div style={{ display: 'inline-block', borderRadius: '8px', background: 'white', padding: '8px' }}>
+                <img
+                  src={school.logo_url.startsWith('http') ? school.logo_url : `${API_BASE_URL}${school.logo_url}`}
+                  alt="Current Logo"
+                  style={{ maxHeight: 120, maxWidth: '100%', objectFit: 'contain' }}
+                />
+              </div>
+            </div>
+          )}
+          {/* Confirm modal for deleting logo */}
+          <ConfirmModal
+            isOpen={showDeleteConfirm}
+            title="ยืนยันการลบโลโก้"
+            message="คุณแน่ใจหรือไม่ว่าต้องการลบโลโก้? การลบจะไม่สามารถย้อนกลับได้"
+            onConfirm={handleDeleteLogo}
+            onCancel={() => setShowDeleteConfirm(false)}
+          />
           {/* Preview */}
           {preview ? (
             <div className="logo-preview">
@@ -181,6 +243,18 @@ function LogoUploadModal({ isOpen, schoolId, onClose, onSuccess }) {
               disabled={uploading}
             >
               เปลี่ยนไฟล์
+            </button>
+          )}
+
+          {school?.logo_url && (
+            <button
+              className="logo-upload-btn delete" 
+              onClick={() => setShowDeleteConfirm(true)}
+              disabled={uploading}
+              title="ลบโลโก้ปัจจุบัน"
+              aria-label="ลบโลโก้"
+            >
+              🗑️ ลบโลโก้
             </button>
           )}
 

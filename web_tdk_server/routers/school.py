@@ -22,23 +22,30 @@ def _safe_delete_logo_file(logo_url: str):
     """
     try:
         if not logo_url or not isinstance(logo_url, str):
+            print(f"Skipping delete: logo_url is empty or not a string")
             return
+        print(f"Attempting to delete logo: {logo_url}")
         # our stored logo_url is like "/uploads/logos/filename.ext"
         if not logo_url.startswith('/uploads/logos/'):
+            print(f"Skipping delete: logo_url does not start with /uploads/logos/: {logo_url}")
             return
         filename = os.path.basename(logo_url)
+        print(f"Extracted filename: {filename}")
         abs_upload_dir = os.path.abspath(UPLOAD_DIR)
         candidate = os.path.abspath(os.path.join(UPLOAD_DIR, filename))
+        print(f"Candidate path: {candidate}, upload_dir: {abs_upload_dir}")
         # ensure candidate is inside upload_dir
         if not candidate.startswith(abs_upload_dir + os.path.sep) and candidate != abs_upload_dir:
             print(f"Refusing to delete file outside upload dir: {candidate}")
             return
         if os.path.exists(candidate):
             os.remove(candidate)
-            print(f"Deleted old logo file: {candidate}")
+            print(f"✓ Deleted old logo file: {candidate}")
+        else:
+            print(f"⚠ File does not exist: {candidate}")
     except Exception as e:
         # don't raise; log and continue
-        print(f"Failed to delete old logo file '{logo_url}': {e}")
+        print(f"✗ Failed to delete old logo file '{logo_url}': {e}")
 
 @router.post("", response_model=School, status_code=status.HTTP_201_CREATED)
 @router.post("/", response_model=School, status_code=status.HTTP_201_CREATED)
@@ -74,11 +81,16 @@ def update_school(school_id: int, school_update: SchoolUpdate, db: Session = Dep
     if not school:
         raise HTTPException(status_code=404, detail="School not found")
     
+    # Update name if provided
     if school_update.name:
         school.name = school_update.name
-    if school_update.logo_url is not None:
+    
+    # Update logo_url if provided (can be None to delete logo)
+    # Check using dict to see if field was explicitly set in request
+    update_data = school_update.dict(exclude_unset=True)
+    if 'logo_url' in update_data:
         old_logo = school.logo_url
-        # update to new url
+        # update to new url (can be None to delete)
         school.logo_url = school_update.logo_url
         # commit then delete old file if it was managed by us
         db.commit()
