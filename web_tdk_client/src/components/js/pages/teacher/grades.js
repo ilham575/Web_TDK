@@ -110,8 +110,29 @@ function GradesPage(){
             classMap[c.key] = c;
           });
           const distinct = Object.values(classMap);
+          // Sort classes by numeric label order (e.g., ป.1/1, Grade 1/2)
+          const extractNumbers = (str) => {
+            if (!str) return [];
+            const match = String(str).match(/\d+/g);
+            return match ? match.map(n => Number(n)) : [];
+          };
+          const compareLabels = (a, b) => {
+            const na = extractNumbers(a.label);
+            const nb = extractNumbers(b.label);
+            const len = Math.max(na.length, nb.length);
+            for (let i = 0; i < len; i++) {
+              const ai = na[i] ?? 0;
+              const bi = nb[i] ?? 0;
+              if (ai !== bi) return ai - bi;
+            }
+            // If all numeric parts are equal or absent, compare label strings
+            return String(a.label).localeCompare(String(b.label), 'th');
+          };
+          distinct.sort(compareLabels);
           setClasses(distinct);
-          setSelectedClass(distinct.length > 1 ? distinct[0] : null);
+          // Set selectedClass to null when multiple classes (forces explicit selection)
+          // Auto-select only when there's a single class
+          setSelectedClass(distinct.length === 1 ? distinct[0] : null);
         } else setStudents([]);
       }catch(err){ setStudents([]); }
     };
@@ -148,14 +169,58 @@ function GradesPage(){
     if (id) loadSubject();
   }, [id, students]);
 
-  // Load assignments and grades for this subject
-  useEffect(()=>{
-    const loadAssignmentsAndGrades = async ()=>{
+  // Load assignments and grades for this subject (refactor to named function so we can refresh on demand)
+  const refreshAssignmentsAndGrades = async ()=>{
       try{
+        // Wait for classes to load first
+        if (classes.length === 0) {
+          return;
+        }
+        
+        // If multiple classes exist and user hasn't selected one, do not fetch
+        if (classes.length > 1 && !selectedClass) {
+          setAssignments([]);
+          setGrades({});
+          setSelectedAssignmentId(null);
+          return;
+        }
+        
         const token = localStorage.getItem('token');
         
-        // First load assignments (filter by class when selectedClassId exists)
-        const assignmentUrl = `${API_BASE_URL}/grades/assignments/${id}${selectedClassId ? `?classroom_id=${selectedClassId}` : ''}`;
+        // Determine the classroom ID to filter by
+        let classroomIdToFilter = null;
+        if (classes.length === 1 && classes[0].id) {
+          classroomIdToFilter = classes[0].id;
+        } else if (selectedClass && selectedClass.id) {
+          classroomIdToFilter = selectedClass.id;
+        }
+        
+        // Must have classroom ID to filter properly
+        if (!classroomIdToFilter) {
+          console.warn('No classroom_id available for filtering - attempting to resolve');
+          // Try to resolve classroom ID by label if possible
+          const classToResolve = selectedClass || (classes.length === 1 ? classes[0] : null);
+          if (classToResolve && classToResolve.label && !classToResolve.id) {
+            const foundId = await findClassroomIdByLabel(classToResolve.label);
+            if (foundId) {
+              classroomIdToFilter = foundId;
+              // Update the class object with the resolved ID
+              if (classes.length === 1) {
+                setClasses([{ ...classes[0], id: foundId, key: `id:${foundId}` }]);
+                setSelectedClass({ ...classes[0], id: foundId, key: `id:${foundId}` });
+              } else if (selectedClass) {
+                setSelectedClass(prev => prev ? { ...prev, id: foundId, key: `id:${foundId}` } : prev);
+                setClasses(prev => prev.map(c => c.key === classToResolve.key ? { ...c, id: foundId, key: `id:${foundId}` } : c));
+              }
+            }
+          }
+        }
+        
+        // If still no classroom ID, we can't filter properly - but still try to fetch
+        // This handles cases where classroom_id might not exist in DB yet
+        
+        // First load assignments (always filter by classroom_id if available)
+        const assignmentUrl = `${API_BASE_URL}/grades/assignments/${id}${classroomIdToFilter ? `?classroom_id=${classroomIdToFilter}` : ''}`;
         const assignmentsRes = await fetch(assignmentUrl, { headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
         if (!assignmentsRes.ok) return;
         const assignmentsData = await assignmentsRes.json();
@@ -171,8 +236,8 @@ function GradesPage(){
         
         setAssignments(assignmentList);
         
-        // Then load all grades for this subject (filter by class when selectedClassId exists)
-        const gradesUrl = `${API_BASE_URL}/grades/?subject_id=${id}${selectedClassId ? `&classroom_id=${selectedClassId}` : ''}`;
+        // Then load all grades for this subject (filter by classroom_id if available)
+        const gradesUrl = `${API_BASE_URL}/grades/?subject_id=${id}${classroomIdToFilter ? `&classroom_id=${classroomIdToFilter}` : ''}`;
         const gradesRes = await fetch(gradesUrl, { headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
         if (!gradesRes.ok) return;
         const gradesData = await gradesRes.json();
@@ -206,10 +271,21 @@ function GradesPage(){
           setTitle(assignmentToSelect.title);
           setMaxScore(assignmentToSelect.max_score);
         }
-      }catch(err){ console.error('Failed to load assignments and grades:', err); }
-    };
-    loadAssignmentsAndGrades();
-  },[id, selectedClassId]);
+      } catch (err) { console.error('Failed to load assignments and grades:', err); }
+  };
+
+  useEffect(()=>{
+    // Reset state when class changes to prevent stale data
+    setAssignments([]);
+    setGrades({});
+    setSelectedAssignmentId(null);
+    setTitle('');
+    setMaxScore(100);
+    // Only refresh if we have classes loaded OR this is the initial load
+    if (classes.length > 0 || selectedClassId) {
+      refreshAssignmentsAndGrades();
+    }
+  },[id, selectedClassId, classes.length]);
 
   const setGrade = (sid, value) => {
     // Validate that the grade doesn't exceed max score
@@ -289,6 +365,32 @@ function GradesPage(){
     setNewAssignmentClassroomId(selectedClassId || null);
   };
 
+  // Helper: try to fetch classroom ID from API by matching label (fallback when selectedClass.id is missing)
+  const findClassroomIdByLabel = async (label) => {
+    if (!label) return null;
+    try {
+      const token = localStorage.getItem('token');
+      const schoolId = localStorage.getItem('school_id');
+      if (!schoolId) return null;
+      const res = await fetch(`${API_BASE_URL}/classrooms/list/${schoolId}`, { headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (!Array.isArray(data)) return null;
+      const normalize = (s) => {
+        if (!s) return '';
+        try { return String(s).normalize('NFKD').replace(/\p{M}/gu, '').replace(/[^\p{L}\p{N}\s]/gu, '').replace(/\s+/g, ' ').trim().toLowerCase(); } catch(e) { return String(s).replace(/[^\w\s]/g,'').replace(/\s+/g,' ').trim().toLowerCase(); }
+      };
+      const target = normalize(label);
+      let found = data.find(ac => normalize(ac.name || '') === target);
+      if (!found) {
+        found = data.find(ac => normalize(ac.name || '').includes(target) || target.includes(normalize(ac.name || '')));
+      }
+      return found ? found.id : null;
+    } catch (err) {
+      return null;
+    }
+  };
+
   const handleCreateAssignment = async () => {
     if (!newAssignmentTitle.trim()) {
       toast.error('กรุณาใส่หัวข้องาน');
@@ -297,6 +399,21 @@ function GradesPage(){
     if (newAssignmentMaxScore <= 0) {
       toast.error('คะแนนเต็มต้องมากกว่า 0');
       return;
+    }
+
+    // If selected class exists but has no id, try to resolve its id from server by label
+    let resolvedClassroomId = selectedClassId || null;
+    if (selectedClass && !selectedClass.id) {
+      const foundId = await findClassroomIdByLabel(selectedClass.label);
+      if (foundId) {
+        resolvedClassroomId = foundId;
+        // update the selectedClass and classes mapping so it shows as created
+        setSelectedClass(prev => prev ? { ...prev, id: foundId, key: `id:${foundId}` } : prev);
+        setClasses(prev => prev.map(c => c.key === selectedClass.key ? { ...c, id: foundId, key: `id:${foundId}` } : c));
+      } else {
+        toast.error('ชั้นเรียนที่เลือกยังไม่ได้สร้างในระบบ กรุณาสร้างชั้นเรียนก่อน');
+        return;
+      }
     }
 
     // Check if assignment title already exists
@@ -308,10 +425,13 @@ function GradesPage(){
 
     try {
       const token = localStorage.getItem('token');
+      // Use the resolved class id (selected top class or matched server id)
+      // Always use selectedClassId if available, otherwise use resolved id
+      const payloadClassroomId = selectedClassId || resolvedClassroomId || null;
       const payload = {
         title: newAssignmentTitle.trim(),
         max_score: newAssignmentMaxScore,
-        classroom_id: newAssignmentClassroomId || null
+        classroom_id: payloadClassroomId
       };
       
       const res = await fetch(`${API_BASE_URL}/grades/assignments/${id}`, { 
@@ -330,13 +450,16 @@ function GradesPage(){
       }
       
       const newAssignment = await res.json();
-      
-      // Add new assignment to state
+
+      // Determine classroom id to store (prefer server response but fall back to payload)
+      const createdClassroomId = (newAssignment && typeof newAssignment.classroom_id !== 'undefined') ? newAssignment.classroom_id : payloadClassroomId;
+
+      // Add new assignment to state (id includes classroom id to avoid leaking across classes)
       setAssignments(prev => [...prev, {
-        id: newAssignment.classroom_id ? `${newAssignment.title}::${newAssignment.classroom_id}` : newAssignment.title,
+        id: createdClassroomId ? `${newAssignment.title}::${createdClassroomId}` : newAssignment.title,
         title: newAssignment.title,
         max_score: newAssignment.max_score,
-        classroom_id: newAssignment.classroom_id || null,
+        classroom_id: createdClassroomId || null,
         created_at: new Date().toISOString()
       }]);
       
@@ -346,11 +469,7 @@ function GradesPage(){
         [newAssignment.title]: {}
       }));
       
-      // Select the new assignment
-      const newAssignmentId = newAssignment.classroom_id ? `${newAssignment.title}::${newAssignment.classroom_id}` : newAssignment.title;
-      setSelectedAssignmentId(newAssignmentId);
-      setTitle(newAssignment.title);
-      setMaxScore(newAssignment.max_score);
+      // (Selection will be re-applied after we refresh the assignments list)
       
       // Reset modal
       setNewAssignmentTitle('');
@@ -358,6 +477,15 @@ function GradesPage(){
       setNewAssignmentClassroomId(null);
       setShowCreateModal(false);
       
+      // Refresh assignments so we don't leak this assignment across other class views
+      await refreshAssignmentsAndGrades();
+
+      // Re-select the assignment we just created (if it's in the current class filter)
+      const newAssignmentId = createdClassroomId ? `${newAssignment.title}::${createdClassroomId}` : newAssignment.title;
+      setSelectedAssignmentId(newAssignmentId);
+      setTitle(newAssignment.title);
+      setMaxScore(newAssignment.max_score);
+
       toast.success('สร้างหัวข้องานใหม่เรียบร้อยแล้ว');
     } catch (err) {
       console.error('Failed to create assignment:', err);
@@ -394,10 +522,11 @@ function GradesPage(){
     }
 
     // Check if assignment title already exists (excluding current assignment)
-    const existingAssignment = assignments.find(a => 
-      a.title.toLowerCase() === editAssignmentTitle.trim().toLowerCase() && 
-      a.id !== editingAssignment.id
-    );
+      const existingAssignment = assignments.find(a => 
+        a.title.toLowerCase() === editAssignmentTitle.trim().toLowerCase() && 
+        (a.classroom_id || null) === (editingAssignment.classroom_id || null) &&
+        a.id !== editingAssignment.id
+      );
     if (existingAssignment) {
       toast.error('หัวข้องานนี้มีอยู่แล้ว');
       return;
@@ -408,7 +537,7 @@ function GradesPage(){
       const payload = {
         title: editAssignmentTitle.trim(),
         max_score: editAssignmentMaxScore,
-        classroom_id: editAssignmentClassroomId || null
+          classroom_id: editingAssignment.classroom_id || null
       };
       
       const editUrl = `${API_BASE_URL}/grades/assignments/${id}/${editingAssignment.title}${editingAssignment.classroom_id ? `?classroom_id=${editingAssignment.classroom_id}` : ''}`;
@@ -464,6 +593,8 @@ function GradesPage(){
       setEditAssignmentMaxScore(100);
       setEditAssignmentClassroomId(null);
       setShowEditModal(false);
+      // Refresh assignments to reflect updates
+      await refreshAssignmentsAndGrades();
       
       toast.success('แก้ไขหัวข้องานเรียบร้อยแล้ว');
     } catch (err) {
@@ -531,6 +662,9 @@ function GradesPage(){
       setDeletingAssignment(null);
       setShowDeleteModal(false);
       
+      // Refresh assignments after deletion
+      await refreshAssignmentsAndGrades();
+
       toast.success('ลบหัวข้องานเรียบร้อยแล้ว');
     } catch (err) {
       console.error('Failed to delete assignment:', err);
@@ -632,7 +766,62 @@ function GradesPage(){
       </div>
 
       <div className="grades-content">
-        {assignments.length === 0 ? (
+        {/* Class Selector - Always shown at top when multiple classes */}
+        {classes.length > 1 && (
+          <div className="class-selector-top" style={{
+            padding: '1.25rem',
+            backgroundColor: selectedClass ? '#d1fae5' : '#fff7ed',
+            border: `2px solid ${selectedClass ? '#10b981' : '#fb923c'}`,
+            borderRadius: '12px',
+            marginBottom: '1.5rem'
+          }}>
+            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', color: '#1f2937' }}>
+              📚 เลือกชั้นเรียนที่ต้องการให้คะแนน:
+            </label>
+            <select
+              value={selectedClass ? selectedClass.key : ''}
+              onChange={(e) => {
+                const selectedKey = e.target.value;
+                const found = classes.find(c => c.key === selectedKey);
+                setSelectedClass(found || null);
+              }}
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                borderRadius: '8px',
+                border: `2px solid ${selectedClass ? '#10b981' : '#fb923c'}`,
+                backgroundColor: '#fff',
+                fontSize: '1rem',
+                cursor: 'pointer',
+                color: '#1f2937',
+                fontWeight: '500'
+              }}
+            >
+              <option value="">-- เลือกชั้นเรียน --</option>
+              {classes.map(c => (<option key={c.key} value={c.key}>{c.label}</option>))}
+            </select>
+            {selectedClass && (
+              <p style={{ margin: '0.5rem 0 0 0', color: '#059669', fontSize: '0.9rem', fontWeight: '500' }}>
+                ✅ ชั้นเรียนที่เลือก: <strong>{selectedClass.label}</strong>
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Show assignment controls only after class selection */}
+        {(!selectedClass && classes.length > 1) ? (
+          <div className="class-required-message" style={{
+            textAlign: 'center',
+            padding: '2rem',
+            backgroundColor: '#fef3c7',
+            border: '2px dashed #f59e0b',
+            borderRadius: '12px',
+            color: '#92400e'
+          }}>
+            <p style={{ fontSize: '1.1rem', fontWeight: '600', margin: '0 0 0.5rem 0' }}>⚠️ กรุณาเลือกชั้นเรียนก่อน</p>
+            <p style={{ margin: '0', fontSize: '0.95rem' }}>คุณต้องเลือกชั้นเรียนเพื่อดำเนินการเลือก/เพิ่ม/แก้ไข/ลบหัวข้องาน</p>
+          </div>
+        ) : assignments.length === 0 ? (
           <div className="assignments-empty">
             <div className="empty-icon">📝</div>
             <h3 className="empty-title">ยังไม่มีหัวข้องาน</h3>
@@ -712,22 +901,6 @@ function GradesPage(){
 
         {selectedAssignmentId && visibleStudents.length > 0 && (
           <>
-            {classes.length > 1 && (
-              <div className="class-filter" style={{ margin: '0.75rem 0' }}>
-                <label style={{ marginRight: '0.5rem' }}>ชั้นเรียน:</label>
-                <select
-                  value={selectedClass ? selectedClass.key : ''}
-                  onChange={(e) => {
-                    const selectedKey = e.target.value;
-                    const found = classes.find(c => c.key === selectedKey);
-                    setSelectedClass(found || null);
-                  }}
-                >
-                  {classes.map(c => (<option key={c.key} value={c.key}>{c.label}</option>))}
-                </select>
-              </div>
-            )}
-
             <table className="grades-table">
             <thead>
               <tr>
@@ -815,20 +988,13 @@ function GradesPage(){
                           />
                         </div>
                         <div className="grades-modal-field">
-                          <label htmlFor="new-assignment-classroom" className="grades-modal-label">ชั้นเรียน (เลือกเพื่อกำหนดเฉพาะชั้น):</label>
-                          <select
-                            id="new-assignment-classroom"
-                            className={`grades-modal-select ${newAssignmentClassroomId ? 'has-classroom' : ''}`}
-                            value={newAssignmentClassroomId || ''}
-                            onChange={(e) => setNewAssignmentClassroomId(e.target.value ? Number(e.target.value) : null)}
-                          >
-                            <option value="">ทุกชั้น (Global)</option>
-                            {classes.map(c => (
-                              <option key={c.key} value={c.id || ''} disabled={!c.id} title={!c.id ? 'ชั้นเรียนนี้ยังไม่มีในระบบ (ต้องสร้าง classroom ก่อน)' : ''}>
-                                {c.label}{!c.id && ' (ยังไม่ได้สร้างในระบบ)'}
-                              </option>
-                            ))}
-                          </select>
+                          <label className="grades-modal-label">ชั้นเรียน:</label>
+                          <div className="grades-modal-input" style={{ padding: '0.6rem', background: '#f8fafc', borderRadius: '6px' }}>
+                            {selectedClass ? selectedClass.label : (newAssignmentClassroomId ? (classes.find(c => c.id === newAssignmentClassroomId)?.label || `#${newAssignmentClassroomId}`) : 'ทุกชั้น (Global)')}
+                          </div>
+                          <div style={{ marginTop: '0.4rem', fontSize: '0.85rem', color: '#6b7280' }}>
+                            ระบบจะใช้ชั้นเรียนที่คุณเลือกด้านบนสำหรับหัวข้องานนี้ หากต้องการให้หัวข้องานเป็นแบบ "ทุกชั้น" ให้เลือกตัวเลือก "ทุกชั้น (Global)" ที่ด้านบน
+                          </div>
                         </div>
                 <div className="grades-modal-field">
                   <label htmlFor="new-max-score" className="grades-modal-label">คะแนนเต็ม:</label>
@@ -873,20 +1039,13 @@ function GradesPage(){
                   />
                 </div>
                 <div className="grades-modal-field">
-                  <label htmlFor="edit-assignment-classroom" className="grades-modal-label">ชั้นเรียน (เลือกเพื่อกำหนดเฉพาะชั้น):</label>
-                  <select
-                    id="edit-assignment-classroom"
-                    className={`grades-modal-select ${editAssignmentClassroomId ? 'has-classroom' : ''}`}
-                    value={editAssignmentClassroomId || ''}
-                    onChange={(e) => setEditAssignmentClassroomId(e.target.value ? Number(e.target.value) : null)}
-                  >
-                    <option value="">ทุกชั้น (Global)</option>
-                    {classes.map(c => (
-                      <option key={c.key} value={c.id || ''} disabled={!c.id} title={!c.id ? 'ชั้นเรียนนี้ยังไม่มีในระบบ (ต้องสร้าง classroom ก่อน)' : ''}>
-                        {c.label}{!c.id && ' (ยังไม่ได้สร้างในระบบ)'}
-                      </option>
-                    ))}
-                  </select>
+                  <label className="grades-modal-label">ชั้นเรียน:</label>
+                  <div className="grades-modal-input" style={{ padding: '0.6rem', background: '#f8fafc', borderRadius: '6px' }}>
+                    {editingAssignment && (editingAssignment.classroom_id ? (classes.find(c => c.id === editingAssignment.classroom_id)?.label || `#${editingAssignment.classroom_id}`) : 'ทุกชั้น (Global)')}
+                  </div>
+                  <div style={{ marginTop: '0.4rem', fontSize: '0.85rem', color: '#6b7280' }}>
+                    การเปลี่ยนชั้นเรียนของหัวข้องานไม่สามารถทำได้จากหน้านี้ หากต้องการย้ายหัวข้องาน โปรดสร้างใหม่ในชั้นเป้าหมายหรือใช้ฟีเจอร์ย้ายหัวข้องาน
+                  </div>
                 </div>
                 <div className="grades-modal-field">
                   <label htmlFor="edit-max-score" className="grades-modal-label">คะแนนเต็ม:</label>

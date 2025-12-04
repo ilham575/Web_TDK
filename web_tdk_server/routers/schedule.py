@@ -234,10 +234,25 @@ def assign_subject_to_schedule(
         if not final_schedule_slot_id and schedule_slot:
             final_schedule_slot_id = schedule_slot.id
         
+        # If classroom_id is provided, validate teacher teaches that classroom
+        if assignment.classroom_id:
+            from models.classroom import Classroom
+            classroom = db.query(Classroom).filter(
+                Classroom.id == assignment.classroom_id,
+                Classroom.school_id == current_user.school_id
+            ).first()
+            
+            if not classroom:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Classroom not found or not in your school"
+                )
+        
         db_assignment = SubjectSchedule(
             subject_id=assignment.subject_id,
             schedule_slot_id=final_schedule_slot_id,  # Can be None for custom schedules
             teacher_id=current_user.id,
+            classroom_id=assignment.classroom_id,  # Optional: specific classroom only
             day_of_week=assignment.day_of_week,
             start_time=assignment.start_time,
             end_time=assignment.end_time
@@ -252,12 +267,16 @@ def assign_subject_to_schedule(
             subject_id=db_assignment.subject_id,
             schedule_slot_id=db_assignment.schedule_slot_id,
             teacher_id=db_assignment.teacher_id,
+            classroom_id=db_assignment.classroom_id,
             day_of_week=db_assignment.day_of_week,
             start_time=db_assignment.start_time,
             end_time=db_assignment.end_time,
             subject_name=subject.name if subject else None,
-            teacher_name=current_user.full_name
+            teacher_name=current_user.full_name,
+            classroom_name=db_assignment.classroom.name if db_assignment.classroom else None
         )
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         raise HTTPException(
@@ -278,7 +297,8 @@ def get_teacher_schedules(
     
     schedules = db.query(SubjectSchedule).options(
         joinedload(SubjectSchedule.subject),
-        joinedload(SubjectSchedule.schedule_slot)
+        joinedload(SubjectSchedule.schedule_slot),
+        joinedload(SubjectSchedule.classroom)
     ).filter(
         SubjectSchedule.teacher_id == current_user.id
     ).all()
@@ -290,11 +310,13 @@ def get_teacher_schedules(
             subject_id=schedule.subject_id,
             schedule_slot_id=schedule.schedule_slot_id,
             teacher_id=schedule.teacher_id,
+            classroom_id=schedule.classroom_id,
             day_of_week=schedule.day_of_week,
             start_time=schedule.start_time,
             end_time=schedule.end_time,
             subject_name=schedule.subject.name if schedule.subject else None,
-            teacher_name=current_user.full_name
+            teacher_name=current_user.full_name,
+            classroom_name=schedule.classroom.name if schedule.classroom else None
         ))
     
     return result
@@ -373,18 +395,34 @@ def get_student_schedule(
             detail="Only students can access this endpoint"
         )
     
+    # Import needed models
+    from models.classroom import ClassroomStudent, Classroom
+    
+    # Get student's current classroom
+    student_classroom = db.query(ClassroomStudent).join(
+        Classroom, ClassroomStudent.classroom_id == Classroom.id
+    ).filter(
+        ClassroomStudent.student_id == current_user.id,
+        ClassroomStudent.is_active == True
+    ).first()
+    
+    classroom_id = student_classroom.classroom_id if student_classroom else None
+    
     # Get all subjects the student is enrolled in
     student_subjects = db.query(SubjectStudent.subject_id).filter(
         SubjectStudent.student_id == current_user.id
     ).subquery()
     
     # Get schedules for those subjects
+    # Filter by: (classroom_id matches student's classroom) OR (classroom_id is NULL = applies to all)
     schedules = db.query(SubjectSchedule).options(
         joinedload(SubjectSchedule.subject),
         joinedload(SubjectSchedule.schedule_slot),
         joinedload(SubjectSchedule.teacher)
     ).filter(
-        SubjectSchedule.subject_id.in_(student_subjects)
+        SubjectSchedule.subject_id.in_(student_subjects),
+        # Show schedules that either match student's classroom or apply to all classrooms
+        (SubjectSchedule.classroom_id == classroom_id) | (SubjectSchedule.classroom_id == None)
     ).all()
     
     result = []

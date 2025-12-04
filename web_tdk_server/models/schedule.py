@@ -25,6 +25,7 @@ class SubjectSchedule(Base):
     subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=False)
     schedule_slot_id = Column(Integer, ForeignKey("schedule_slots.id"), nullable=True)  # Optional for backward compatibility
     teacher_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    classroom_id = Column(Integer, ForeignKey("classrooms.id"), nullable=True)  # Specific classroom (optional - if None, applies to all)
     
     # New fields for custom time slots
     day_of_week = Column(String(10), nullable=True)  # Day of week (0-6, where 0=Sunday)
@@ -35,3 +36,4 @@ class SubjectSchedule(Base):
     subject = relationship("Subject", back_populates="subject_schedules")
     schedule_slot = relationship("ScheduleSlot", back_populates="subject_schedules")
     teacher = relationship("User", foreign_keys=[teacher_id])
+    classroom = relationship("Classroom", foreign_keys=[classroom_id])

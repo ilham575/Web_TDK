@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import '../../../css/pages/teacher/teacher-home.css';
 import '../../../css/pages/teacher/schedule-modal.css';
+import '../../../css/pages/teacher/homeroom-summary.css';
 import ScheduleGrid from '../../ScheduleGrid';
 import AbsenceApproval from '../admin/AbsenceApproval';
 import { ToastContainer, toast } from 'react-toastify';
@@ -40,10 +41,20 @@ function TeacherPage() {
   const [subjectSchedules, setSubjectSchedules] = useState([]);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [selectedSubjectId, setSelectedSubjectId] = useState('');
+  const [selectedClassroomId, setSelectedClassroomId] = useState('');  // Classroom selector
   const [scheduleDay, setScheduleDay] = useState('');
   const [scheduleStartTime, setScheduleStartTime] = useState('');
   const [scheduleEndTime, setScheduleEndTime] = useState('');
   const [editingAssignment, setEditingAssignment] = useState(null);
+  const [classrooms, setClassrooms] = useState([]);  // List of classrooms
+
+  // Homeroom summary state
+  const [homeroomSummary, setHomeroomSummary] = useState(null);
+  const [loadingHomeroomSummary, setLoadingHomeroomSummary] = useState(false);
+  const [selectedHomeroomClassroom, setSelectedHomeroomClassroom] = useState(null);
+  const [showStudentDetailModal, setShowStudentDetailModal] = useState(false);
+  const [selectedStudentDetail, setSelectedStudentDetail] = useState(null);
+  const [teacherHomerooms, setTeacherHomerooms] = useState([]);
 
   const openConfirmModal = (title, message, onConfirm) => { setConfirmTitle(title); setConfirmMessage(message); setOnConfirmAction(() => onConfirm); setShowConfirmModal(true); };
 
@@ -217,15 +228,102 @@ function TeacherPage() {
     } catch { toast.error('เกิดข้อผิดพลาดในการลบข่าว'); }
   };
 
+  // Load homeroom summary when switching to homeroom tab
+  const loadHomeroomSummary = useCallback(async () => {
+    if (!currentUser) return;
+    setLoadingHomeroomSummary(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE_URL}/homeroom/my-classrooms/summary`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setHomeroomSummary(data);
+        // Auto-select first classroom if available
+        if (data.classrooms && data.classrooms.length > 0 && !selectedHomeroomClassroom) {
+          setSelectedHomeroomClassroom(data.classrooms[0]);
+        }
+      } else {
+        setHomeroomSummary({ classrooms: [] });
+      }
+    } catch (err) {
+      console.error('Failed to load homeroom summary:', err);
+      setHomeroomSummary({ classrooms: [] });
+    } finally {
+      setLoadingHomeroomSummary(false);
+    }
+  }, [currentUser, selectedHomeroomClassroom]);
 
+  // Load teacher homeroom assignments
+  useEffect(() => {
+    const loadTeacherHomerooms = async () => {
+      if (!currentUser) return;
+      try {
+        const token = localStorage.getItem('token');
+        const res = await fetch(`${API_BASE_URL}/homeroom/?school_id=${currentUser.school_id}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const assigned = data.filter(h => h.teacher_id === currentUser.id);
+          setTeacherHomerooms(assigned);
+        }
+      } catch (err) {
+        console.error('Failed to load teacher homerooms:', err);
+      }
+    };
+    loadTeacherHomerooms();
+  }, [currentUser]);
 
+  // Load homeroom data when tab is selected
+  useEffect(() => {
+    if (activeTab === 'homeroom') {
+      loadHomeroomSummary();
+    }
+  }, [activeTab, loadHomeroomSummary]);
 
+  // Get grade percentage class
+  const getGradeClass = (percentage) => {
+    if (percentage >= 80) return 'excellent';
+    if (percentage >= 60) return 'good';
+    if (percentage >= 40) return 'average';
+    return 'poor';
+  };
 
-
-
-
-
-
+  // View student detail - fetch detailed data from classroom endpoint
+  const viewStudentDetail = async (student) => {
+    if (!selectedHomeroomClassroom) return;
+    
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE_URL}/homeroom/my-classrooms/${selectedHomeroomClassroom.classroom_id}/students`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        const detailedStudent = data.students?.find(s => s.id === student.id);
+        if (detailedStudent) {
+          setSelectedStudentDetail(detailedStudent);
+          setShowStudentDetailModal(true);
+        } else {
+          // Fallback to basic student data
+          setSelectedStudentDetail(student);
+          setShowStudentDetailModal(true);
+        }
+      } else {
+        // Fallback to basic student data
+        setSelectedStudentDetail(student);
+        setShowStudentDetailModal(true);
+      }
+    } catch (err) {
+      console.error('Failed to load student detail:', err);
+      // Fallback to basic student data
+      setSelectedStudentDetail(student);
+      setShowStudentDetailModal(true);
+    }
+  };
 
   const initials = (name) => (name ? name.split(' ').map(n=>n[0]).slice(0,2).join('').toUpperCase() : 'T');
 
@@ -363,6 +461,28 @@ function TeacherPage() {
     });
   };
 
+  const loadClassrooms = async () => {
+    const schoolId = localStorage.getItem('school_id');
+    if (!schoolId) return;
+    
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE_URL}/classrooms/?school_id=${schoolId}`, {
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        setClassrooms(Array.isArray(data) ? data : []);
+      } else {
+        setClassrooms([]);
+      }
+    } catch (err) {
+      console.error('Failed to load classrooms:', err);
+      setClassrooms([]);
+    }
+  };
+
   const loadSubjectSchedules = useCallback(async () => {
     if (!currentUser) return;
     
@@ -409,7 +529,8 @@ function TeacherPage() {
         subject_id: subjectIdNum,
         day_of_week: scheduleDay,
         start_time: scheduleStartTime,
-        end_time: scheduleEndTime
+        end_time: scheduleEndTime,
+        classroom_id: selectedClassroomId ? parseInt(selectedClassroomId, 10) : null  // Optional: specific classroom only
       };
 
       const res = await fetch(`${API_BASE_URL}/schedule/assign`, {
@@ -425,6 +546,7 @@ function TeacherPage() {
         toast.success('กำหนดเวลาเรียนเรียบร้อย');
         setShowScheduleModal(false);
         setSelectedSubjectId('');
+        setSelectedClassroomId('');
         setScheduleDay('');
         setScheduleStartTime('');
         setScheduleEndTime('');
@@ -454,7 +576,8 @@ function TeacherPage() {
         subject_id: parseInt(selectedSubjectId, 10),
         day_of_week: scheduleDay,
         start_time: scheduleStartTime,
-        end_time: scheduleEndTime
+        end_time: scheduleEndTime,
+        classroom_id: selectedClassroomId ? parseInt(selectedClassroomId, 10) : null
       };
 
       const res = await fetch(`${API_BASE_URL}/schedule/assign/${editingAssignment.id}`, {
@@ -469,6 +592,7 @@ function TeacherPage() {
         toast.success('อัปเดตเวลาเรียนเรียบร้อย');
         setShowScheduleModal(false);
         setSelectedSubjectId('');
+        setSelectedClassroomId('');
         setScheduleDay('');
         setScheduleStartTime('');
         setScheduleEndTime('');
@@ -514,6 +638,7 @@ function TeacherPage() {
   const cancelScheduleModal = () => {
     setShowScheduleModal(false);
     setSelectedSubjectId('');
+    setSelectedClassroomId('');
     setScheduleDay('');
     setScheduleStartTime('');
     setScheduleEndTime('');
@@ -525,6 +650,7 @@ function TeacherPage() {
     if (activeTab === 'schedule') {
       loadScheduleSlots();
       loadSubjectSchedules();
+      loadClassrooms();  // Load classrooms for classroom selector
     }
   }, [activeTab, currentUser, loadSubjectSchedules]);
 
@@ -561,6 +687,7 @@ function TeacherPage() {
       <div className="tabs-container">
         <div className="tabs-header">
           <button className={`teacher-tab-button ${activeTab === 'subjects' ? 'active' : ''}`} onClick={() => setActiveTab('subjects')}>📚 รายวิชา</button>
+          <button className={`teacher-tab-button ${activeTab === 'homeroom' ? 'active' : ''}`} onClick={() => setActiveTab('homeroom')}>🏫 ประจำชั้น</button>
           <button className={`teacher-tab-button ${activeTab === 'announcements' ? 'active' : ''}`} onClick={() => setActiveTab('announcements')}>📢 ประกาศข่าว</button>
           <button className={`teacher-tab-button ${activeTab === 'absences' ? 'active' : ''}`} onClick={() => setActiveTab('absences')}>📋 อนุมัติการลา</button>
           <button className={`teacher-tab-button ${activeTab === 'schedule' ? 'active' : ''}`} onClick={() => setActiveTab('schedule')}>🗓️ ตารางเรียน</button>
@@ -608,6 +735,132 @@ function TeacherPage() {
               </div>
             ))}
           </section>
+        )}
+        {activeTab === 'homeroom' && (
+          <div className="homeroom-summary-container">
+            <h3 className="section-title">🏫 สรุปข้อมูลนักเรียนในชั้นที่ประจำ</h3>
+            
+            {teacherHomerooms.length === 0 ? (
+              <div className="homeroom-empty">
+                <div className="homeroom-empty-icon">🏫</div>
+                <div className="homeroom-empty-text">คุณยังไม่ได้รับมอบหมายให้เป็นครูประจำชั้น</div>
+                <div className="homeroom-empty-subtitle">กรุณาติดต่อผู้ดูแลระบบเพื่อกำหนดชั้นเรียนที่ประจำ</div>
+              </div>
+            ) : loadingHomeroomSummary ? (
+              <div className="homeroom-loading">
+                <div className="homeroom-loading-spinner"></div>
+                <span>กำลังโหลดข้อมูล...</span>
+              </div>
+            ) : homeroomSummary && homeroomSummary.classrooms && homeroomSummary.classrooms.length > 0 ? (
+              <>
+                {/* Classroom Selector */}
+                <div className="homeroom-classroom-selector">
+                  {homeroomSummary.classrooms.map(classroom => (
+                    <button
+                      key={classroom.classroom_id}
+                      className={`homeroom-classroom-btn ${selectedHomeroomClassroom?.classroom_id === classroom.classroom_id ? 'active' : ''}`}
+                      onClick={() => setSelectedHomeroomClassroom(classroom)}
+                    >
+                      <span className="homeroom-classroom-name">{classroom.classroom_name}</span>
+                      <span className="homeroom-classroom-count">{classroom.student_count} นักเรียน</span>
+                    </button>
+                  ))}
+                </div>
+
+                {selectedHomeroomClassroom && (
+                  <>
+                    {/* Summary Stats */}
+                    <div className="homeroom-stats-grid">
+                      <div className="homeroom-stat-card students">
+                        <div className="homeroom-stat-label">👥 จำนวนนักเรียน</div>
+                        <div className="homeroom-stat-value">{selectedHomeroomClassroom.student_count}</div>
+                        <div className="homeroom-stat-subtitle">คน</div>
+                      </div>
+                      <div className="homeroom-stat-card grades">
+                        <div className="homeroom-stat-label">📊 คะแนนเฉลี่ยห้อง</div>
+                        <div className="homeroom-stat-value">
+                          {selectedHomeroomClassroom.students.length > 0
+                            ? (selectedHomeroomClassroom.students.reduce((sum, s) => sum + (s.grades?.avg_percentage || 0), 0) / selectedHomeroomClassroom.students.length).toFixed(1)
+                            : 0}%
+                        </div>
+                        <div className="homeroom-stat-subtitle">ของคะแนนเต็ม</div>
+                      </div>
+                      <div className="homeroom-stat-card attendance">
+                        <div className="homeroom-stat-label">✅ อัตราการมาเรียนเฉลี่ย</div>
+                        <div className="homeroom-stat-value">
+                          {selectedHomeroomClassroom.students.length > 0
+                            ? (selectedHomeroomClassroom.students.reduce((sum, s) => sum + (s.attendance?.attendance_rate || 0), 0) / selectedHomeroomClassroom.students.length).toFixed(1)
+                            : 0}%
+                        </div>
+                        <div className="homeroom-stat-subtitle">ของวันเรียนทั้งหมด</div>
+                      </div>
+                    </div>
+
+                    {/* Students Table */}
+                    <div className="homeroom-students-table-container">
+                      <table className="homeroom-students-table">
+                        <thead>
+                          <tr>
+                            <th>นักเรียน</th>
+                            <th>คะแนนรวม</th>
+                            <th>การเข้าเรียน</th>
+                            <th>รายละเอียด</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {selectedHomeroomClassroom.students.map(student => (
+                            <tr key={student.id}>
+                              <td>
+                                <div className="student-name-cell">
+                                  <div className="student-avatar">{initials(student.full_name)}</div>
+                                  <div className="student-info">
+                                    <span className="student-fullname">{student.full_name}</span>
+                                    <span className="student-username">@{student.username}</span>
+                                  </div>
+                                </div>
+                              </td>
+                              <td>
+                                <div className="grade-display">
+                                  <span className="grade-score">
+                                    {student.grades?.total_score || 0}/{student.grades?.total_max_score || 0}
+                                  </span>
+                                  <span className={`grade-percentage ${getGradeClass(student.grades?.avg_percentage || 0)}`}>
+                                    {(student.grades?.avg_percentage || 0).toFixed(1)}%
+                                  </span>
+                                </div>
+                              </td>
+                              <td>
+                                <div className="attendance-display">
+                                  <span className="attendance-rate">{(student.attendance?.attendance_rate || 0).toFixed(1)}%</span>
+                                  <div className="attendance-details">
+                                    <span className="attendance-badge present">มา {student.attendance?.present_days || 0}</span>
+                                    <span className="attendance-badge absent">ขาด {student.attendance?.absent_days || 0}</span>
+                                    <span className="attendance-badge late">สาย {student.attendance?.late_days || 0}</span>
+                                    <span className="attendance-badge sick">ลา {student.attendance?.sick_leave_days || 0}</span>
+                                  </div>
+                                </div>
+                              </td>
+                              <td>
+                                <button className="btn-view-detail" onClick={() => viewStudentDetail(student)}>
+                                  ดูรายละเอียด
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                )}
+              </>
+            ) : (
+              <div className="homeroom-empty">
+                <div className="homeroom-empty-icon">📋</div>
+                <div className="homeroom-empty-text">ไม่พบข้อมูลนักเรียนในชั้นที่ประจำ</div>
+                <div className="homeroom-empty-subtitle">อาจยังไม่มีการเพิ่มนักเรียนเข้าชั้นเรียน</div>
+              </div>
+            )}
+          </div>
         )}
         {activeTab === 'announcements' && (
           <div className="announcements-container">
@@ -685,7 +938,7 @@ function TeacherPage() {
             <div className="schedule-actions">
               <button 
                 className="teacher-btn-primary" 
-                onClick={() => { loadScheduleSlots(); setShowScheduleModal(true); }}
+                onClick={() => { loadScheduleSlots(); loadClassrooms(); setShowScheduleModal(true); }}
                 title="กำหนดเวลาเรียนสำหรับรายวิชา"
               >
                 ➕ กำหนดเวลาเรียน
@@ -711,6 +964,7 @@ function TeacherPage() {
                     // prefill modal for editing
                     setEditingAssignment(item);
                     setSelectedSubjectId(item.subject_id || item.subjectId || (item.subject && item.subject.id) || '');
+                    setSelectedClassroomId(item.classroom_id ? String(item.classroom_id) : '');
                     setScheduleDay(String(item.day_of_week));
                     setScheduleStartTime(item.start_time);
                     setScheduleEndTime(item.end_time);
@@ -795,8 +1049,115 @@ function TeacherPage() {
                         ))}
                       </select>
                     </div>
+
+                    <div className="schedule-form-group">
+                      <label className="schedule-form-label">🏫 ชั้นเรียน (ทำให้เวลาต่างกันตามชั้น)</label>
+                      <select
+                        value={selectedClassroomId}
+                        onChange={e => setSelectedClassroomId(e.target.value)}
+                        className="schedule-form-select"
+                      >
+                        <option value="">-- ไม่ระบุ (ใช้สำหรับทุกชั้น) --</option>
+                        {classrooms.map(classroom => (
+                          <option key={classroom.id} value={classroom.id}>
+                            🏫 {classroom.name} {classroom.grade_level ? `(ชั้น ${classroom.grade_level})` : ''}
+                          </option>
+                        ))}
+                      </select>
+                      {selectedClassroomId && (
+                        <div className="classroom-info-display" style={{
+                          marginTop: '0.75rem',
+                          padding: '0.75rem 0.875rem',
+                          background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.1), rgba(16, 185, 129, 0.08))',
+                          borderRadius: '8px',
+                          border: '1px solid rgba(34, 197, 94, 0.25)',
+                          fontSize: '0.85rem',
+                          color: '#15803d',
+                          fontWeight: '600',
+                          letterSpacing: '0.3px',
+                        }}>
+                          ✓ ชั้นเรียน: {classrooms.find(c => String(c.id) === selectedClassroomId)?.name || 'N/A'}
+                        </div>
+                      )}
+                      {!selectedClassroomId && (
+                        <div className="classroom-info-display" style={{
+                          marginTop: '0.75rem',
+                          padding: '0.75rem 0.875rem',
+                          background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(102, 126, 234, 0.08))',
+                          borderRadius: '8px',
+                          border: '1px solid rgba(59, 130, 246, 0.25)',
+                          fontSize: '0.85rem',
+                          color: '#1e40af',
+                          fontWeight: '600',
+                          letterSpacing: '0.3px',
+                        }}>
+                          ℹ️ ใช้สำหรับทุกชั้นเรียน
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
+
+                {/* Summary Section */}
+                {(scheduleDay || selectedSubjectId || selectedClassroomId) && (
+                  <div className="schedule-form-section" style={{ background: 'linear-gradient(135deg, rgba(248, 113, 113, 0.08), rgba(239, 68, 68, 0.06))' }}>
+                    <h4 className="schedule-section-title" style={{ color: '#dc2626', marginBottom: '1.25rem' }}>
+                      📋 สรุปการจัดเวลาเรียน
+                    </h4>
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: '1fr 1fr 1fr',
+                      gap: '1rem',
+                      position: 'relative',
+                      zIndex: 1
+                    }}>
+                      {/* Day Section */}
+                      <div style={{
+                        background: 'rgba(255, 255, 255, 0.8)',
+                        border: '2px solid rgba(59, 130, 246, 0.2)',
+                        borderRadius: '10px',
+                        padding: '1rem',
+                        textAlign: 'center'
+                      }}>
+                        <div style={{ fontSize: '0.8rem', color: '#666', fontWeight: '600', marginBottom: '0.5rem' }}>📅 วันเรียน</div>
+                        <div style={{ fontSize: '1.25rem', fontWeight: '800', color: '#1e40af' }}>
+                          {scheduleDay ? getDayName(scheduleDay) : '-'}
+                        </div>
+                      </div>
+
+                      {/* Subject Section */}
+                      <div style={{
+                        background: 'rgba(255, 255, 255, 0.8)',
+                        border: '2px solid rgba(251, 191, 36, 0.2)',
+                        borderRadius: '10px',
+                        padding: '1rem',
+                        textAlign: 'center'
+                      }}>
+                        <div style={{ fontSize: '0.8rem', color: '#666', fontWeight: '600', marginBottom: '0.5rem' }}>📚 รายวิชา</div>
+                        <div style={{ fontSize: '0.95rem', fontWeight: '700', color: '#a16207', wordBreak: 'break-word' }}>
+                          {selectedSubjectId ? (teacherSubjects.find(s => String(s.id) === selectedSubjectId)?.name || 'N/A') : '-'}
+                        </div>
+                      </div>
+
+                      {/* Classroom Section */}
+                      <div style={{
+                        background: 'rgba(255, 255, 255, 0.8)',
+                        border: '2px solid rgba(34, 197, 94, 0.2)',
+                        borderRadius: '10px',
+                        padding: '1rem',
+                        textAlign: 'center'
+                      }}>
+                        <div style={{ fontSize: '0.8rem', color: '#666', fontWeight: '600', marginBottom: '0.5rem' }}>🏫 ชั้นเรียน</div>
+                        <div style={{ fontSize: '0.95rem', fontWeight: '700', color: '#15803d', wordBreak: 'break-word' }}>
+                          {selectedClassroomId 
+                            ? (classrooms.find(c => String(c.id) === selectedClassroomId)?.name || 'N/A')
+                            : 'ทั้งหมด'
+                          }
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Time Section */}
                 <div className="schedule-form-section">
@@ -807,12 +1168,36 @@ function TeacherPage() {
                     <div className="schedule-form-group">
                       <label className="schedule-form-label">เวลาเริ่ม</label>
                       <input
-                        type="time"
+                        type="text"
+                        placeholder="08:30"
                         value={scheduleStartTime}
-                        onChange={e => setScheduleStartTime(e.target.value)}
+                        onChange={e => {
+                          let val = e.target.value.replace(/[^\d:]/g, '');
+                          if (val.length === 2 && !val.includes(':') && e.nativeEvent.inputType !== 'deleteContentBackward') {
+                            val = val + ':';
+                          }
+                          if (val.length <= 5) {
+                            setScheduleStartTime(val);
+                          }
+                        }}
+                        onBlur={e => {
+                          let val = e.target.value.replace(/[^\d]/g, '');
+                          if (val.length === 4) {
+                            const h = val.substring(0, 2);
+                            const m = val.substring(2, 4);
+                            if (parseInt(h) <= 23 && parseInt(m) <= 59) {
+                              setScheduleStartTime(`${h}:${m}`);
+                            }
+                          } else if (val.length === 3) {
+                            const h = val.substring(0, 1).padStart(2, '0');
+                            const m = val.substring(1, 3);
+                            if (parseInt(h) <= 23 && parseInt(m) <= 59) {
+                              setScheduleStartTime(`${h}:${m}`);
+                            }
+                          }
+                        }}
                         className="schedule-form-input"
-                        step="60"
-                        lang="en-GB"
+                        maxLength={5}
                       />
                     </div>
 
@@ -821,12 +1206,36 @@ function TeacherPage() {
                     <div className="schedule-form-group">
                       <label className="schedule-form-label">เวลาสิ้นสุด</label>
                       <input
-                        type="time"
+                        type="text"
+                        placeholder="16:30"
                         value={scheduleEndTime}
-                        onChange={e => setScheduleEndTime(e.target.value)}
+                        onChange={e => {
+                          let val = e.target.value.replace(/[^\d:]/g, '');
+                          if (val.length === 2 && !val.includes(':') && e.nativeEvent.inputType !== 'deleteContentBackward') {
+                            val = val + ':';
+                          }
+                          if (val.length <= 5) {
+                            setScheduleEndTime(val);
+                          }
+                        }}
+                        onBlur={e => {
+                          let val = e.target.value.replace(/[^\d]/g, '');
+                          if (val.length === 4) {
+                            const h = val.substring(0, 2);
+                            const m = val.substring(2, 4);
+                            if (parseInt(h) <= 23 && parseInt(m) <= 59) {
+                              setScheduleEndTime(`${h}:${m}`);
+                            }
+                          } else if (val.length === 3) {
+                            const h = val.substring(0, 1).padStart(2, '0');
+                            const m = val.substring(1, 3);
+                            if (parseInt(h) <= 23 && parseInt(m) <= 59) {
+                              setScheduleEndTime(`${h}:${m}`);
+                            }
+                          }
+                        }}
                         className="schedule-form-input"
-                        step="60"
-                        lang="en-GB"
+                        maxLength={5}
                       />
                     </div>
                   </div>
@@ -857,6 +1266,97 @@ function TeacherPage() {
           openManageStudents(managingSubjectId);
         }}
       /> */}
+
+      {/* Student Detail Modal */}
+      {showStudentDetailModal && selectedStudentDetail && (
+        <div className="student-detail-modal-overlay" onClick={() => setShowStudentDetailModal(false)}>
+          <div className="student-detail-modal" onClick={e => e.stopPropagation()}>
+            <div className="student-detail-header">
+              <div className="student-detail-title">
+                <div className="student-detail-avatar">{initials(selectedStudentDetail.full_name)}</div>
+                <div className="student-detail-name">
+                  <h3>{selectedStudentDetail.full_name}</h3>
+                  <p>@{selectedStudentDetail.username} • {selectedStudentDetail.email}</p>
+                </div>
+              </div>
+              <button className="student-detail-close" onClick={() => setShowStudentDetailModal(false)}>×</button>
+            </div>
+            <div className="student-detail-content">
+              {/* Grades Section */}
+              <div className="student-detail-section">
+                <h4>📊 สรุปคะแนน</h4>
+                {selectedStudentDetail.grades_by_subject && selectedStudentDetail.grades_by_subject.length > 0 ? (
+                  <div className="subject-grades-list">
+                    {selectedStudentDetail.grades_by_subject.map(subject => (
+                      <div key={subject.subject_id} className="subject-grade-item">
+                        <div className="subject-grade-header">
+                          <span className="subject-name">📚 {subject.subject_name}</span>
+                          <span className="subject-total">
+                            {subject.total_score}/{subject.total_max_score} 
+                            ({subject.total_max_score > 0 ? ((subject.total_score / subject.total_max_score) * 100).toFixed(1) : 0}%)
+                          </span>
+                        </div>
+                        {subject.assignments && subject.assignments.length > 0 && (
+                          <div className="assignments-list">
+                            {subject.assignments.map((assignment, idx) => (
+                              <div key={idx} className="assignment-badge">
+                                <span className="assignment-title">{assignment.title}:</span>
+                                <span className="assignment-score">{assignment.score}/{assignment.max_score}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="homeroom-empty">
+                    <div className="homeroom-empty-text">ยังไม่มีข้อมูลคะแนน</div>
+                  </div>
+                )}
+              </div>
+
+              {/* Attendance Section */}
+              <div className="student-detail-section">
+                <h4>✅ สรุปการเข้าเรียน</h4>
+                {selectedStudentDetail.attendance_by_subject && selectedStudentDetail.attendance_by_subject.length > 0 ? (
+                  <div className="subject-attendance-list">
+                    {selectedStudentDetail.attendance_by_subject.map(subject => (
+                      <div key={subject.subject_id} className="subject-attendance-item">
+                        <div className="subject-attendance-header">
+                          <span className="subject-name">📚 {subject.subject_name}</span>
+                          <span className="subject-total">
+                            {subject.present_days}/{subject.total_days} วัน
+                            ({subject.total_days > 0 ? ((subject.present_days / subject.total_days) * 100).toFixed(1) : 0}%)
+                          </span>
+                        </div>
+                        <div className="attendance-stats">
+                          <span className="attendance-stat">
+                            <span className="attendance-stat-icon">✅</span> มา {subject.present_days}
+                          </span>
+                          <span className="attendance-stat">
+                            <span className="attendance-stat-icon">❌</span> ขาด {subject.absent_days}
+                          </span>
+                          <span className="attendance-stat">
+                            <span className="attendance-stat-icon">⏰</span> สาย {subject.late_days}
+                          </span>
+                          <span className="attendance-stat">
+                            <span className="attendance-stat-icon">🏥</span> ลา {subject.sick_leave_days}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="homeroom-empty">
+                    <div className="homeroom-empty-text">ยังไม่มีข้อมูลการเข้าเรียน</div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <ConfirmModal
         isOpen={showConfirmModal}

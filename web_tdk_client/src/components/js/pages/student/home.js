@@ -17,8 +17,7 @@ function StudentPage() {
   const [currentUser, setCurrentUser] = useState(null);
   const [expandedAnnouncement, setExpandedAnnouncement] = useState(null);
   const [activeTab, setActiveTab] = useState('subjects');
-  const [isEditingGrade, setIsEditingGrade] = useState(false);
-  const [editingGradeLevel, setEditingGradeLevel] = useState('');
+  // นักเรียนไม่สามารถแก้ไขชั้นเรียนจากหน้านี้ (disabled)
   
   // Schedule state
   const [studentSchedule, setStudentSchedule] = useState([]);
@@ -46,7 +45,7 @@ function StudentPage() {
           navigate('/change-password');
         } else {
           setCurrentUser(data);
-          setEditingGradeLevel(data.grade_level || '');
+          // ไม่ต้องตั้งค่า editingGradeLevel เพราะเอาส่วนแก้ไขออก
           // persist school name when available so other parts of the app can read it
           const schoolName = data?.school_name || data?.school?.name || data?.school?.school_name || '';
           if (schoolName) localStorage.setItem('school_name', schoolName);
@@ -147,30 +146,7 @@ function StudentPage() {
       setTimeout(() => navigate('/signin'), 1000);
   };
 
-  const handleSaveGradeLevel = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE_URL}/users/me`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ grade_level: editingGradeLevel })
-      });
-      
-      if (res.ok) {
-        const updated = await res.json();
-        setCurrentUser(updated);
-        setIsEditingGrade(false);
-        toast.success('บันทึกชั้นปีสำเร็จ');
-      } else {
-        toast.error('ไม่สามารถบันทึกชั้นปี');
-      }
-    } catch (err) {
-      toast.error('เกิดข้อผิดพลาดในการบันทึก');
-    }
-  };
+  // ปิดการใช้งานการแก้ไขชั้นเรียนจากนักเรียน (handler ถูกลบ)
 
   // Helpers
   const initials = (name) => {
@@ -309,24 +285,9 @@ function StudentPage() {
             <div className="account-email">{currentUser?.email || ''}</div>
             <div className="school-info">โรงเรียน: {displaySchool}</div>
             <div className="grade-info">
-              {isEditingGrade ? (
-                <div className="grade-edit">
-                  <input
-                    type="text"
-                    value={editingGradeLevel}
-                    onChange={(e) => setEditingGradeLevel(e.target.value)}
-                    placeholder="เช่น ป.1, ชั้น 1"
-                    className="grade-input"
-                  />
-                  <button className="grade-btn-save" onClick={handleSaveGradeLevel}>บันทึก</button>
-                  <button className="grade-btn-cancel" onClick={() => { setIsEditingGrade(false); setEditingGradeLevel(currentUser?.grade_level || ''); }}>ยกเลิก</button>
-                </div>
-              ) : (
-                <div className="grade-display" onClick={() => setIsEditingGrade(true)}>
-                  <span>ชั้นปี: <strong>{currentUser?.grade_level || 'ไม่ระบุ'}</strong></span>
-                  <button className="grade-btn-edit">✏️</button>
-                </div>
-              )}
+              <div className="grade-display">
+                <span>ชั้นปี: <strong>{currentUser?.grade_level || 'ไม่ระบุ'}</strong></span>
+              </div>
             </div>
           </div>
           <div className="header-actions">

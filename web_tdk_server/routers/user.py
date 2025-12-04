@@ -507,7 +507,22 @@ def update_current_user(
     db: Session = Depends(get_db)
 ):
     """อัปเดตข้อมูลผู้ใช้งานปัจจุบัน"""
-    for field, value in user_update.dict(exclude_unset=True).items():
+    # authorization checks
+    incoming = user_update.dict(exclude_unset=True)
+
+    # Only admins can change role, is_active or school_id
+    if 'role' in incoming and getattr(current_user, 'role', None) != 'admin':
+        raise HTTPException(status_code=403, detail='Only admins can change user role')
+    if 'is_active' in incoming and getattr(current_user, 'role', None) != 'admin':
+        raise HTTPException(status_code=403, detail='Only admins can change account activation')
+    if 'school_id' in incoming and getattr(current_user, 'role', None) != 'admin':
+        raise HTTPException(status_code=403, detail='Only admins can change school assignment')
+
+    # Only admins or teachers can update grade_level (prevent students from modifying their own class)
+    if 'grade_level' in incoming and getattr(current_user, 'role', None) not in ('admin', 'teacher'):
+        raise HTTPException(status_code=403, detail='Only admin or teacher can update grade_level')
+
+    for field, value in incoming.items():
         setattr(current_user, field, value)
     
     db.commit()
@@ -701,9 +716,14 @@ def admin_update_student_grade_level(
     db: Session = Depends(get_db),
     current_user: UserModel = Depends(get_current_user)
 ):
-    """Admin-only: Update a student's grade level"""
-    if getattr(current_user, 'role', None) != 'admin':
-        raise HTTPException(status_code=403, detail='Only admins can update grade levels')
+    """Admin/Teacher: Update a student's grade level
+
+    - Admin: can update any student within their school
+    - Teacher: can update students in their school (limited to students only)
+    """
+    role = getattr(current_user, 'role', None)
+    if role not in ('admin', 'teacher'):
+        raise HTTPException(status_code=403, detail='Only admins or teachers can update grade levels')
     
     # Check if user exists
     user = db.query(UserModel).filter(UserModel.id == user_id).first()
@@ -713,6 +733,10 @@ def admin_update_student_grade_level(
     # Allow updating grade level for students (or bulk create new students)
     if user.role != 'student':
         raise HTTPException(status_code=400, detail='เฉพาะนักเรียนเท่านั้นที่สามารถเพิ่มชั้นเรียนได้')
+
+    # If teacher is performing the update, ensure same school
+    if role == 'teacher' and user.school_id != current_user.school_id:
+        raise HTTPException(status_code=403, detail='ครูไม่มีสิทธิ์แก้ไขชั้นเรียนของนักเรียนจากโรงเรียนอื่น')
     
     # Update grade level
     user.grade_level = grade_level

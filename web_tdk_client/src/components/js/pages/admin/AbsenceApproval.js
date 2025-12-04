@@ -11,6 +11,8 @@ export default function AbsenceApproval() {
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [selectedAbsenceId, setSelectedAbsenceId] = useState(null);
+  const [selectedAbsenceVersion, setSelectedAbsenceVersion] = useState(null);
+  const [processingIds, setProcessingIds] = useState(new Set()); // Track which absences are being processed
 
   // Load absences
   const loadAbsences = async () => {
@@ -41,8 +43,16 @@ export default function AbsenceApproval() {
     ? absences 
     : absences.filter(a => a.status === filter);
 
-  // Approve absence
-  const handleApprove = async (absenceId) => {
+  // Approve absence with optimistic locking
+  const handleApprove = async (absenceId, version) => {
+    // Prevent double-click
+    if (processingIds.has(absenceId)) {
+      toast.warning('กำลังประมวลผล กรุณารอสักครู่...');
+      return;
+    }
+
+    setProcessingIds(prev => new Set([...prev, absenceId]));
+
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(`${API_BASE_URL}/absences/${absenceId}`, {
@@ -51,29 +61,56 @@ export default function AbsenceApproval() {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {})
         },
-        body: JSON.stringify({ status: 'approved' })
+        body: JSON.stringify({ 
+          status: 'approved',
+          version: version  // Send version for optimistic locking
+        })
       });
 
       if (res.ok) {
         const updated = await res.json();
         setAbsences(absences.map(a => a.id === absenceId ? updated : a));
-        toast.success('อนุมัติการลาเรียบร้อย');
+        toast.success('✅ อนุมัติการลาเรียบร้อย');
       } else {
         const error = await res.json();
-        toast.error(error.detail || 'ไม่สามารถอนุมัติการลา');
+        
+        // Handle conflict (already processed by another user)
+        if (res.status === 409) {
+          toast.error(`⚠️ ${error.detail}`);
+          // Refresh the list to get updated data
+          await loadAbsences();
+        } else if (res.status === 403) {
+          toast.error(`🚫 ${error.detail}`);
+        } else {
+          toast.error(error.detail || 'ไม่สามารถอนุมัติการลา');
+        }
       }
     } catch (err) {
       console.error('Error:', err);
-      toast.error('เกิดข้อผิดพลาด');
+      toast.error('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+    } finally {
+      setProcessingIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(absenceId);
+        return newSet;
+      });
     }
   };
 
-  // Reject absence
+  // Reject absence with optimistic locking
   const handleReject = async () => {
     if (!rejectReason.trim()) {
       toast.error('กรุณาระบุเหตุผลการปฏิเสธ');
       return;
     }
+
+    // Prevent double-click
+    if (processingIds.has(selectedAbsenceId)) {
+      toast.warning('กำลังประมวลผล กรุณารอสักครู่...');
+      return;
+    }
+
+    setProcessingIds(prev => new Set([...prev, selectedAbsenceId]));
 
     try {
       const token = localStorage.getItem('token');
@@ -83,23 +120,48 @@ export default function AbsenceApproval() {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {})
         },
-        body: JSON.stringify({ status: 'rejected', reject_reason: rejectReason })
+        body: JSON.stringify({ 
+          status: 'rejected', 
+          reject_reason: rejectReason,
+          version: selectedAbsenceVersion  // Send version for optimistic locking
+        })
       });
 
       if (res.ok) {
         const updated = await res.json();
         setAbsences(absences.map(a => a.id === selectedAbsenceId ? updated : a));
-        toast.success('ปฏิเสธการลาเรียบร้อย');
+        toast.success('❌ ปฏิเสธการลาเรียบร้อย');
         setShowRejectModal(false);
         setRejectReason('');
         setSelectedAbsenceId(null);
+        setSelectedAbsenceVersion(null);
       } else {
         const error = await res.json();
-        toast.error(error.detail || 'ไม่สามารถปฏิเสธการลา');
+        
+        // Handle conflict (already processed by another user)
+        if (res.status === 409) {
+          toast.error(`⚠️ ${error.detail}`);
+          setShowRejectModal(false);
+          setRejectReason('');
+          setSelectedAbsenceId(null);
+          setSelectedAbsenceVersion(null);
+          // Refresh the list to get updated data
+          await loadAbsences();
+        } else if (res.status === 403) {
+          toast.error(`🚫 ${error.detail}`);
+        } else {
+          toast.error(error.detail || 'ไม่สามารถปฏิเสธการลา');
+        }
       }
     } catch (err) {
       console.error('Error:', err);
-      toast.error('เกิดข้อผิดพลาด');
+      toast.error('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+    } finally {
+      setProcessingIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(selectedAbsenceId);
+        return newSet;
+      });
     }
   };
 
@@ -110,6 +172,18 @@ export default function AbsenceApproval() {
       month: 'long',
       day: 'numeric',
       weekday: 'long'
+    });
+  };
+
+  const formatDateTime = (dateTimeStr) => {
+    if (!dateTimeStr) return null;
+    const date = new Date(dateTimeStr);
+    return date.toLocaleString('th-TH', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
     });
   };
 
@@ -131,10 +205,27 @@ export default function AbsenceApproval() {
     return labels[status] || status;
   };
 
+  const getApproverRoleLabel = (role) => {
+    if (!role) return '';
+    const labels = {
+      admin: '(แอดมิน)',
+      teacher: '(ครูประจำชั้น)'
+    };
+    return labels[role] || `(${role})`;
+  };
+
   return (
     <section className="absence-approval-section">
       <div className="approval-header">
         <h4><span className="approval-icon">📋</span> อนุมัติการลาเรียน</h4>
+        <button 
+          className="refresh-btn"
+          onClick={loadAbsences}
+          disabled={loading}
+          title="รีเฟรชข้อมูล"
+        >
+          🔄 {loading ? 'กำลังโหลด...' : 'รีเฟรช'}
+        </button>
       </div>
 
       <div className="approval-filters">
@@ -184,6 +275,14 @@ export default function AbsenceApproval() {
                 </div>
                 <div className="approval-date">
                   📅 {formatDate(absence.absence_date)}
+                  {absence.absence_date_end && absence.absence_date_end !== absence.absence_date && (
+                    <span> - {formatDate(absence.absence_date_end)}</span>
+                  )}
+                  {absence.days_count && absence.days_count > 1 && (
+                    <span style={{ marginLeft: '8px', color: '#666', fontSize: '12px' }}>
+                      ({absence.days_count} วัน)
+                    </span>
+                  )}
                 </div>
                 <div>
                   <span className={`absence-type ${absence.absence_type}`}>
@@ -200,6 +299,26 @@ export default function AbsenceApproval() {
                     <strong>เหตุผล:</strong> {absence.reason}
                   </div>
                 )}
+                
+                {/* Show approver info if processed */}
+                {absence.status !== 'pending' && absence.approver_name && (
+                  <div className="approval-by" style={{ marginTop: '8px', fontSize: '12px', color: '#666', borderTop: '1px solid #eee', paddingTop: '8px' }}>
+                    <strong>{absence.status === 'approved' ? '✅ อนุมัติโดย:' : '❌ ปฏิเสธโดย:'}</strong>{' '}
+                    {absence.approver_name} {getApproverRoleLabel(absence.approver_role)}
+                    {absence.approved_at && (
+                      <span style={{ marginLeft: '8px', color: '#999' }}>
+                        เมื่อ {formatDateTime(absence.approved_at)}
+                      </span>
+                    )}
+                  </div>
+                )}
+                
+                {/* Show rejection reason */}
+                {absence.status === 'rejected' && absence.reject_reason && (
+                  <div className="rejection-reason" style={{ marginTop: '4px', fontSize: '12px', color: '#d32f2f', backgroundColor: '#ffebee', padding: '8px', borderRadius: '4px' }}>
+                    <strong>เหตุผลที่ปฏิเสธ:</strong> {absence.reject_reason}
+                  </div>
+                )}
               </div>
               <div className="approval-actions">
                 <span className={`absence-status ${absence.status}`}>
@@ -209,20 +328,23 @@ export default function AbsenceApproval() {
                   <>
                     <button
                       className="approval-btn approve"
-                      onClick={() => handleApprove(absence.id)}
+                      onClick={() => handleApprove(absence.id, absence.version)}
+                      disabled={processingIds.has(absence.id)}
                       title="อนุมัติ"
                     >
-                      ✅ อนุมัติ
+                      {processingIds.has(absence.id) ? '⏳...' : '✅ อนุมัติ'}
                     </button>
                     <button
                       className="approval-btn reject"
                       onClick={() => {
                         setSelectedAbsenceId(absence.id);
+                        setSelectedAbsenceVersion(absence.version);
                         setShowRejectModal(true);
                       }}
+                      disabled={processingIds.has(absence.id)}
                       title="ปฏิเสธ"
                     >
-                      ❌ ปฏิเสธ
+                      {processingIds.has(absence.id) ? '⏳...' : '❌ ปฏิเสธ'}
                     </button>
                   </>
                 )}
@@ -265,8 +387,9 @@ export default function AbsenceApproval() {
               <button
                 className="reject-btn-confirm"
                 onClick={handleReject}
+                disabled={processingIds.has(selectedAbsenceId)}
               >
-                ปฏิเสธ
+                {processingIds.has(selectedAbsenceId) ? 'กำลังประมวลผล...' : 'ปฏิเสธ'}
               </button>
             </div>
           </div>

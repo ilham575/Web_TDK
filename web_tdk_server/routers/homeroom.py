@@ -1,10 +1,16 @@
 from fastapi import APIRouter, HTTPException, Depends, status
 from sqlalchemy.orm import Session
 from typing import List, Optional
+import json
 
 from schemas.homeroom import HomeroomTeacher, HomeroomTeacherCreate, HomeroomTeacherUpdate, HomeroomTeacherWithDetails
 from models.homeroom import HomeroomTeacher as HomeroomTeacherModel
 from models.user import User as UserModel
+from models.classroom import Classroom as ClassroomModel, ClassroomStudent as ClassroomStudentModel
+from models.grade import Grade as GradeModel
+from models.attendance import Attendance as AttendanceModel
+from models.subject import Subject as SubjectModel
+from models.subject_student import SubjectStudent as SubjectStudentModel
 from database.connection import get_db
 from routers.user import get_current_user
 
@@ -304,3 +310,253 @@ def get_students_by_grade(
         'email': s.email,
         'grade_level': s.grade_level
     } for s in students]
+
+
+@router.get("/my-classrooms/summary")
+def get_homeroom_summary(
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user)
+):
+    """ดึงข้อมูลสรุปของนักเรียนในชั้นที่ครูประจำ (คะแนน + การเข้าเรียน)"""
+    if current_user.role not in ['teacher', 'admin']:
+        raise HTTPException(status_code=403, detail="ต้องเป็นครูหรือแอดมินเท่านั้น")
+    
+    # Get homeroom assignments for this teacher
+    homerooms = db.query(HomeroomTeacherModel).filter(
+        HomeroomTeacherModel.teacher_id == current_user.id
+    ).all()
+    
+    if not homerooms:
+        return {"classrooms": [], "message": "ไม่พบข้อมูลครูประจำชั้น"}
+    
+    result = []
+    
+    for hr in homerooms:
+        # Get classrooms for this grade level
+        classrooms = db.query(ClassroomModel).filter(
+            ClassroomModel.school_id == hr.school_id,
+            ClassroomModel.grade_level == hr.grade_level
+        ).all()
+        
+        for classroom in classrooms:
+            # Get students in this classroom
+            enrollments = db.query(ClassroomStudentModel, UserModel).join(
+                UserModel, ClassroomStudentModel.student_id == UserModel.id
+            ).filter(
+                ClassroomStudentModel.classroom_id == classroom.id,
+                ClassroomStudentModel.is_active == True
+            ).all()
+            
+            students_data = []
+            for enrollment, student in enrollments:
+                # Get grades for this student
+                grades = db.query(GradeModel).filter(
+                    GradeModel.student_id == student.id
+                ).all()
+                
+                total_score = 0
+                total_max_score = 0
+                assignments_count = 0
+                
+                for grade in grades:
+                    if grade.grade is not None and grade.max_score:
+                        total_score += float(grade.grade)
+                        total_max_score += float(grade.max_score)
+                        assignments_count += 1
+                
+                avg_percentage = (total_score / total_max_score * 100) if total_max_score > 0 else 0
+                
+                # Get attendance for this student
+                # Find subjects this student is enrolled in
+                enrolled_subjects = db.query(SubjectStudentModel.subject_id).filter(
+                    SubjectStudentModel.student_id == student.id
+                ).all()
+                enrolled_subject_ids = [s[0] for s in enrolled_subjects]
+                
+                # Count attendance records
+                total_days = 0
+                present_days = 0
+                absent_days = 0
+                late_days = 0
+                sick_leave_days = 0
+                
+                if enrolled_subject_ids:
+                    attendance_records = db.query(AttendanceModel).filter(
+                        AttendanceModel.subject_id.in_(enrolled_subject_ids)
+                    ).all()
+                    
+                    for record in attendance_records:
+                        try:
+                            attendance_data = json.loads(record.present_json) if record.present_json else {}
+                            student_id_str = str(student.id)
+                            if student_id_str in attendance_data:
+                                status = attendance_data[student_id_str]
+                                total_days += 1
+                                if status == 'present':
+                                    present_days += 1
+                                elif status == 'absent':
+                                    absent_days += 1
+                                elif status == 'late':
+                                    late_days += 1
+                                elif status == 'sick_leave':
+                                    sick_leave_days += 1
+                        except:
+                            pass
+                
+                attendance_rate = (present_days / total_days * 100) if total_days > 0 else 0
+                
+                students_data.append({
+                    'id': student.id,
+                    'username': student.username,
+                    'full_name': student.full_name,
+                    'email': student.email,
+                    'grades': {
+                        'total_score': round(total_score, 2),
+                        'total_max_score': round(total_max_score, 2),
+                        'avg_percentage': round(avg_percentage, 2),
+                        'assignments_count': assignments_count
+                    },
+                    'attendance': {
+                        'total_days': total_days,
+                        'present_days': present_days,
+                        'absent_days': absent_days,
+                        'late_days': late_days,
+                        'sick_leave_days': sick_leave_days,
+                        'attendance_rate': round(attendance_rate, 2)
+                    }
+                })
+            
+            result.append({
+                'classroom_id': classroom.id,
+                'classroom_name': classroom.name,
+                'grade_level': classroom.grade_level,
+                'student_count': len(students_data),
+                'students': students_data
+            })
+    
+    return {"classrooms": result}
+
+
+@router.get("/my-classrooms/{classroom_id}/students")
+def get_homeroom_classroom_students(
+    classroom_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user)
+):
+    """ดึงรายละเอียดนักเรียนในชั้นเรียนที่ครูประจำ"""
+    if current_user.role not in ['teacher', 'admin']:
+        raise HTTPException(status_code=403, detail="ต้องเป็นครูหรือแอดมินเท่านั้น")
+    
+    # Verify this teacher is homeroom teacher for this classroom
+    classroom = db.query(ClassroomModel).filter(ClassroomModel.id == classroom_id).first()
+    if not classroom:
+        raise HTTPException(status_code=404, detail="ไม่พบชั้นเรียน")
+    
+    if current_user.role == 'teacher':
+        homeroom = db.query(HomeroomTeacherModel).filter(
+            HomeroomTeacherModel.teacher_id == current_user.id,
+            HomeroomTeacherModel.grade_level == classroom.grade_level,
+            HomeroomTeacherModel.school_id == classroom.school_id
+        ).first()
+        
+        if not homeroom:
+            raise HTTPException(status_code=403, detail="คุณไม่ใช่ครูประจำชั้นของห้องเรียนนี้")
+    
+    # Get students in this classroom
+    enrollments = db.query(ClassroomStudentModel, UserModel).join(
+        UserModel, ClassroomStudentModel.student_id == UserModel.id
+    ).filter(
+        ClassroomStudentModel.classroom_id == classroom_id,
+        ClassroomStudentModel.is_active == True
+    ).all()
+    
+    students_data = []
+    for enrollment, student in enrollments:
+        # Get all grades for this student with subject details
+        grades = db.query(GradeModel, SubjectModel).join(
+            SubjectModel, GradeModel.subject_id == SubjectModel.id
+        ).filter(
+            GradeModel.student_id == student.id
+        ).all()
+        
+        grades_by_subject = {}
+        for grade, subject in grades:
+            if subject.id not in grades_by_subject:
+                grades_by_subject[subject.id] = {
+                    'subject_id': subject.id,
+                    'subject_name': subject.name,
+                    'assignments': [],
+                    'total_score': 0,
+                    'total_max_score': 0
+                }
+            if grade.grade is not None and grade.max_score:
+                grades_by_subject[subject.id]['assignments'].append({
+                    'title': grade.title,
+                    'score': float(grade.grade),
+                    'max_score': float(grade.max_score)
+                })
+                grades_by_subject[subject.id]['total_score'] += float(grade.grade)
+                grades_by_subject[subject.id]['total_max_score'] += float(grade.max_score)
+        
+        # Get attendance
+        enrolled_subjects = db.query(SubjectStudentModel.subject_id).filter(
+            SubjectStudentModel.student_id == student.id
+        ).all()
+        enrolled_subject_ids = [s[0] for s in enrolled_subjects]
+        
+        attendance_by_subject = {}
+        if enrolled_subject_ids:
+            for subject_id in enrolled_subject_ids:
+                subject = db.query(SubjectModel).filter(SubjectModel.id == subject_id).first()
+                if not subject:
+                    continue
+                    
+                attendance_records = db.query(AttendanceModel).filter(
+                    AttendanceModel.subject_id == subject_id
+                ).all()
+                
+                subject_attendance = {
+                    'subject_id': subject_id,
+                    'subject_name': subject.name,
+                    'total_days': 0,
+                    'present_days': 0,
+                    'absent_days': 0,
+                    'late_days': 0,
+                    'sick_leave_days': 0
+                }
+                
+                for record in attendance_records:
+                    try:
+                        attendance_data = json.loads(record.present_json) if record.present_json else {}
+                        student_id_str = str(student.id)
+                        if student_id_str in attendance_data:
+                            status = attendance_data[student_id_str]
+                            subject_attendance['total_days'] += 1
+                            if status == 'present':
+                                subject_attendance['present_days'] += 1
+                            elif status == 'absent':
+                                subject_attendance['absent_days'] += 1
+                            elif status == 'late':
+                                subject_attendance['late_days'] += 1
+                            elif status == 'sick_leave':
+                                subject_attendance['sick_leave_days'] += 1
+                    except:
+                        pass
+                
+                attendance_by_subject[subject_id] = subject_attendance
+        
+        students_data.append({
+            'id': student.id,
+            'username': student.username,
+            'full_name': student.full_name,
+            'email': student.email,
+            'grades_by_subject': list(grades_by_subject.values()),
+            'attendance_by_subject': list(attendance_by_subject.values())
+        })
+    
+    return {
+        'classroom_id': classroom.id,
+        'classroom_name': classroom.name,
+        'grade_level': classroom.grade_level,
+        'students': students_data
+    }

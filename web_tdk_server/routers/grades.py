@@ -71,8 +71,9 @@ def get_grades(subject_id: int = None, classroom_id: int = None, db: Session = D
     if subject_id is not None:
         query = query.filter(GradeModel.subject_id == subject_id)
     if classroom_id is not None:
-        # include class-specific grades and global grades (without classroom)
-        query = query.filter((GradeModel.classroom_id == classroom_id) | (GradeModel.classroom_id.is_(None)))
+        # ONLY return grades for this specific classroom (strict filter)
+        query = query.filter(GradeModel.classroom_id == classroom_id)
+    # When no classroom_id provided, return ALL grades (no additional filter)
     rows = query.all()
     return rows
 
@@ -102,7 +103,7 @@ def get_assignments(subject_id: int, classroom_id: int = None, db: Session = Dep
     else:
         raise HTTPException(status_code=403, detail='Not authorized to view assignments for this subject')
 
-    # Get distinct assignments (unique title + max_score combinations)
+    # Get distinct assignments (unique title + max_score + classroom_id combinations)
     query = db.query(
         GradeModel.title,
         GradeModel.max_score,
@@ -112,8 +113,9 @@ def get_assignments(subject_id: int, classroom_id: int = None, db: Session = Dep
         GradeModel.title.isnot(None)
     )
     if classroom_id is not None:
-        # include assignments created for this classroom or global (NULL classroom_id)
-        query = query.filter((GradeModel.classroom_id == classroom_id) | (GradeModel.classroom_id.is_(None)))
+        # ONLY show assignments created for this specific classroom (strict filter)
+        query = query.filter(GradeModel.classroom_id == classroom_id)
+    # When no classroom_id provided, return ALL assignments (no additional filter)
     assignments = query.distinct().all()
 
     # Convert to response format with generated IDs

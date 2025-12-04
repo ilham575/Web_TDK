@@ -4,6 +4,7 @@ import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import Loading from '../Loading';
 import ChangePasswordModal from '../ChangePasswordModal';
+import ClassroomDetailModal from '../ClassroomDetailModal';
 import '../../css/pages/profile.css';
 import { API_BASE_URL } from '../../endpoints';
 
@@ -16,6 +17,29 @@ function ProfilePage() {
   const [editData, setEditData] = useState({});
   const [isSaving, setIsSaving] = useState(false);
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
+  const [teacherHomerooms, setTeacherHomerooms] = useState([]);
+  const [teacherClassrooms, setTeacherClassrooms] = useState({});
+  const [loadingHomerooms, setLoadingHomerooms] = useState(false);
+  const [showClassroomModal, setShowClassroomModal] = useState(false);
+  const [selectedClassroomId, setSelectedClassroomId] = useState(null);
+  const [gradeLevels, setGradeLevels] = useState([]);
+  const [loadingGradeLevels, setLoadingGradeLevels] = useState(false);
+  const [classroomStudentCounts, setClassroomStudentCounts] = useState({});
+
+  // Refresh student count when modal opens
+  useEffect(() => {
+    if (showClassroomModal && selectedClassroomId) {
+      const token = localStorage.getItem('token');
+      fetch(`${API_BASE_URL}/classrooms/${selectedClassroomId}/students`, { headers: { Authorization: `Bearer ${token}` } })
+        .then(res => res.json())
+        .then(students => {
+          setClassroomStudentCounts(prev => ({ ...prev, [selectedClassroomId]: Array.isArray(students) ? students.length : 0 }));
+        })
+        .catch(() => {
+          setClassroomStudentCounts(prev => ({ ...prev, [selectedClassroomId]: 0 }));
+        });
+    }
+  }, [showClassroomModal, selectedClassroomId]);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -40,6 +64,53 @@ function ProfilePage() {
             })
             .catch(() => {});
         }
+          // If teacher, fetch homeroom assignments and classrooms
+          if (data.role === 'teacher') {
+            setLoadingHomerooms(true);
+            const token = localStorage.getItem('token');
+            fetch(`${API_BASE_URL}/homeroom/?school_id=${data.school_id}`, { headers: { Authorization: `Bearer ${token}` } })
+              .then(res => res.json())
+              .then(homerooms => {
+                // Filter for this teacher only
+                const assigned = homerooms.filter(h => h.teacher_id === data.id);
+                setTeacherHomerooms(assigned || []);
+                // For each assigned grade_level, fetch classrooms
+                assigned.forEach(hr => {
+                  fetch(`${API_BASE_URL}/classrooms?school_id=${data.school_id}&grade_level=${encodeURIComponent(hr.grade_level)}`, { headers: { Authorization: `Bearer ${token}` } })
+                    .then(res => res.json())
+                    .then(classrooms => {
+                      setTeacherClassrooms(prev => ({ ...prev, [hr.grade_level]: classrooms }));
+                      // Fetch actual student counts for each classroom
+                      classrooms.forEach(classroom => {
+                        fetch(`${API_BASE_URL}/classrooms/${classroom.id}/students`, { headers: { Authorization: `Bearer ${token}` } })
+                          .then(res => res.json())
+                          .then(students => {
+                            // Filter out deleted students (is_active === false)
+                            const activeStudents = Array.isArray(students) ? students.filter(s => s.is_active !== false) : [];
+                            setClassroomStudentCounts(prev => ({ ...prev, [classroom.id]: activeStudents.length }));
+                          })
+                          .catch(() => {
+                            setClassroomStudentCounts(prev => ({ ...prev, [classroom.id]: 0 }));
+                          });
+                      });
+                    })
+                    .catch(() => {
+                      setTeacherClassrooms(prev => ({ ...prev, [hr.grade_level]: [] }));
+                    });
+                });
+              })
+              .catch(() => {})
+              .finally(() => setLoadingHomerooms(false));
+          }
+        // If admin/teacher, fetch available grade levels for dropdown
+        if (data.role === 'admin' || data.role === 'teacher') {
+          setLoadingGradeLevels(true);
+          fetch(`${API_BASE_URL}/homeroom/grade-levels?school_id=${data.school_id}`, { headers: { Authorization: `Bearer ${token}` } })
+            .then(res => res.json())
+            .then(g => setGradeLevels(g || []))
+            .catch(() => setGradeLevels([]))
+            .finally(() => setLoadingGradeLevels(false));
+        }
       })
       .catch(() => { navigate('/signin'); })
       .finally(() => setLoading(false));
@@ -58,8 +129,9 @@ function ProfilePage() {
         email: editData.email
       };
       
-      // เพิ่ม grade_level สำหรับนักเรียน
-      if (user.role === 'student') {
+      // Missing: do NOT allow students to update their grade_level from UI (server already enforced)
+      // Only add grade_level to payload if the user is not a student and grade_level was modified
+      if ((user.role === 'admin' || user.role === 'teacher') && editData.grade_level !== undefined) {
         payload.grade_level = editData.grade_level;
       }
 
@@ -218,23 +290,54 @@ function ProfilePage() {
               </div>
             </div>
 
-            {/* Editable Field: Grade Level (for students) */}
+              {/* Teacher: Homeroom assignments */}
+              {user.role === 'teacher' && (
+                <div className="profile-field">
+                  <div className="profile-field-icon">🏷️</div>
+                  <div className="profile-field-content">
+                    <div className="profile-field-label">ครูประจำชั้น</div>
+                    <div className="profile-field-value">
+                      {loadingHomerooms ? (
+                        'กำลังโหลดข้อมูลครูประจำชั้น...'
+                      ) : (
+                        teacherHomerooms.length > 0 ? (
+                          <ul className="profile-homeroom-list">
+                            {teacherHomerooms.map(hr => (
+                              <li key={hr.id} className="profile-homeroom-item">
+                                <strong>{hr.grade_level}</strong>
+                                {hr.academic_year ? ` (${hr.academic_year})` : ''}
+                                {teacherClassrooms[hr.grade_level] && teacherClassrooms[hr.grade_level].length > 0 && (
+                                  <div className="profile-homeroom-classrooms">
+                                    ห้อง: {teacherClassrooms[hr.grade_level].map((c, idx) => (
+                                      <span key={c.id}>
+                                        <button className="profile-classroom-link" onClick={() => { setSelectedClassroomId(c.id); setShowClassroomModal(true); }}
+                                          style={{ background: 'none', border: 'none', padding: 0, color: '#2b6cb0', cursor: 'pointer' }}
+                                        >{c.name}</button>
+                                        {idx < teacherClassrooms[hr.grade_level].length - 1 ? ', ' : ''}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                                <div className="profile-homeroom-meta">จำนวนนักเรียน: {teacherClassrooms[hr.grade_level]?.reduce((total, c) => total + (classroomStudentCounts[c.id] !== undefined ? classroomStudentCounts[c.id] : 0), 0) || 0}</div>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <div>ไม่ได้ประจำชั้นใดๆ</div>
+                        )
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+            {/* Editable Field: Grade Level - Only for students */}
             {user.role === 'student' && (
               <div className="profile-field">
                 <div className="profile-field-icon">📚</div>
                 <div className="profile-field-content">
                   <div className="profile-field-label">ชั้นปี</div>
-                  {isEditing ? (
-                    <input
-                      type="text"
-                      className="profile-field-input"
-                      placeholder="เช่น ป.1, ชั้น 1"
-                      value={editData.grade_level}
-                      onChange={(e) => handleEditChange('grade_level', e.target.value)}
-                    />
-                  ) : (
-                    <div className="profile-field-value">{user.grade_level || 'ไม่ระบุ'}</div>
-                  )}
+                  <div className="profile-field-value">{user.grade_level || 'ไม่ระบุ'}</div>
                 </div>
               </div>
             )}
@@ -337,6 +440,13 @@ function ProfilePage() {
         isOpen={showChangePasswordModal}
         onClose={() => setShowChangePasswordModal(false)}
       />
+      {user && user.role === 'teacher' && (
+        <ClassroomDetailModal
+          isOpen={showClassroomModal}
+          classroomId={selectedClassroomId}
+          onClose={() => { setSelectedClassroomId(null); setShowClassroomModal(false); }}
+        />
+      )}
       <ToastContainer />
     </div>
   );

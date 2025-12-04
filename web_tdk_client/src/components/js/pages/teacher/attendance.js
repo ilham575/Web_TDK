@@ -45,6 +45,28 @@ function AttendancePage(){
           };
 
           const distinct = Array.from(new Set(data.map(getClassIdentifier)));
+
+          // Helper to extract numeric parts for natural sorting (e.g., ป.1/1 -> [1,1])
+          const extractNumbers = (str) => {
+            if (!str) return [];
+            const match = String(str).match(/\d+/g);
+            return match ? match.map(n => Number(n)) : [];
+          };
+
+          const compareNumericLabels = (a, b) => {
+            const na = extractNumbers(a);
+            const nb = extractNumbers(b);
+            const len = Math.max(na.length, nb.length);
+            for (let i = 0; i < len; i++) {
+              const ai = na[i] ?? 0;
+              const bi = nb[i] ?? 0;
+              if (ai !== bi) return ai - bi;
+            }
+            // Fallback to localeCompare (supports Thai as well)
+            return String(a).localeCompare(String(b), 'th');
+          };
+
+          distinct.sort(compareNumericLabels);
           setClasses(distinct);
           // only select a class when there are multiple groups; otherwise show all
           setSelectedClass(distinct.length > 1 ? distinct[0] : null);

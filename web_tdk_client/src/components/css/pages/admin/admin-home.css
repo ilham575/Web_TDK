@@ -2391,6 +2391,29 @@
   gap: 1rem;
 }
 
+/* Force 24-hour format for time inputs */
+.schedule-form-input[type="time"] {
+  /* Hide AM/PM selector in webkit browsers */
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.schedule-form-input[type="time"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  padding: 0.5rem;
+  margin-left: 0.5rem;
+}
+
+/* Hide AM/PM text in Chrome/Safari */
+.schedule-form-input[type="time"]::-webkit-datetime-edit-ampm-field {
+  display: none !important;
+}
+
+/* Ensure hour shows in 24-hour format */
+.schedule-form-input[type="time"]::-webkit-datetime-edit-hour-field {
+  /* Use 24-hour clock */
+}
+
 .schedule-time-inputs .schedule-form-group {
   margin: 0;
 }

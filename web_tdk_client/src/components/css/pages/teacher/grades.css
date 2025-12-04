@@ -174,6 +174,25 @@ body {
   color: #374151;
 }
 
+/* Make disabled class options clearly visible and visually distinct */
+.class-filter select option:disabled {
+  color: #9ca3af; /* Muted gray */
+  background-color: #f8fafc; /* slightly tinted */
+  opacity: 0.85;
+  text-decoration: line-through; /* show strike-through (may be ignored by some browsers) */
+  cursor: not-allowed; /* hint it's not interactive */
+}
+
+.class-filter select option:disabled {
+  font-style: italic;
+}
+
+/* When an option is disabled and selected (fallback), make it visually distinct in the select field */
+.class-filter select option:disabled[selected],
+.class-filter select option:disabled:checked {
+  color: #9ca3af;
+}
+
 .btn-new-assignment {
   background: linear-gradient(135deg, #10b981, #059669);
   color: #ffffff;
@@ -709,6 +728,19 @@ body {
 .grades-modal-select option {
   background: #ffffff;
   color: #374151;
+}
+
+/* Also style disabled options inside modal selects */
+.grades-modal-select option:disabled {
+  color: #9ca3af;
+  background-color: #f8fafc;
+  opacity: 0.85;
+  text-decoration: line-through;
+  cursor: not-allowed;
+}
+
+.grades-modal-select option:disabled {
+  font-style: italic;
 }
 
 /* Visual hint when a classroom is specifically selected (not Global) */

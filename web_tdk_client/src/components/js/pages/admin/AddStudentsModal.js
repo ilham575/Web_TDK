@@ -11,6 +11,9 @@ const AddStudentsModal = ({
   onAddStudents,
   onBack,
   onClose,
+  onRemoveStudent,
+  onStudentCountUpdate,
+  refreshKey,
 }) => {
   // Local state สำหรับ modal นี้เท่านั้น
   const [selectedStudentIds, setSelectedStudentIds] = useState(new Set());
@@ -74,17 +77,20 @@ const AddStudentsModal = ({
         })
         .finally(() => setLoadingClassroomStudents(false));
     }
-  }, [isOpen, selectedClassroom, classroomStep]);
+  }, [isOpen, selectedClassroom, classroomStep, refreshKey]);
 
   useEffect(() => {
     const sourceStudents = classroomStep === 'add_students' ? availableStudents : classroomStudents;
     console.log('[AddStudentsModal] useEffect filter: classroomStep:', classroomStep, 'sourceStudents:', sourceStudents, 'searchTerm:', searchTerm);
     
+    // Filter out deleted students (is_active === false)
+    const activeStudents = sourceStudents.filter(s => s.is_active !== false);
+    
     if (searchTerm.trim() === '') {
-      setFilteredStudents(sourceStudents);
-      console.log('[AddStudentsModal] No search term, using all sourceStudents:', sourceStudents);
+      setFilteredStudents(activeStudents);
+      console.log('[AddStudentsModal] No search term, using all activeStudents:', activeStudents);
     } else {
-      const filtered = sourceStudents.filter(s =>
+      const filtered = activeStudents.filter(s =>
         (s.full_name && s.full_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (s.username && s.username.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (s.email && s.email.toLowerCase().includes(searchTerm.toLowerCase()))
@@ -187,7 +193,8 @@ const AddStudentsModal = ({
                           display: 'flex',
                           alignItems: 'center',
                           gap: '1rem',
-                          backgroundColor: selectedStudentIds.has(student.id) ? '#f0f7ff' : 'white'
+                          backgroundColor: selectedStudentIds.has(student.id) ? '#f0f7ff' : (student.is_active === false ? '#fff3cd' : 'white'),
+                          opacity: student.is_active === false ? 0.7 : 1
                         }}
                       >
                         { !isViewMode && (
@@ -206,13 +213,49 @@ const AddStudentsModal = ({
                           />
                         )}
                         <div style={{ flex: 1 }}>
-                          <div style={{ fontWeight: '600', fontSize: '14px' }}>
+                          <div style={{ fontWeight: '600', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                             {student.full_name || student.username}
                           </div>
                           <div style={{ fontSize: '12px', color: '#666' }}>
                             📧 {student.email}
                           </div>
                         </div>
+                        {isViewMode && (
+                          <button
+                            onClick={() => {
+                              if (onRemoveStudent) {
+                                onRemoveStudent(selectedClassroom.id, student.student_id, student.full_name || student.username);
+                                // Call callback to update student count
+                                if (onStudentCountUpdate) {
+                                  onStudentCountUpdate(selectedClassroom.id);
+                                }
+                              }
+                            }}
+                            style={{
+                              padding: '0.5rem 1rem',
+                              backgroundColor: student.is_active === false ? '#4caf50' : '#ff6b6b',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              fontSize: '12px',
+                              fontWeight: '600',
+                              transition: 'all 0.2s ease',
+                              whiteSpace: 'nowrap'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.target.style.backgroundColor = student.is_active === false ? '#45a049' : '#ff5252';
+                              e.target.style.transform = 'scale(1.05)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.target.style.backgroundColor = student.is_active === false ? '#4caf50' : '#ff6b6b';
+                              e.target.style.transform = 'scale(1)';
+                            }}
+                            title={student.is_active === false ? "เพิ่มนักเรียนกลับเข้า" : "ลบนักเรียนออกจากชั้นเรียน"}
+                          >
+                            {student.is_active === false ? '✓ เพิ่มกลับ' : '🗑️ ลบ'}
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>

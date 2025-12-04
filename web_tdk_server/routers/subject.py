@@ -112,7 +112,7 @@ def subjects_by_student(student_id: int, db: Session = Depends(get_db), current_
     return subs
 
 
-@router.get("/{subject_id}/students", response_model=List[UserSchema])
+@router.get("/{subject_id}/students")
 def get_subject_students(subject_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     # list students enrolled in subject
     subj = db.query(SubjectModel).filter(SubjectModel.id == subject_id).first()
@@ -121,9 +121,45 @@ def get_subject_students(subject_id: int, db: Session = Depends(get_db), current
     # only admin or assigned teacher can view
     if getattr(current_user, 'role', None) != 'admin' and subj.teacher_id != getattr(current_user, 'id', None):
         raise HTTPException(status_code=403, detail='Not authorized to view students for this subject')
-    # join subject_students -> users
-    student_rows = db.query(UserModel).join(SubjectStudentModel, SubjectStudentModel.student_id == UserModel.id).filter(SubjectStudentModel.subject_id == subject_id).all()
-    return student_rows
+    
+    # join subject_students -> users and include classroom info
+    student_rows = db.query(UserModel).join(
+        SubjectStudentModel, SubjectStudentModel.student_id == UserModel.id
+    ).filter(SubjectStudentModel.subject_id == subject_id).all()
+    
+    # Build response with classroom info for each student
+    result = []
+    for student in student_rows:
+        # Get student's active classroom
+        classroom_student = db.query(ClassroomStudentModel).filter(
+            ClassroomStudentModel.student_id == student.id,
+            ClassroomStudentModel.is_active == True
+        ).first()
+        
+        classroom_info = None
+        if classroom_student:
+            classroom = db.query(ClassroomModel).filter(
+                ClassroomModel.id == classroom_student.classroom_id
+            ).first()
+            if classroom:
+                classroom_info = {
+                    'id': classroom.id,
+                    'name': classroom.name
+                }
+        
+        result.append({
+            'id': student.id,
+            'username': student.username,
+            'full_name': student.full_name,
+            'email': student.email,
+            'role': student.role,
+            'school_id': student.school_id,
+            'grade_level': student.grade_level,
+            'is_active': student.is_active,
+            'classroom': classroom_info
+        })
+    
+    return result
 
 
 @router.get("/available-students/{subject_id}")

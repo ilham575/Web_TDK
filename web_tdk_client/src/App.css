@@ -39,3 +39,25 @@
     transform: rotate(360deg);
   }
 }
+
+/* ===== Global Time Input Styles - Force 24-hour format ===== */
+/* Hide AM/PM selector in all time inputs */
+input[type="time"]::-webkit-datetime-edit-ampm-field {
+  display: none !important;
+}
+
+/* Force 24-hour display in time inputs */
+input[type="time"] {
+  /* Ensure consistent appearance */
+}
+
+/* Better time picker indicator */
+input[type="time"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.2s ease;
+}
+
+input[type="time"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}

@@ -80,51 +80,55 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
         return;
       }
 
-      // Validate all dates in range are available
+      // Validate all dates in range are available (only include opening days)
       const start = new Date(formData.absence_date_start);
       const end = new Date(formData.absence_date_end);
       const dates = [];
+      const raw = Array.isArray(operatingHours) ? operatingHours.map(s => Number(s.day_of_week)) : [];
+      const allowedDays = raw.map(v => (v > 6 ? (v % 7) : v));
+      
       for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-        const dateStr = d.toISOString().split('T')[0];
-        if (!availableDates.includes(dateStr)) {
-          toast.error(`วันที่ ${dateStr} ไม่ตรงกับวันที่เปิดเรียน`);
-          return;
+        const dow = d.getDay();
+        // Only include days that are in operating hours
+        if (allowedDays.includes(dow)) {
+          const dateStr = d.toISOString().split('T')[0];
+          dates.push(dateStr);
         }
-        dates.push(dateStr);
+      }
+      
+      if (dates.length === 0) {
+        toast.error('ไม่มีวันที่เปิดเรียนในช่วงวันที่เลือก');
+        return;
       }
 
-      // Submit each day as separate absence
+      // Submit as single absence record with date range
       try {
         const token = localStorage.getItem('token');
-        let successCount = 0;
-        for (const date of dates) {
-          const res = await fetch(`${API_BASE_URL}/absences/`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              ...(token ? { Authorization: `Bearer ${token}` } : {})
-            },
-            body: JSON.stringify({
-              absence_date: date,
-              subject_id: formData.subject_id || null,
-              absence_type: formData.absence_type,
-              reason: formData.reason
-            })
-          });
+        const res = await fetch(`${API_BASE_URL}/absences/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify({
+            absence_date: formData.absence_date_start,
+            absence_date_end: formData.absence_date_end,
+            days_count: dates.length,
+            subject_id: formData.subject_id || null,
+            absence_type: formData.absence_type,
+            reason: formData.reason
+          })
+        });
 
-          if (res.ok) {
-            const newAbsence = await res.json();
-            setAbsences(prev => [newAbsence, ...prev]);
-            successCount++;
-          }
-        }
-
-        if (successCount === dates.length) {
+        if (res.ok) {
+          const newAbsence = await res.json();
+          setAbsences([newAbsence, ...absences]);
           toast.success(`ยื่นคำขออนุญาตการลา ${dates.length} วันเรียบร้อย`);
           setFormData({ absence_date_start: '', absence_date_end: '', subject_id: '', absence_type: 'personal', reason: '', is_multi_day: false });
           setShowForm(false);
         } else {
-          toast.warning(`ยื่นคำขออนุญาตการลา ${successCount}/${dates.length} วัน`);
+          const error = await res.json();
+          toast.error(error.detail || 'เกิดข้อผิดพลาดในการยื่นคำขออนุญาตการลา');
         }
       } catch (err) {
         console.error('Error:', err);
@@ -237,6 +241,27 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
     return labels[status] || status;
   };
 
+  const getApproverRoleLabel = (role) => {
+    if (!role) return '';
+    const labels = {
+      admin: '(แอดมิน)',
+      teacher: '(ครูประจำชั้น)'
+    };
+    return labels[role] || `(${role})`;
+  };
+
+  const formatDateTime = (dateTimeStr) => {
+    if (!dateTimeStr) return null;
+    const date = new Date(dateTimeStr);
+    return date.toLocaleString('th-TH', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
   const getSubjectName = (subjectId) => {
     if (!subjectId) return null;
     const found = studentSubjects.find(s => String(s.id) === String(subjectId));
@@ -264,6 +289,14 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
               <div className="absence-info">
                 <div className="absence-date">
                   📅 {formatDate(absence.absence_date)}
+                  {absence.absence_date_end && absence.absence_date_end !== absence.absence_date && (
+                    <span> - {formatDate(absence.absence_date_end)}</span>
+                  )}
+                  {absence.days_count && absence.days_count > 1 && (
+                    <span style={{ marginLeft: '8px', color: '#666', fontSize: '12px' }}>
+                      ({absence.days_count} วัน)
+                    </span>
+                  )}
                 </div>
                 <div>
                   <span className={`absence-type ${absence.absence_type}`}>
@@ -276,6 +309,26 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
                 {absence.reason && (
                   <div className="absence-reason">
                     <strong>เหตุผล:</strong> {absence.reason}
+                  </div>
+                )}
+                
+                {/* Show approver info */}
+                {absence.status !== 'pending' && absence.approver_name && (
+                  <div className="absence-approver" style={{ marginTop: '8px', fontSize: '12px', color: '#666', borderTop: '1px solid #eee', paddingTop: '8px' }}>
+                    <strong>{absence.status === 'approved' ? '✅ อนุมัติโดย:' : '❌ ปฏิเสธโดย:'}</strong>{' '}
+                    {absence.approver_name} {getApproverRoleLabel(absence.approver_role)}
+                    {absence.approved_at && (
+                      <span style={{ marginLeft: '8px', color: '#999' }}>
+                        เมื่อ {formatDateTime(absence.approved_at)}
+                      </span>
+                    )}
+                  </div>
+                )}
+                
+                {/* Show rejection reason */}
+                {absence.status === 'rejected' && absence.reject_reason && (
+                  <div className="rejection-reason" style={{ marginTop: '4px', fontSize: '12px', color: '#d32f2f', backgroundColor: '#ffebee', padding: '8px', borderRadius: '4px' }}>
+                    <strong>เหตุผลที่ปฏิเสธ:</strong> {absence.reject_reason}
                   </div>
                 )}
               </div>

@@ -212,8 +212,8 @@ async def bulk_create_classrooms(
     return result
 
 
-@router.get("/list/{school_id}", response_model=List[ClassroomListResponse])
-async def list_classrooms(
+@router.get("/", response_model=List[ClassroomListResponse])
+async def get_classrooms(
     school_id: int,
     semester: Optional[int] = None,
     academic_year: Optional[str] = None,
@@ -221,7 +221,7 @@ async def list_classrooms(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """ดึงรายการชั้นเรียนทั้งหมดของโรงเรียน"""
+    """ดึงรายการชั้นเรียนทั้งหมดของโรงเรียน (ใช้ query parameter)"""
     query = db.query(Classroom).filter(
         Classroom.school_id == school_id,
         Classroom.is_active == True
@@ -257,170 +257,49 @@ async def list_classrooms(
     return result
 
 
-@router.get("/{classroom_id}", response_model=ClassroomResponse)
-async def get_classroom(
-    classroom_id: int,
+@router.get("/list/{school_id}", response_model=List[ClassroomListResponse])
+async def list_classrooms(
+    school_id: int,
+    semester: Optional[int] = None,
+    academic_year: Optional[str] = None,
+    grade_level: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """ดึงข้อมูลชั้นเรียน"""
-    classroom = get_classroom_or_404(classroom_id, db)
-
-    student_count = db.query(ClassroomStudent).filter(
-        ClassroomStudent.classroom_id == classroom.id,
-        ClassroomStudent.is_active == True
-    ).count()
-
-    return ClassroomResponse(
-        id=classroom.id,
-        name=classroom.name,
-        grade_level=classroom.grade_level,
-        room_number=classroom.room_number,
-        semester=classroom.semester,
-        academic_year=classroom.academic_year,
-        school_id=classroom.school_id,
-        is_active=classroom.is_active,
-        parent_classroom_id=classroom.parent_classroom_id,
-        student_count=student_count,
-        created_at=classroom.created_at,
-        updated_at=classroom.updated_at
+    """ดึงรายการชั้นเรียนทั้งหมดของโรงเรียน (ใช้ path parameter)"""
+    query = db.query(Classroom).filter(
+        Classroom.school_id == school_id,
+        Classroom.is_active == True
     )
 
+    if semester:
+        query = query.filter(Classroom.semester == semester)
+    if academic_year:
+        query = query.filter(Classroom.academic_year == academic_year)
+    if grade_level:
+        query = query.filter(Classroom.grade_level == grade_level)
 
-@router.put("/{classroom_id}", response_model=ClassroomResponse)
-async def update_classroom_put(
-    classroom_id: int,
-    data: ClassroomUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """อัปเดตข้อมูลชั้นเรียน (PUT)"""
-    verify_admin_or_owner(current_user)
-    classroom = get_classroom_or_404(classroom_id, db)
+    classrooms = query.order_by(Classroom.grade_level, Classroom.room_number).all()
 
-    try:
-        if data.name is not None:
-            classroom.name = data.name
-        if data.grade_level is not None:
-            classroom.grade_level = data.grade_level
-        if data.room_number is not None:
-            classroom.room_number = data.room_number
-        if data.semester is not None:
-            classroom.semester = data.semester
-        if data.is_active is not None:
-            classroom.is_active = data.is_active
-
-        db.commit()
-        db.refresh(classroom)
-
+    result = []
+    for c in classrooms:
         student_count = db.query(ClassroomStudent).filter(
-            ClassroomStudent.classroom_id == classroom.id,
+            ClassroomStudent.classroom_id == c.id,
             ClassroomStudent.is_active == True
         ).count()
 
-        return ClassroomResponse(
-            id=classroom.id,
-            name=classroom.name,
-            grade_level=classroom.grade_level,
-            room_number=classroom.room_number,
-            semester=classroom.semester,
-            academic_year=classroom.academic_year,
-            school_id=classroom.school_id,
-            is_active=classroom.is_active,
-            parent_classroom_id=classroom.parent_classroom_id,
+        result.append(ClassroomListResponse(
+            id=c.id,
+            name=c.name,
+            grade_level=c.grade_level,
+            room_number=c.room_number,
+            semester=c.semester,
+            academic_year=c.academic_year,
             student_count=student_count,
-            created_at=classroom.created_at,
-            updated_at=classroom.updated_at
-        )
-    except Exception as e:
-        db.rollback()
-        if "Duplicate entry" in str(e) or "UNIQUE" in str(e):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"ชั้นเรียน '{data.name}' มีอยู่แล้ว กรุณาตรวจสอบชื่อชั้นเรียนและรายละเอียด"
-            )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
-        )
+            is_active=c.is_active
+        ))
 
-
-@router.patch("/{classroom_id}", response_model=ClassroomResponse)
-async def update_classroom(
-    classroom_id: int,
-    data: ClassroomUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """อัปเดตข้อมูลชั้นเรียน (PATCH)"""
-    verify_admin_or_owner(current_user)
-    classroom = get_classroom_or_404(classroom_id, db)
-
-    try:
-        if data.name is not None:
-            classroom.name = data.name
-        if data.room_number is not None:
-            classroom.room_number = data.room_number
-        if data.semester is not None:
-            classroom.semester = data.semester
-        if data.is_active is not None:
-            classroom.is_active = data.is_active
-
-        db.commit()
-        db.refresh(classroom)
-
-        student_count = db.query(ClassroomStudent).filter(
-            ClassroomStudent.classroom_id == classroom.id,
-            ClassroomStudent.is_active == True
-        ).count()
-
-        return ClassroomResponse(
-            id=classroom.id,
-            name=classroom.name,
-            grade_level=classroom.grade_level,
-            room_number=classroom.room_number,
-            semester=classroom.semester,
-            academic_year=classroom.academic_year,
-            school_id=classroom.school_id,
-            is_active=classroom.is_active,
-            parent_classroom_id=classroom.parent_classroom_id,
-            student_count=student_count,
-            created_at=classroom.created_at,
-            updated_at=classroom.updated_at
-        )
-    except Exception as e:
-        db.rollback()
-        if "Duplicate entry" in str(e) or "UNIQUE" in str(e):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"ชั้นเรียน '{data.name}' มีอยู่แล้ว"
-            )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
-        )
-
-
-@router.delete("/{classroom_id}")
-async def delete_classroom(
-    classroom_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """ลบชั้นเรียน (hard delete)"""
-    verify_admin_or_owner(current_user)
-    classroom = get_classroom_or_404(classroom_id, db)
-
-    # ลบ ClassroomStudent ที่เกี่ยวข้องก่อน (ป้องกัน IntegrityError)
-    db.query(ClassroomStudent).filter(
-        ClassroomStudent.classroom_id == classroom_id
-    ).delete(synchronize_session=False)
-    
-    # ลบ classroom
-    db.delete(classroom)
-    db.commit()
-
-    return {"message": "ลบชั้นเรียนเรียบร้อยแล้ว"}
+    return result
 
 
 # ===== Student Management =====
@@ -572,14 +451,13 @@ async def get_students_in_classroom(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """ดึงรายชื่อนักเรียนในชั้นเรียน"""
+    """ดึงรายชื่อนักเรียนในชั้นเรียน (รวม active และ inactive)"""
     classroom = get_classroom_or_404(classroom_id, db)
 
     enrollments = db.query(ClassroomStudent, User).join(
         User, ClassroomStudent.student_id == User.id
     ).filter(
-        ClassroomStudent.classroom_id == classroom_id,
-        ClassroomStudent.is_active == True
+        ClassroomStudent.classroom_id == classroom_id
     ).all()
 
     result = []
@@ -590,20 +468,20 @@ async def get_students_in_classroom(
             full_name=student.full_name,
             username=student.username,
             email=student.email,
-            is_active=student.is_active
+            is_active=enrollment.is_active  # ใช้ enrollment.is_active ไม่ใช่ student.is_active
         ))
 
     return result
 
 
-@router.delete("/{classroom_id}/students/{student_id}")
+@router.delete("/{classroom_id}/students/{student_id}", status_code=status.HTTP_200_OK)
 async def remove_student_from_classroom(
     classroom_id: int,
     student_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """ลบนักเรียนออกจากชั้นเรียน"""
+    """ลบนักเรียนออกจากชั้นเรียน (soft delete by setting is_active=False)"""
     verify_admin_or_owner(current_user)
 
     enrollment = db.query(ClassroomStudent).filter(
@@ -617,6 +495,7 @@ async def remove_student_from_classroom(
             detail="ไม่พบนักเรียนในชั้นเรียนนี้"
         )
 
+    # ลบ (deactivate) นักเรียน
     enrollment.is_active = False
     db.commit()
 
@@ -820,3 +699,171 @@ async def get_grades_from_previous_term(
             for g in grades
         ]
     }
+
+
+# ===== Generic Routes (ต้องอยู่ที่ท้ายสุด เพื่อไม่ให้ match ก่อน specific routes) =====
+
+@router.get("/{classroom_id}", response_model=ClassroomResponse)
+async def get_classroom(
+    classroom_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """ดึงข้อมูลชั้นเรียน"""
+    classroom = get_classroom_or_404(classroom_id, db)
+
+    student_count = db.query(ClassroomStudent).filter(
+        ClassroomStudent.classroom_id == classroom.id,
+        ClassroomStudent.is_active == True
+    ).count()
+
+    return ClassroomResponse(
+        id=classroom.id,
+        name=classroom.name,
+        grade_level=classroom.grade_level,
+        room_number=classroom.room_number,
+        semester=classroom.semester,
+        academic_year=classroom.academic_year,
+        school_id=classroom.school_id,
+        is_active=classroom.is_active,
+        parent_classroom_id=classroom.parent_classroom_id,
+        student_count=student_count,
+        created_at=classroom.created_at,
+        updated_at=classroom.updated_at
+    )
+
+
+@router.put("/{classroom_id}", response_model=ClassroomResponse)
+async def update_classroom_put(
+    classroom_id: int,
+    data: ClassroomUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """อัปเดตข้อมูลชั้นเรียน (PUT)"""
+    verify_admin_or_owner(current_user)
+    classroom = get_classroom_or_404(classroom_id, db)
+
+    try:
+        if data.name is not None:
+            classroom.name = data.name
+        if data.grade_level is not None:
+            classroom.grade_level = data.grade_level
+        if data.room_number is not None:
+            classroom.room_number = data.room_number
+        if data.semester is not None:
+            classroom.semester = data.semester
+        if data.is_active is not None:
+            classroom.is_active = data.is_active
+
+        db.commit()
+        db.refresh(classroom)
+
+        student_count = db.query(ClassroomStudent).filter(
+            ClassroomStudent.classroom_id == classroom.id,
+            ClassroomStudent.is_active == True
+        ).count()
+
+        return ClassroomResponse(
+            id=classroom.id,
+            name=classroom.name,
+            grade_level=classroom.grade_level,
+            room_number=classroom.room_number,
+            semester=classroom.semester,
+            academic_year=classroom.academic_year,
+            school_id=classroom.school_id,
+            is_active=classroom.is_active,
+            parent_classroom_id=classroom.parent_classroom_id,
+            student_count=student_count,
+            created_at=classroom.created_at,
+            updated_at=classroom.updated_at
+        )
+    except Exception as e:
+        db.rollback()
+        if "Duplicate entry" in str(e) or "UNIQUE" in str(e):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"ชั้นเรียน '{data.name}' มีอยู่แล้ว กรุณาตรวจสอบชื่อชั้นเรียนและรายละเอียด"
+            )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+
+@router.patch("/{classroom_id}", response_model=ClassroomResponse)
+async def update_classroom(
+    classroom_id: int,
+    data: ClassroomUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """อัปเดตข้อมูลชั้นเรียน (PATCH)"""
+    verify_admin_or_owner(current_user)
+    classroom = get_classroom_or_404(classroom_id, db)
+
+    try:
+        if data.name is not None:
+            classroom.name = data.name
+        if data.room_number is not None:
+            classroom.room_number = data.room_number
+        if data.semester is not None:
+            classroom.semester = data.semester
+        if data.is_active is not None:
+            classroom.is_active = data.is_active
+
+        db.commit()
+        db.refresh(classroom)
+
+        student_count = db.query(ClassroomStudent).filter(
+            ClassroomStudent.classroom_id == classroom.id,
+            ClassroomStudent.is_active == True
+        ).count()
+
+        return ClassroomResponse(
+            id=classroom.id,
+            name=classroom.name,
+            grade_level=classroom.grade_level,
+            room_number=classroom.room_number,
+            semester=classroom.semester,
+            academic_year=classroom.academic_year,
+            school_id=classroom.school_id,
+            is_active=classroom.is_active,
+            parent_classroom_id=classroom.parent_classroom_id,
+            student_count=student_count,
+            created_at=classroom.created_at,
+            updated_at=classroom.updated_at
+        )
+    except Exception as e:
+        db.rollback()
+        if "Duplicate entry" in str(e) or "UNIQUE" in str(e):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"ชั้นเรียน '{data.name}' มีอยู่แล้ว"
+            )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+
+@router.delete("/{classroom_id}")
+async def delete_classroom(
+    classroom_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """ลบชั้นเรียน (hard delete)"""
+    verify_admin_or_owner(current_user)
+    classroom = get_classroom_or_404(classroom_id, db)
+
+    # ลบ ClassroomStudent ที่เกี่ยวข้องก่อน (ป้องกัน IntegrityError)
+    db.query(ClassroomStudent).filter(
+        ClassroomStudent.classroom_id == classroom.id
+    ).delete(synchronize_session=False)
+
+    db.delete(classroom)
+    db.commit()
+
+    return {"message": "ลบชั้นเรียนสำเร็จ"}
+

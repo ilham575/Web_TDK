@@ -27,6 +27,7 @@ class SubjectScheduleBase(BaseModel):
     start_time: time
     end_time: time
     schedule_slot_id: Optional[int] = None  # Optional reference to operating hours
+    classroom_id: Optional[int] = None  # Specific classroom (optional - if None, applies to all)
 
 class SubjectScheduleCreate(SubjectScheduleBase):
     pass
@@ -35,7 +36,9 @@ class SubjectSchedule(SubjectScheduleBase):
     id: int
     teacher_id: int
     subject_name: Optional[str] = None
+    subject_code: Optional[str] = None
     teacher_name: Optional[str] = None
+    classroom_name: Optional[str] = None  # Display classroom name if assigned
     
     class Config:
         from_attributes = True

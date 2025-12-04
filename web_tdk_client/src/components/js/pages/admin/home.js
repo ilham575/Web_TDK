@@ -139,6 +139,7 @@ function AdminPage() {
 
   // Classroom management state
   const [classrooms, setClassrooms] = useState([]);
+  const [classroomStudentCounts, setClassroomStudentCounts] = useState({});
   const [showClassroomModal, setShowClassroomModal] = useState(false);
   const [classroomStep, setClassroomStep] = useState('select'); // 'select', 'add_students', 'edit', 'promote'
   const [creatingClassroom, setCreatingClassroom] = useState(false);
@@ -147,6 +148,7 @@ function AdminPage() {
   const [classroomPromotionType, setClassroomPromotionType] = useState('end_of_year');
   const [classroomPromotionNewGrade, setClassroomPromotionNewGrade] = useState('');
   const [promotingClassroom, setPromotingClassroom] = useState(false);
+  const [classroomRefreshKey, setClassroomRefreshKey] = useState(0);
 
   // Individual student promotion state
   const [showPromoteStudentModal, setShowPromoteStudentModal] = useState(false);
@@ -252,6 +254,27 @@ function AdminPage() {
       headers: { ...(token ? { 'Authorization': `Bearer ${token}` } : {}) }
     }).then(res=>res.json()).then(data=>{ if (Array.isArray(data)) setClassrooms(data); else setClassrooms([]); }).catch(()=>setClassrooms([]));
   }, [currentUser]);
+
+  // Fetch actual student counts for each classroom
+  useEffect(() => {
+    if (!Array.isArray(classrooms) || classrooms.length === 0) return;
+    
+    const token = localStorage.getItem('token');
+    classrooms.forEach(classroom => {
+      fetch(`${API_BASE_URL}/classrooms/${classroom.id}/students`, {
+        headers: { ...(token ? { 'Authorization': `Bearer ${token}` } : {}) }
+      })
+        .then(res => res.json())
+        .then(students => {
+          // Filter out deleted students (is_active === false)
+          const activeStudents = Array.isArray(students) ? students.filter(s => s.is_active !== false) : [];
+          setClassroomStudentCounts(prev => ({ ...prev, [classroom.id]: activeStudents.length }));
+        })
+        .catch(() => {
+          setClassroomStudentCounts(prev => ({ ...prev, [classroom.id]: 0 }));
+        });
+    });
+  }, [classrooms]);
 
   // Determine school name from multiple possible sources (API shape may vary)
   const displaySchool = currentUser?.school_name || currentUser?.school?.name || localStorage.getItem('school_name') || '-';
@@ -1563,6 +1586,8 @@ function AdminPage() {
 
         // รีเฟรชรายการชั้นเรียนเพื่ออัปเดตจำนวนนักเรียน
         await refreshClassrooms();
+        // Trigger Modal refresh
+        setClassroomRefreshKey(prev => prev + 1);
       } else {
         if (data.errors && data.errors.length > 0) {
           toast.error(data.errors.join('\n'));
@@ -1770,6 +1795,54 @@ function AdminPage() {
         } catch (err) {
           console.error('Error deleting classroom:', err);
           toast.error('เกิดข้อผิดพลาดในการลบชั้นเรียน');
+        }
+      }
+    );
+  };
+
+  // Remove a student from a classroom (toggle is_active)
+  const removeStudentFromClassroom = async (classroomId, studentId, studentName) => {
+    openConfirmModal(
+      'ลบนักเรียนออกจากชั้นเรียน',
+      `ต้องการลบ "${studentName}" ออกจากชั้นเรียนใช่หรือไม่?`,
+      async () => {
+        const token = localStorage.getItem('token');
+        try {
+          const response = await fetch(`${API_BASE_URL}/classrooms/${classroomId}/students/${studentId}`, {
+            method: 'DELETE',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+          });
+
+          if (response.ok) {
+            toast.success('✓ ลบนักเรียนสำเร็จ');
+            
+            // Update student count for this classroom
+            const studentRes = await fetch(`${API_BASE_URL}/classrooms/${classroomId}/students`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (studentRes.ok) {
+              const students = await studentRes.json();
+              // Filter out deleted students (is_active === false)
+              const activeStudents = Array.isArray(students) ? students.filter(s => s.is_active !== false) : [];
+              setClassroomStudentCounts(prev => ({ 
+                ...prev, 
+                [classroomId]: activeStudents.length 
+              }));
+            }
+            
+            // Refresh classrooms and trigger Modal refresh
+            await refreshClassrooms();
+            setClassroomRefreshKey(prev => prev + 1);
+          } else {
+            const data = await response.json();
+            toast.error(data.detail || 'ไม่สามารถลบนักเรียน');
+          }
+        } catch (err) {
+          console.error('Error removing student from classroom:', err);
+          toast.error('เกิดข้อผิดพลาดในการลบนักเรียน');
         }
       }
     );
@@ -2642,7 +2715,7 @@ function AdminPage() {
                           <td>{classroom.grade_level}</td>
                           <td>{classroom.semester ? `เทอม ${classroom.semester}` : '-'}</td>
                           <td>{classroom.academic_year || '-'}</td>
-                          <td>{classroom.student_count || 0} คน</td>
+                          <td>{classroomStudentCounts[classroom.id] ?? classroom.student_count ?? 0} คน</td>
                           <td>
                             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                               <button 
@@ -2742,7 +2815,7 @@ function AdminPage() {
                           <td>{classroom.grade_level}</td>
                           <td>{classroom.semester ? `เทอม ${classroom.semester}` : '-'}</td>
                           <td>{classroom.academic_year || '-'}</td>
-                          <td>{classroom.student_count || 0} คน</td>
+                          <td>{classroomStudentCounts[classroom.id] ?? classroom.student_count ?? 0} คน</td>
                           <td>
                             <button 
                               className="admin-btn-small admin-btn-success"
@@ -2837,7 +2910,7 @@ function AdminPage() {
                               </div>
                             </div>
                             <div className="table-cell cell-students">
-                              <span className="student-count">👨‍🎓 {hr.student_count || 0} คน</span>
+                              <span className="student-count">👨‍🎓 {classrooms.filter(c => c.grade_level === hr.grade_level).reduce((total, c) => total + (classroomStudentCounts[c.id] || 0), 0) || 0} คน</span>
                             </div>
                             <div className="table-cell cell-year">
                               {hr.academic_year || '-'}
@@ -3367,12 +3440,42 @@ function AdminPage() {
                   <label className="schedule-form-label">เวลาเริ่มเรียน</label>
                     <input 
                     className="schedule-form-input form-field" 
-                    type="time" 
+                    type="text" 
+                    placeholder="08:30"
                     value={newScheduleStartTime} 
-                    onChange={e => setNewScheduleStartTime(e.target.value)}
+                    onChange={e => {
+                      // Allow digits and colon, auto-insert colon
+                      let val = e.target.value.replace(/[^\d:]/g, '');
+                      // Auto-insert colon after 2 digits if not present
+                      if (val.length === 2 && !val.includes(':') && e.nativeEvent.inputType !== 'deleteContentBackward') {
+                        val = val + ':';
+                      }
+                      // Limit format to HH:MM
+                      if (val.length <= 5) {
+                        setNewScheduleStartTime(val);
+                      }
+                    }}
+                    onBlur={e => {
+                      // Format time on blur
+                      let val = e.target.value.replace(/[^\d]/g, ''); // Remove all non-digits
+                      if (val.length === 4) {
+                        // Format HHMM to HH:MM
+                        const h = val.substring(0, 2);
+                        const m = val.substring(2, 4);
+                        if (parseInt(h) <= 23 && parseInt(m) <= 59) {
+                          setNewScheduleStartTime(`${h}:${m}`);
+                        }
+                      } else if (val.length === 3) {
+                        // Format HMM to 0H:MM
+                        const h = val.substring(0, 1).padStart(2, '0');
+                        const m = val.substring(1, 3);
+                        if (parseInt(h) <= 23 && parseInt(m) <= 59) {
+                          setNewScheduleStartTime(`${h}:${m}`);
+                        }
+                      }
+                    }}
                     required 
-                    step="60"
-                    lang="en-GB"
+                    maxLength={5}
                   />
                   <div className="schedule-helper">รูปแบบเวลา 24 ชั่วโมง เช่น 08:30</div>
                 </div>
@@ -3380,12 +3483,42 @@ function AdminPage() {
                   <label className="schedule-form-label">เวลาสิ้นสุดการเรียน</label>
                     <input 
                     className="schedule-form-input form-field" 
-                    type="time" 
+                    type="text" 
+                    placeholder="16:30"
                     value={newScheduleEndTime} 
-                    onChange={e => setNewScheduleEndTime(e.target.value)}
+                    onChange={e => {
+                      // Allow digits and colon, auto-insert colon
+                      let val = e.target.value.replace(/[^\d:]/g, '');
+                      // Auto-insert colon after 2 digits if not present
+                      if (val.length === 2 && !val.includes(':') && e.nativeEvent.inputType !== 'deleteContentBackward') {
+                        val = val + ':';
+                      }
+                      // Limit format to HH:MM
+                      if (val.length <= 5) {
+                        setNewScheduleEndTime(val);
+                      }
+                    }}
+                    onBlur={e => {
+                      // Format time on blur
+                      let val = e.target.value.replace(/[^\d]/g, ''); // Remove all non-digits
+                      if (val.length === 4) {
+                        // Format HHMM to HH:MM
+                        const h = val.substring(0, 2);
+                        const m = val.substring(2, 4);
+                        if (parseInt(h) <= 23 && parseInt(m) <= 59) {
+                          setNewScheduleEndTime(`${h}:${m}`);
+                        }
+                      } else if (val.length === 3) {
+                        // Format HMM to 0H:MM
+                        const h = val.substring(0, 1).padStart(2, '0');
+                        const m = val.substring(1, 3);
+                        if (parseInt(h) <= 23 && parseInt(m) <= 59) {
+                          setNewScheduleEndTime(`${h}:${m}`);
+                        }
+                      }
+                    }}
                     required 
-                    step="60"
-                    lang="en-GB"
+                    maxLength={5}
                   />
                   <div className="schedule-helper">รูปแบบเวลา 24 ชั่วโมง เช่น 09:30</div>
                 </div>
@@ -3437,6 +3570,8 @@ function AdminPage() {
         onAddStudents={addStudentsToClassroom}
         onBack={() => setClassroomStep('select')}
         onClose={closeClassroomModal}
+        onRemoveStudent={removeStudentFromClassroom}
+        refreshKey={classroomRefreshKey}
       />
 
     {/* Promote Classroom Modal (Group B) */}
