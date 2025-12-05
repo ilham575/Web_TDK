@@ -989,10 +989,15 @@ def promote_students(
                     UserModel.id == student_id,
                     UserModel.role == 'student'
                 ).first()
-                
+
                 if not student:
+                    # ลองค้นหาโดยไม่ตรวจสอบ role ก่อน เพื่อดูว่าพบ user ไหม
+                    user_exists = db.query(UserModel).filter(UserModel.id == student_id).first()
+                    if user_exists:
+                        errors.append(f'⚠️ ID {student_id} เป็น {user_exists.role} ไม่ใช่นักเรียน')
+                    else:
+                        errors.append(f'⚠️ ไม่พบนักเรียน ID {student_id}')
                     failed_count += 1
-                    errors.append(f'⚠️ ไม่พบนักเรียน ID {student_id}')
                     continue
                 
                 old_grade = student.grade_level or 'ไม่ระบุ'
@@ -1085,11 +1090,7 @@ def promote_students(
         # Validate session objects and commit all changes
         _validate_no_null_classroom_student(db)
         
-        # Log all ClassroomStudent changes before commit (temporary debugging)
-        from models.classroom import ClassroomStudent as _CS_log
-        for obj in list(db.new) + list(db.dirty):
-            if isinstance(obj, _CS_log):
-                print(f'[DEBUG PROMOTE_STUDENTS] ClassroomStudent change: id={obj.id}, classroom_id={obj.classroom_id}, student_id={obj.student_id}, is_active={obj.is_active}, state={"new" if obj in db.new else "dirty"}')
+        # (temporary debugging removed) - classroom change logging was removed
         
         try:
             db.commit()

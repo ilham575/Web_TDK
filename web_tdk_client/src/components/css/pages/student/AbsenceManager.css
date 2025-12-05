@@ -170,6 +170,16 @@
   transform: translateY(-1px);
 }
 
+.absence-btn.edit {
+  background: rgba(59, 130, 246, 0.2);
+  color: #1e40af;
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+.absence-btn.edit:hover {
+  background: rgba(59, 130, 246, 0.3);
+}
+
 .absence-btn.delete {
   background: rgba(239, 68, 68, 0.2);
   color: #7f1d1d;

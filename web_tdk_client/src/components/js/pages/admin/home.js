@@ -20,6 +20,7 @@ import CreateClassroomModal from './CreateClassroomModal';
 import EditClassroomModal from './EditClassroomModal';
 import AddStudentsModal from './AddStudentsModal';
 import SubjectManagementModal from '../../SubjectManagementModal';
+import ScheduleManagementModal from '../../ScheduleManagementModal';
 import { API_BASE_URL } from '../../../endpoints';
 import { setSchoolFavicon } from '../../../../utils/faviconUtils';
 import { logout } from '../../../../utils/authUtils';
@@ -104,6 +105,9 @@ function AdminPage() {
   const [newScheduleStartTime, setNewScheduleStartTime] = useState('');
   const [newScheduleEndTime, setNewScheduleEndTime] = useState('');
   const [editingSchedule, setEditingSchedule] = useState(null);
+  
+  // Teacher/Student Schedule Management Modal state
+  const [showScheduleManagementModal, setShowScheduleManagementModal] = useState(false);
 
   // Homeroom teacher management state
   const [homeroomTeachers, setHomeroomTeachers] = useState([]);
@@ -256,12 +260,16 @@ function AdminPage() {
   }, [currentUser]);
 
   // Fetch actual student counts for each classroom
+  // Re-fetch when classrooms change OR when switching to classrooms/promotions tabs (to ensure fresh data)
   useEffect(() => {
     if (!Array.isArray(classrooms) || classrooms.length === 0) return;
+    // Only run when on tabs that need student counts
+    if (activeTab !== 'classrooms' && activeTab !== 'promotions') return;
     
     const token = localStorage.getItem('token');
     classrooms.forEach(classroom => {
-      fetch(`${API_BASE_URL}/classrooms/${classroom.id}/students`, {
+      // Add cache-busting timestamp to force fresh data from server
+      fetch(`${API_BASE_URL}/classrooms/${classroom.id}/students?t=${Date.now()}`, {
         headers: { ...(token ? { 'Authorization': `Bearer ${token}` } : {}) }
       })
         .then(res => res.json())
@@ -274,7 +282,7 @@ function AdminPage() {
           setClassroomStudentCounts(prev => ({ ...prev, [classroom.id]: 0 }));
         });
     });
-  }, [classrooms]);
+  }, [classrooms, activeTab]);
 
   // Determine school name from multiple possible sources (API shape may vary)
   const displaySchool = currentUser?.school_name || currentUser?.school?.name || localStorage.getItem('school_name') || '-';
@@ -1489,7 +1497,8 @@ function AdminPage() {
   const refreshClassrooms = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE_URL}/classrooms/list/${currentUser.school_id}`, {
+      // Add cache-busting timestamp to force fresh data
+      const response = await fetch(`${API_BASE_URL}/classrooms/list/${currentUser.school_id}?t=${Date.now()}`, {
         headers: { ...(token ? { 'Authorization': `Bearer ${token}` } : {}) }
       });
       if (response.ok) {
@@ -1584,6 +1593,9 @@ function AdminPage() {
           }, 1000);
         }
 
+        // Clear cached student counts so they get recalculated with fresh data
+        setClassroomStudentCounts({});
+        
         // รีเฟรชรายการชั้นเรียนเพื่ออัปเดตจำนวนนักเรียน
         await refreshClassrooms();
         // Trigger Modal refresh
@@ -1921,13 +1933,15 @@ function AdminPage() {
 
   // เปิด modal เลื่อนนักเรียนรายบุคคล
   const openPromoteStudentModal = async (classroom) => {
+    // Reset classroom students data before fetching fresh data
+    setClassroomStudents([]);
     setClassroomForStudentPromotion(classroom);
     setShowPromoteStudentModal(true);
     
-    // ดึงข้อมูลนักเรียนในชั้นเรียน
+    // ดึงข้อมูลนักเรียนในชั้นเรียน (guaranteed fresh data)
     const token = localStorage.getItem('token');
     try {
-      const response = await fetch(`${API_BASE_URL}/classrooms/${classroom.id}/students`, {
+      const response = await fetch(`${API_BASE_URL}/classrooms/${classroom.id}/students?t=${Date.now()}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
@@ -1968,9 +1982,16 @@ function AdminPage() {
           }, 1000);
         }
         
+        // Close modal and reset state
         setShowPromoteStudentModal(false);
         setClassroomStudents([]);
         setClassroomForStudentPromotion(null);
+        
+        // Clear cached student counts so they get recalculated with fresh data
+        setClassroomStudentCounts({});
+        
+        // Refresh classrooms data to reflect promotion changes
+        await refreshClassrooms();
       } else {
         toast.error(data.detail || 'เลื่อนชั้นไม่สำเร็จ');
       }
@@ -2078,7 +2099,8 @@ function AdminPage() {
         <button className={`admin-tab-button ${activeTab === 'subjects' ? 'active' : ''}`} onClick={() => setActiveTab('subjects')}>📚 จัดการรายวิชา</button>
         <button className={`admin-tab-button ${activeTab === 'announcements' ? 'active' : ''}`} onClick={() => setActiveTab('announcements')}>จัดการประกาศข่าว</button>
         <button className={`admin-tab-button ${activeTab === 'absences' ? 'active' : ''}`} onClick={() => setActiveTab('absences')}>อนุมัติการลา</button>
-        <button className={`admin-tab-button ${activeTab === 'schedule' ? 'active' : ''}`} onClick={() => setActiveTab('schedule')}>จัดการตารางเรียน</button>
+        <button className={`admin-tab-button ${activeTab === 'schedule' ? 'active' : ''}`} onClick={() => setActiveTab('schedule')}>🗓️ ตั้งค่าเวลา</button>
+        <button className={`admin-tab-button ${activeTab === 'schedules' ? 'active' : ''}`} onClick={() => { setActiveTab('schedules'); loadSubjects(); }}>📅 เพิ่มตารางเรียน</button>
       </div>
       <div className="tab-content">
         {activeTab === 'users' && (
@@ -2237,38 +2259,36 @@ function AdminPage() {
 
                         {/* Pagination */}
                         {totalPages > 1 && (
-                          <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem', alignItems: 'center', marginBottom: '2rem' }}>
+                          <div className="admin-pagination">
                             <button
+                              className={`pagination-btn prev ${teacherCurrentPage === 1 ? 'disabled' : ''}`}
                               onClick={() => setTeacherCurrentPage(p => Math.max(1, p - 1))}
                               disabled={teacherCurrentPage === 1}
-                              style={{ padding: '6px 10px', cursor: teacherCurrentPage === 1 ? 'not-allowed' : 'pointer', opacity: teacherCurrentPage === 1 ? 0.5 : 1 }}
+                              aria-label="ก่อนหน้า"
                             >
                               ← ก่อนหน้า
                             </button>
-                            {Array.from({ length: totalPages }, (_, i) => (
-                              <button
-                                key={i + 1}
-                                onClick={() => setTeacherCurrentPage(i + 1)}
-                                style={{
-                                  padding: '6px 10px',
-                                  backgroundColor: teacherCurrentPage === i + 1 ? '#667eea' : '#f0f0f0',
-                                  color: teacherCurrentPage === i + 1 ? 'white' : 'black',
-                                  borderRadius: '4px',
-                                  border: 'none',
-                                  cursor: 'pointer'
-                                }}
-                              >
-                                {i + 1}
-                              </button>
-                            ))}
+                            <div className="pagination-pages" role="navigation" aria-label="pagination">
+                              {Array.from({ length: totalPages }, (_, i) => (
+                                <button
+                                  key={i + 1}
+                                  className={`pagination-page ${teacherCurrentPage === i + 1 ? 'active' : ''}`}
+                                  onClick={() => setTeacherCurrentPage(i + 1)}
+                                  aria-current={teacherCurrentPage === i + 1 ? 'page' : undefined}
+                                >
+                                  {i + 1}
+                                </button>
+                              ))}
+                            </div>
                             <button
+                              className={`pagination-btn next ${teacherCurrentPage === totalPages ? 'disabled' : ''}`}
                               onClick={() => setTeacherCurrentPage(p => Math.min(totalPages, p + 1))}
                               disabled={teacherCurrentPage === totalPages}
-                              style={{ padding: '6px 10px', cursor: teacherCurrentPage === totalPages ? 'not-allowed' : 'pointer', opacity: teacherCurrentPage === totalPages ? 0.5 : 1 }}
+                              aria-label="ถัดไป"
                             >
                               ถัดไป →
                             </button>
-                            <span style={{ marginLeft: '1rem', color: '#666' }}>หน้า {teacherCurrentPage} / {totalPages} ({filteredTeachers.length} คน)</span>
+                            <span className="pagination-summary">หน้า {teacherCurrentPage} / {totalPages} ({filteredTeachers.length} คน)</span>
                           </div>
                         )}
                       </>
@@ -2415,38 +2435,36 @@ function AdminPage() {
 
                         {/* Pagination */}
                         {totalPages > 1 && (
-                          <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem', alignItems: 'center', marginBottom: '2rem' }}>
+                          <div className="admin-pagination">
                             <button
+                              className={`pagination-btn prev ${studentCurrentPage === 1 ? 'disabled' : ''}`}
                               onClick={() => setStudentCurrentPage(p => Math.max(1, p - 1))}
                               disabled={studentCurrentPage === 1}
-                              style={{ padding: '6px 10px', cursor: studentCurrentPage === 1 ? 'not-allowed' : 'pointer', opacity: studentCurrentPage === 1 ? 0.5 : 1 }}
+                              aria-label="ก่อนหน้า"
                             >
                               ← ก่อนหน้า
                             </button>
-                            {Array.from({ length: totalPages }, (_, i) => (
-                              <button
-                                key={i + 1}
-                                onClick={() => setStudentCurrentPage(i + 1)}
-                                style={{
-                                  padding: '6px 10px',
-                                  backgroundColor: studentCurrentPage === i + 1 ? '#667eea' : '#f0f0f0',
-                                  color: studentCurrentPage === i + 1 ? 'white' : 'black',
-                                  borderRadius: '4px',
-                                  border: 'none',
-                                  cursor: 'pointer'
-                                }}
-                              >
-                                {i + 1}
-                              </button>
-                            ))}
+                            <div className="pagination-pages" role="navigation" aria-label="pagination">
+                              {Array.from({ length: totalPages }, (_, i) => (
+                                <button
+                                  key={i + 1}
+                                  className={`pagination-page ${studentCurrentPage === i + 1 ? 'active' : ''}`}
+                                  onClick={() => setStudentCurrentPage(i + 1)}
+                                  aria-current={studentCurrentPage === i + 1 ? 'page' : undefined}
+                                >
+                                  {i + 1}
+                                </button>
+                              ))}
+                            </div>
                             <button
+                              className={`pagination-btn next ${studentCurrentPage === totalPages ? 'disabled' : ''}`}
                               onClick={() => setStudentCurrentPage(p => Math.min(totalPages, p + 1))}
                               disabled={studentCurrentPage === totalPages}
-                              style={{ padding: '6px 10px', cursor: studentCurrentPage === totalPages ? 'not-allowed' : 'pointer', opacity: studentCurrentPage === totalPages ? 0.5 : 1 }}
+                              aria-label="ถัดไป"
                             >
                               ถัดไป →
                             </button>
-                            <span style={{ marginLeft: '1rem', color: '#666' }}>หน้า {studentCurrentPage} / {totalPages} ({filteredStudents.length} คน)</span>
+                            <span className="pagination-summary">หน้า {studentCurrentPage} / {totalPages} ({filteredStudents.length} คน)</span>
                           </div>
                         )}
                       </>
@@ -3103,6 +3121,45 @@ function AdminPage() {
           </div>
         )}
 
+        {activeTab === 'schedules' && (
+          <div className="content-card">
+            <div className="card-header">
+              <h2><span className="card-icon">📅</span> เพิ่มตารางเรียนสำหรับครูและนักเรียน</h2>
+            </div>
+            <div className="card-content">
+              <div style={{ marginBottom: '1.5rem' }}>
+                <button
+                  className="admin-btn-primary"
+                  onClick={() => setShowScheduleManagementModal(true)}
+                  style={{
+                    padding: '12px 20px',
+                    fontSize: '1rem',
+                    fontWeight: '600',
+                    borderRadius: '8px'
+                  }}
+                >
+                  ➕ เพิ่มตารางเรียนใหม่
+                </button>
+              </div>
+              <div style={{
+                padding: '1.5rem',
+                backgroundColor: '#e3f2fd',
+                borderRadius: '8px',
+                border: '1px solid #90caf9',
+                color: '#1565c0'
+              }}>
+                <h4 style={{ marginTop: 0 }}>📋 วิธีการใช้งาน</h4>
+                <ul style={{ marginBottom: 0, paddingLeft: '1.5rem', lineHeight: '1.8' }}>
+                  <li>คลิกปุ่ม "เพิ่มตารางเรียนใหม่" เพื่อสร้างตารางเรียน</li>
+                  <li>เลือกประเภท: ตารางครู หรือ ตารางนักเรียน</li>
+                  <li>เลือกครู/นักเรียน วิชา ชั้นเรียน วัน และเวลา</li>
+                  <li>ตารางเรียนจะมีผล อตรับจากทันที</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
+
         {activeTab === 'subjects' && (
           <div className="content-card">
             <div className="card-header">
@@ -3720,6 +3777,18 @@ function AdminPage() {
       teachers={teachers}
       classrooms={classrooms}
       currentSchoolId={currentUser?.school_id}
+    />
+
+    {/* Schedule Management Modal */}
+    <ScheduleManagementModal
+      isOpen={showScheduleManagementModal}
+      onClose={() => setShowScheduleManagementModal(false)}
+      teachers={teachers}
+      subjects={subjects}
+      classrooms={classrooms}
+      onSuccess={() => {
+        // Refresh schedules or data as needed
+      }}
     />
     </>
   );

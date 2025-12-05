@@ -7,6 +7,30 @@ import ScheduleDetailModal from './ScheduleDetailModal';
 // role: 'teacher'|'student' (if teacher, we can show action buttons when onActionDelete provided)
 export default function ScheduleGrid({ operatingHours = [], schedules = [], role = 'student', onActionDelete, onActionEdit }) {
   const dayNames = ['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์','เสาร์'];
+  
+  // Color palette สำหรับแต่ละชั้นเรียน (classroom)
+  const classroomColors = [
+    { bg: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)', border: '#1e40af', text: '#ffffff' }, // Blue
+    { bg: 'linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)', border: '#7f1d1d', text: '#ffffff' }, // Red
+    { bg: 'linear-gradient(135deg, #10b981 0%, #047857 100%)', border: '#065f46', text: '#ffffff' }, // Green
+    { bg: 'linear-gradient(135deg, #f59e0b 0%, #b45309 100%)', border: '#78350f', text: '#ffffff' }, // Amber
+    { bg: 'linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)', border: '#4c1d95', text: '#ffffff' }, // Purple
+    { bg: 'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)', border: '#164e63', text: '#ffffff' }, // Cyan
+    { bg: 'linear-gradient(135deg, #ec4899 0%, #be185d 100%)', border: '#831843', text: '#ffffff' }, // Pink
+    { bg: 'linear-gradient(135deg, #f97316 0%, #c2410c 100%)', border: '#7c2d12', text: '#ffffff' }, // Orange
+  ];
+  
+  // Function เพื่อหาสี ตามชั้นเรียน (สร้าง hash ของชื่อชั้น)
+  const getClassroomColor = (classroomName) => {
+    if (!classroomName) return classroomColors[0]; // default blue
+    let hash = 0;
+    for (let i = 0; i < classroomName.length; i++) {
+      hash = ((hash << 5) - hash) + classroomName.charCodeAt(i);
+      hash = hash & hash; // Convert to 32bit integer
+    }
+    const index = Math.abs(hash) % classroomColors.length;
+    return classroomColors[index];
+  };
 
   // local state for modal + selection
   const [showDetailModal, setShowDetailModal] = useState(false);
@@ -67,7 +91,7 @@ export default function ScheduleGrid({ operatingHours = [], schedules = [], role
     schedulesByDay[d].push(s);
   });
 
-  // merge adjacent schedules for the same subject so blocks appear linked
+  // merge adjacent schedules for the same subject AND same classroom so blocks appear linked
   const mergeAdjacentSchedules = (items) => {
     if (!Array.isArray(items) || items.length === 0) return [];
     // sort by start time
@@ -89,9 +113,13 @@ export default function ScheduleGrid({ operatingHours = [], schedules = [], role
       const curStart = toFloat(cur.start_time) || 0;
       // consider adjacent if end === start (exact) or within 1 minute tolerance
       const adjacent = Math.abs(lastEnd - curStart) < (1/60 + 1e-9);
-      // merge only when it's the same subject (prefer subject id if present) or same subject_name
+      // merge only when it's the same subject AND same classroom
       const sameSubject = (last.subject_code && cur.subject_code && last.subject_code === cur.subject_code) || (last.subject_name && cur.subject_name && last.subject_name === cur.subject_name) || (last.subject_id && cur.subject_id && last.subject_id === cur.subject_id) || (last.subject && cur.subject && last.subject === cur.subject);
-      if (adjacent && sameSubject) {
+      const lastClassroom = last.classroom_name || last.classroom || '';
+      const curClassroom = cur.classroom_name || cur.classroom || '';
+      const sameClassroom = lastClassroom === curClassroom;
+      
+      if (adjacent && sameSubject && sameClassroom) {
         // extend last.end_time to cur.end_time
         last.end_time = cur.end_time;
         // optionally, merge other fields if missing
@@ -122,60 +150,44 @@ export default function ScheduleGrid({ operatingHours = [], schedules = [], role
 
   return (
     <div className="schedule-grid-wrap">
-      <div className="schedule-grid-header">
-        <div className="col day-col">วัน/เวลาเรียน</div>
-        <div className="time-grid" style={{ gridTemplateColumns: `repeat(${hours.length}, 1fr)` }}>
-          {hours.map((h,i) => (
-            <div key={h} className="col time-col">
-              <span className="time-label">{String(h).padStart(2,'0')}.00</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="schedule-grid-body">
+      <div className="schedule-list-view">
         {days.map(day => {
           const dayKey = String(day.key);
           const items = mergeAdjacentSchedules(schedulesByDay[dayKey] || []);
           return (
-            <div key={day.key} className={`grid-row ${isMobile ? 'schedule-day-card' : ''} ${isMobile && selectedMobileDay == day.key ? 'open' : ''}`}>
-              <div className="col day-col day-label" role={isMobile ? 'button' : undefined} tabIndex={isMobile ? 0 : undefined} onClick={isMobile ? () => toggleMobileDay(day.key) : undefined} onKeyDown={isMobile ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleMobileDay(day.key) } } : undefined} aria-expanded={isMobile ? (selectedMobileDay === day.key) : undefined}>
-                <span className="day-label-text">{day.label}</span>
-                {isMobile && <span className="day-count">{items.length} รายการ</span>}
-              </div>
-              <div className="col times-col">
-                <div className="times-inner" style={{ gridTemplateColumns: `repeat(${hours.length}, 1fr)` }}>
-                  {/* empty grid cells as background */}
-                  {hours.map((h,i) => (<div key={i} className="time-cell" />))}
-
-                  {/* schedule blocks */}
-                    {items.map(item => {
-                      const s = toFloat(item.start_time) || minH;
-                      const e = toFloat(item.end_time) || (minH + 1);
-                      const totalSpan = Math.max(0.001, (maxH - minH)); // avoid division by zero
-                      let leftPct = Math.max(0, ((s - minH) / totalSpan) * 100);
-                      let widthPct = Math.max(0.1, ((e - s) / totalSpan) * 100); // ensure visible
-                      if (leftPct + widthPct > 100) widthPct = Math.max(0.1, 100 - leftPct);
-                    const teacherDisplay = item.teacher_name || item.teacher || item.teacher_full_name || item.teacher_fullname || null;
+            <div key={day.key} className="schedule-day-section">
+              <div className="day-section-header">{day.label}</div>
+              <div className="day-items-list">
+                {items.length > 0 ? (
+                  items.map(item => {
                     const subjectDisplay = item.subject_name || item.subject || item.subject_code || '';
+                    const classroomDisplay = item.classroom_name || item.classroom || null;
+                    const classroomColor = getClassroomColor(classroomDisplay);
+                    
                     return (
                       <div
                         key={item.id || `${item.subject_name}-${item.start_time}`}
-                        className={`schedule-block ${role==='teacher' ? 'clickable' : ''}`}
-                        style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
-                        title={`${(item.subject_name || item.subject || item.subject_code || '').trim()} ${item.start_time}-${item.end_time}${item.teacher_name ? ' — ' + item.teacher_name : ''}`}
-                        aria-label={`${item.subject_name || item.subject || item.subject_code}, ${item.start_time} ถึง ${item.end_time}${item.teacher_name ? ', โดย ' + item.teacher_name : ''}`}
+                        className="schedule-list-item"
+                        style={{
+                          borderLeftColor: classroomColor.border,
+                          background: classroomColor.bg
+                        }}
                         onClick={() => openDetail(item)}
                         role="button"
                         tabIndex={0}
                         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDetail(item); } }}
                       >
-                          <div className="block-title">{subjectDisplay}</div>
-                        {/* delete action is moved to the modal — remove inline action */}
+                        <div className="list-item-subject">📚 {subjectDisplay}</div>
+                        <div className="list-item-time">⏰ {item.start_time}-{item.end_time}</div>
+                        {role === 'teacher' && classroomDisplay && (
+                          <div className="list-item-classroom">🏫 {classroomDisplay}</div>
+                        )}
                       </div>
                     );
-                  })}
-                </div>
+                  })
+                ) : (
+                  <div className="no-items-message">ไม่มีรายวิชาในวันนี้</div>
+                )}
               </div>
             </div>
           );

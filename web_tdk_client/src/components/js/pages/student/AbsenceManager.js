@@ -9,6 +9,7 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
   const [absences, setAbsences] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({
     absence_date_start: '',
     absence_date_end: '',
@@ -17,6 +18,11 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
     reason: '',
     is_multi_day: false
   });
+
+  // Check if student can edit/delete this absence (pending or rejected only)
+  const canModify = (absence) => {
+    return absence.status === 'pending' || absence.status === 'rejected';
+  };
 
   // Load absences
   const loadAbsences = async () => {
@@ -43,30 +49,85 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
     loadAbsences();
   }, [studentId]);
 
+  useEffect(() => {
+    console.log('DEBUG AbsenceManager operatingHours:', operatingHours);
+    if (Array.isArray(operatingHours)) {
+      console.log('operatingHours length:', operatingHours.length);
+      operatingHours.forEach((hour, i) => {
+        console.log(`  [${i}]`, hour);
+      });
+    }
+  }, [operatingHours]);
+
   // Get available dates from operating hours (filter by day_of_week)
   const getAvailableDates = () => {
+    // Get today's date using local timezone (not UTC)
     const today = new Date();
-    const futureDate = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000); // 30 days ahead
+    today.setHours(0, 0, 0, 0);
+    
+    const futureDate = new Date(today);
+    futureDate.setDate(futureDate.getDate() + 30);
+    
     const dates = [];
-    const raw = Array.isArray(operatingHours) ? operatingHours.map(s => Number(s.day_of_week)) : [];
-    // normalize day indexing (if 1..7 used, map to 0..6)
-    const allowedDays = raw.map(v => (v > 6 ? (v % 7) : v));
+    
+    // Map day names to JavaScript's getDay() values (0=Sunday, 1=Monday, ..., 6=Saturday)
+    const dayNameToNumber = {
+      'sunday': 0,
+      'monday': 1,
+      'tuesday': 2,
+      'wednesday': 3,
+      'thursday': 4,
+      'friday': 5,
+      'saturday': 6
+    };
+    
+    // Get allowed days from operating hours, handling both string names and numbers
+    let allowedDays = Array.isArray(operatingHours) 
+      ? operatingHours.map(s => {
+          const day = s.day_of_week;
+          if (typeof day === 'string') {
+            // Try parsing as number first (e.g., '0', '6')
+            const asNum = Number(day);
+            if (!isNaN(asNum) && asNum >= 0 && asNum <= 6) {
+              return asNum;
+            }
+            // Otherwise try as day name (e.g., 'monday', 'sunday')
+            return dayNameToNumber[day.toLowerCase()] !== undefined ? dayNameToNumber[day.toLowerCase()] : null;
+          }
+          return Number(day) <= 6 ? Number(day) : (Number(day) % 7);
+        }).filter(d => d !== null)
+      : [];
+    
+    // Remove duplicates (in case multiple slots on same day)
+    allowedDays = [...new Set(allowedDays)];
+    
+    console.log('DEBUG allowedDays:', allowedDays);
 
     for (let d = new Date(today); d <= futureDate; d.setDate(d.getDate() + 1)) {
+      // Create a date string in local timezone (not UTC)
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      const dateStr = `${year}-${month}-${day}`;
+      
       const dow = d.getDay();
-      if (allowedDays.length === 0 || allowedDays.includes(dow)) {
-        dates.push(d.toISOString().split('T')[0]);
+      // Only include days that are in operating hours (if operatingHours is set)
+      if (allowedDays.length > 0 && allowedDays.includes(dow)) {
+        console.log(`  Date: ${dateStr}, dow: ${dow}`);
+        dates.push(dateStr);
       }
     }
 
     return dates;
   };
 
-  // Submit absence (single or multi-day)
+  // Submit absence (single or multi-day) or update if editing
   const handleSubmit = async (e) => {
     e.preventDefault();
 
     const availableDates = getAvailableDates();
+    const method = editingId ? 'PUT' : 'POST';
+    const endpoint = editingId ? `${API_BASE_URL}/absences/${editingId}` : `${API_BASE_URL}/absences/`;
 
     if (formData.is_multi_day) {
       // Multi-day mode
@@ -84,14 +145,48 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
       const start = new Date(formData.absence_date_start);
       const end = new Date(formData.absence_date_end);
       const dates = [];
-      const raw = Array.isArray(operatingHours) ? operatingHours.map(s => Number(s.day_of_week)) : [];
-      const allowedDays = raw.map(v => (v > 6 ? (v % 7) : v));
+      
+      // Map day names to JavaScript's getDay() values (0=Sunday, 1=Monday, ..., 6=Saturday)
+      const dayNameToNumber = {
+        'sunday': 0,
+        'monday': 1,
+        'tuesday': 2,
+        'wednesday': 3,
+        'thursday': 4,
+        'friday': 5,
+        'saturday': 6
+      };
+      
+      // Get allowed days from operating hours, handling both string names and numbers
+      let allowedDays = Array.isArray(operatingHours) 
+        ? operatingHours.map(s => {
+            const day = s.day_of_week;
+            if (typeof day === 'string') {
+              // Try parsing as number first (e.g., '0', '6')
+              const asNum = Number(day);
+              if (!isNaN(asNum) && asNum >= 0 && asNum <= 6) {
+                return asNum;
+              }
+              // Otherwise try as day name (e.g., 'monday', 'sunday')
+              return dayNameToNumber[day.toLowerCase()] !== undefined ? dayNameToNumber[day.toLowerCase()] : null;
+            }
+            return Number(day) <= 6 ? Number(day) : (Number(day) % 7);
+          }).filter(d => d !== null)
+        : [];
+      
+      // Remove duplicates
+      allowedDays = [...new Set(allowedDays)];
       
       for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        // Create a date string in local timezone (not UTC)
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        const dateStr = `${year}-${month}-${day}`;
+        
         const dow = d.getDay();
         // Only include days that are in operating hours
-        if (allowedDays.includes(dow)) {
-          const dateStr = d.toISOString().split('T')[0];
+        if (allowedDays.length > 0 && allowedDays.includes(dow)) {
           dates.push(dateStr);
         }
       }
@@ -101,38 +196,47 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
         return;
       }
 
-      // Submit as single absence record with date range
+      // Submit as single absence record with date range (and status 'pending' if editing)
       try {
         const token = localStorage.getItem('token');
-        const res = await fetch(`${API_BASE_URL}/absences/`, {
-          method: 'POST',
+        const payload = {
+          absence_date: formData.absence_date_start,
+          absence_date_end: formData.absence_date_end,
+          days_count: dates.length,
+          subject_id: formData.subject_id || null,
+          absence_type: formData.absence_type,
+          reason: formData.reason
+        };
+        // Note: Backend will automatically reset status to pending if this is an edit of rejected absence
+        
+        const res = await fetch(endpoint, {
+          method: method,
           headers: {
             'Content-Type': 'application/json',
             ...(token ? { Authorization: `Bearer ${token}` } : {})
           },
-          body: JSON.stringify({
-            absence_date: formData.absence_date_start,
-            absence_date_end: formData.absence_date_end,
-            days_count: dates.length,
-            subject_id: formData.subject_id || null,
-            absence_type: formData.absence_type,
-            reason: formData.reason
-          })
+          body: JSON.stringify(payload)
         });
 
         if (res.ok) {
-          const newAbsence = await res.json();
-          setAbsences([newAbsence, ...absences]);
-          toast.success(`ยื่นคำขออนุญาตการลา ${dates.length} วันเรียบร้อย`);
+          const updated = await res.json();
+          if (editingId) {
+            setAbsences(absences.map(a => a.id === editingId ? updated : a));
+            toast.success('แก้ไขคำขออนุญาตการลาเรียบร้อย (รีเซ็ตสถานะเป็นรอการอนุมัติ)');
+          } else {
+            setAbsences([updated, ...absences]);
+            toast.success(`ยื่นคำขออนุญาตการลา ${dates.length} วันเรียบร้อย`);
+          }
           setFormData({ absence_date_start: '', absence_date_end: '', subject_id: '', absence_type: 'personal', reason: '', is_multi_day: false });
+          setEditingId(null);
           setShowForm(false);
         } else {
           const error = await res.json();
-          toast.error(error.detail || 'เกิดข้อผิดพลาดในการยื่นคำขออนุญาตการลา');
+          toast.error(error.detail || 'เกิดข้อผิดพลาดในการจัดการคำขออนุญาตการลา');
         }
       } catch (err) {
         console.error('Error:', err);
-        toast.error('เกิดข้อผิดพลาดในการยื่นคำขออนุญาตการลา');
+        toast.error('เกิดข้อผิดพลาดในการจัดการคำขออนุญาตการลา');
       }
     } else {
       // Single day mode
@@ -148,33 +252,42 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
 
       try {
         const token = localStorage.getItem('token');
-        const res = await fetch(`${API_BASE_URL}/absences/`, {
-          method: 'POST',
+        const payload = {
+          absence_date: formData.absence_date_start,
+          subject_id: formData.subject_id || null,
+          absence_type: formData.absence_type,
+          reason: formData.reason
+        };
+        // Note: Backend will automatically reset status to pending if this is an edit of rejected absence
+        
+        const res = await fetch(endpoint, {
+          method: method,
           headers: {
             'Content-Type': 'application/json',
             ...(token ? { Authorization: `Bearer ${token}` } : {})
           },
-          body: JSON.stringify({
-            absence_date: formData.absence_date_start,
-            subject_id: formData.subject_id || null,
-            absence_type: formData.absence_type,
-            reason: formData.reason
-          })
+          body: JSON.stringify(payload)
         });
 
         if (res.ok) {
-          const newAbsence = await res.json();
-          setAbsences([newAbsence, ...absences]);
+          const updated = await res.json();
+          if (editingId) {
+            setAbsences(absences.map(a => a.id === editingId ? updated : a));
+            toast.success('แก้ไขคำขออนุญาตการลาเรียบร้อย (รีเซ็ตสถานะเป็นรอการอนุมัติ)');
+          } else {
+            setAbsences([updated, ...absences]);
+            toast.success('ยื่นคำขออนุญาตการลาเรียบร้อย');
+          }
           setFormData({ absence_date_start: '', absence_date_end: '', subject_id: '', absence_type: 'personal', reason: '', is_multi_day: false });
+          setEditingId(null);
           setShowForm(false);
-          toast.success('ยื่นคำขออนุญาตการลาเรียบร้อย');
         } else {
           const error = await res.json();
-          toast.error(error.detail || 'เกิดข้อผิดพลาดในการยื่นคำขออนุญาตการลา');
+          toast.error(error.detail || 'เกิดข้อผิดพลาดในการจัดการคำขออนุญาตการลา');
         }
       } catch (err) {
         console.error('Error:', err);
-        toast.error('เกิดข้อผิดพลาดในการยื่นคำขออนุญาตการลา');
+        toast.error('เกิดข้อผิดพลาดในการจัดการคำขออนุญาตการลา');
       }
     }
   };
@@ -183,9 +296,36 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [pendingDeleteAbsenceId, setPendingDeleteAbsenceId] = useState(null);
 
-  const confirmDeleteAbsence = (absenceId) => {
-    setPendingDeleteAbsenceId(absenceId);
+  const confirmDeleteAbsence = (absence) => {
+    if (!canModify(absence)) {
+      toast.error('ไม่สามารถลบคำขอนี้ได้ (ต้องเป็นสถานะรอการอนุมัติหรือไม่อนุมัติเท่านั้น)');
+      return;
+    }
+    setPendingDeleteAbsenceId(absence.id);
     setShowDeleteConfirm(true);
+  };
+
+  const openEditForm = (absence) => {
+    if (!canModify(absence)) {
+      toast.error('ไม่สามารถแก้ไขคำขอนี้ได้ (ต้องเป็นสถานะรอการอนุมัติหรือไม่อนุมัติเท่านั้น)');
+      return;
+    }
+    setEditingId(absence.id);
+    setFormData({
+      absence_date_start: absence.absence_date,
+      absence_date_end: absence.absence_date_end || absence.absence_date,
+      subject_id: absence.subject_id || '',
+      absence_type: absence.absence_type,
+      reason: absence.reason || '',
+      is_multi_day: absence.absence_date_end && absence.absence_date_end !== absence.absence_date
+    });
+    setShowForm(true);
+  };
+
+  const cancelForm = () => {
+    setShowForm(false);
+    setEditingId(null);
+    setFormData({ absence_date_start: '', absence_date_end: '', subject_id: '', absence_type: 'personal', reason: '', is_multi_day: false });
   };
 
   const handleDelete = async () => {
@@ -226,7 +366,7 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
   const getAbsenceTypeLabel = (type) => {
     const labels = {
       sick: '🤒 ป่วย',
-      personal: '👤 ธุรเรียน',
+      personal: '👤 ลากิจ',
       other: '📝 อื่นๆ'
     };
     return labels[type] || type;
@@ -336,13 +476,21 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
                 <span className={`absence-status ${absence.status}`}>
                   {getStatusLabel(absence.status)}
                 </span>
-                {absence.status === 'pending' && (
-                  <button
-                    className="absence-btn delete"
-                    onClick={() => confirmDeleteAbsence(absence.id)}
-                  >
-                    ลบ
-                  </button>
+                {canModify(absence) && (
+                  <>
+                    <button
+                      className="absence-btn edit"
+                      onClick={() => openEditForm(absence)}
+                    >
+                      แก้ไข
+                    </button>
+                    <button
+                      className="absence-btn delete"
+                      onClick={() => confirmDeleteAbsence(absence)}
+                    >
+                      ลบ
+                    </button>
+                  </>
                 )}
               </div>
             </li>
@@ -351,13 +499,13 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
       )}
 
       {showForm && ReactDOM.createPortal(
-        <div className="absence-form-overlay" onClick={() => setShowForm(false)}>
+        <div className="absence-form-overlay" onClick={() => cancelForm()}>
           <div className="absence-form-modal" onClick={(e) => e.stopPropagation()}>
             <div className="absence-form-header">
-              <h3>ยื่นคำขออนุญาตการลา</h3>
+              <h3>{editingId ? '📝 แก้ไขคำขออนุญาตการลา' : '📝 ยื่นคำขออนุญาตการลา'}</h3>
               <button
                 className="form-close-btn"
-                onClick={() => setShowForm(false)}
+                onClick={() => cancelForm()}
               >
                 ✕
               </button>
@@ -433,7 +581,7 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
                   onChange={(e) => setFormData({ ...formData, absence_type: e.target.value })}
                   required
                 >
-                  <option value="personal">ธุรเรียน</option>
+                  <option value="personal">ลากิจ</option>
                   <option value="sick">ป่วย</option>
                   <option value="other">อื่นๆ</option>
                 </select>
@@ -467,12 +615,12 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
                 <button
                   type="button"
                   className="form-btn form-btn-cancel"
-                  onClick={() => setShowForm(false)}
+                  onClick={() => cancelForm()}
                 >
                   ยกเลิก
                 </button>
                 <button type="submit" className="form-btn form-btn-submit">
-                  ส่งคำขออนุญาต
+                  {editingId ? '💾 บันทึกการแก้ไข' : '✉️ ส่งคำขออนุญาต'}
                 </button>
               </div>
             </form>

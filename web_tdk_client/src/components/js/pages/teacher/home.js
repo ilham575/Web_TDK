@@ -995,45 +995,14 @@ function TeacherPage() {
             </div>
             <div className="schedule-modal-content">
               <div className="schedule-form-intro">
-                <p className="schedule-form-description">เลือกวันและเวลาที่ต้องการจัดวิชาเรียน</p>
+                <p className="schedule-form-description">เลือกรายวิชา วัน และเวลาที่ต้องการจัดการสอน</p>
               </div>
 
               <div className="schedule-form">
                 {/* Basic Information Section */}
                 <div className="schedule-form-section">
-                  <h4 className="schedule-section-title">
-                    📋 ข้อมูลพื้นฐาน
-                  </h4>
+                  <h4 className="schedule-section-title">📋 ข้อมูลพื้นฐาน</h4>
                   <div className="schedule-form-grid">
-                    <div className="schedule-form-group">
-                      <label className="schedule-form-label">📅 วันเรียน</label>
-                        <select
-                          value={scheduleDay}
-                          onChange={e => setScheduleDay(e.target.value)}
-                          className="schedule-form-select"
-                        >
-                          <option value="">-- เลือกวัน --</option>
-                          {/* Only show days configured by admin in scheduleSlots */}
-                          {Array.isArray(scheduleSlots) && scheduleSlots.length > 0 ? (
-                            scheduleSlots
-                              // dedupe by day_of_week just in case
-                              .filter((s, idx, arr) => arr.findIndex(x => String(x.day_of_week) === String(s.day_of_week)) === idx)
-                              .map(slot => (
-                                <option key={slot.id || slot.day_of_week} value={String(slot.day_of_week)}>
-                                  {getDayName(slot.day_of_week)}{slot.start_time ? ` — ${slot.start_time}-${slot.end_time}` : ''}
-                                </option>
-                              ))
-                          ) : (
-                            <option disabled>ยังไม่มีวันเปิดเรียนที่กำหนดโดยผู้ดูแล</option>
-                          )}
-                        </select>
-                      {scheduleDay && scheduleSlots.find(slot => slot.day_of_week.toString() === scheduleDay) && (
-                        <div className="operating-hours-display">
-                          ⏰ เวลาเปิดเรียน: {scheduleSlots.find(slot => slot.day_of_week.toString() === scheduleDay).start_time} - {scheduleSlots.find(slot => slot.day_of_week.toString() === scheduleDay).end_time}
-                        </div>
-                      )}
-                    </div>
-
                     <div className="schedule-form-group">
                       <label className="schedule-form-label">📚 รายวิชา</label>
                       <select
@@ -1044,126 +1013,60 @@ function TeacherPage() {
                         <option value="">-- เลือกรายวิชา --</option>
                         {teacherSubjects.map(subject => (
                           <option key={subject.id} value={subject.id}>
-                            📖 {subject.name}
+                            {subject.name}
                           </option>
                         ))}
                       </select>
                     </div>
 
                     <div className="schedule-form-group">
-                      <label className="schedule-form-label">🏫 ชั้นเรียน (ทำให้เวลาต่างกันตามชั้น)</label>
+                      <label className="schedule-form-label">📅 วันเรียน</label>
+                      <select
+                        value={scheduleDay}
+                        onChange={e => setScheduleDay(e.target.value)}
+                        className="schedule-form-select"
+                      >
+                        <option value="">-- เลือกวัน --</option>
+                        {Array.isArray(scheduleSlots) && scheduleSlots.length > 0 ? (
+                          scheduleSlots
+                            .filter((s, idx, arr) => arr.findIndex(x => String(x.day_of_week) === String(s.day_of_week)) === idx)
+                            .map(slot => (
+                              <option key={slot.id || slot.day_of_week} value={String(slot.day_of_week)}>
+                                {getDayName(slot.day_of_week)}
+                              </option>
+                            ))
+                        ) : (
+                          <option disabled>ยังไม่มีวันเปิดเรียนที่กำหนด</option>
+                        )}
+                      </select>
+                      {scheduleDay && scheduleSlots.find(slot => slot.day_of_week.toString() === scheduleDay) && (
+                        <div className="operating-hours-display">
+                          ⏰ เวลาเปิดเรียน: {scheduleSlots.find(slot => slot.day_of_week.toString() === scheduleDay).start_time} - {scheduleSlots.find(slot => slot.day_of_week.toString() === scheduleDay).end_time}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="schedule-form-group">
+                      <label className="schedule-form-label">🏫 ชั้นเรียน (ตัวเลือก)</label>
                       <select
                         value={selectedClassroomId}
                         onChange={e => setSelectedClassroomId(e.target.value)}
                         className="schedule-form-select"
                       >
-                        <option value="">-- ไม่ระบุ (ใช้สำหรับทุกชั้น) --</option>
+                        <option value="">-- ไม่ระบุ (ทุกชั้น) --</option>
                         {classrooms.map(classroom => (
                           <option key={classroom.id} value={classroom.id}>
-                            🏫 {classroom.name} {classroom.grade_level ? `(ชั้น ${classroom.grade_level})` : ''}
+                            {classroom.name} {classroom.grade_level ? `(ชั้น ${classroom.grade_level})` : ''}
                           </option>
                         ))}
                       </select>
-                      {selectedClassroomId && (
-                        <div className="classroom-info-display" style={{
-                          marginTop: '0.75rem',
-                          padding: '0.75rem 0.875rem',
-                          background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.1), rgba(16, 185, 129, 0.08))',
-                          borderRadius: '8px',
-                          border: '1px solid rgba(34, 197, 94, 0.25)',
-                          fontSize: '0.85rem',
-                          color: '#15803d',
-                          fontWeight: '600',
-                          letterSpacing: '0.3px',
-                        }}>
-                          ✓ ชั้นเรียน: {classrooms.find(c => String(c.id) === selectedClassroomId)?.name || 'N/A'}
-                        </div>
-                      )}
-                      {!selectedClassroomId && (
-                        <div className="classroom-info-display" style={{
-                          marginTop: '0.75rem',
-                          padding: '0.75rem 0.875rem',
-                          background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(102, 126, 234, 0.08))',
-                          borderRadius: '8px',
-                          border: '1px solid rgba(59, 130, 246, 0.25)',
-                          fontSize: '0.85rem',
-                          color: '#1e40af',
-                          fontWeight: '600',
-                          letterSpacing: '0.3px',
-                        }}>
-                          ℹ️ ใช้สำหรับทุกชั้นเรียน
-                        </div>
-                      )}
                     </div>
                   </div>
                 </div>
 
-                {/* Summary Section */}
-                {(scheduleDay || selectedSubjectId || selectedClassroomId) && (
-                  <div className="schedule-form-section" style={{ background: 'linear-gradient(135deg, rgba(248, 113, 113, 0.08), rgba(239, 68, 68, 0.06))' }}>
-                    <h4 className="schedule-section-title" style={{ color: '#dc2626', marginBottom: '1.25rem' }}>
-                      📋 สรุปการจัดเวลาเรียน
-                    </h4>
-                    <div style={{
-                      display: 'grid',
-                      gridTemplateColumns: '1fr 1fr 1fr',
-                      gap: '1rem',
-                      position: 'relative',
-                      zIndex: 1
-                    }}>
-                      {/* Day Section */}
-                      <div style={{
-                        background: 'rgba(255, 255, 255, 0.8)',
-                        border: '2px solid rgba(59, 130, 246, 0.2)',
-                        borderRadius: '10px',
-                        padding: '1rem',
-                        textAlign: 'center'
-                      }}>
-                        <div style={{ fontSize: '0.8rem', color: '#666', fontWeight: '600', marginBottom: '0.5rem' }}>📅 วันเรียน</div>
-                        <div style={{ fontSize: '1.25rem', fontWeight: '800', color: '#1e40af' }}>
-                          {scheduleDay ? getDayName(scheduleDay) : '-'}
-                        </div>
-                      </div>
-
-                      {/* Subject Section */}
-                      <div style={{
-                        background: 'rgba(255, 255, 255, 0.8)',
-                        border: '2px solid rgba(251, 191, 36, 0.2)',
-                        borderRadius: '10px',
-                        padding: '1rem',
-                        textAlign: 'center'
-                      }}>
-                        <div style={{ fontSize: '0.8rem', color: '#666', fontWeight: '600', marginBottom: '0.5rem' }}>📚 รายวิชา</div>
-                        <div style={{ fontSize: '0.95rem', fontWeight: '700', color: '#a16207', wordBreak: 'break-word' }}>
-                          {selectedSubjectId ? (teacherSubjects.find(s => String(s.id) === selectedSubjectId)?.name || 'N/A') : '-'}
-                        </div>
-                      </div>
-
-                      {/* Classroom Section */}
-                      <div style={{
-                        background: 'rgba(255, 255, 255, 0.8)',
-                        border: '2px solid rgba(34, 197, 94, 0.2)',
-                        borderRadius: '10px',
-                        padding: '1rem',
-                        textAlign: 'center'
-                      }}>
-                        <div style={{ fontSize: '0.8rem', color: '#666', fontWeight: '600', marginBottom: '0.5rem' }}>🏫 ชั้นเรียน</div>
-                        <div style={{ fontSize: '0.95rem', fontWeight: '700', color: '#15803d', wordBreak: 'break-word' }}>
-                          {selectedClassroomId 
-                            ? (classrooms.find(c => String(c.id) === selectedClassroomId)?.name || 'N/A')
-                            : 'ทั้งหมด'
-                          }
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
                 {/* Time Section */}
                 <div className="schedule-form-section">
-                  <h4 className="schedule-section-title">
-                    ⏰ ช่วงเวลาเรียน
-                  </h4>
+                  <h4 className="schedule-section-title">⏰ ช่วงเวลาเรียน</h4>
                   <div className="time-form-grid">
                     <div className="schedule-form-group">
                       <label className="schedule-form-label">เวลาเริ่ม</label>
@@ -1249,7 +1152,7 @@ function TeacherPage() {
                 </button>
                 <button className="schedule-btn schedule-btn-submit" onClick={editingAssignment ? updateSubjectSchedule : assignSubjectToSchedule}>
                   <span>✅</span>
-                  {editingAssignment ? 'อัปเดตเวลาเรียน' : 'กำหนดเวลาเรียน'}
+                  {editingAssignment ? 'อัปเดต' : 'กำหนดเวลา'}
                 </button>
               </div>
             </div>

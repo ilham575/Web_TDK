@@ -463,7 +463,7 @@ async def get_students_in_classroom(
     result = []
     for enrollment, student in enrollments:
         result.append(StudentInClassroom(
-            id=enrollment.id,
+            id=student.id,  # Return student.id, not enrollment.id
             student_id=student.id,
             full_name=student.full_name,
             username=student.username,

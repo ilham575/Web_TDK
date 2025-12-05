@@ -267,6 +267,32 @@
   color: #065f46;
 }
 
+/* Classroom Card */
+.schedule-classroom-card {
+  background: linear-gradient(135deg, #ecf0ff 0%, #dbeafe 100%);
+  border-color: rgba(59, 130, 246, 0.15);
+}
+
+.classroom-badge-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.classroom-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 14px;
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  color: #ffffff;
+  border-radius: 20px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
 /* Room Card */
 .schedule-room-card {
   background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%);

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import '../../../css/pages/student/student-home.css';
 import ScheduleGrid from '../../ScheduleGrid';
 import AbsenceManager from './AbsenceManager';
+import AcademicTranscript from './AcademicTranscript';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { API_BASE_URL } from '../../../endpoints';
@@ -102,12 +103,9 @@ function StudentPage() {
   // fetch operating hours
   useEffect(() => {
     const loadOperatingHours = async () => {
-      const schoolId = localStorage.getItem('school_id');
-      if (!schoolId) return;
-      
       try {
         const token = localStorage.getItem('token');
-        const res = await fetch(`${API_BASE_URL}/schedule/slots?school_id=${schoolId}`, {
+        const res = await fetch(`${API_BASE_URL}/schedule/slots`, {
           headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
         });
         
@@ -328,6 +326,7 @@ function StudentPage() {
         <button className={`student-tab-button ${activeTab === 'announcements' ? 'active' : ''}`} onClick={() => setActiveTab('announcements')}>ข่าวสาร</button>
         <button className={`student-tab-button ${activeTab === 'schedule' ? 'active' : ''}`} onClick={() => setActiveTab('schedule')}>ตารางเรียน</button>
         <button className={`student-tab-button ${activeTab === 'absences' ? 'active' : ''}`} onClick={() => setActiveTab('absences')}>การลา</button>
+        <button className={`student-tab-button ${activeTab === 'transcript' ? 'active' : ''}`} onClick={() => setActiveTab('transcript')}>📊 ผลการเรียน</button>
       </div>
       <div className="tab-content">
         {activeTab === 'subjects' && (
@@ -404,6 +403,9 @@ function StudentPage() {
         )}
         {activeTab === 'absences' && (
           <AbsenceManager studentId={currentUser?.id} operatingHours={operatingHours} studentSubjects={studentSubjects} />
+        )}
+        {activeTab === 'transcript' && (
+          <AcademicTranscript studentId={currentUser?.id} studentSubjects={studentSubjects} />
         )}
       </div>
     </div>

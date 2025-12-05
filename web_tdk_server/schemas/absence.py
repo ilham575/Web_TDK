@@ -29,8 +29,15 @@ class AbsenceCreate(BaseModel):
 
 
 class AbsenceUpdate(BaseModel):
+    # Allow students to update type/reason and (optionally) dates/subject when editing
     absence_type: Optional[AbsenceTypeEnum] = None
     reason: Optional[str] = None
+    # Optional fields for changing the absence dates/subject/count
+    absence_date: Optional[date] = None
+    absence_date_end: Optional[date] = None
+    days_count: Optional[int] = None
+    subject_id: Optional[int] = None
+    # Status and rejection info are primarily for approvers, but kept optional
     status: Optional[AbsenceStatusEnum] = None
     reject_reason: Optional[str] = None
     version: Optional[int] = None  # สำหรับ optimistic locking

@@ -3,11 +3,15 @@
 const getBaseURL = () => {
   const isDev = process.env.NODE_ENV === 'development';
 
-  console.log('NODE_ENV:', process.env.NODE_ENV);
+  if (process.env.NODE_ENV === 'development') {
+    console.log('NODE_ENV:', process.env.NODE_ENV);
+  }
   
   if (isDev) {
     const raw = process.env.REACT_APP_API_BASE_URL || 'http://127.0.0.1:8000';
-    console.log('DEV API_BASE_URL:', raw);
+    if (process.env.NODE_ENV === 'development') {
+      console.log('DEV API_BASE_URL:', raw);
+    }
     // สำหรับ development ใช้ localhost
     return raw;
   } else {
@@ -19,7 +23,10 @@ const getBaseURL = () => {
       return raw.replace(/^http:\/\//i, 'https://');
     }
 
-    console.log('API_BASE_URL:', raw);
+    if (process.env.NODE_ENV === 'production') {
+      console.log('API_BASE_URL:', raw);
+    }
+
     return raw || undefined;
   }
 };

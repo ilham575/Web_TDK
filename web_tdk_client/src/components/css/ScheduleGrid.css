@@ -1,163 +1,284 @@
 .schedule-grid-wrap {
-  border: 1px solid #e6e6e6;
-  border-radius: 6px;
+  border: none;
+  border-radius: 12px;
   overflow: hidden;
-  background: #fff;
+  background: linear-gradient(135deg, #f8fbff 0%, #f0f9ff 100%);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
 }
 
-/* Header: left fixed column for Day, then horizontal scrollable hour columns */
+/* List View for all screens */
 .schedule-grid-header {
-  display: flex;
-  align-items: center;
-  border-bottom: 1px solid #eee;
-  background: #fafafa;
-  padding: 8px; /* keep equal padding with .times-col */
-  overflow-x: auto;
-}
-.schedule-grid-header .col { padding: 6px 8px; box-sizing: border-box; }
-.schedule-grid-header .day-col { width: 140px; flex: 0 0 140px; font-weight: 700; }
-.schedule-grid-header .time-grid { display: grid; flex: 1; box-sizing: border-box; }
-.schedule-grid-header .time-grid .time-col { min-width: 120px; text-align: center; color: #2a6f6f; font-weight: 600; box-sizing: border-box; border-right: 1px solid rgba(0,0,0,0.04); }
-.schedule-grid-header .time-grid .time-col:last-child { border-right: none; }
-
-.schedule-grid-header .time-label { display:inline-block; }
-.schedule-grid-header .time-sep { display:none; }
-
-.schedule-grid-body { max-height: 480px; overflow: auto; }
-.grid-row { display: flex; align-items: stretch; border-top: 1px solid #f0f0f0; }
-.grid-row .day-col { width: 140px; padding: 12px; background: #fff; display:flex; align-items:center; justify-content:flex-start; font-weight:600; flex: 0 0 140px; }
-.grid-row .times-col { flex:1; overflow-x:auto; padding:8px; }
-
-/* times-inner is a CSS grid — JS sets gridTemplateColumns inline (repeat(hours.length, 1fr)) */
-
-:root {
-  --schedule-cell-height: 72px; /* default height of a time cell */
+  display: none;
 }
 
-.times-inner {
-  display: grid;
-  position: relative;
-  /* remove column gap so multi-column blocks look continuous */
-  gap: 0;
-  column-gap: 0;
-  align-items: start;
-  /* grid-template-columns is set inline from JS (repeat N columns) */
-  grid-auto-rows: 1fr;
-  min-height: var(--schedule-cell-height); /* ensure container has height for absolute blocks */
+.schedule-grid-body {
+  padding: 0;
 }
-.time-cell { border-right: 1px solid rgba(0,0,0,0.04); background: transparent; min-height: var(--schedule-cell-height); min-width: 120px; box-sizing: border-box; }
 
-/* schedule blocks are placed by CSS grid column indices (inline style from React)
-   Do NOT use absolute positioning — make them normal grid children so they span columns */
-.schedule-block {
-  background: linear-gradient(180deg, #e8f6ff 0%, #dff3ff 100%);
-  border: 2px solid rgba(30,120,120,0.15);
-  /* unify corners so multi-column blocks look like one connected pill */
-  border-radius: 8px;
-  padding: 6px 8px;
-  box-shadow: 0 1px 0 rgba(0,0,0,0.03);
+.schedule-list-view {
+  padding: 16px;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  gap: 20px;
+}
+
+.schedule-day-section {
+  background: #fff;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.12);
+  transition: box-shadow 0.2s ease;
+}
+
+.schedule-day-section:hover {
+  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.15);
+}
+
+.day-section-header {
+  background: linear-gradient(135deg, #f0f4ff 0%, #e8f1ff 100%);
+  padding: 14px 16px;
+  font-weight: 700;
+  font-size: 15px;
+  color: #1e40af;
+  border-bottom: 1px solid rgba(59, 130, 246, 0.1);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.day-items-list {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.schedule-list-item {
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  border-left: 4px solid;
+  padding: 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: #ffffff;
+}
+
+.schedule-list-item:hover {
+  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.2);
+  transform: translateY(-2px);
+}
+
+.schedule-list-item:active {
+  transform: scale(0.98);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.list-item-subject {
+  font-weight: 700;
+  font-size: 15px;
+  margin-bottom: 8px;
+}
+
+.list-item-time {
+  font-size: 13px;
+  opacity: 0.9;
+  margin-bottom: 6px;
+}
+
+.list-item-classroom {
+  font-size: 12px;
+  opacity: 0.85;
+  font-weight: 600;
+}
+
+.no-items-message {
+  padding: 24px;
+  text-align: center;
+  color: #64748b;
+  font-size: 14px;
+}
+
+/* Empty State Styling */
+.schedule-no-data {
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  box-sizing: border-box;
-  margin: 0;
-  position: absolute;
-  top: 0; /* match container top */
-  bottom: 0; /* stretch to bottom */
-  height: auto; /* let top/bottom control height */
-  z-index: 1;
+  justify-content: center;
+  padding: 60px 30px;
+  text-align: center;
+  background: linear-gradient(135deg, #f8fbff 0%, #f0f9ff 100%);
 }
-.schedule-block.clickable { cursor: pointer; }
-.schedule-block.clickable:hover { box-shadow: 0 6px 20px rgba(0,0,0,0.08); transform: translateY(-2px); }
-.block-time { font-size: 12px; color: #0b5560; margin-top: 4px; font-weight: 600; }
-.block-teacher { font-size: 12px; color: #0b3b3b; margin-top: 4px; opacity: 0.9; }
-.block-title { font-weight: 700; font-size: 14px; color: #164d4d; text-align: center; }
-.block-sub { font-size: 12px; color: #386868; text-align: center; margin-top:2px; }
-.block-time, .block-teacher, .block-sub, .block-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
-.block-delete { margin-top:6px; align-self:center; background:transparent;border:0;color:#a33;cursor:pointer;font-size:12px; }
 
-/* ensure schedule-block stretches to fill the grid cell(s) it spans */
-/* Positioning is handled via absolute left/width computed in JS */
+.schedule-no-data .empty-icon {
+  font-size: 64px;
+  margin-bottom: 20px;
+  animation: float 3s ease-in-out infinite;
+}
 
-/* When two different blocks are adjacent, keep a small visual separator by using the time-cell borders.
-  When a block spans multiple columns it will cover those borders so looks continuous. */
+.schedule-no-data .empty-text {
+  font-size: 18px;
+  font-weight: 800;
+  color: #1e40af;
+  margin-bottom: 8px;
+  letter-spacing: 0.3px;
+}
 
-/* Optional: reduce inner padding so blocks appear tightly connected */
-.schedule-block .block-title { padding: 0 2px; }
+.schedule-no-data .empty-subtitle {
+  font-size: 14px;
+  color: #64748b;
+  max-width: 300px;
+}
 
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+/* Responsive: Desktop */
 @media (max-width: 1024px) {
-  .schedule-grid-header {
-    padding: 6px;
+  .schedule-list-view {
+    padding: 14px;
+    gap: 18px;
   }
-  .schedule-grid-header .day-col, .grid-row .day-col { width: 120px; flex: 0 0 120px; }
-  .schedule-grid-header .time-col { min-width: 100px; flex: 0 0 100px; }
-  .time-cell { min-width: 100px; }
-  .block-title { font-size: 13px; }
+
+  .day-section-header {
+    padding: 12px 14px;
+    font-size: 14px;
+  }
+
+  .schedule-list-item {
+    padding: 12px;
+  }
+
+  .list-item-subject {
+    font-size: 14px;
+    margin-bottom: 6px;
+  }
+
+  .list-item-time {
+    font-size: 12px;
+    margin-bottom: 4px;
+  }
+
+  .list-item-classroom {
+    font-size: 11px;
+  }
 }
 
+/* Responsive: Tablet */
 @media (max-width: 720px) {
-  :root { --schedule-cell-height: 64px; }
-  
-  .schedule-grid-wrap { border-radius: 4px; }
-  
-  .schedule-grid-header {
-    padding: 5px;
+  .schedule-list-view {
+    padding: 12px;
+    gap: 16px;
   }
-  .schedule-grid-header .col { padding: 5px 6px; }
-  .schedule-grid-header .day-col { width: 90px; flex: 0 0 90px; font-size: 14px; }
-  .schedule-grid-header .time-col { min-width: 80px; flex: 0 0 80px; font-size: 13px; }
-  .schedule-grid-header .time-label { font-size: 12px; }
-  
-  .grid-row .day-col { width: 90px; flex: 0 0 90px; padding: 8px; }
-  .grid-row .times-col { padding: 5px; }
-  
-  .time-cell { min-width: 80px; min-height: 64px; }
-  
-  .schedule-block {
-    padding: 4px 6px;
+
+  .schedule-day-section {
+    border-radius: 8px;
+  }
+
+  .day-section-header {
+    padding: 12px 12px;
+    font-size: 13px;
+  }
+
+  .day-items-list {
+    padding: 8px;
+    gap: 8px;
+  }
+
+  .schedule-list-item {
+    padding: 12px;
     border-radius: 6px;
-    border-width: 1.5px;
   }
-  .block-title { font-size: 12px; font-weight: 600; }
-  .block-time { font-size: 11px; }
-  .block-teacher { font-size: 11px; }
-  .block-sub { font-size: 10px; }
-  
-  .schedule-grid-body { max-height: 360px; }
+
+  .list-item-subject {
+    font-size: 13px;
+    margin-bottom: 6px;
+  }
+
+  .list-item-time {
+    font-size: 12px;
+    margin-bottom: 4px;
+  }
+
+  .list-item-classroom {
+    font-size: 11px;
+  }
 }
 
+/* Responsive: Mobile */
 @media (max-width: 480px) {
-  :root { --schedule-cell-height: 56px; }
-  
-  .schedule-grid-header .day-col { width: 70px; flex: 0 0 70px; font-size: 13px; }
-  .schedule-grid-header .time-col { min-width: 70px; flex: 0 0 70px; font-size: 12px; }
-  .schedule-grid-header .time-label { font-size: 11px; }
-  
-  .grid-row .day-col { width: 70px; flex: 0 0 70px; padding: 6px; }
-  
-  .time-cell { min-width: 70px; min-height: 56px; }
-  
-  .schedule-block {
-    padding: 3px 5px;
-    border-width: 1px;
+  .schedule-grid-wrap {
+    border-radius: 8px;
   }
-  .block-title { font-size: 11px; font-weight: 600; }
-  .block-time { font-size: 10px; }
-  .block-teacher { display: none; }
-  .block-sub { display: none; }
-  
-  .schedule-grid-body { max-height: 300px; }
 
-  /* Mobile: render each day as a collapsible card */
-  .schedule-grid-header { display: none; }
-  .grid-row { display: block; border: none; padding: 6px; margin: 6px 8px; background: #fff; border-radius: 10px; box-shadow: 0 6px 18px rgba(0,0,0,0.06); }
-  .grid-row .day-col { width: auto; flex: 1 1 auto; display:flex; justify-content:space-between; align-items:center; font-weight:700; background:transparent; padding: 10px 12px; }
-  .grid-row .day-col .day-count { font-size: 12px; color: #64748b; margin-left: 12px; font-weight: 600; }
-  .grid-row .day-col:after { content: '\25BC'; font-size: 12px; margin-left: 8px; opacity: 0.6; transition: transform 0.2s ease; }
-  .grid-row.open .day-col:after { transform: rotate(180deg); }
-  .grid-row .times-col { display: block; max-height: 0; overflow: hidden; padding: 0 12px; transition: max-height 0.28s ease, padding 0.2s ease; }
-  .grid-row.open .times-col { display: block; max-height: 420px; padding: 10px 12px; }
-  .grid-row.open .times-inner { min-height: var(--schedule-cell-height); }
-  .grid-row .times-col .times-inner { overflow-x: auto; }
+  .schedule-list-view {
+    padding: 10px;
+    gap: 12px;
+  }
+
+  .schedule-day-section {
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
+  }
+
+  .schedule-day-section:hover {
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.12);
+  }
+
+  .day-section-header {
+    padding: 10px 12px;
+    font-size: 12px;
+  }
+
+  .day-items-list {
+    padding: 6px;
+    gap: 6px;
+  }
+
+  .schedule-list-item {
+    padding: 10px;
+    border-left: 3px solid;
+    border-radius: 6px;
+  }
+
+  .schedule-list-item:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+  }
+
+  .list-item-subject {
+    font-size: 13px;
+    margin-bottom: 4px;
+  }
+
+  .list-item-time {
+    font-size: 11px;
+    margin-bottom: 3px;
+  }
+
+  .list-item-classroom {
+    font-size: 10px;
+  }
+
+  .no-items-message {
+    padding: 16px;
+    font-size: 12px;
+  }
+
+  .schedule-no-data {
+    padding: 40px 20px;
+  }
+
+  .schedule-no-data .empty-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+  }
+
+  .schedule-no-data .empty-text {
+    font-size: 16px;
+  }
+
+  .schedule-no-data .empty-subtitle {
+    font-size: 12px;
+  }
 }

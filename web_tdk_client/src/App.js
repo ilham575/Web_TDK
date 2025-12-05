@@ -42,7 +42,11 @@ function RequireAuth({ children }) {
   return children;
 }
 
-console.log = () => {};
+if (process.env.NODE_ENV === 'production') {
+  console.log = function () {};
+} else {
+  // console.log = function () {};
+}
 
 // Component สำหรับจัดการ favicon เมื่อเข้าสู่ระบบ
 function FaviconHandler() {

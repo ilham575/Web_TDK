@@ -390,19 +390,43 @@ def update_absence(
     
     role = getattr(current_user, 'role', None)
     
-    # Students can only update their own pending absences
+    # Students can only update their own pending or rejected absences
     if role == 'student':
         if absence.student_id != current_user.id:
             raise HTTPException(status_code=403, detail='Not authorized to update this absence')
-        if absence.status != AbsenceStatus.PENDING:
-            raise HTTPException(status_code=400, detail='Can only update pending absences')
+        if absence.status not in [AbsenceStatus.PENDING, AbsenceStatus.REJECTED]:
+            raise HTTPException(status_code=400, detail='Can only update pending or rejected absences')
         
-        # Students cannot change status
-        if payload.status is not None:
-            raise HTTPException(status_code=403, detail='Students cannot change absence status')
+        # Students cannot explicitly change status - but we reset rejected to pending when they resubmit
+        if payload.status is not None and payload.status != AbsenceStatus.PENDING:
+            raise HTTPException(status_code=403, detail='Students can only resubmit as pending')
+        
+        # Update other fields (type, reason, dates)
+        if payload.absence_type is not None:
+            absence.absence_type = payload.absence_type
+        if payload.reason is not None:
+            absence.reason = payload.reason
+        
+        # Reset status to pending if it was rejected
+        if absence.status == AbsenceStatus.REJECTED:
+            absence.status = AbsenceStatus.PENDING
+            absence.approved_by = None
+            absence.approved_at = None
+            absence.approver_role = None
+            absence.reject_reason = None
+        
+        # Update dates if provided (for resubmission)
+        if payload.absence_date is not None:
+            absence.absence_date = payload.absence_date
+        if payload.absence_date_end is not None:
+            absence.absence_date_end = payload.absence_date_end
+        if payload.days_count is not None:
+            absence.days_count = payload.days_count
+        if payload.subject_id is not None or (hasattr(payload, 'subject_id') and payload.subject_id == ''):
+            absence.subject_id = payload.subject_id
     
-    # Handle status change (approval/rejection)
-    if payload.status is not None:
+    # Handle status change (approval/rejection) - only for teachers/admins
+    elif payload.status is not None:
         # Check authorization
         can_approve, approver_role = can_approve_absence(db, current_user, absence.student_id)
         

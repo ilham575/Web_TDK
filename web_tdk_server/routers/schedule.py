@@ -321,6 +321,152 @@ def get_teacher_schedules(
     
     return result
 
+@router.put("/assign/{assignment_id}", response_model=SubjectScheduleSchema)
+def update_subject_schedule(
+    assignment_id: int,
+    assignment: SubjectScheduleCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.role != "teacher":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only teachers can update schedule assignments"
+        )
+    
+    db_assignment = db.query(SubjectSchedule).filter(
+        SubjectSchedule.id == assignment_id,
+        SubjectSchedule.teacher_id == current_user.id
+    ).first()
+    
+    if not db_assignment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Schedule assignment not found"
+        )
+    
+    # Validate subject_id is not null and exists
+    if not assignment.subject_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Subject ID is required"
+        )
+    
+    # Verify the subject belongs to the teacher
+    subject = db.query(Subject).filter(
+        Subject.id == assignment.subject_id,
+        Subject.teacher_id == current_user.id
+    ).first()
+    
+    if not subject:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Subject not found or not assigned to you"
+        )
+    
+    # Validate time slot is within school operating hours
+    if assignment.schedule_slot_id:
+        schedule_slot = db.query(ScheduleSlot).filter(
+            ScheduleSlot.id == assignment.schedule_slot_id,
+            ScheduleSlot.school_id == current_user.school_id
+        ).first()
+        
+        if not schedule_slot:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Schedule slot not found"
+            )
+        
+        if (assignment.start_time < schedule_slot.start_time or 
+            assignment.end_time > schedule_slot.end_time or
+            str(assignment.day_of_week) != str(schedule_slot.day_of_week)):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Subject schedule must be within school operating hours"
+            )
+    else:
+        schedule_slot = db.query(ScheduleSlot).filter(
+            ScheduleSlot.school_id == current_user.school_id,
+            ScheduleSlot.day_of_week == assignment.day_of_week
+        ).first()
+        
+        if not schedule_slot:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"No operating hours defined for day {assignment.day_of_week}"
+            )
+        
+        if (assignment.start_time < schedule_slot.start_time or 
+            assignment.end_time > schedule_slot.end_time):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Subject schedule ({assignment.start_time}-{assignment.end_time}) must be within school operating hours ({schedule_slot.start_time}-{schedule_slot.end_time})"
+            )
+    
+    # Check for time conflicts with other subjects on the same day (excluding current assignment)
+    existing_schedule = db.query(SubjectSchedule).filter(
+        SubjectSchedule.id != assignment_id,
+        SubjectSchedule.day_of_week == assignment.day_of_week,
+        SubjectSchedule.start_time < assignment.end_time,
+        SubjectSchedule.end_time > assignment.start_time,
+        SubjectSchedule.teacher_id == current_user.id
+    ).first()
+    
+    if existing_schedule:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Time slot conflicts with another subject schedule"
+        )
+    
+    try:
+        # If classroom_id is provided, validate teacher teaches that classroom
+        if assignment.classroom_id:
+            from models.classroom import Classroom
+            classroom = db.query(Classroom).filter(
+                Classroom.id == assignment.classroom_id,
+                Classroom.school_id == current_user.school_id
+            ).first()
+            
+            if not classroom:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Classroom not found or not in your school"
+                )
+        
+        # Update assignment fields
+        db_assignment.subject_id = assignment.subject_id
+        db_assignment.schedule_slot_id = assignment.schedule_slot_id
+        db_assignment.classroom_id = assignment.classroom_id
+        db_assignment.day_of_week = assignment.day_of_week
+        db_assignment.start_time = assignment.start_time
+        db_assignment.end_time = assignment.end_time
+        
+        db.commit()
+        db.refresh(db_assignment)
+        
+        # Return the updated assignment with proper schema
+        return SubjectScheduleSchema(
+            id=db_assignment.id,
+            subject_id=db_assignment.subject_id,
+            schedule_slot_id=db_assignment.schedule_slot_id,
+            teacher_id=db_assignment.teacher_id,
+            classroom_id=db_assignment.classroom_id,
+            day_of_week=db_assignment.day_of_week,
+            start_time=db_assignment.start_time,
+            end_time=db_assignment.end_time,
+            subject_name=subject.name if subject else None,
+            teacher_name=current_user.full_name,
+            classroom_name=db_assignment.classroom.name if db_assignment.classroom else None
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update schedule assignment: {str(e)}"
+        )
+
 @router.delete("/assign/{assignment_id}")
 def delete_subject_schedule(
     assignment_id: int,
@@ -439,3 +585,223 @@ def get_student_schedule(
         ))
     
     return result
+
+# Admin endpoints - Assign schedules to teachers and students
+@router.post("/assign_admin", response_model=SubjectScheduleSchema)
+def admin_assign_schedule_to_teacher(
+    assignment: SubjectScheduleCreate,
+    teacher_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Admin endpoint to assign a schedule to a teacher"""
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admins can assign schedules"
+        )
+    
+    # Verify teacher exists and belongs to same school
+    teacher = db.query(User).filter(
+        User.id == teacher_id,
+        User.role == "teacher",
+        User.school_id == current_user.school_id
+    ).first()
+    
+    if not teacher:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Teacher not found or not in your school"
+        )
+    
+    # Validate subject_id is not null and exists
+    if not assignment.subject_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Subject ID is required"
+        )
+    
+    # Verify the subject belongs to the teacher or is available to assign
+    subject = db.query(Subject).filter(
+        Subject.id == assignment.subject_id,
+        Subject.school_id == current_user.school_id
+    ).first()
+    
+    if not subject:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Subject not found in your school"
+        )
+    
+    # Check for time conflicts with other subjects on the same day
+    existing_schedule = db.query(SubjectSchedule).filter(
+        SubjectSchedule.day_of_week == assignment.day_of_week,
+        SubjectSchedule.start_time < assignment.end_time,
+        SubjectSchedule.end_time > assignment.start_time,
+        SubjectSchedule.teacher_id == teacher_id
+    ).first()
+    
+    if existing_schedule:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Time slot conflicts with another subject schedule for this teacher"
+        )
+    
+    try:
+        # Determine schedule_slot_id if provided
+        final_schedule_slot_id = assignment.schedule_slot_id
+        
+        # If classroom_id is provided, validate it exists
+        if assignment.classroom_id:
+            from models.classroom import Classroom
+            classroom = db.query(Classroom).filter(
+                Classroom.id == assignment.classroom_id,
+                Classroom.school_id == current_user.school_id
+            ).first()
+            
+            if not classroom:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Classroom not found or not in your school"
+                )
+        
+        db_assignment = SubjectSchedule(
+            subject_id=assignment.subject_id,
+            schedule_slot_id=final_schedule_slot_id,
+            teacher_id=teacher_id,  # Assign to specified teacher
+            classroom_id=assignment.classroom_id,
+            day_of_week=assignment.day_of_week,
+            start_time=assignment.start_time,
+            end_time=assignment.end_time
+        )
+        db.add(db_assignment)
+        db.commit()
+        db.refresh(db_assignment)
+        
+        return SubjectScheduleSchema(
+            id=db_assignment.id,
+            subject_id=db_assignment.subject_id,
+            schedule_slot_id=db_assignment.schedule_slot_id,
+            teacher_id=db_assignment.teacher_id,
+            classroom_id=db_assignment.classroom_id,
+            day_of_week=db_assignment.day_of_week,
+            start_time=db_assignment.start_time,
+            end_time=db_assignment.end_time,
+            subject_name=subject.name,
+            teacher_name=teacher.full_name,
+            classroom_name=db_assignment.classroom.name if db_assignment.classroom else None
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to assign schedule: {str(e)}"
+        )
+
+@router.post("/assign_student", response_model=dict)
+def admin_assign_schedule_to_student(
+    subject_id: int,
+    student_id: int,
+    classroom_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Admin endpoint to enroll a student in a subject (connects them to its schedule)"""
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admins can assign student schedules"
+        )
+    
+    # Verify student exists and belongs to same school
+    student = db.query(User).filter(
+        User.id == student_id,
+        User.role == "student",
+        User.school_id == current_user.school_id
+    ).first()
+    
+    if not student:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Student not found or not in your school"
+        )
+    
+    # Verify subject exists
+    subject = db.query(Subject).filter(
+        Subject.id == subject_id,
+        Subject.school_id == current_user.school_id
+    ).first()
+    
+    if not subject:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Subject not found in your school"
+        )
+    
+    # Verify classroom exists
+    from models.classroom import Classroom
+    classroom = db.query(Classroom).filter(
+        Classroom.id == classroom_id,
+        Classroom.school_id == current_user.school_id
+    ).first()
+    
+    if not classroom:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Classroom not found or not in your school"
+        )
+    
+    # Verify student is in the classroom
+    from models.classroom import ClassroomStudent
+    student_in_classroom = db.query(ClassroomStudent).filter(
+        ClassroomStudent.student_id == student_id,
+        ClassroomStudent.classroom_id == classroom_id,
+        ClassroomStudent.is_active == True
+    ).first()
+    
+    if not student_in_classroom:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Student is not enrolled in the specified classroom"
+        )
+    
+    try:
+        # Check if student is already enrolled in this subject
+        from models.subject_student import SubjectStudent
+        existing_enrollment = db.query(SubjectStudent).filter(
+            SubjectStudent.student_id == student_id,
+            SubjectStudent.subject_id == subject_id
+        ).first()
+        
+        if existing_enrollment:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Student is already enrolled in this subject"
+            )
+        
+        # Create subject-student enrollment
+        enrollment = SubjectStudent(
+            student_id=student_id,
+            subject_id=subject_id
+        )
+        db.add(enrollment)
+        db.commit()
+        
+        return {
+            "message": "Student enrolled in subject successfully",
+            "student_id": student_id,
+            "subject_id": subject_id,
+            "subject_name": subject.name,
+            "student_name": student.full_name,
+            "classroom_name": classroom.name
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to enroll student in subject: {str(e)}"
+        )

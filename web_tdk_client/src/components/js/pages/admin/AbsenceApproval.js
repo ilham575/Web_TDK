@@ -189,8 +189,8 @@ export default function AbsenceApproval() {
 
   const getAbsenceTypeLabel = (type) => {
     const labels = {
-      sick: '🤒 ป่วย',
-      personal: '👤 ธุรเรียน',
+      sick: '🤒 ลาป่วย',
+      personal: '👤 ลากิจ',
       other: '📝 อื่นๆ'
     };
     return labels[type] || type;
@@ -218,13 +218,16 @@ export default function AbsenceApproval() {
     <section className="absence-approval-section">
       <div className="approval-header">
         <h4><span className="approval-icon">📋</span> อนุมัติการลาเรียน</h4>
-        <button 
-          className="refresh-btn"
+        <button
+          className={`refresh-btn icon-btn ${loading ? 'loading' : ''}`}
           onClick={loadAbsences}
           disabled={loading}
           title="รีเฟรชข้อมูล"
+          aria-label="รีเฟรชข้อมูล"
         >
-          🔄 {loading ? 'กำลังโหลด...' : 'รีเฟรช'}
+          <span className="refresh-icon" aria-hidden="true">🔄</span>
+          {loading && <span className="btn-spinner" aria-hidden="true"></span>}
+          <span className="visually-hidden">รีเฟรช</span>
         </button>
       </div>
 

@@ -16,6 +16,7 @@
   display: flex;
   align-items: center;
   margin-bottom: 1.5rem;
+  justify-content: space-between;
 }
 
 .approval-header h4 {
@@ -33,6 +34,75 @@
 
 .approval-icon {
   font-size: 1.5rem;
+}
+
+/* Refresh button in approval header */
+.refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0;
+  width: 44px;
+  height: 44px;
+  background: linear-gradient(135deg, #ffffff 0%, #f6f7fb 100%);
+  border: 1px solid rgba(15,23,42,0.06);
+  color: #0f172a;
+  border-radius: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(2,6,23,0.04);
+  transition: all 0.16s ease, transform 0.12s ease;
+  position: relative;
+  overflow: hidden;
+  min-width: 44px;
+}
+.refresh-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 26px rgba(2,6,23,0.08);
+}
+.refresh-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+.refresh-btn:focus {
+  outline: 3px solid rgba(102,110,234,0.18);
+  outline-offset: 2px;
+}
+
+/* icon inside the button */
+.refresh-btn .refresh-icon {
+  display: inline-block;
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
+/* small spinner that appears when loading */
+.btn-spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(2,6,23,0.12);
+  border-top-color: #667eea;
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+  margin-left: 6px;
+}
+
+@media (max-width: 720px) {
+  .approval-header { flex-direction: column; align-items: stretch; gap: 0.75rem; }
+  .refresh-btn { justify-content: center; width: 48px; margin-left: auto; }
+}
+
+/* visually hidden (accessible) */
+.visually-hidden,
+.sr-only {
+  position: absolute !important;
+  height: 1px; width: 1px;
+  overflow: hidden;
+  clip: rect(1px, 1px, 1px, 1px);
+  white-space: nowrap;
 }
 
 .approval-filters {

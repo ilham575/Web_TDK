@@ -23,6 +23,7 @@ export default function ScheduleDetailModal({ isOpen, item, onClose, role = 'stu
   const teacherName = item.teacher_name || item.teacher || item.teacher_full_name || item.teacher_fullname || '';
   const subject = item.subject_name || item.subject || item.subject_code || '';
   const room = item.room || '';
+  const classroom = item.classroom_name || item.classroom || '';
   const day = item.day_of_week;
   const dayNames = ['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์','เสาร์'];
   const dayLabel = (day !== undefined && day !== null) ? (dayNames[Number(day)] || String(day)) : 'ไม่ระบุ';
@@ -103,11 +104,26 @@ export default function ScheduleDetailModal({ isOpen, item, onClose, role = 'stu
             </div>
           )}
 
+          {/* Classroom Card */}
+          {classroom && (
+            <div className="schedule-info-card schedule-classroom-card">
+              <div className="info-card-header">
+                <span className="info-card-icon">🏫</span>
+                <span className="info-card-title">ชั้นเรียน</span>
+              </div>
+              <div className="info-card-content">
+                <div className="classroom-badge-list">
+                  <span className="classroom-badge">{classroom}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Room Card */}
           {room && (
             <div className="schedule-info-card schedule-room-card">
               <div className="info-card-header">
-                <span className="info-card-icon">🏫</span>
+                <span className="info-card-icon">📍</span>
                 <span className="info-card-title">ห้องเรียน</span>
               </div>
               <div className="info-card-content">

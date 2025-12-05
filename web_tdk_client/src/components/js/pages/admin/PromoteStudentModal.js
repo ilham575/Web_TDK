@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 
 const PromoteStudentModal = ({
   isOpen,
@@ -13,6 +13,16 @@ const PromoteStudentModal = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [newGradeLevel, setNewGradeLevel] = useState('');
   const [promotionType, setPromotionType] = useState('mid_term'); // Internal state for promotion type
+
+  // Reset form state when modal opens with a new classroom
+  useEffect(() => {
+    if (isOpen && classroom) {
+      setSelectedStudents(new Set());
+      setSearchTerm('');
+      setNewGradeLevel('');
+      setPromotionType('mid_term');
+    }
+  }, [isOpen, classroom?.id]); // Depend on classroom.id to detect new classroom
 
   const extractGradeNumber = (gradeString) => {
     const match = gradeString?.match(/\d+/);
@@ -38,8 +48,10 @@ const PromoteStudentModal = ({
   }, [classroom, getClassroomGradeLevels]);
 
   const filteredStudents = useMemo(() => {
-    if (!searchTerm) return students || [];
-    return (students || []).filter(s =>
+    // Filter to show only active students (is_active !== false)
+    const activeStudents = (students || []).filter(s => s.is_active !== false);
+    if (!searchTerm) return activeStudents;
+    return activeStudents.filter(s =>
       (s.full_name?.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (s.username?.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (s.email?.toLowerCase().includes(searchTerm.toLowerCase()))
