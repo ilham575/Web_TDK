@@ -1,3 +1,0 @@
----------------------------------------------- REMOTE BUILD OUTPUT ----------------------------------------------
-------------------------------------- BUILD FINISHED; TRUNCATING OUTPUT LOGS ------------------------------------
-Logs are available at [https://console.cloud.google.com/cloud-build/builds/26ed4ee6-5be0-4202-9458-ab774cb7e204?project=20868466778].
