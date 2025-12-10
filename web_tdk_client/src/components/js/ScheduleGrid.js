@@ -179,9 +179,10 @@ export default function ScheduleGrid({ operatingHours = [], schedules = [], role
                       >
                         <div className="list-item-subject">📚 {subjectDisplay}</div>
                         <div className="list-item-time">⏰ {item.start_time}-{item.end_time}</div>
-                        {role === 'teacher' && classroomDisplay && (
+                        {(role === 'teacher' || role === 'admin') && classroomDisplay && (
                           <div className="list-item-classroom">🏫 {classroomDisplay}</div>
                         )}
+                        {/* Inline edit/delete removed for admin; use modal actions instead */}
                       </div>
                     );
                   })

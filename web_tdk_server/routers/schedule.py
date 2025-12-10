@@ -220,8 +220,9 @@ def assign_subject_to_schedule(
             )
     
     # Check for time conflicts with other subjects on the same day
-        existing_schedule = db.query(SubjectSchedule).filter(
-            SubjectSchedule.day_of_week == str(assignment.day_of_week),
+    # Same teacher cannot have overlapping schedules at the same time (even across different classrooms)
+    existing_schedule = db.query(SubjectSchedule).filter(
+        SubjectSchedule.day_of_week == str(assignment.day_of_week),
         SubjectSchedule.start_time < assignment.end_time,
         SubjectSchedule.end_time > assignment.start_time,
         SubjectSchedule.teacher_id == current_user.id
@@ -230,8 +231,23 @@ def assign_subject_to_schedule(
     if existing_schedule:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Time slot conflicts with another subject schedule"
+            detail="Teacher cannot have overlapping schedules at the same time"
         )
+    
+    # Check if same time slot has a subject in the same classroom already (only one subject per timeslot per classroom)
+    if assignment.classroom_id:
+        existing_subject_in_classroom = db.query(SubjectSchedule).filter(
+            SubjectSchedule.classroom_id == assignment.classroom_id,
+            SubjectSchedule.day_of_week == str(assignment.day_of_week),
+            SubjectSchedule.start_time < assignment.end_time,
+            SubjectSchedule.end_time > assignment.start_time
+        ).first()
+        
+        if existing_subject_in_classroom:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This classroom already has a subject scheduled at this time"
+            )
     
     try:
         # Determine schedule_slot_id - use provided one or find appropriate one
@@ -333,16 +349,24 @@ def update_subject_schedule(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    if current_user.role != "teacher":
+    # Allow teachers to edit their own assignments, or admins to edit assignments in their school
+    if current_user.role not in ("teacher", "admin"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only teachers can update schedule assignments"
+            detail="Only teachers or admins can update schedule assignments"
         )
     
-    db_assignment = db.query(SubjectSchedule).filter(
-        SubjectSchedule.id == assignment_id,
-        SubjectSchedule.teacher_id == current_user.id
-    ).first()
+    if current_user.role == 'teacher':
+        db_assignment = db.query(SubjectSchedule).filter(
+            SubjectSchedule.id == assignment_id,
+            SubjectSchedule.teacher_id == current_user.id
+        ).first()
+    else:
+        # admin: load assignment by id, ensure it belongs to the admin's school
+        db_assignment = db.query(SubjectSchedule).join(Subject).filter(
+            SubjectSchedule.id == assignment_id,
+            Subject.school_id == current_user.school_id
+        ).first()
     
     if not db_assignment:
         raise HTTPException(
@@ -357,17 +381,28 @@ def update_subject_schedule(
             detail="Subject ID is required"
         )
     
-    # Verify the subject belongs to the teacher
-    subject = db.query(Subject).filter(
-        Subject.id == assignment.subject_id,
-        Subject.teacher_id == current_user.id
-    ).first()
-    
-    if not subject:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Subject not found or not assigned to you"
-        )
+    # Verify the subject belongs to the teacher when current_user is teacher,
+    # or belongs to the same school when current_user is admin
+    if current_user.role == 'teacher':
+        subject = db.query(Subject).filter(
+            Subject.id == assignment.subject_id,
+            Subject.teacher_id == current_user.id
+        ).first()
+        if not subject:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Subject not found or not assigned to you"
+            )
+    else:
+        subject = db.query(Subject).filter(
+            Subject.id == assignment.subject_id,
+            Subject.school_id == current_user.school_id
+        ).first()
+        if not subject:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Subject not found in your school"
+            )
     
     # Validate time slot is within school operating hours
     if assignment.schedule_slot_id:
@@ -409,6 +444,7 @@ def update_subject_schedule(
             )
     
     # Check for time conflicts with other subjects on the same day (excluding current assignment)
+    # Same teacher cannot have overlapping schedules at the same time (even across different classrooms)
     existing_schedule = db.query(SubjectSchedule).filter(
         SubjectSchedule.id != assignment_id,
         SubjectSchedule.day_of_week == str(assignment.day_of_week),
@@ -420,8 +456,24 @@ def update_subject_schedule(
     if existing_schedule:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Time slot conflicts with another subject schedule"
+            detail="Teacher cannot have overlapping schedules at the same time"
         )
+    
+    # Check if same time slot has a subject in the same classroom already (only one subject per timeslot per classroom)
+    if assignment.classroom_id:
+        existing_subject_in_classroom = db.query(SubjectSchedule).filter(
+            SubjectSchedule.id != assignment_id,
+            SubjectSchedule.classroom_id == assignment.classroom_id,
+            SubjectSchedule.day_of_week == str(assignment.day_of_week),
+            SubjectSchedule.start_time < assignment.end_time,
+            SubjectSchedule.end_time > assignment.start_time
+        ).first()
+        
+        if existing_subject_in_classroom:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This classroom already has a subject scheduled at this time"
+            )
     
     try:
         # If classroom_id is provided, validate teacher teaches that classroom
@@ -478,16 +530,24 @@ def delete_subject_schedule(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    if current_user.role != "teacher":
+    # Allow teachers to delete their own assignments or admins to delete assignments in their school
+    if current_user.role not in ("teacher", "admin"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only teachers can delete schedule assignments"
+            detail="Only teachers or admins can delete schedule assignments"
         )
     
-    db_assignment = db.query(SubjectSchedule).filter(
-        SubjectSchedule.id == assignment_id,
-        SubjectSchedule.teacher_id == current_user.id
-    ).first()
+    if current_user.role == 'teacher':
+        db_assignment = db.query(SubjectSchedule).filter(
+            SubjectSchedule.id == assignment_id,
+            SubjectSchedule.teacher_id == current_user.id
+        ).first()
+    else:
+        # admin: delete any assignment that belongs to the admin's school
+        db_assignment = db.query(SubjectSchedule).join(Subject).filter(
+            SubjectSchedule.id == assignment_id,
+            Subject.school_id == current_user.school_id
+        ).first()
     
     if not db_assignment:
         raise HTTPException(
@@ -525,11 +585,13 @@ def get_school_assignments(
             subject_id=schedule.subject_id,
             schedule_slot_id=schedule.schedule_slot_id,
             teacher_id=schedule.teacher_id,
+            classroom_id=schedule.classroom_id,
             day_of_week=schedule.day_of_week,
             start_time=schedule.start_time,
             end_time=schedule.end_time,
             subject_name=schedule.subject.name if schedule.subject else None,
-            teacher_name=schedule.teacher.full_name if schedule.teacher else None
+            teacher_name=schedule.teacher.full_name if schedule.teacher else None,
+            classroom_name=schedule.classroom.name if schedule.classroom else None
         ))
     
     return result
@@ -639,6 +701,7 @@ def admin_assign_schedule_to_teacher(
         )
     
     # Check for time conflicts with other subjects on the same day
+    # Same teacher cannot have overlapping schedules at the same time (even across different classrooms)
     existing_schedule = db.query(SubjectSchedule).filter(
         SubjectSchedule.day_of_week == str(assignment.day_of_week),
         SubjectSchedule.start_time < assignment.end_time,
@@ -649,8 +712,23 @@ def admin_assign_schedule_to_teacher(
     if existing_schedule:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Time slot conflicts with another subject schedule for this teacher"
+            detail="Teacher cannot have overlapping schedules at the same time"
         )
+    
+    # Check if same time slot has a subject in the same classroom already (only one subject per timeslot per classroom)
+    if assignment.classroom_id:
+        existing_subject_in_classroom = db.query(SubjectSchedule).filter(
+            SubjectSchedule.classroom_id == assignment.classroom_id,
+            SubjectSchedule.day_of_week == str(assignment.day_of_week),
+            SubjectSchedule.start_time < assignment.end_time,
+            SubjectSchedule.end_time > assignment.start_time
+        ).first()
+        
+        if existing_subject_in_classroom:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This classroom already has a subject scheduled at this time"
+            )
     
     try:
         # Determine schedule_slot_id if provided

@@ -113,6 +113,7 @@ function AdminPage() {
   
   // Teacher/Student Schedule Management Modal state
   const [showScheduleManagementModal, setShowScheduleManagementModal] = useState(false);
+  const [editingAssignment, setEditingAssignment] = useState(null);
 
   // Homeroom teacher management state
   const [homeroomTeachers, setHomeroomTeachers] = useState([]);
@@ -908,7 +909,7 @@ function AdminPage() {
       if (res.ok) {
         toast.success('ยกเลิกเวลาเรียนเรียบร้อย');
         // refresh adminSchedules
-        setAdminSchedules(prev => (Array.isArray(prev) ? prev.filter(a => a.id !== assignId) : prev));
+        await loadAdminSchedules();
       } else {
         const data = await res.json();
         toast.error(data.detail || 'ยกเลิกเวลาเรียนไม่สำเร็จ');
@@ -1170,26 +1171,31 @@ function AdminPage() {
   }, [activeTab, currentUser?.school_id]);
 
   // Load schedule slots when switching to schedule tab
+  const loadAdminSchedules = async () => {
+    try {
+      const schoolId = localStorage.getItem('school_id');
+      if (!schoolId) return;
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE_URL}/schedule/assignments?school_id=${schoolId}`, { headers: { ...(token?{ Authorization: `Bearer ${token}` }:{}) } });
+      if (res.ok) {
+        const data = await res.json();
+        setAdminSchedules(Array.isArray(data) ? data : []);
+      } else {
+        setAdminSchedules([]);
+      }
+    } catch (err) {
+      setAdminSchedules([]);
+    }
+  };
+
   React.useEffect(() => {
     if (activeTab === 'schedule') {
       loadScheduleSlots();
-      // try to load existing schedule assignments (best-effort; backend may not expose this exact endpoint)
-      (async () => {
-        try {
-          const schoolId = localStorage.getItem('school_id');
-          if (!schoolId) return;
-          const token = localStorage.getItem('token');
-          const res = await fetch(`${API_BASE_URL}/schedule/assignments?school_id=${schoolId}`, { headers: { ...(token?{ Authorization: `Bearer ${token}` }:{}) } });
-          if (res.ok) {
-            const data = await res.json();
-            setAdminSchedules(Array.isArray(data) ? data : []);
-          } else {
-            setAdminSchedules([]);
-          }
-        } catch (err) {
-          setAdminSchedules([]);
-        }
-      })();
+      loadAdminSchedules();
+    } else if (activeTab === 'schedules') {
+      // Load admin schedules when switching to "เพิ่มตารางเรียน" tab
+      loadScheduleSlots();
+      loadAdminSchedules();
     }
   }, [activeTab]);
 
@@ -3168,10 +3174,7 @@ function AdminPage() {
                       </div>
                     </div>
 
-                    <div className="schedule-preview-section">
-                      <h4>ตัวอย่างตารางเรียน</h4>
-                      <ScheduleGrid operatingHours={scheduleSlots} schedules={adminSchedules} role="teacher" onActionDelete={(id)=>{ openConfirmModal('ยกเลิกเวลาเรียน', 'ต้องการยกเลิกเวลาเรียนใช่หรือไม่?', async ()=>{ await deleteAssignment(id); }); }} />
-                    </div>
+                    {/* schedule preview moved to Schedules tab */}
                   </div>
                 )}
               </div>
@@ -3188,7 +3191,7 @@ function AdminPage() {
               <div style={{ marginBottom: '1.5rem' }}>
                 <button
                   className="admin-btn-primary"
-                  onClick={() => setShowScheduleManagementModal(true)}
+                  onClick={() => { setEditingAssignment(null); setShowScheduleManagementModal(true); }}
                   style={{
                     padding: '12px 20px',
                     fontSize: '1rem',
@@ -3214,6 +3217,18 @@ function AdminPage() {
                   <li>ตารางเรียนจะมีผล อตรับจากทันที</li>
                 </ul>
               </div>
+              {Array.isArray(scheduleSlots) && scheduleSlots.length > 0 && Array.isArray(adminSchedules) && adminSchedules.length > 0 && (
+                <div style={{ marginTop: '1.5rem' }}>
+                  <h4>ตัวอย่างตารางเรียน</h4>
+                  <ScheduleGrid
+                    operatingHours={scheduleSlots}
+                    schedules={adminSchedules}
+                    role="admin"
+                    onActionDelete={(id)=>{ openConfirmModal('ยกเลิกเวลาเรียน', 'ต้องการยกเลิกเวลาเรียนใช่หรือไม่?', async ()=>{ await deleteAssignment(id); }); }}
+                    onActionEdit={(item)=>{ setEditingAssignment(item); setShowScheduleManagementModal(true); }}
+                  />
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -3573,12 +3588,15 @@ function AdminPage() {
     {/* Schedule Management Modal */}
     <ScheduleManagementModal
       isOpen={showScheduleManagementModal}
-      onClose={() => setShowScheduleManagementModal(false)}
+      onClose={() => { setShowScheduleManagementModal(false); setEditingAssignment(null); }}
       teachers={teachers}
       subjects={subjects}
       classrooms={classrooms}
+      editingAssignment={editingAssignment}
       onSuccess={() => {
         // Refresh schedules or data as needed
+        loadAdminSchedules();
+        setEditingAssignment(null);
       }}
     />
     </>

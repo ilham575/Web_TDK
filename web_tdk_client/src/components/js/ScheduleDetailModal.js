@@ -151,12 +151,12 @@ export default function ScheduleDetailModal({ isOpen, item, onClose, role = 'stu
           <button className="schedule-modal-btn-secondary" onClick={onClose}>
             <span>✖️</span> ปิด
           </button>
-          {role === 'teacher' && onEdit && (
+          {(role === 'teacher' || role === 'admin') && onEdit && (
             <button className="schedule-modal-btn-primary" onClick={() => { onEdit(item); onClose(); }}>
               <span>✏️</span> แก้ไข
             </button>
           )}
-          {role === 'teacher' && onDelete && (
+          {(role === 'teacher' || role === 'admin') && onDelete && (
             <button className="schedule-modal-btn-danger" onClick={() => { onDelete(item.id); onClose(); }}>
               <span>🗑️</span> ลบ
             </button>
