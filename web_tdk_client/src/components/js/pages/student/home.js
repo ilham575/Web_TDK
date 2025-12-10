@@ -4,6 +4,7 @@ import '../../../css/pages/student/student-home.css';
 import ScheduleGrid from '../../ScheduleGrid';
 import AbsenceManager from './AbsenceManager';
 import AcademicTranscript from './AcademicTranscript';
+import PageHeader from '../../PageHeader';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { API_BASE_URL } from '../../../endpoints';
@@ -147,11 +148,6 @@ function StudentPage() {
   // ปิดการใช้งานการแก้ไขชั้นเรียนจากนักเรียน (handler ถูกลบ)
 
   // Helpers
-  const initials = (name) => {
-    if (!name) return 'S';
-    return name.split(' ').map(n => n[0]).slice(0,2).join('').toUpperCase();
-  };
-
   // Parse server-provided datetime strings into a local Date object.
   // This preserves the wall-clock time for naive datetimes like "YYYY-MM-DD HH:MM:SS"
   const parseLocalDatetime = (s) => {
@@ -269,31 +265,29 @@ function StudentPage() {
   return (
     <div className="student-container">
       <ToastContainer />
-      <header className="student-header">
-        <div className="header-left">
-          <div className="student-avatar" aria-hidden>{initials(currentUser?.name || currentUser?.username || 'Student')}</div>
-          <div className="user-info">
-            <h3>สวัสดี, {currentUser?.name || currentUser?.username || 'นักเรียน'}</h3>
-            <p>บทบาท: นักเรียน</p>
-          </div>
-        </div>
-        <div className="header-right">
-          <div className="account-info">
-            <div className="account-label">ข้อมูลบัญชี</div>
-            <div className="account-email">{currentUser?.email || ''}</div>
-            <div className="school-info">โรงเรียน: {displaySchool}</div>
-            <div className="grade-info">
-              <div className="grade-display">
-                <span>ชั้นปี: <strong>{currentUser?.grade_level || 'ไม่ระบุ'}</strong></span>
+      <PageHeader 
+        currentUser={currentUser}
+        role="student"
+        displaySchool={displaySchool}
+        rightContent={
+          <>
+            <div className="account-info">
+              <div className="account-label">ข้อมูลบัญชี</div>
+              <div className="account-email">{currentUser?.email || ''}</div>
+              <div className="school-info">โรงเรียน: {displaySchool}</div>
+              <div className="grade-info">
+                <div className="grade-display">
+                  <span>ชั้นปี: <strong>{currentUser?.grade_level || 'ไม่ระบุ'}</strong></span>
+                </div>
               </div>
             </div>
-          </div>
-          <div className="header-actions">
-            <button className="student-btn-secondary" onClick={() => navigate('/profile')}>👤 โปรไฟล์</button>
-            <button onClick={handleSignout} className="student-signout-btn">Sign out</button>
-          </div>
-        </div>
-      </header>
+            <div className="header-actions">
+              <button className="student-btn-secondary" onClick={() => navigate('/profile')}>👤 โปรไฟล์</button>
+              <button onClick={handleSignout} className="student-signout-btn">Sign out</button>
+            </div>
+          </>
+        }
+      />
 
       <div className="dashboard-grid">
         <div className="student-stats-card">

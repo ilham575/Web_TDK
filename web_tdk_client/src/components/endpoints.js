@@ -8,7 +8,7 @@ const getBaseURL = () => {
   }
   
   if (isDev) {
-    const raw = process.env.REACT_APP_API_BASE_URL || 'http://127.0.0.1:8000';
+    const raw = process.env.REACT_APP_API_BASE_URL || 'http://127.0.0.1:8080';
     if (process.env.NODE_ENV === 'development') {
       console.log('DEV API_BASE_URL:', raw);
     }

@@ -545,7 +545,7 @@ async def promote_classroom(
         new_academic_year = classroom.academic_year
         new_grade_level = classroom.grade_level
         new_room = classroom.room_number
-        new_name = classroom.name if not classroom.room_number else f"{classroom.grade_level}/{classroom.room_number}"
+        new_name = new_grade_level if not new_room else f"{new_grade_level}/{new_room}"
 
     elif data.promotion_type == "mid_term_with_promotion":
         if classroom.semester == 2:
@@ -591,24 +591,22 @@ async def promote_classroom(
     ).first()
 
     if existing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"ชั้นเรียน {new_name} เทอม {new_semester} ปี {new_academic_year} มีอยู่แล้ว"
+        # ใช้ชั้นเรียนที่มีอยู่แล้วแทนการสร้างใหม่
+        new_classroom = existing
+    else:
+        # สร้างชั้นเรียนใหม่
+        new_classroom = Classroom(
+            name=new_name,
+            grade_level=new_grade_level,
+            room_number=new_room,
+            semester=new_semester,
+            academic_year=new_academic_year,
+            school_id=classroom.school_id,
+            parent_classroom_id=classroom.id  # อ้างอิงชั้นเรียนเดิม
         )
 
-    # สร้างชั้นเรียนใหม่
-    new_classroom = Classroom(
-        name=new_name,
-        grade_level=new_grade_level,
-        room_number=new_room,
-        semester=new_semester,
-        academic_year=new_academic_year,
-        school_id=classroom.school_id,
-        parent_classroom_id=classroom.id  # อ้างอิงชั้นเรียนเดิม
-    )
-
-    db.add(new_classroom)
-    db.flush()  # เพื่อให้ได้ new_classroom.id
+        db.add(new_classroom)
+        db.flush()  # เพื่อให้ได้ new_classroom.id
 
     # คัดลอกนักเรียน
     students = db.query(ClassroomStudent).filter(
@@ -620,19 +618,26 @@ async def promote_classroom(
     grades_copied = 0
 
     for enrollment in students:
-        # เพิ่มนักเรียนเข้าชั้นเรียนใหม่
-        new_enrollment = ClassroomStudent(
-            classroom_id=new_classroom.id,
-            student_id=enrollment.student_id
-        )
-        db.add(new_enrollment)
+        # ตรวจสอบว่านักเรียนนี้ไม่มีอยู่ในชั้นเรียนเป้าหมายแล้ว
+        existing_enrollment = db.query(ClassroomStudent).filter(
+            ClassroomStudent.classroom_id == new_classroom.id,
+            ClassroomStudent.student_id == enrollment.student_id,
+            ClassroomStudent.is_active == True
+        ).first()
+        
+        if not existing_enrollment:
+            # เพิ่มนักเรียนเข้าชั้นเรียนใหม่
+            new_enrollment = ClassroomStudent(
+                classroom_id=new_classroom.id,
+                student_id=enrollment.student_id
+            )
+            db.add(new_enrollment)
+            promoted_students += 1
 
         # อัปเดต grade_level ของนักเรียน
         student = db.query(User).filter(User.id == enrollment.student_id).first()
         if student:
             student.grade_level = new_grade_level
-        
-        promoted_students += 1
 
         # ถ้าเลือก include_grades - เก็บ reference ไว้ (คะแนนยังอยู่ในตาราง grades)
         # ไม่จำเป็นต้องคัดลอก เพราะสามารถดึงจาก parent_classroom_id ได้

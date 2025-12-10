@@ -1,0 +1,273 @@
+/* PageHeader.css - CSS รวมสำหรับ Header ทุก role */
+
+/* ===== Common Header Styles ===== */
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.user-info h1,
+.user-info h2,
+.user-info h3 {
+  margin: 0;
+  font-weight: 600;
+}
+
+.user-info-subtitle {
+  color: #666;
+  font-size: 0.9rem;
+  margin-top: 0.25rem;
+}
+
+/* ===== Avatar Styles ===== */
+.admin-avatar,
+.teacher-avatar,
+.student-avatar,
+.avatar {
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 1.3rem;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* ===== Admin Header ===== */
+.admin-header {
+  color: white;
+  padding: 1.5rem 2rem;
+  border-radius: 12px;
+  margin-bottom: 2rem;
+  box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.admin-header .user-info h1 {
+  font-size: 1.8rem;
+}
+
+.admin-header .user-info-subtitle {
+  font-size: 1rem;
+}
+
+/* ===== Teacher Header ===== */
+.teacher-header {
+  color: white;
+  padding: 2rem;
+  border-radius: 12px;
+  margin-bottom: 2rem;
+  box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+}
+
+.teacher-welcome {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.teacher-info .teacher-title {
+  font-size: 1.8rem;
+  margin: 0;
+  font-weight: 700;
+}
+
+.teacher-info .teacher-subtitle {
+  margin: 0.5rem 0 0 0;
+  font-size: 1rem;
+  opacity: 0.95;
+}
+
+.teacher-actions {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.teacher-stats {
+  display: flex;
+  gap: 1rem;
+}
+
+.stats-card {
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(10px);
+  border-radius: 10px;
+  padding: 0.75rem 1.25rem;
+  text-align: center;
+  min-width: 80px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.stats-card.floating-effect {
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.stats-card.floating-effect:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+}
+
+.teacher-stats-value {
+  font-size: 1.8rem;
+  font-weight: 700;
+  margin-bottom: 0.25rem;
+}
+
+.teacher-stats-label {
+  font-size: 0.85rem;
+  opacity: 0.95;
+}
+
+/* ===== Student Header ===== */
+.student-header {
+  color: white;
+  padding: 1.5rem 2rem;
+  border-radius: 12px;
+  margin-bottom: 2rem;
+  box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.student-header .user-info h3 {
+  font-size: 1.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.student-header .user-info p {
+  margin: 0;
+  opacity: 0.95;
+  font-size: 0.95rem;
+}
+
+/* ===== Owner Header ===== */
+.owner-header {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  color: white;
+  padding: 1.5rem 2rem;
+  border-radius: 12px;
+  margin-bottom: 2rem;
+  box-shadow: 0 10px 30px rgba(240, 147, 251, 0.3);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.owner-header .user-info h1 {
+  font-size: 1.8rem;
+}
+
+.owner-header .user-info-subtitle {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 1rem;
+}
+
+/* ===== Responsive Design ===== */
+@media (max-width: 768px) {
+  .admin-header,
+  .teacher-header,
+  .student-header,
+  .owner-header {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 1.25rem;
+  }
+
+  .header-left,
+  .header-right {
+    width: 100%;
+  }
+
+  .header-right {
+    justify-content: flex-start;
+    margin-top: 1rem;
+  }
+
+  .teacher-header {
+    gap: 1rem;
+  }
+
+  .teacher-welcome {
+    gap: 1rem;
+  }
+
+  .teacher-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .teacher-stats {
+    flex-wrap: wrap;
+  }
+
+  .stats-card {
+    min-width: 70px;
+    padding: 0.5rem 1rem;
+  }
+
+  .admin-avatar,
+  .teacher-avatar,
+  .student-avatar,
+  .avatar {
+    width: 3rem;
+    height: 3rem;
+    font-size: 1.1rem;
+  }
+
+  .user-info h1,
+  .teacher-info .teacher-title {
+    font-size: 1.4rem;
+  }
+
+  .user-info h3 {
+    font-size: 1.2rem;
+  }
+
+  .user-info-subtitle,
+  .teacher-info .teacher-subtitle {
+    font-size: 0.85rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .admin-header,
+  .teacher-header,
+  .student-header,
+  .owner-header {
+    padding: 1rem;
+  }
+
+  .stats-card {
+    min-width: 60px;
+    padding: 0.4rem 0.8rem;
+  }
+
+  .teacher-stats-value {
+    font-size: 1.5rem;
+  }
+
+  .teacher-stats-label {
+    font-size: 0.75rem;
+  }
+}

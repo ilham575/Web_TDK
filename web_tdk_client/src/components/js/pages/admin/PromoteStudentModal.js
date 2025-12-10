@@ -8,21 +8,37 @@ const PromoteStudentModal = ({
   onClose,
   isPromoting,
   getClassroomGradeLevels,
+  getClassroomNamesByGrade, // <- new: function to get classroom names for a grade
+  promotionNewGradeLevel, // <- parent-controlled new grade select value
+  setPromotionNewGradeLevel, // <- parent-controlled setter
 }) => {
   const [selectedStudents, setSelectedStudents] = useState(new Set());
   const [searchTerm, setSearchTerm] = useState('');
-  const [newGradeLevel, setNewGradeLevel] = useState('');
+  // Use parent-provided `promotionNewGradeLevel` and `setPromotionNewGradeLevel` if available
   const [promotionType, setPromotionType] = useState('mid_term'); // Internal state for promotion type
+  const [shouldCloseAfterReset, setShouldCloseAfterReset] = useState(false); // Track if modal should close after reset
 
   // Reset form state when modal opens with a new classroom
   useEffect(() => {
     if (isOpen && classroom) {
       setSelectedStudents(new Set());
       setSearchTerm('');
-      setNewGradeLevel('');
+      if (typeof setPromotionNewGradeLevel === 'function') {
+        setPromotionNewGradeLevel('');
+      }
       setPromotionType('mid_term');
+      setShouldCloseAfterReset(false);
     }
   }, [isOpen, classroom?.id]); // Depend on classroom.id to detect new classroom
+
+  // When shouldCloseAfterReset becomes true and isPromoting is false (request completed),
+  // reset form state only (parent will close modal after refresh completes)
+  useEffect(() => {
+    if (shouldCloseAfterReset && !isPromoting) {
+      resetForm();
+      setShouldCloseAfterReset(false);
+    }
+  }, [shouldCloseAfterReset, isPromoting]);
 
   const extractGradeNumber = (gradeString) => {
     const match = gradeString?.match(/\d+/);
@@ -64,7 +80,7 @@ const PromoteStudentModal = ({
       return;
     }
 
-    if ((promotionType === 'mid_term_with_promotion' || promotionType === 'end_of_year') && !newGradeLevel) {
+    if ((promotionType === 'mid_term_with_promotion' || promotionType === 'end_of_year') && !promotionNewGradeLevel) {
       alert('กรุณาระบุชั้นปีใหม่');
       return;
     }
@@ -72,10 +88,16 @@ const PromoteStudentModal = ({
     const payload = {
       student_ids: Array.from(selectedStudents),
       promotion_type: promotionType,
+      classroom_id: classroom?.id,
     };
 
     if (promotionType === 'mid_term_with_promotion' || promotionType === 'end_of_year') {
-      payload.new_grade_level = newGradeLevel;
+      payload.new_grade_level = promotionNewGradeLevel;
+      // Also send classroom names for the new grade so parent can display them
+      if (typeof getClassroomNamesByGrade === 'function') {
+        const newClassroomNames = getClassroomNamesByGrade(promotionNewGradeLevel);
+        payload.new_classroom_names = newClassroomNames;
+      }
     }
 
     if (promotionType === 'end_of_year') {
@@ -83,13 +105,14 @@ const PromoteStudentModal = ({
     }
 
     onPromoteStudents(payload);
-    resetForm();
+    // Mark that we should reset and close after the request completes
+    setShouldCloseAfterReset(true);
   };
 
   const resetForm = () => {
     setSelectedStudents(new Set());
     setSearchTerm('');
-    setNewGradeLevel('');
+    if (typeof setPromotionNewGradeLevel === 'function') setPromotionNewGradeLevel('');
     setPromotionType('mid_term');
   };
 
@@ -169,9 +192,9 @@ const PromoteStudentModal = ({
                   value="mid_term"
                   checked={promotionType === 'mid_term'}
                   onChange={e => {
-                    setPromotionType(e.target.value);
-                    setNewGradeLevel('');
-                  }}
+                      setPromotionType(e.target.value);
+                      if (typeof setPromotionNewGradeLevel === 'function') setPromotionNewGradeLevel('');
+                    }}
                 />
                 <div>
                   <strong style={{ color: promotionType === 'mid_term' ? '#2e7d32' : '#333' }}>🔄 เลื่อนเทอมเท่านั้น</strong><br />
@@ -196,9 +219,9 @@ const PromoteStudentModal = ({
                   value="mid_term_with_promotion"
                   checked={promotionType === 'mid_term_with_promotion'}
                   onChange={e => {
-                    setPromotionType(e.target.value);
-                    setNewGradeLevel('');
-                  }}
+                      setPromotionType(e.target.value);
+                      if (typeof setPromotionNewGradeLevel === 'function') setPromotionNewGradeLevel('');
+                    }}
                 />
                 <div>
                   <strong style={{ color: promotionType === 'mid_term_with_promotion' ? '#2e7d32' : '#333' }}>📈 เลื่อนเทอม + ชั้น</strong><br />
@@ -223,9 +246,9 @@ const PromoteStudentModal = ({
                   value="end_of_year"
                   checked={promotionType === 'end_of_year'}
                   onChange={e => {
-                    setPromotionType(e.target.value);
-                    setNewGradeLevel('');
-                  }}
+                      setPromotionType(e.target.value);
+                      if (typeof setPromotionNewGradeLevel === 'function') setPromotionNewGradeLevel('');
+                    }}
                 />
                 <div>
                   <strong style={{ color: promotionType === 'end_of_year' ? '#2e7d32' : '#333' }}>📈 เลื่อนปลายปี</strong><br />
@@ -240,18 +263,22 @@ const PromoteStudentModal = ({
             <div className="admin-form-group" style={{ marginBottom: '1.5rem' }}>
               <label className="admin-form-label">ชั้นปีใหม่ <span style={{ color: 'red' }}>*</span></label>
               {availableNextGrades.length > 0 ? (
-                <select 
-                  className="admin-form-input"
-                  value={newGradeLevel}
-                  onChange={e => setNewGradeLevel(e.target.value)}
+                  <select 
+                    className="admin-form-input"
+                    value={promotionNewGradeLevel || ''}
+                    onChange={e => typeof setPromotionNewGradeLevel === 'function' ? setPromotionNewGradeLevel(e.target.value) : null}
                   style={{ cursor: 'pointer' }}
                 >
                   <option value="">-- เลือกชั้นปีใหม่ --</option>
-                  {availableNextGrades.map(grade => (
-                    <option key={grade} value={grade}>
-                      {grade}
-                    </option>
-                  ))}
+                  {availableNextGrades.map(grade => {
+                    const classroomNames = typeof getClassroomNamesByGrade === 'function' ? getClassroomNamesByGrade(grade) : [];
+                    const namesList = classroomNames.length > 0 ? classroomNames.join(', ') : grade;
+                    return (
+                      <option key={grade} value={grade}>
+                        {grade} (ชั้นปีที่ {extractGradeNumber(grade)}) - {namesList}
+                      </option>
+                    );
+                  })}
                 </select>
               ) : (
                 <div style={{
@@ -357,7 +384,7 @@ const PromoteStudentModal = ({
             type="button" 
             className="admin-btn-primary" 
             onClick={handleSubmit}
-            disabled={isPromoting || selectedStudents.size === 0 || ((promotionType === 'mid_term_with_promotion' || promotionType === 'end_of_year') && !newGradeLevel)}
+            disabled={isPromoting || selectedStudents.size === 0 || ((promotionType === 'mid_term_with_promotion' || promotionType === 'end_of_year') && !promotionNewGradeLevel)}
             style={{ backgroundColor: '#4caf50' }}
           >
             {isPromoting ? 'กำลังเลื่อน...' : `✓ เลื่อน ${selectedStudents.size} นักเรียน`}

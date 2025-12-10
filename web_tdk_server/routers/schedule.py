@@ -33,9 +33,10 @@ def create_schedule_slot(
         )
     
     # Check for time conflicts
+    dow = str(schedule_slot.day_of_week)
     existing_slot = db.query(ScheduleSlot).filter(
         ScheduleSlot.school_id == current_user.school_id,
-        ScheduleSlot.day_of_week == schedule_slot.day_of_week,
+        ScheduleSlot.day_of_week == dow,
         ScheduleSlot.start_time < schedule_slot.end_time,
         ScheduleSlot.end_time > schedule_slot.start_time
     ).first()
@@ -46,8 +47,10 @@ def create_schedule_slot(
             detail="Time slot conflicts with existing schedule"
         )
     
+    slot_data = schedule_slot.dict()
+    slot_data['day_of_week'] = str(slot_data.get('day_of_week'))
     db_schedule_slot = ScheduleSlot(
-        **schedule_slot.dict(),
+        **slot_data,
         school_id=current_user.school_id,
         created_by=current_user.id
     )
@@ -94,7 +97,7 @@ def update_schedule_slot(
     existing_slot = db.query(ScheduleSlot).filter(
         ScheduleSlot.school_id == current_user.school_id,
         ScheduleSlot.id != slot_id,
-        ScheduleSlot.day_of_week == schedule_slot.day_of_week,
+        ScheduleSlot.day_of_week == str(schedule_slot.day_of_week),
         ScheduleSlot.start_time < schedule_slot.end_time,
         ScheduleSlot.end_time > schedule_slot.start_time
     ).first()
@@ -106,6 +109,8 @@ def update_schedule_slot(
         )
     
     for key, value in schedule_slot.dict().items():
+        if key == 'day_of_week':
+            value = str(value)
         setattr(db_slot, key, value)
     
     db.commit()
@@ -197,7 +202,7 @@ def assign_subject_to_schedule(
         # If no schedule_slot_id, find operating hours for the day
         schedule_slot = db.query(ScheduleSlot).filter(
             ScheduleSlot.school_id == current_user.school_id,
-            ScheduleSlot.day_of_week == assignment.day_of_week
+                ScheduleSlot.day_of_week == str(assignment.day_of_week)
         ).first()
         
         if not schedule_slot:
@@ -215,8 +220,8 @@ def assign_subject_to_schedule(
             )
     
     # Check for time conflicts with other subjects on the same day
-    existing_schedule = db.query(SubjectSchedule).filter(
-        SubjectSchedule.day_of_week == assignment.day_of_week,
+        existing_schedule = db.query(SubjectSchedule).filter(
+            SubjectSchedule.day_of_week == str(assignment.day_of_week),
         SubjectSchedule.start_time < assignment.end_time,
         SubjectSchedule.end_time > assignment.start_time,
         SubjectSchedule.teacher_id == current_user.id
@@ -253,7 +258,7 @@ def assign_subject_to_schedule(
             schedule_slot_id=final_schedule_slot_id,  # Can be None for custom schedules
             teacher_id=current_user.id,
             classroom_id=assignment.classroom_id,  # Optional: specific classroom only
-            day_of_week=assignment.day_of_week,
+            day_of_week=str(assignment.day_of_week),
             start_time=assignment.start_time,
             end_time=assignment.end_time
         )
@@ -387,7 +392,7 @@ def update_subject_schedule(
     else:
         schedule_slot = db.query(ScheduleSlot).filter(
             ScheduleSlot.school_id == current_user.school_id,
-            ScheduleSlot.day_of_week == assignment.day_of_week
+            ScheduleSlot.day_of_week == str(assignment.day_of_week)
         ).first()
         
         if not schedule_slot:
@@ -406,7 +411,7 @@ def update_subject_schedule(
     # Check for time conflicts with other subjects on the same day (excluding current assignment)
     existing_schedule = db.query(SubjectSchedule).filter(
         SubjectSchedule.id != assignment_id,
-        SubjectSchedule.day_of_week == assignment.day_of_week,
+        SubjectSchedule.day_of_week == str(assignment.day_of_week),
         SubjectSchedule.start_time < assignment.end_time,
         SubjectSchedule.end_time > assignment.start_time,
         SubjectSchedule.teacher_id == current_user.id
@@ -437,7 +442,7 @@ def update_subject_schedule(
         db_assignment.subject_id = assignment.subject_id
         db_assignment.schedule_slot_id = assignment.schedule_slot_id
         db_assignment.classroom_id = assignment.classroom_id
-        db_assignment.day_of_week = assignment.day_of_week
+        db_assignment.day_of_week = str(assignment.day_of_week)
         db_assignment.start_time = assignment.start_time
         db_assignment.end_time = assignment.end_time
         
@@ -635,7 +640,7 @@ def admin_assign_schedule_to_teacher(
     
     # Check for time conflicts with other subjects on the same day
     existing_schedule = db.query(SubjectSchedule).filter(
-        SubjectSchedule.day_of_week == assignment.day_of_week,
+        SubjectSchedule.day_of_week == str(assignment.day_of_week),
         SubjectSchedule.start_time < assignment.end_time,
         SubjectSchedule.end_time > assignment.start_time,
         SubjectSchedule.teacher_id == teacher_id
@@ -670,7 +675,7 @@ def admin_assign_schedule_to_teacher(
             schedule_slot_id=final_schedule_slot_id,
             teacher_id=teacher_id,  # Assign to specified teacher
             classroom_id=assignment.classroom_id,
-            day_of_week=assignment.day_of_week,
+            day_of_week=str(assignment.day_of_week),
             start_time=assignment.start_time,
             end_time=assignment.end_time
         )

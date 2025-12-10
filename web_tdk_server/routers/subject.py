@@ -14,6 +14,39 @@ from schemas.user import User as UserSchema
 
 router = APIRouter(prefix="/subjects", tags=["subjects"])
 
+def validate_activity_percentage(db: Session, subject_id: int = None, new_percentage: int = None, school_id: int = None):
+    """
+    Validate that activity subjects' total percentage does not exceed 100%
+    If subject_id is provided, exclude it from the check (for updates)
+    """
+    if not new_percentage or new_percentage <= 0:
+        return  # No validation needed if percentage is None or <= 0
+    
+    if new_percentage > 100:
+        raise HTTPException(status_code=400, detail="Activity percentage cannot exceed 100%")
+    
+    # Check total percentage across all activity subjects in the school
+    # (since activity subjects are defined per subject, not per classroom)
+    if school_id:
+        activity_subjects = db.query(SubjectModel).filter(
+            SubjectModel.school_id == school_id,
+            SubjectModel.subject_type == 'activity',
+            SubjectModel.is_ended == False
+        ).all()
+        
+        # Calculate total percentage excluding current subject
+        total_percent = sum([
+            s.activity_percentage or 0 
+            for s in activity_subjects 
+            if s.id != subject_id
+        ])
+        
+        if total_percent + new_percentage > 100:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Activity subjects exceed 100%: current total {total_percent}% + new {new_percentage}% = {total_percent + new_percentage}%"
+            )
+
 
 @router.post("", response_model=Subject, status_code=status.HTTP_201_CREATED)
 @router.post("/", response_model=Subject, status_code=status.HTTP_201_CREATED)
@@ -27,6 +60,10 @@ def create_subject(subject: SubjectCreate, db: Session = Depends(get_db), curren
     # if provided school_id and doesn't match current_user's school, reject
     if getattr(current_user, 'school_id', None) is not None and school_id is not None and int(school_id) != int(current_user.school_id):
         raise HTTPException(status_code=403, detail="Cannot create subject for different school")
+
+    # Validate activity_percentage if subject_type is 'activity'
+    if subject.subject_type == 'activity' and getattr(subject, 'activity_percentage', None):
+        validate_activity_percentage(db, new_percentage=subject.activity_percentage, school_id=school_id)
 
     new_sub = SubjectModel(
         name=subject.name,
@@ -58,6 +95,12 @@ def update_subject(subject_id: int, subject: SubjectCreate, db: Session = Depend
     # Verify school ownership
     if getattr(current_user, 'school_id', None) is not None and subj.school_id is not None and int(subj.school_id) != int(current_user.school_id):
         raise HTTPException(status_code=403, detail="Cannot update subject for different school")
+    
+    # Validate activity_percentage if changing to activity type or updating percentage
+    new_type = subject.subject_type or subj.subject_type
+    new_percent = getattr(subject, 'activity_percentage', None) or subj.activity_percentage
+    if new_type == 'activity' and new_percent:
+        validate_activity_percentage(db, subject_id=subject_id, new_percentage=new_percent, school_id=subj.school_id)
     
     # Update fields
     if subject.name:

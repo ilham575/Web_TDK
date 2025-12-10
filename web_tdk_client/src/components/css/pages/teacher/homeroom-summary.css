@@ -510,3 +510,194 @@
     gap: 0.25rem;
   }
 }
+
+/* Homeroom Transcript Table Format */
+.homeroom-transcript-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+.homeroom-transcript-table thead {
+  background: #f8fafc;
+}
+
+.homeroom-transcript-table th {
+  padding: 12px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.homeroom-transcript-table tbody tr {
+  border-bottom: 1px solid #e2e8f0;
+  transition: background 0.2s ease;
+}
+
+.homeroom-transcript-table tbody tr:hover {
+  background: rgba(59, 130, 246, 0.04);
+}
+
+.homeroom-transcript-table tbody tr.first-row:hover {
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.homeroom-transcript-table tbody tr.empty-grades:hover {
+  background: rgba(255, 193, 7, 0.04);
+}
+
+.homeroom-transcript-table td {
+  padding: 12px;
+  color: #333;
+}
+
+/* Column Styles */
+.homeroom-transcript-table .col-subject {
+  width: 30%;
+  min-width: 180px;
+}
+
+.homeroom-transcript-table .col-type {
+  width: 25%;
+  min-width: 150px;
+}
+
+.homeroom-transcript-table .col-score {
+  width: 10%;
+  min-width: 80px;
+  text-align: center;
+}
+
+.homeroom-transcript-table .col-grade {
+  width: 10%;
+  min-width: 70px;
+  text-align: center;
+}
+
+.homeroom-transcript-table .col-credits {
+  width: 8%;
+  min-width: 60px;
+  text-align: center;
+}
+
+.homeroom-transcript-table .col-gpa {
+  width: 8%;
+  min-width: 60px;
+  text-align: center;
+}
+
+.homeroom-transcript-table .col-action {
+  width: 12%;
+  min-width: 100px;
+  text-align: center;
+}
+
+/* Empty Data Cell */
+.empty-data {
+  text-align: center;
+  color: #94a3b8;
+  font-style: italic;
+  padding: 1rem !important;
+}
+
+/* Subject Cell Content */
+.subject-cell-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.subject-cell-text {
+  font-weight: 600;
+  color: #1e293b;
+}
+
+/* Score Cell */
+.score-cell {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 3px;
+}
+
+.score-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #667eea;
+}
+
+.score-unit {
+  font-size: 0.8rem;
+  color: #999;
+}
+
+/* Grade Badge */
+.grade-badge-table {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  color: white;
+  font-weight: 700;
+  font-size: 0.95rem;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+/* Credits Value */
+.credit-value {
+  font-weight: 700;
+  color: #1e293b;
+}
+
+/* GPA Value */
+.gpa-value-table {
+  font-weight: 700;
+  font-size: 1rem;
+  color: #667eea;
+}
+
+/* Attendance Display - Compact */
+.attendance-display-compact {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.attendance-rate-compact {
+  font-weight: 700;
+  color: #1e293b;
+  font-size: 0.95rem;
+}
+
+.attendance-badges-compact {
+  display: flex;
+  gap: 0.35rem;
+  flex-direction: column;
+  align-items: center;
+}
+
+.attendance-badge-compact {
+  display: inline-block;
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.attendance-badge-compact.present {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.attendance-badge-compact.absent {
+  background: #fee2e2;
+  color: #991b1b;
+}

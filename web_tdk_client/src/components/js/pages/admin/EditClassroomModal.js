@@ -9,16 +9,21 @@ const EditClassroomModal = ({
   onClose,
 }) => {
   // Local state สำหรับ modal นี้เท่านั้น
-  const [name, setName] = useState('');
   const [gradeLevel, setGradeLevel] = useState('');
   const [roomNumber, setRoomNumber] = useState('');
   const [semester, setSemester] = useState(1);
   const [academicYear, setAcademicYear] = useState('');
 
+  // ฟังก์ชันสำหรับสร้างชื่อชั้นเรียนอัตโนมัติ
+  const generateClassName = () => {
+    if (!gradeLevel) return '';
+    if (roomNumber) return `${gradeLevel}/${roomNumber}`;
+    return gradeLevel;
+  };
+
   // เมื่อ modal เปิด ให้โหลดข้อมูลจาก selectedClassroom
   useEffect(() => {
     if (isOpen && selectedClassroom) {
-      setName(selectedClassroom.name || '');
       setGradeLevel(selectedClassroom.grade_level || '');
       setRoomNumber(selectedClassroom.room_number || '');
       setSemester(selectedClassroom.semester || 1);
@@ -29,7 +34,6 @@ const EditClassroomModal = ({
   // Reset form เมื่อ modal ปิด
   useEffect(() => {
     if (!isOpen) {
-      setName('');
       setGradeLevel('');
       setRoomNumber('');
       setSemester(1);
@@ -39,14 +43,13 @@ const EditClassroomModal = ({
 
   const handleSubmit = async () => {
     await onUpdateClassroom({
-      name,
+      name: generateClassName(),
       gradeLevel,
       roomNumber,
       semester,
       academicYear,
     });
     // Reset form หลังแก้ไขสำเร็จ
-    setName('');
     setGradeLevel('');
     setRoomNumber('');
     setSemester(1);
@@ -78,20 +81,8 @@ const EditClassroomModal = ({
           {/* Instructions box */}
           <div style={{ marginBottom: '1.5rem', padding: '1rem', backgroundColor: '#e3f2fd', borderLeft: '4px solid #1976d2', borderRadius: '4px' }}>
             <p style={{ margin: 0, color: '#1565c0', fontSize: '14px' }}>
-              📝 แก้ไขรายละเอียดชั้นเรียน
+              📝 แก้ไขรายละเอียดชั้นเรียน (ชื่อชั้นเรียนสร้างจากชั้นปี/เลขห้องอัตโนมัติ)
             </p>
-          </div>
-
-          <div className="admin-form-group">
-            <label className="admin-form-label">ชื่อชั้นเรียน <span style={{ color: 'red' }}>*</span></label>
-            <input 
-              className="admin-form-input" 
-              type="text" 
-              value={name}
-              onChange={e => setName(e.target.value)}
-              placeholder="เช่น ป.1/1, ป.2/2"
-            />
-            <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>จำนวนห้องสามารถใส่เลขหรือตัวอักษรได้ เช่น 1, 2, 3 หรือ A, B, C</div>
           </div>
 
           <div className="admin-form-group">
@@ -146,6 +137,9 @@ const EditClassroomModal = ({
 
         {/* Footer */}
         <div className="admin-modal-footer">
+          <div style={{ fontSize: '13px', color: '#666', marginBottom: '1rem' }}>
+            ✓ ชื่อชั้นเรียน: <strong>{generateClassName() || '-'}</strong>
+          </div>
           <button 
             type="button" 
             className="admin-btn-secondary"
@@ -155,11 +149,19 @@ const EditClassroomModal = ({
           </button>
           <button 
             type="button" 
-            className="admin-btn-primary" 
+            className="admin-btn-primary save-edit-btn" 
             onClick={handleSubmit}
-            disabled={updatingClassroom || !name || !gradeLevel}
+            disabled={updatingClassroom || !gradeLevel}
+            aria-label={updatingClassroom ? 'กำลังบันทึกการแก้ไข' : 'บันทึกการแก้ไข'}
           >
-            {updatingClassroom ? 'กำลังบันทึก...' : '✓ บันทึกการแก้ไข'}
+            {updatingClassroom ? (
+              <span className="btn-loading">⏳ กำลังบันทึก...</span>
+            ) : (
+              <>
+                <span className="btn-icon">✓</span>
+                <span className="btn-text">บันทึกการแก้ไข</span>
+              </>
+            )}
           </button>
         </div>
       </div>

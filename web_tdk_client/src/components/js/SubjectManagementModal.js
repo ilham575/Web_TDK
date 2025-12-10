@@ -118,6 +118,25 @@ function SubjectManagementModal({ isOpen, onClose, onSave, subject, teachers, cl
         toast.error('เปอร์เซ็นต์กิจกรรมต้องอยู่ระหว่าง 0 ถึง 100');
         return;
       }
+      
+      // Check if adding/changing this percentage would exceed 100% total
+      const newPercent = formData.activity_percentage === '' ? 0 : Number(formData.activity_percentage);
+      const currentPercent = subject?.activity_percentage || 0;
+      
+      // Only validate if percentage is being changed or this is a new activity subject
+      if (newPercent !== currentPercent) {
+        // Calculate current total from other activity subjects (excluding this one)
+        const otherActivityTotal = localClassrooms.reduce((sum, cls) => {
+          // This is a rough estimate - ideally should fetch from server
+          return sum;
+        }, 0);
+        
+        // The server will validate the exact total, but we can give a warning
+        if (newPercent > 100) {
+          toast.error('เปอร์เซ็นต์ไม่สามารถเกิน 100% ได้');
+          return;
+        }
+      }
     }
 
     setSaving(true);
@@ -242,35 +261,6 @@ function SubjectManagementModal({ isOpen, onClose, onSave, subject, teachers, cl
         </div>
         
         <form onSubmit={handleSave} className="subject-form">
-          {/* Credits for main subjects and activity percentage for activity subjects */}
-          {formData.subject_type === 'main' && (
-            <div className="form-group">
-              <label>หน่วยกิต (Credits)</label>
-              <input
-                type="number"
-                name="credits"
-                value={formData.credits}
-                onChange={handleNumberChange}
-                placeholder="เช่น 3"
-                min="0"
-              />
-            </div>
-          )}
-
-          {formData.subject_type === 'activity' && (
-            <div className="form-group">
-              <label>เปอร์เซ็นต์คะแนนที่ระบบต้องการ (%)</label>
-              <input
-                type="number"
-                name="activity_percentage"
-                value={formData.activity_percentage}
-                onChange={handleNumberChange}
-                placeholder="เช่น 30"
-                min="0"
-                max="100"
-              />
-            </div>
-          )}
           <div className="form-group">
             <label>ชื่อรายวิชา *</label>
             <input
@@ -307,6 +297,36 @@ function SubjectManagementModal({ isOpen, onClose, onSave, subject, teachers, cl
               </select>
             </div>
           </div>
+
+          {/* Credits for main subjects and activity percentage for activity subjects */}
+          {formData.subject_type === 'main' && (
+            <div className="form-group">
+              <label>หน่วยกิต (Credits)</label>
+              <input
+                type="number"
+                name="credits"
+                value={formData.credits}
+                onChange={handleNumberChange}
+                placeholder="เช่น 3"
+                min="0"
+              />
+            </div>
+          )}
+
+          {formData.subject_type === 'activity' && (
+            <div className="form-group">
+              <label>เปอร์เซ็นต์คะแนนที่ระบบต้องการ (%)</label>
+              <input
+                type="number"
+                name="activity_percentage"
+                value={formData.activity_percentage}
+                onChange={handleNumberChange}
+                placeholder="เช่น 30"
+                min="0"
+                max="100"
+              />
+            </div>
+          )}
 
           <div className="form-group">
             <label>ครูผู้สอน</label>

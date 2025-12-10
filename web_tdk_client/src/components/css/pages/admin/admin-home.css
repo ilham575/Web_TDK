@@ -1486,6 +1486,95 @@
     inset 0 1px 0 rgba(255,255,255,0.15);
 }
 
+/* Special styling for the add-students button in the AddStudentsModal */
+.admin-modal .admin-btn-primary.add-students-btn,
+.modal .admin-btn-primary.add-students-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 1.05rem;
+  border-radius: 10px;
+  min-width: 220px;
+  justify-content: center;
+  font-weight: 700;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.admin-modal .admin-btn-primary.add-students-btn:hover,
+.modal .admin-btn-primary.add-students-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 40px rgba(102, 126, 234, 0.65), inset 0 1px 0 rgba(255,255,255,0.35);
+}
+.admin-modal .admin-btn-primary.add-students-btn .btn-icon,
+.modal .admin-btn-primary.add-students-btn .btn-icon{
+  display:inline-flex; align-items:center; justify-content:center; background: rgba(255,255,255,0.15); padding:0.25rem 0.45rem; border-radius:6px; font-weight:900;
+}
+.admin-modal .admin-btn-primary.add-students-btn .btn-text{ font-size:0.95rem; }
+.modal .admin-btn-primary.add-students-btn .btn-text{ font-size:0.95rem; }
+.admin-modal .admin-btn-primary.add-students-btn .btn-count{ background: rgba(255,255,255,0.16); padding:0.18rem 0.6rem; border-radius:999px; font-weight:800; color:white; font-size:0.95rem; margin:0 0.15rem; }
+.modal .admin-btn-primary.add-students-btn .btn-count{ background: rgba(255,255,255,0.16); padding:0.18rem 0.6rem; border-radius:999px; font-weight:800; color:white; font-size:0.95rem; margin:0 0.15rem; }
+.admin-modal .admin-btn-primary.add-students-btn .btn-label{ color: rgba(255,255,255,0.95); font-size:0.95rem; opacity:0.95; }
+.modal .admin-btn-primary.add-students-btn .btn-label{ color: rgba(255,255,255,0.95); font-size:0.95rem; opacity:0.95; }
+.admin-modal .admin-btn-primary.add-students-btn[disabled]{ opacity:0.6; transform:none; cursor:not-allowed; box-shadow: none; }
+.modal .admin-btn-primary.add-students-btn[disabled]{ opacity:0.6; transform:none; cursor:not-allowed; box-shadow: none; }
+.admin-modal .admin-btn-primary.add-students-btn .btn-loading{ display:inline-flex; gap:0.45rem; align-items:center; }
+.modal .admin-btn-primary.add-students-btn .btn-loading{ display:inline-flex; gap:0.45rem; align-items:center; }
+
+/* Focus and accessibility */
+.admin-modal .admin-btn-primary.add-students-btn:focus,
+.modal .admin-btn-primary.add-students-btn:focus {
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(102,126,234,0.18), 0 14px 40px rgba(102,126,234,0.6);
+}
+
+/* Remove unexpected border/outline that may come from browser autofill or focus */
+.admin-modal .admin-btn-primary.add-students-btn,
+.modal .admin-btn-primary.add-students-btn {
+  border: 0; outline: none; padding: 0.6rem 1.05rem; 
+}
+
+/* Save/Edit button (EditClassroomModal) */
+.admin-modal .admin-btn-primary.save-edit-btn,
+.modal .admin-btn-primary.save-edit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 1.1rem;
+  border-radius: 10px;
+  min-width: 200px;
+  justify-content: center;
+  font-weight: 700;
+  color: white;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.08);
+  border: 3px solid rgba(0,0,0,0.9); /* black border to match image */
+  background: linear-gradient(135deg, #7f5af0 0%, #ef3b78 50%, #2ab7f6 100%);
+}
+.admin-modal .admin-btn-primary.save-edit-btn:hover,
+.modal .admin-btn-primary.save-edit-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 40px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.18);
+}
+.admin-modal .admin-btn-primary.save-edit-btn .btn-icon,
+.modal .admin-btn-primary.save-edit-btn .btn-icon{
+  display:inline-flex; align-items:center; justify-content:center; background: rgba(255,255,255,0.12); padding:0.22rem 0.42rem; border-radius:6px; font-weight:900; font-size:0.95rem;
+}
+.admin-modal .admin-btn-primary.save-edit-btn .btn-text,
+.modal .admin-btn-primary.save-edit-btn .btn-text{ font-size:1rem; }
+.admin-modal .admin-btn-primary.save-edit-btn[disabled],
+.modal .admin-btn-primary.save-edit-btn[disabled]{ opacity:0.6; transform:none; cursor:not-allowed; box-shadow: none; }
+.admin-modal .admin-btn-primary.save-edit-btn .btn-loading,
+.modal .admin-btn-primary.save-edit-btn .btn-loading{ display:inline-flex; gap:0.5rem; align-items:center; }
+.admin-modal .admin-btn-primary.save-edit-btn:focus,
+.modal .admin-btn-primary.save-edit-btn:focus {
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(0,0,0,0.18), 0 14px 40px rgba(0,0,0,0.18);
+}
+
+@media (max-width: 480px) {
+  .admin-modal .admin-btn-primary.add-students-btn { min-width: auto; padding: 0.56rem 0.8rem; }
+  .admin-modal .admin-btn-primary.add-students-btn .btn-count { padding: 0.14rem 0.45rem; font-size: 0.9rem; }
+  .admin-modal .admin-btn-primary.add-students-btn .btn-text, .admin-modal .admin-btn-primary.add-students-btn .btn-label{ display: none; }
+}
+
 /* Make cancel/secondary buttons in modals visually lighter */
 .admin-modal .admin-btn-secondary {
   padding: 0.75rem 1.25rem;
@@ -3129,7 +3218,6 @@
 }
 
 .homeroom-modal .admin-form-input {
-  width: 100%;
   padding: 0.75rem 1rem;
   border: 2px solid rgba(203, 213, 225, 0.6);
   border-radius: 10px;

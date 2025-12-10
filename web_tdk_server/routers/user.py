@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends, status, UploadFile, File
 import secrets
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from sqlalchemy.orm import Session
+from sqlalchemy import and_
 from typing import List
 from fastapi import Body
 from sqlalchemy.exc import IntegrityError
@@ -941,6 +942,7 @@ def promote_students(
     student_ids: List[int] = Body(..., embed=True),
     new_grade_level: str = Body(None, embed=True),  # Required for mid_term_with_promotion and end_of_year
     new_academic_year: str = Body(None, embed=True),  # For end_of_year
+    classroom_id: int = Body(None, embed=True),
     db: Session = Depends(get_db),
     current_user: UserModel = Depends(get_current_user)
 ):
@@ -956,7 +958,6 @@ def promote_students(
     new_academic_year: For end_of_year, auto +1 if not provided
     """
     from models.classroom import ClassroomStudent, Classroom
-    from sqlalchemy import and_
     
     # Only admins can promote students
     if getattr(current_user, 'role', None) != 'admin':
@@ -981,8 +982,105 @@ def promote_students(
     failed_count = 0
     errors = []
     promoted_students = []
+    source_classroom = None
+    target_classroom = None
     
     try:
+        if classroom_id is not None:
+            source_classroom = db.query(Classroom).filter(Classroom.id == classroom_id).first()
+            if not source_classroom:
+                raise HTTPException(status_code=404, detail=f'ไม่พบข้อมูลชั้นเรียน ID {classroom_id}')
+
+        def compose_class_name(grade_level_value, room_value):
+            return grade_level_value if not room_value else f"{grade_level_value}/{room_value}"
+
+        def ensure_target_classroom():
+            nonlocal target_classroom
+            if target_classroom or not source_classroom:
+                return target_classroom
+
+            # Determine target classroom attributes
+            if promotion_type == 'mid_term':
+                new_semester = 2
+                new_academic_year_value = source_classroom.academic_year
+                new_grade = source_classroom.grade_level
+                # For mid_term, keep the same classroom name
+                new_name = source_classroom.name
+            elif promotion_type == 'mid_term_with_promotion':
+                new_semester = 2
+                new_academic_year_value = source_classroom.academic_year
+                new_grade = new_grade_level
+                # Generate new classroom name based on selected grade level
+                new_name = compose_class_name(new_grade, source_classroom.room_number)
+                # Try to find existing classroom with matching name pattern for new grade
+                potential_target = db.query(Classroom).filter(
+                    and_(
+                        Classroom.grade_level == new_grade,
+                        Classroom.school_id == source_classroom.school_id,
+                        Classroom.semester == new_semester,
+                        Classroom.academic_year == new_academic_year_value,
+                        Classroom.is_active == True
+                    )
+                ).first()
+                if potential_target:
+                    new_name = potential_target.name
+            else:  # end_of_year
+                new_semester = 1
+                new_academic_year_value = new_academic_year or str(int(source_classroom.academic_year or '0') + 1)
+                new_grade = new_grade_level
+                # Generate new classroom name based on selected grade level
+                new_name = compose_class_name(new_grade, source_classroom.room_number)
+                # Try to find existing classroom with matching name pattern for new grade
+                potential_target = db.query(Classroom).filter(
+                    and_(
+                        Classroom.grade_level == new_grade,
+                        Classroom.school_id == source_classroom.school_id,
+                        Classroom.semester == new_semester,
+                        Classroom.academic_year == new_academic_year_value,
+                        Classroom.is_active == True
+                    )
+                ).first()
+                if potential_target:
+                    new_name = potential_target.name
+
+            room_number = source_classroom.room_number
+
+            existing = db.query(Classroom).filter(
+                and_(
+                    Classroom.name == new_name,
+                    Classroom.school_id == source_classroom.school_id,
+                    Classroom.semester == new_semester,
+                    Classroom.academic_year == new_academic_year_value,
+                    Classroom.is_active == True
+                )
+            ).first()
+
+            if existing:
+                target_classroom = existing
+                return target_classroom
+
+            target_classroom = Classroom(
+                name=new_name,
+                grade_level=new_grade,
+                room_number=room_number,
+                semester=new_semester,
+                academic_year=new_academic_year_value,
+                school_id=source_classroom.school_id,
+                parent_classroom_id=source_classroom.id
+            )
+            db.add(target_classroom)
+            db.flush()
+            return target_classroom
+
+        def deactivate_old_enrollment(enrollment_id_value):
+            if enrollment_id_value:
+                db.query(ClassroomStudent).filter(
+                    ClassroomStudent.id == enrollment_id_value
+                ).update(
+                    {ClassroomStudent.is_active: False},
+                    synchronize_session=False
+                )
+
         for student_id in student_ids:
             try:
                 student = db.query(UserModel).filter(
@@ -1034,6 +1132,7 @@ def promote_students(
                             student.grade_level = str(student.grade_level).replace('เทอม 1', 'เทอม 2')
                         else:
                             student.grade_level = f"{student.grade_level} (เทอม 2)" if student.grade_level else "เทอม 2"
+                    deactivate_old_enrollment(enrollment_id)
                     
                 elif promotion_type in ['mid_term_with_promotion', 'end_of_year']:
                     # ต้องมีข้อมูลชั้นเรียนเพื่อเลื่อน
@@ -1050,28 +1149,28 @@ def promote_students(
                             failed_count += 1
                             errors.append(f'⚠️ นักเรียน ID {student_id} อยู่เทอม 2 แล้ว')
                             continue
-                        
-                        # ลบออกจากชั้นเรียนเดิม (เทอม 1)
-                        # จะเข้าไปในชั้นเรียนเทอม 2 โดยการเลื่อนชั้นเรียนทั้งห้อง
-                        db.query(ClassroomStudent).filter(
-                            ClassroomStudent.id == enrollment_id
-                        ).update(
-                            {ClassroomStudent.is_active: False},
-                            synchronize_session=False
-                        )
-                    
                     elif promotion_type == 'end_of_year':
-                        # ลบออกจากชั้นเรียนเดิม (ปีเดิม)
-                        db.query(ClassroomStudent).filter(
-                            ClassroomStudent.id == enrollment_id
-                        ).update(
-                            {ClassroomStudent.is_active: False},
-                            synchronize_session=False
-                        )
+                        pass
                     
                     # อัพเดต grade_level
                     student.grade_level = new_grade_level
+                    deactivate_old_enrollment(enrollment_id)
                 
+                target = ensure_target_classroom()
+                if target:
+                    existing_target = db.query(ClassroomStudent).filter(
+                        ClassroomStudent.classroom_id == target.id,
+                        ClassroomStudent.student_id == student_id
+                    ).first()
+                    if existing_target:
+                        if not existing_target.is_active:
+                            existing_target.is_active = True
+                    else:
+                        db.add(ClassroomStudent(
+                            classroom_id=target.id,
+                            student_id=student_id
+                        ))
+
                 db.add(student)
                 db.flush()
                 promoted_count += 1
@@ -1089,8 +1188,6 @@ def promote_students(
         
         # Validate session objects and commit all changes
         _validate_no_null_classroom_student(db)
-        
-        # (temporary debugging removed) - classroom change logging was removed
         
         try:
             db.commit()

@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8000';
+import { API_BASE_URL } from '../../../endpoints';
 
 const AddStudentsModal = ({
   isOpen,
@@ -62,12 +61,16 @@ const AddStudentsModal = ({
           'Authorization': `Bearer ${token}`,
         }
       })
-        .then(res => res.json())
+        .then(res => {
+          console.log('[AddStudentsModal] Response status:', res.status);
+          return res.json();
+        })
         .then(data => {
           console.log('[AddStudentsModal] Classroom students response:', data);
           if (Array.isArray(data)) {
+            console.log('[AddStudentsModal] Setting classroomStudents to:', data);
             setClassroomStudents(data);
-            console.log('[AddStudentsModal] Classroom students set to:', data);
+            console.log('[AddStudentsModal] Classroom students set (final check)');
           }
         })
         .catch(err => {
@@ -105,19 +108,11 @@ const AddStudentsModal = ({
     if (!isOpen) {
       setSelectedStudentIds(new Set());
       setSearchTerm('');
-    }
-  }, [isOpen]);
-
-  // เมื่อ modal เปิดหรือเปลี่ยน selectedClassroom/classroomStep ให้ล้างข้อมูลเก่า
-  useEffect(() => {
-    if (isOpen) {
       setAvailableStudents([]);
       setClassroomStudents([]);
       setFilteredStudents([]);
-      setSelectedStudentIds(new Set());
-      setSearchTerm('');
     }
-  }, [isOpen, selectedClassroom, classroomStep]);
+  }, [isOpen]);
 
   const handleAddStudents = async () => {
     await onAddStudents(Array.from(selectedStudentIds));
@@ -170,7 +165,7 @@ const AddStudentsModal = ({
                   className="admin-form-input"
                   value={searchTerm}
                   onChange={e => setSearchTerm(e.target.value)}
-                  style={{ width: '100%' }}
+                  style={{ width: '95%' }}
                 />
               </div>
 
@@ -214,9 +209,10 @@ const AddStudentsModal = ({
                         )}
                         <div style={{ flex: 1 }}>
                           <div style={{ fontWeight: '600', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            {student.full_name || student.username}
+                            👤 {student.full_name || '(ไม่ระบุชื่อ)'}
+                            {student.full_name && <span style={{ fontSize: '12px', color: '#999' }}>({student.username})</span>}
                           </div>
-                          <div style={{ fontSize: '12px', color: '#666' }}>
+                          <div style={{ fontSize: '12px', color: '#666', marginTop: '0.25rem' }}>
                             📧 {student.email}
                           </div>
                         </div>
@@ -290,11 +286,21 @@ const AddStudentsModal = ({
           { !isViewMode && (
             <button 
               type="button" 
-              className="admin-btn-primary"
+              className="admin-btn-primary add-students-btn"
               onClick={handleAddStudents}
               disabled={addingStudentsToClassroom || selectedStudentIds.size === 0}
+              aria-label={`เพิ่ม ${selectedStudentIds.size} นักเรียน`}
             >
-              {addingStudentsToClassroom ? 'กำลังเพิ่ม...' : `✓ เพิ่ม ${selectedStudentIds.size} นักเรียน`}
+              {addingStudentsToClassroom ? (
+                <span className="btn-loading">⏳ กำลังเพิ่ม...</span>
+              ) : (
+                <>
+                  <span className="btn-icon">✓</span>
+                  <span className="btn-text">เพิ่ม</span>
+                  <span className="btn-count">{selectedStudentIds.size}</span>
+                  <span className="btn-label">นักเรียน</span>
+                </>
+              )}
             </button>
           )}
         </div>

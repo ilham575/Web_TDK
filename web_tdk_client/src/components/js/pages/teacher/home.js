@@ -5,11 +5,14 @@ import '../../../css/pages/teacher/schedule-modal.css';
 import '../../../css/pages/teacher/homeroom-summary.css';
 import ScheduleGrid from '../../ScheduleGrid';
 import AbsenceApproval from '../admin/AbsenceApproval';
+import PageHeader, { getInitials } from '../../PageHeader';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import ConfirmModal from '../../ConfirmModal';
 import ExpiryModal from '../../ExpiryModal';
 import AnnouncementModal from '../../AnnouncementModal';
+import StudentDetailModal from '../../../modals/StudentDetailModal';
+import ScheduleModal from '../../../modals/ScheduleModal';
 // import BulkEnrollModal from '../../BulkEnrollModal';
 import { API_BASE_URL } from '../../../endpoints';
 import { setSchoolFavicon } from '../../../../utils/faviconUtils';
@@ -295,37 +298,10 @@ function TeacherPage() {
   const viewStudentDetail = async (student) => {
     if (!selectedHomeroomClassroom) return;
     
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE_URL}/homeroom/my-classrooms/${selectedHomeroomClassroom.classroom_id}/students`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      
-      if (res.ok) {
-        const data = await res.json();
-        const detailedStudent = data.students?.find(s => s.id === student.id);
-        if (detailedStudent) {
-          setSelectedStudentDetail(detailedStudent);
-          setShowStudentDetailModal(true);
-        } else {
-          // Fallback to basic student data
-          setSelectedStudentDetail(student);
-          setShowStudentDetailModal(true);
-        }
-      } else {
-        // Fallback to basic student data
-        setSelectedStudentDetail(student);
-        setShowStudentDetailModal(true);
-      }
-    } catch (err) {
-      console.error('Failed to load student detail:', err);
-      // Fallback to basic student data
-      setSelectedStudentDetail(student);
-      setShowStudentDetailModal(true);
-    }
+    // ใช้ข้อมูลนักเรียนจากตารางแล้ว เพราะมีข้อมูลคะแนนที่ถูกต้อง
+    setSelectedStudentDetail(student);
+    setShowStudentDetailModal(true);
   };
-
-  const initials = (name) => (name ? name.split(' ').map(n=>n[0]).slice(0,2).join('').toUpperCase() : 'T');
 
   // Parse server-provided datetime strings into a local Date object.
   // Accepts formats like "YYYY-MM-DD HH:MM:SS" (naive local),
@@ -368,6 +344,93 @@ function TeacherPage() {
     if (item.email && currentUser.email && String(item.email).toLowerCase() === String(currentUser.email).toLowerCase()) return true;
     if (item.created_by_email && currentUser.email && String(item.created_by_email).toLowerCase() === String(currentUser.email).toLowerCase()) return true;
     return false;
+  };
+
+  // ระบบเกรด: A+, A, B+, B, C+, C, D+, D, F
+  const getLetterGrade = (percentage) => {
+    percentage = parseFloat(percentage);
+    
+    // Updated thresholds:
+    // A+ 95 - 100
+    // A  80 - 94
+    // B+ 75 - 79
+    // B  70 - 74
+    // C+ 65 - 69
+    // C  60 - 64
+    // D+ 55 - 59
+    // D  50 - 54
+    // F  < 50
+    if (percentage >= 95) return { grade: 'A+', baseGrade: 'A', gpaValue: 4.0, color: '#2E7D32' };
+    if (percentage >= 80) return { grade: 'A', baseGrade: 'A', gpaValue: 4.0, color: '#388E3C' };
+
+    if (percentage >= 75) return { grade: 'B+', baseGrade: 'B', gpaValue: 3.5, color: '#558B2F' };
+    if (percentage >= 70) return { grade: 'B', baseGrade: 'B', gpaValue: 3.0, color: '#689F38' };
+
+    if (percentage >= 65) return { grade: 'C+', baseGrade: 'C', gpaValue: 2.5, color: '#AFB42B' };
+    if (percentage >= 60) return { grade: 'C', baseGrade: 'C', gpaValue: 2.0, color: '#C0CA33' };
+
+    if (percentage >= 55) return { grade: 'D+', baseGrade: 'D', gpaValue: 1.5, color: '#F57F17' };
+    if (percentage >= 50) return { grade: 'D', baseGrade: 'D', gpaValue: 1.0, color: '#F9A825' };
+
+    return { grade: 'F', baseGrade: 'F', gpaValue: 0, color: '#D32F2F' };
+  };
+
+  // คำนวณ GPA โดยคำนึงถึงเฉพาะวิชาปกติ (ไม่รวมกิจกรรม)
+  const calculateGPA = (subjectDataArray) => {
+    if (!Array.isArray(subjectDataArray) || subjectDataArray.length === 0) return 0;
+
+    // Consider only non-activity subjects that have grades
+    const graded = subjectDataArray.filter(s => {
+      if (s.is_activity) return false;
+      const hasTotalMax = Number(s.total_max_score) > 0;
+      return hasTotalMax;
+    });
+    if (graded.length === 0) return 0;
+
+    let totalWeighted = 0;
+    let totalCredits = 0;
+
+    graded.forEach(s => {
+      const percentage = Number(s.total_max_score) > 0 ? (Number(s.total_score) / Number(s.total_max_score)) * 100 : 0;
+      const gpaValue = getLetterGrade(percentage).gpaValue;
+
+      const credit = Number(s.credits || 1);
+      totalWeighted += gpaValue * credit;
+      totalCredits += credit;
+    });
+
+    if (totalCredits === 0) return 0;
+    return Number((totalWeighted / totalCredits).toFixed(2));
+  };
+
+  // คำนวณสรุปคะแนนเฉพาะวิชาปกติ (ไม่รวมกิจกรรม)
+  const calculateMainSubjectsScore = (subjectsList) => {
+    // Handle null, undefined, or empty arrays
+    if (!subjectsList || !Array.isArray(subjectsList) || subjectsList.length === 0) {
+      return { totalScore: 0, totalMaxScore: 0, percentage: 0, mainSubjectsCount: 0 };
+    }
+
+    let totalScore = 0;
+    let totalMaxScore = 0;
+    let mainSubjectsCount = 0;
+
+    subjectsList.forEach(subject => {
+      if (!subject) return;
+      
+      // Skip activity subjects
+      if (subject.is_activity) return;
+
+      const totalMax = Number(subject.total_max_score || 0);
+      if (totalMax <= 0) return;
+
+      mainSubjectsCount++;
+      totalScore += Number(subject.total_score || 0);
+      totalMaxScore += totalMax;
+    });
+
+    const percentage = totalMaxScore > 0 ? parseFloat(((totalScore / totalMaxScore) * 100).toFixed(2)) : 0;
+
+    return { totalScore, totalMaxScore, percentage, mainSubjectsCount };
   };
 
     const openAnnouncementModal = (item) => {
@@ -657,32 +720,21 @@ function TeacherPage() {
   return (
     <div className="teacher-container">
       <ToastContainer />
-      <div className="teacher-header">
-        <div className="teacher-welcome">
-          <div className="teacher-avatar" aria-hidden>{initials(currentUser?.full_name || currentUser?.username)}</div>
-          <div className="teacher-info">
-            <h2 className="teacher-title">{`👋 สวัสดี, ${currentUser ? (currentUser.full_name || currentUser.username) : 'ครู'}`}</h2>
-            <p className="teacher-subtitle">🎓 จัดการรายวิชา และประกาศข่าวของโรงเรียนอย่างมีประสิทธิภาพ</p>
-          </div>
-        </div>
-
-        <div className="teacher-actions">
-          <div className="teacher-stats">
-            <div className="stats-card floating-effect">
-              <div className="teacher-stats-value">{teacherSubjects.length}</div>
-              <div className="teacher-stats-label">รายวิชา</div>
-            </div>
-            <div className="stats-card floating-effect">
-              <div className="teacher-stats-value">{Array.isArray(announcements) ? announcements.length : 0}</div>
-              <div className="teacher-stats-label">ข่าวสาร</div>
-            </div>
-          </div>
+      <PageHeader 
+        currentUser={currentUser}
+        role="teacher"
+        displaySchool={displaySchool}
+        stats={{
+          subjects: teacherSubjects.length,
+          announcements: Array.isArray(announcements) ? announcements.length : 0
+        }}
+        rightContent={
           <div className="header-actions">
             <button className="teacher-btn-secondary" onClick={() => navigate('/profile')}>👤 โปรไฟล์</button>
             <button onClick={handleSignout} className="teacher-signout-btn">🚪 ออกจากระบบ</button>
           </div>
-        </div>
-      </div>
+        }
+      />
 
       <div className="tabs-container">
         <div className="tabs-header">
@@ -779,9 +831,25 @@ function TeacherPage() {
                       <div className="homeroom-stat-card grades">
                         <div className="homeroom-stat-label">📊 คะแนนเฉลี่ยห้อง</div>
                         <div className="homeroom-stat-value">
-                          {selectedHomeroomClassroom.students.length > 0
-                            ? (selectedHomeroomClassroom.students.reduce((sum, s) => sum + (s.grades?.avg_percentage || 0), 0) / selectedHomeroomClassroom.students.length).toFixed(1)
-                            : 0}%
+                          {selectedHomeroomClassroom.students && selectedHomeroomClassroom.students.length > 0
+                            ? (() => {
+                                // คำนวณเฉพาะนักเรียนที่มีข้อมูลคะแนน
+                                const studentsWithGrades = selectedHomeroomClassroom.students.filter(s => {
+                                  const score = calculateMainSubjectsScore(s.grades_by_subject || []);
+                                  return score.totalMaxScore > 0;
+                                });
+                                
+                                if (studentsWithGrades.length === 0) {
+                                  return 'ไม่มีข้อมูล';
+                                }
+                                
+                                const avgPercentage = studentsWithGrades.reduce((sum, s) => {
+                                  const mainSubjectsScore = calculateMainSubjectsScore(s.grades_by_subject || []);
+                                  return sum + mainSubjectsScore.percentage;
+                                }, 0) / studentsWithGrades.length;
+                                return avgPercentage.toFixed(1);
+                              })()
+                            : 'ไม่มีข้อมูล'}%
                         </div>
                         <div className="homeroom-stat-subtitle">ของคะแนนเต็ม</div>
                       </div>
@@ -812,7 +880,7 @@ function TeacherPage() {
                             <tr key={student.id}>
                               <td>
                                 <div className="student-name-cell">
-                                  <div className="student-avatar">{initials(student.full_name)}</div>
+                                  <div className="student-avatar">{getInitials(student.full_name, 'S')}</div>
                                   <div className="student-info">
                                     <span className="student-fullname">{student.full_name}</span>
                                     <span className="student-username">@{student.username}</span>
@@ -821,12 +889,23 @@ function TeacherPage() {
                               </td>
                               <td>
                                 <div className="grade-display">
-                                  <span className="grade-score">
-                                    {student.grades?.total_score || 0}/{student.grades?.total_max_score || 0}
-                                  </span>
-                                  <span className={`grade-percentage ${getGradeClass(student.grades?.avg_percentage || 0)}`}>
-                                    {(student.grades?.avg_percentage || 0).toFixed(1)}%
-                                  </span>
+                                  {(() => {
+                                    const mainSubjectsScore = calculateMainSubjectsScore(student.grades_by_subject || []);
+                                    // ถ้าไม่มีข้อมูลคะแนนเลย แสดง "ไม่มีข้อมูล"
+                                    if (mainSubjectsScore.totalMaxScore === 0) {
+                                      return <span style={{ color: '#999', fontSize: '0.9rem' }}>ไม่มีข้อมูล</span>;
+                                    }
+                                    return (
+                                      <>
+                                        <span className="grade-score">
+                                          {mainSubjectsScore.totalScore}/{mainSubjectsScore.totalMaxScore}
+                                        </span>
+                                        <span className={`grade-percentage ${getGradeClass(mainSubjectsScore.percentage || 0)}`}>
+                                          {mainSubjectsScore.percentage.toFixed(1)}%
+                                        </span>
+                                      </>
+                                    );
+                                  })()}
                                 </div>
                               </td>
                               <td>
@@ -980,185 +1059,27 @@ function TeacherPage() {
       <ExpiryModal isOpen={showExpiryModal} initialValue={expiryModalValue} onClose={() => setShowExpiryModal(false)} onSave={saveExpiry} title="ตั้งวันหมดอายุ" />
 
       <AnnouncementModal isOpen={showAnnouncementModal} initialData={modalAnnouncement} onClose={closeAnnouncementModal} onSave={saveAnnouncementFromModal} />
-      {/* Student enrollment modal removed — admin manages enrollments */}
-      {showScheduleModal && (
-        <div className="schedule-modal-overlay">
-          <div className="schedule-modal">
-            <div className="schedule-modal-header">
-              <h3 className="schedule-modal-title">
-                <span className="schedule-modal-icon">🗓️</span>
-                {editingAssignment ? '✏️ แก้ไขการกำหนดเวลา' : '➕ กำหนดเวลาเรียน'}
-              </h3>
-              <button className="schedule-modal-close" onClick={cancelScheduleModal} title="ปิด">
-                ×
-              </button>
-            </div>
-            <div className="schedule-modal-content">
-              <div className="schedule-form-intro">
-                <p className="schedule-form-description">เลือกรายวิชา วัน และเวลาที่ต้องการจัดการสอน</p>
-              </div>
-
-              <div className="schedule-form">
-                {/* Basic Information Section */}
-                <div className="schedule-form-section">
-                  <h4 className="schedule-section-title">📋 ข้อมูลพื้นฐาน</h4>
-                  <div className="schedule-form-grid">
-                    <div className="schedule-form-group">
-                      <label className="schedule-form-label">📚 รายวิชา</label>
-                      <select
-                        value={selectedSubjectId}
-                        onChange={e => setSelectedSubjectId(e.target.value)}
-                        className="schedule-form-select"
-                      >
-                        <option value="">-- เลือกรายวิชา --</option>
-                        {teacherSubjects.map(subject => (
-                          <option key={subject.id} value={subject.id}>
-                            {subject.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="schedule-form-group">
-                      <label className="schedule-form-label">📅 วันเรียน</label>
-                      <select
-                        value={scheduleDay}
-                        onChange={e => setScheduleDay(e.target.value)}
-                        className="schedule-form-select"
-                      >
-                        <option value="">-- เลือกวัน --</option>
-                        {Array.isArray(scheduleSlots) && scheduleSlots.length > 0 ? (
-                          scheduleSlots
-                            .filter((s, idx, arr) => arr.findIndex(x => String(x.day_of_week) === String(s.day_of_week)) === idx)
-                            .map(slot => (
-                              <option key={slot.id || slot.day_of_week} value={String(slot.day_of_week)}>
-                                {getDayName(slot.day_of_week)}
-                              </option>
-                            ))
-                        ) : (
-                          <option disabled>ยังไม่มีวันเปิดเรียนที่กำหนด</option>
-                        )}
-                      </select>
-                      {scheduleDay && scheduleSlots.find(slot => slot.day_of_week.toString() === scheduleDay) && (
-                        <div className="operating-hours-display">
-                          ⏰ เวลาเปิดเรียน: {scheduleSlots.find(slot => slot.day_of_week.toString() === scheduleDay).start_time} - {scheduleSlots.find(slot => slot.day_of_week.toString() === scheduleDay).end_time}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="schedule-form-group">
-                      <label className="schedule-form-label">🏫 ชั้นเรียน (ตัวเลือก)</label>
-                      <select
-                        value={selectedClassroomId}
-                        onChange={e => setSelectedClassroomId(e.target.value)}
-                        className="schedule-form-select"
-                      >
-                        <option value="">-- ไม่ระบุ (ทุกชั้น) --</option>
-                        {classrooms.map(classroom => (
-                          <option key={classroom.id} value={classroom.id}>
-                            {classroom.name} {classroom.grade_level ? `(ชั้น ${classroom.grade_level})` : ''}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Time Section */}
-                <div className="schedule-form-section">
-                  <h4 className="schedule-section-title">⏰ ช่วงเวลาเรียน</h4>
-                  <div className="time-form-grid">
-                    <div className="schedule-form-group">
-                      <label className="schedule-form-label">เวลาเริ่ม</label>
-                      <input
-                        type="text"
-                        placeholder="08:30"
-                        value={scheduleStartTime}
-                        onChange={e => {
-                          let val = e.target.value.replace(/[^\d:]/g, '');
-                          if (val.length === 2 && !val.includes(':') && e.nativeEvent.inputType !== 'deleteContentBackward') {
-                            val = val + ':';
-                          }
-                          if (val.length <= 5) {
-                            setScheduleStartTime(val);
-                          }
-                        }}
-                        onBlur={e => {
-                          let val = e.target.value.replace(/[^\d]/g, '');
-                          if (val.length === 4) {
-                            const h = val.substring(0, 2);
-                            const m = val.substring(2, 4);
-                            if (parseInt(h) <= 23 && parseInt(m) <= 59) {
-                              setScheduleStartTime(`${h}:${m}`);
-                            }
-                          } else if (val.length === 3) {
-                            const h = val.substring(0, 1).padStart(2, '0');
-                            const m = val.substring(1, 3);
-                            if (parseInt(h) <= 23 && parseInt(m) <= 59) {
-                              setScheduleStartTime(`${h}:${m}`);
-                            }
-                          }
-                        }}
-                        className="schedule-form-input"
-                        maxLength={5}
-                      />
-                    </div>
-
-                    <div className="time-separator">ถึง</div>
-
-                    <div className="schedule-form-group">
-                      <label className="schedule-form-label">เวลาสิ้นสุด</label>
-                      <input
-                        type="text"
-                        placeholder="16:30"
-                        value={scheduleEndTime}
-                        onChange={e => {
-                          let val = e.target.value.replace(/[^\d:]/g, '');
-                          if (val.length === 2 && !val.includes(':') && e.nativeEvent.inputType !== 'deleteContentBackward') {
-                            val = val + ':';
-                          }
-                          if (val.length <= 5) {
-                            setScheduleEndTime(val);
-                          }
-                        }}
-                        onBlur={e => {
-                          let val = e.target.value.replace(/[^\d]/g, '');
-                          if (val.length === 4) {
-                            const h = val.substring(0, 2);
-                            const m = val.substring(2, 4);
-                            if (parseInt(h) <= 23 && parseInt(m) <= 59) {
-                              setScheduleEndTime(`${h}:${m}`);
-                            }
-                          } else if (val.length === 3) {
-                            const h = val.substring(0, 1).padStart(2, '0');
-                            const m = val.substring(1, 3);
-                            if (parseInt(h) <= 23 && parseInt(m) <= 59) {
-                              setScheduleEndTime(`${h}:${m}`);
-                            }
-                          }
-                        }}
-                        className="schedule-form-input"
-                        maxLength={5}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="schedule-modal-actions">
-                <button className="schedule-btn schedule-btn-cancel" onClick={cancelScheduleModal}>
-                  <span>❌</span>
-                  ยกเลิก
-                </button>
-                <button className="schedule-btn schedule-btn-submit" onClick={editingAssignment ? updateSubjectSchedule : assignSubjectToSchedule}>
-                  <span>✅</span>
-                  {editingAssignment ? 'อัปเดต' : 'กำหนดเวลา'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      
+      <ScheduleModal
+        isOpen={showScheduleModal}
+        editingAssignment={editingAssignment}
+        selectedSubjectId={selectedSubjectId}
+        setSelectedSubjectId={setSelectedSubjectId}
+        scheduleDay={scheduleDay}
+        setScheduleDay={setScheduleDay}
+        selectedClassroomId={selectedClassroomId}
+        setSelectedClassroomId={setSelectedClassroomId}
+        scheduleStartTime={scheduleStartTime}
+        setScheduleStartTime={setScheduleStartTime}
+        scheduleEndTime={scheduleEndTime}
+        setScheduleEndTime={setScheduleEndTime}
+        teacherSubjects={teacherSubjects}
+        scheduleSlots={scheduleSlots}
+        classrooms={classrooms}
+        getDayName={getDayName}
+        onSubmit={editingAssignment ? updateSubjectSchedule : assignSubjectToSchedule}
+        onCancel={cancelScheduleModal}
+      />
 
       {/* <BulkEnrollModal
         isOpen={showBulkEnrollModal}
@@ -1170,96 +1091,15 @@ function TeacherPage() {
         }}
       /> */}
 
-      {/* Student Detail Modal */}
-      {showStudentDetailModal && selectedStudentDetail && (
-        <div className="student-detail-modal-overlay" onClick={() => setShowStudentDetailModal(false)}>
-          <div className="student-detail-modal" onClick={e => e.stopPropagation()}>
-            <div className="student-detail-header">
-              <div className="student-detail-title">
-                <div className="student-detail-avatar">{initials(selectedStudentDetail.full_name)}</div>
-                <div className="student-detail-name">
-                  <h3>{selectedStudentDetail.full_name}</h3>
-                  <p>@{selectedStudentDetail.username} • {selectedStudentDetail.email}</p>
-                </div>
-              </div>
-              <button className="student-detail-close" onClick={() => setShowStudentDetailModal(false)}>×</button>
-            </div>
-            <div className="student-detail-content">
-              {/* Grades Section */}
-              <div className="student-detail-section">
-                <h4>📊 สรุปคะแนน</h4>
-                {selectedStudentDetail.grades_by_subject && selectedStudentDetail.grades_by_subject.length > 0 ? (
-                  <div className="subject-grades-list">
-                    {selectedStudentDetail.grades_by_subject.map(subject => (
-                      <div key={subject.subject_id} className="subject-grade-item">
-                        <div className="subject-grade-header">
-                          <span className="subject-name">📚 {subject.subject_name}</span>
-                          <span className="subject-total">
-                            {subject.total_score}/{subject.total_max_score} 
-                            ({subject.total_max_score > 0 ? ((subject.total_score / subject.total_max_score) * 100).toFixed(1) : 0}%)
-                          </span>
-                        </div>
-                        {subject.assignments && subject.assignments.length > 0 && (
-                          <div className="assignments-list">
-                            {subject.assignments.map((assignment, idx) => (
-                              <div key={idx} className="assignment-badge">
-                                <span className="assignment-title">{assignment.title}:</span>
-                                <span className="assignment-score">{assignment.score}/{assignment.max_score}</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="homeroom-empty">
-                    <div className="homeroom-empty-text">ยังไม่มีข้อมูลคะแนน</div>
-                  </div>
-                )}
-              </div>
-
-              {/* Attendance Section */}
-              <div className="student-detail-section">
-                <h4>✅ สรุปการเข้าเรียน</h4>
-                {selectedStudentDetail.attendance_by_subject && selectedStudentDetail.attendance_by_subject.length > 0 ? (
-                  <div className="subject-attendance-list">
-                    {selectedStudentDetail.attendance_by_subject.map(subject => (
-                      <div key={subject.subject_id} className="subject-attendance-item">
-                        <div className="subject-attendance-header">
-                          <span className="subject-name">📚 {subject.subject_name}</span>
-                          <span className="subject-total">
-                            {subject.present_days}/{subject.total_days} วัน
-                            ({subject.total_days > 0 ? ((subject.present_days / subject.total_days) * 100).toFixed(1) : 0}%)
-                          </span>
-                        </div>
-                        <div className="attendance-stats">
-                          <span className="attendance-stat">
-                            <span className="attendance-stat-icon">✅</span> มา {subject.present_days}
-                          </span>
-                          <span className="attendance-stat">
-                            <span className="attendance-stat-icon">❌</span> ขาด {subject.absent_days}
-                          </span>
-                          <span className="attendance-stat">
-                            <span className="attendance-stat-icon">⏰</span> สาย {subject.late_days}
-                          </span>
-                          <span className="attendance-stat">
-                            <span className="attendance-stat-icon">🏥</span> ลา {subject.sick_leave_days}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="homeroom-empty">
-                    <div className="homeroom-empty-text">ยังไม่มีข้อมูลการเข้าเรียน</div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <StudentDetailModal
+        isOpen={showStudentDetailModal}
+        selectedStudentDetail={selectedStudentDetail}
+        onClose={() => setShowStudentDetailModal(false)}
+        calculateMainSubjectsScore={calculateMainSubjectsScore}
+        calculateGPA={calculateGPA}
+        getLetterGrade={getLetterGrade}
+        initials={getInitials}
+      />
 
       <ConfirmModal
         isOpen={showConfirmModal}

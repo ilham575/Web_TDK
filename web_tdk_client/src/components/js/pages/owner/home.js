@@ -6,6 +6,7 @@ import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
 import Loading from '../../Loading';
+import PageHeader from '../../PageHeader';
 
 import ConfirmModal from '../../ConfirmModal';
 
@@ -391,40 +392,34 @@ function OwnerPage() {
         <Loading message="กำลังตรวจสอบสิทธิ์..." />
       ) : (
         <>
-      <div className="owner-header">
-        <div className="header-left">
-          <div className="avatar" aria-hidden>{currentUser?.full_name ? currentUser.full_name.split(' ').map(n=>n[0]).slice(0,2).join('').toUpperCase() : 'O'}</div>
-          <div className="user-info">
-            <h1>{`สวัสดี, ${currentUser ? (currentUser.full_name || currentUser.username) : 'Owner'}! 👑`}</h1>
-            <div className="user-info-subtitle">
-              🏢 จัดการโรงเรียนและสิทธิ์การเข้าถึงทั่วทั้งระบบ
+      <PageHeader 
+        currentUser={currentUser}
+        role="owner"
+        rightContent={
+          <>
+            <div className="account-info">
+              <div className="account-label">บัญชี</div>
+              <div className="account-email">{currentUser?.email || ''}</div>
             </div>
-          </div>
-        </div>
-
-        <div className="header-right">
-          <div className="account-info">
-            <div className="account-label">บัญชี</div>
-            <div className="account-email">{currentUser?.email || ''}</div>
-          </div>
-          <div className="header-actions">
-            <button 
-              className="owner-btn-secondary" 
-              onClick={() => navigate('/profile')}
-              title="ดูโปรไฟล์"
-            >
-              👤 โปรไฟล์
-            </button>
-            <button 
-              className="owner-btn-danger" 
-              onClick={handleSignout}
-              title="ออกจากระบบ"
-            >
-              🚪 ออกจากระบบ
-            </button>
-          </div>
-        </div>
-      </div>
+            <div className="header-actions">
+              <button 
+                className="owner-btn-secondary" 
+                onClick={() => navigate('/profile')}
+                title="ดูโปรไฟล์"
+              >
+                👤 โปรไฟล์
+              </button>
+              <button 
+                className="owner-btn-danger" 
+                onClick={handleSignout}
+                title="ออกจากระบบ"
+              >
+                🚪 ออกจากระบบ
+              </button>
+            </div>
+          </>
+        }
+      />
 
       <div className="stats-section">
         <div className="stats-card stats-schools">

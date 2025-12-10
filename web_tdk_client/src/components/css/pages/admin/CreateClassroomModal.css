@@ -1,0 +1,62 @@
+/* Styles for Create Classroom Modal */
+.create-classroom-modal.admin-modal {
+  max-width: 760px; /* narrower so it fits better */
+  width: 96%;
+  box-sizing: border-box;
+}
+.create-classroom-modal .admin-modal-body {
+  padding: 1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+.create-classroom-modal .admin-modal-header { padding: 1rem 1.25rem; }
+
+.create-classroom-modal .admin-modal-close { width: 34px; height: 34px; font-size: 1rem; }
+.create-classroom-modal .admin-btn-primary { min-width: 120px; padding: 0.55rem 0.9rem; font-weight: 700; }
+.create-classroom-modal .admin-btn-secondary { padding: 0.45rem 0.8rem; }
+
+/* Tighter inputs and header sizes for more compact modal */
+.create-classroom-modal .admin-modal-header h3 { font-size: 1.45rem; }
+.create-classroom-modal .admin-form-input { padding: 0.65rem 0.9rem; font-size: 0.95rem; }
+.create-classroom-modal .form-helper { font-size: 12px; color: #667085; }
+.create-classroom-modal .admin-modal-instruction {
+  padding: 1rem 1.25rem;
+  border-left: 4px solid rgba(99, 102, 241, 1);
+  background: linear-gradient(90deg, rgba(229,242,255,0.6), rgba(255,255,255,0.4));
+  border-radius: 8px;
+  color: #0f172a;
+}
+.create-classroom-modal .form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(220px, 1fr));
+  gap: 0.75rem;
+}
+.create-classroom-modal .admin-form-group { gap: 0.75rem; }
+.create-classroom-modal .admin-form-help {
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 6px;
+}
+.create-classroom-modal .admin-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+}
+.create-classroom-modal .footer-actions-left { display: flex; gap: 0.75rem; align-items: center; }
+.create-classroom-modal .preview-badge {
+  padding: 0.28rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(34,197,94,0.10);
+  color: #166534;
+  font-weight: 700;
+  font-size: 0.82rem;
+}
+@media (max-width: 768px) {
+  .create-classroom-modal.admin-modal { width: 94%; }
+  .create-classroom-modal .form-grid { grid-template-columns: 1fr; }
+  .create-classroom-modal .admin-modal-footer { flex-direction: column-reverse; align-items: stretch; }
+  .create-classroom-modal .footer-actions-left { justify-content: space-between; }
+}

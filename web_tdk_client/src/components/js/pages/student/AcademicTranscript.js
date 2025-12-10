@@ -2,14 +2,20 @@ import React, { useState, useEffect } from 'react';
 import { API_BASE_URL } from '../../../endpoints';
 import { toast } from 'react-toastify';
 import '../../../css/pages/student/academic-transcript.css';
+import ActivityDetailModal from '../../ActivityDetailModal';
 
 export default function AcademicTranscript({ studentId, studentSubjects }) {
   const [grades, setGrades] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expandedSubject, setExpandedSubject] = useState(null);
   const [showGradeModal, setShowGradeModal] = useState(false);
+  const [showActivityModal, setShowActivityModal] = useState(false);
+  const [showGPAModal, setShowGPAModal] = useState(false);
+  const [selectedActivityData, setSelectedActivityData] = useState(null);
   const [transcriptSummary, setTranscriptSummary] = useState({
     totalSubjects: 0,
+    regularSubjectsCount: 0,
+    activitySubjectsCount: 0,
     totalScore: 0,
     totalMaxScore: 0,
     totalCredits: 0,
@@ -18,9 +24,9 @@ export default function AcademicTranscript({ studentId, studentSubjects }) {
     completedSubjects: 0
   });
 
-  // โหลดเกรดของนักเรียนจากทุกวิชา
+  // โหลดเกรดของนักเรียนจากทุกวิชา (with activity aggregation)
   useEffect(() => {
-    if (!studentId || !studentSubjects.length) {
+    if (!studentId) {
       setLoading(false);
       return;
     }
@@ -28,86 +34,104 @@ export default function AcademicTranscript({ studentId, studentSubjects }) {
     const loadGrades = async () => {
       try {
         const token = localStorage.getItem('token');
-        // Request grades for each subject, include `student_id` so server returns only this student's records
-        const gradePromises = studentSubjects.map(subject =>
-          fetch(`${API_BASE_URL}/grades?subject_id=${subject.id}&student_id=${studentId}`, {
-            headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
-          }).then(res => res.json())
-        );
-
-        const allGradesArrays = await Promise.all(gradePromises);
-        const allGrades = allGradesArrays.flat();
-
-        // จัดกลุ่มเกรดตามวิชา
-        const gradesBySubject = {};
-        studentSubjects.forEach(subject => {
-          // Ensure we only keep grades for this student. Some APIs return grades for all students
-          // when queried by subject; include common student id fields as fallback filter.
-          gradesBySubject[subject.id] = {
-            subject: subject,
-            grades: allGrades.filter(g => g.subject_id === subject.id && (
-              g.student_id === studentId || g.user_id === studentId || g.userId === studentId
-            )),
-            totalScore: 0,
-            totalMaxScore: 0,
-            scorePercentage: 0
-          };
+        
+        // Load full transcript with activity aggregation
+        const transcriptRes = await fetch(`${API_BASE_URL}/grades/student/${studentId}/transcript`, {
+          headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
         });
 
-        // คำนวณคะแนนแต่ละวิชา
-        Object.values(gradesBySubject).forEach(subjectData => {
-          if (subjectData.grades.length > 0) {
-            // รวมคะแนนจากงานที่ชื่อเดียวกัน (เอาเพียงชุดแรก)
-            const gradesByTitle = {};
-            subjectData.grades.forEach(g => {
-              const title = g.title || 'no-title';
-              if (!gradesByTitle[title]) {
-                gradesByTitle[title] = { score: 0, maxScore: 0, count: 0 };
-              }
-              gradesByTitle[title].score += (g.grade || 0);
-              gradesByTitle[title].maxScore += (g.max_score || 0);
-              gradesByTitle[title].count++;
-            });
-            
-            // เอาเฉพาะชุดแรก (งานชื่อแรกที่พบ)
-            const firstTitle = Object.keys(gradesByTitle)[0];
-            if (firstTitle) {
-              subjectData.totalScore = gradesByTitle[firstTitle].score;
-              subjectData.totalMaxScore = gradesByTitle[firstTitle].maxScore;
-            }
-            
-            if (subjectData.totalMaxScore > 0) {
-              subjectData.scorePercentage = ((subjectData.totalScore / subjectData.totalMaxScore) * 100).toFixed(2);
-            }
+        if (!transcriptRes.ok) {
+          throw new Error('Failed to load transcript');
+        }
+
+        const transcriptData = await transcriptRes.json();
+
+        // Process transcript data
+        const processedGrades = transcriptData.map(entry => {
+          if (entry.subject_type === 'activity') {
+            // Activity entry with aggregation
+            return {
+              subject: { 
+                id: null,
+                name: 'กิจกรรม (Activity)',
+                subject_type: 'activity'
+              },
+              grades: entry.breakdown || [],
+              totalScore: entry.score,
+              totalMaxScore: 100,
+              scorePercentage: entry.score,
+              isActivity: true,
+              activityBreakdown: entry.breakdown || [],
+              totalActivityPercent: entry.total_percent || 0
+            };
+          } else {
+            // Regular subject
+            return {
+              subject: {
+                id: entry.subject_id,
+                name: entry.subject_name,
+                subject_type: 'regular',
+                credits: entry.credits || 1
+              },
+              grades: [],
+              totalScore: entry.score,
+              totalMaxScore: entry.max_score,
+              scorePercentage: entry.normalized_score,
+              isActivity: false
+            };
           }
         });
 
-        setGrades(Object.values(gradesBySubject));
+        setGrades(processedGrades);
 
-        // คำนวณสรุปสถิติรวม (จากงานแรกเท่านั้น)
+        // คำนวณสรุปสถิติรวม (แยกจำนวนวิชาปกติและกิจกรรม)
         let totalScore = 0;
         let totalMaxScore = 0;
         let completedSubjects = 0;
         let totalCredits = 0;
+        let regularSubjectsCount = 0;
+        let activitySubjectsCount = 0;
 
-        Object.values(gradesBySubject).forEach(subjectData => {
-          if (subjectData.grades.length > 0) {
-            totalScore += subjectData.totalScore;
-            totalMaxScore += subjectData.totalMaxScore;
-            completedSubjects++;
-            // accumulate credits if available (fall back to 1)
-            const subj = subjectData.subject || {};
-            let credit = Number(subj.credits ?? subj.credit ?? subj.unit ?? subj.weight ?? subjectData.credits ?? subjectData.credit ?? 1);
-            if (!isFinite(credit) || credit <= 0) credit = 1;
-            totalCredits += credit;
+        processedGrades.forEach(gradeData => {
+          // Separate handling for activity vs regular
+          if (gradeData.isActivity) {
+            activitySubjectsCount++;
+            return; // do not include activity in score sums or completedSubjects
           }
+
+          // Regular subjects: include only if there is a valid score info
+          const hasTotalMax = Number(gradeData.totalMaxScore) > 0;
+          const hasNormalized = gradeData.scorePercentage !== undefined && gradeData.scorePercentage !== null && String(gradeData.scorePercentage).trim() !== '';
+          if (!hasTotalMax && !hasNormalized) return; // skip if no score info
+
+          // Tally subjects
+          regularSubjectsCount++;
+          completedSubjects++;
+
+          // Determine contribution to totals
+          if (hasTotalMax) {
+            totalScore += Number(gradeData.totalScore) || 0;
+            totalMaxScore += Number(gradeData.totalMaxScore) || 0;
+          } else if (hasNormalized) {
+            // treat normalized score as out of 100
+            totalScore += Number(gradeData.scorePercentage) || 0;
+            totalMaxScore += 100;
+          }
+
+          const credit = gradeData.subject?.credits || 1;
+          totalCredits += credit;
         });
 
         const overallPercentage = totalMaxScore > 0 ? ((totalScore / totalMaxScore) * 100).toFixed(2) : 0;
-        const gpa = calculateGPA(Object.values(gradesBySubject));
+        const gpa = calculateGPA(processedGrades);
+
+        // Debugging info (can be removed later) to verify processed grades
+        // console.debug('processedGrades:', processedGrades, { regularSubjectsCount, activitySubjectsCount, totalScore, totalMaxScore });
 
         setTranscriptSummary({
-          totalSubjects: studentSubjects.length,
+          totalSubjects: processedGrades.length,
+          regularSubjectsCount,
+          activitySubjectsCount,
           totalScore,
           totalMaxScore,
           totalCredits,
@@ -125,7 +149,7 @@ export default function AcademicTranscript({ studentId, studentSubjects }) {
     };
 
     loadGrades();
-  }, [studentId, studentSubjects]);
+  }, [studentId]);
 
   // ระบบเกรด: A+, A, B+, B, C+, C, D+, D, F
   const getLetterGrade = (percentage) => {
@@ -160,8 +184,17 @@ export default function AcademicTranscript({ studentId, studentSubjects }) {
   const calculateGPA = (subjectDataArray) => {
     if (!Array.isArray(subjectDataArray) || subjectDataArray.length === 0) return 0;
 
-    // Consider only subjects that have grades and a valid max score
-    const graded = subjectDataArray.filter(s => s.grades.length > 0 && s.totalMaxScore > 0);
+    // Consider only non-activity subjects that have grades and a valid max score
+    // We must exclude activity subjects from GPA calculation (pass/fail, not credit-bearing)
+    // Consider non-activity subjects that have a valid totalMaxScore (>0)
+    // Allow calculation even if individual assignment `grades` array is not populated
+    // include regular subjects if they have a totalMaxScore or a pre-computed scorePercentage
+    const graded = subjectDataArray.filter(s => {
+      if (s.isActivity) return false;
+      const hasTotalMax = Number(s.totalMaxScore) > 0;
+      const hasNormalized = s.scorePercentage !== undefined && s.scorePercentage !== null && String(s.scorePercentage).trim() !== '';
+      return hasTotalMax || hasNormalized;
+    });
     if (graded.length === 0) return 0;
 
     // Try to fetch credit value from the subject metadata (common field names),
@@ -170,7 +203,8 @@ export default function AcademicTranscript({ studentId, studentSubjects }) {
     let totalCredits = 0;
 
     graded.forEach(s => {
-      const percentage = (s.totalScore / s.totalMaxScore) * 100;
+      const hasNormalized = s.scorePercentage !== undefined && s.scorePercentage !== null && String(s.scorePercentage).trim() !== '';
+      const percentage = hasNormalized ? Number(s.scorePercentage) : (Number(s.totalMaxScore) > 0 ? (Number(s.totalScore) / Number(s.totalMaxScore)) * 100 : 0);
       const gpaValue = getLetterGrade(percentage).gpaValue;
 
       const subj = s.subject || {};
@@ -183,7 +217,7 @@ export default function AcademicTranscript({ studentId, studentSubjects }) {
     });
 
     if (totalCredits === 0) return 0;
-    return (totalWeighted / totalCredits).toFixed(2);
+    return Number((totalWeighted / totalCredits).toFixed(2));
   };
 
   // คำอธิบายเกรด
@@ -231,9 +265,15 @@ export default function AcademicTranscript({ studentId, studentSubjects }) {
           </div>
         </div>
 
-        <div className="summary-card gpa-card">
+        <div 
+          className="summary-card gpa-card-button"
+          onClick={() => setShowGPAModal(true)}
+          role="button"
+          tabIndex={0}
+          onKeyPress={(e) => e.key === 'Enter' && setShowGPAModal(true)}
+        >
           <div className="summary-card-title">เกรดเฉลี่ย (GPA)</div>
-          <div className="summary-card-value">{transcriptSummary.gpa}</div>
+          <div className="summary-card-value">{typeof transcriptSummary.gpa === 'number' ? transcriptSummary.gpa.toFixed(2) : transcriptSummary.gpa}</div>
           <div className="summary-card-detail">โครงการระดับ 4.0</div>
           <div className="summary-card-desc">
             {transcriptSummary.gpa >= 3.6 && '🌟 ยอดเยี่ยม'}
@@ -243,18 +283,24 @@ export default function AcademicTranscript({ studentId, studentSubjects }) {
           </div>
         </div>
 
-        <div className="summary-card subjects-card">
-          <div className="summary-card-title">รายวิชา</div>
-          <div className="summary-card-value">{transcriptSummary.completedSubjects}</div>
-          <div className="summary-card-detail">จาก {transcriptSummary.totalSubjects} วิชา</div>
+        <div className="summary-card regular-card">
+          <div className="summary-card-title">รายวิชา (ปกติ)</div>
+          <div className="summary-card-value">{transcriptSummary.regularSubjectsCount}</div>
+          <div className="summary-card-detail">หน่วยกิต/วิชาที่นับ GPA</div>
           <div className="summary-card-progress">
             <div className="progress-bar">
               <div 
                 className="progress-fill" 
-                style={{ width: `${(transcriptSummary.completedSubjects / transcriptSummary.totalSubjects) * 100}%` }}
+                style={{ width: `${transcriptSummary.regularSubjectsCount > 0 ? (transcriptSummary.completedSubjects / transcriptSummary.regularSubjectsCount) * 100 : 0}%` }}
               ></div>
             </div>
           </div>
+        </div>
+
+        <div className="summary-card activity-count-card">
+          <div className="summary-card-title">รายวิชา (กิจกรรม)</div>
+          <div className="summary-card-value">{transcriptSummary.activitySubjectsCount}</div>
+          <div className="summary-card-detail">ประเมินแบบ ผ่าน/ไม่ผ่าน</div>
         </div>
 
         <div className="summary-card credits-card">
@@ -278,9 +324,14 @@ export default function AcademicTranscript({ studentId, studentSubjects }) {
         </div>
       </div>
 
-      {/* ส่วนรายละเอียด */}
+      {/* ส่วนรายละเอียด - แสดงเป็นตารางแบบใบแสดงผล */}
       <div className="transcript-details-section">
-        <h3 className="section-title">📚 รายละเอียดคะแนนแต่ละวิชา</h3>
+        <div className="transcript-table-header">
+          <h3 className="section-title">📚 รายละเอียดคะแนนแต่ละวิชา</h3>
+          <div className="transcript-total-row">
+            <span className="total-count">รวมทั้งสิ้น {grades.length} วิชา</span>
+          </div>
+        </div>
 
         {grades.length === 0 ? (
           <div className="empty-transcript">
@@ -289,97 +340,109 @@ export default function AcademicTranscript({ studentId, studentSubjects }) {
             <div className="empty-subtitle">รอดูคะแนนจากครูผู้สอน</div>
           </div>
         ) : (
-          <div className="subjects-list">
-            {grades.map(subjectData => {
+          <table className="transcript-table">
+            <thead>
+              <tr>
+                <th className="col-subject">รายวิชา</th>
+                <th className="col-type">ประเภท</th>
+                <th className="col-score">คะแนนสอบ</th>
+                <th className="col-grade">เกรด</th>
+                <th className="col-credits">หน่วยกิต</th>
+                <th className="col-gpa">GPA</th>
+                <th className="col-action">รายละเอียด</th>
+              </tr>
+            </thead>
+            <tbody>
+              {grades.map(subjectData => {
                 const letterGrade = getLetterGrade(subjectData.scorePercentage);
                 const subj = subjectData.subject || {};
                 let credit = Number(subj.credits ?? subj.credit ?? subj.unit ?? subj.weight ?? subjectData.credits ?? subjectData.credit ?? 1);
                 if (!isFinite(credit) || credit <= 0) credit = 1;
-              return (
-                <div key={subjectData.subject.id} className="subject-card">
-                  <div 
-                    className="subject-card-header"
-                    onClick={() => setExpandedSubject(
-                      expandedSubject === subjectData.subject.id ? null : subjectData.subject.id
-                    )}
-                  >
-                    <div className="subject-card-title-section">
-                      <h4 className="subject-name">{subjectData.subject.name}</h4>
-                    </div>
-                    <div className="subject-card-score-section">
-                      <div className="score-display">
-                        <div className="score-percentage">{subjectData.scorePercentage}%</div>
-                        <div 
-                          className="grade-badge" 
-                          style={{ backgroundColor: letterGrade.color }}
-                        >
+                
+                const tableKey = subjectData.isActivity ? 'activity' : subjectData.subject.id;
+                
+                return (
+                  <tr key={tableKey} className={`transcript-row ${subjectData.isActivity ? 'activity-row' : ''}`}>
+                    <td className="col-subject">
+                      <div className="subject-cell-content">
+                        <span className="subject-icon">{subjectData.isActivity ? '🎯' : '📖'}</span>
+                        <span className="subject-cell-text">{subjectData.subject.name}</span>
+                      </div>
+                    </td>
+                    <td className="col-type">
+                      <span className="type-badge">
+                        {subjectData.isActivity ? 'กิจกรรม' : 'ปกติ'}
+                      </span>
+                    </td>
+                    <td className="col-score">
+                      <div className="score-cell">
+                        <span className="score-value">{subjectData.scorePercentage}</span>
+                        <span className="score-unit">%</span>
+                      </div>
+                    </td>
+                    <td className="col-grade">
+                      {subjectData.isActivity ? (
+                        (() => {
+                          const pass = Number(subjectData.scorePercentage) >= 50;
+                          return (
+                            <span className={`pass-badge ${pass ? 'pass' : 'fail'}`}>
+                              {pass ? 'ผ่าน' : 'ไม่ผ่าน'}
+                            </span>
+                          );
+                        })()
+                      ) : (
+                        <span className="grade-badge-table" style={{ backgroundColor: letterGrade.color }}>
                           {letterGrade.grade}
-                        </div>
-                      </div>
-                      <div className="expand-icon">
-                        {expandedSubject === subjectData.subject.id ? '▲' : '▼'}
-                      </div>
-                    </div>
-                  </div>
-
-                  {expandedSubject === subjectData.subject.id && (
-                    <div className="subject-card-body">
-                      <div className="subject-score-summary">
-                        <div className="score-item">
-                          <span className="score-label">คะแนนรวม</span>
-                          <span className="score-value">{subjectData.totalScore} / {subjectData.totalMaxScore}</span>
-                        </div>
-                        <div className="score-item">
-                          <span className="score-label">เปอร์เซ็นต์</span>
-                          <span className="score-value">{subjectData.scorePercentage}%</span>
-                        </div>
-                        <div className="score-item">
-                          <span className="score-label">จำนวนงาน</span>
-                          <span className="score-value">{subjectData.grades.length} งาน</span>
-                        </div>
-                        <div className="score-item">
-                          <span className="score-label">เกรด GPA</span>
-                          <span className="score-value" style={{ color: letterGrade.color }}>
-                            {letterGrade.gpaValue.toFixed(1)}
-                          </span>
-                        </div>
-                        <div className="score-item">
-                          <span className="score-label">หน่วยกิต</span>
-                          <span className="score-value">{credit}</span>
-                        </div>
-                      </div>
-
-                      {subjectData.grades.length > 0 && (
-                        <div className="subject-assignments">
-                          <h5 className="assignments-title">📋 คะแนนรวมทั้งหมด</h5>
-                          <div className="total-score-display">
-                            <span className="total-label">รวมคะแนนทั้งหมด:</span>
-                            <span className="total-value">{subjectData.totalScore} / {subjectData.totalMaxScore} คะแนน</span>
-                          </div>
-                        </div>
+                        </span>
                       )}
-
-                      <div className="subject-progress-bar">
-                        <div className="progress-label">ความก้าวหน้า</div>
-                        <div className="progress-container">
-                          <div className="progress-track">
-                            <div 
-                              className="progress-bar-fill" 
-                              style={{ 
-                                width: `${subjectData.scorePercentage}%`,
-                                backgroundColor: letterGrade.color
-                              }}
-                            ></div>
-                          </div>
-                          <span className="progress-value">{subjectData.scorePercentage}%</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+                    </td>
+                    <td className="col-credits">
+                      {subjectData.isActivity ? (
+                        <span className="credit-value">—</span>
+                      ) : (
+                        <span className="credit-value">{credit}</span>
+                      )}
+                    </td>
+                    <td className="col-gpa">
+                      {subjectData.isActivity ? (
+                        <span className="gpa-na">—</span>
+                      ) : (
+                        <span className="gpa-value-table">{letterGrade.gpaValue.toFixed(1)}</span>
+                      )}
+                    </td>
+                    <td className="col-action">
+                      {subjectData.isActivity ? (
+                        <button 
+                          className="btn-details-icon"
+                          onClick={() => {
+                            setSelectedActivityData({
+                              activity_subjects: subjectData.activityBreakdown,
+                              total_activity_score: subjectData.totalScore,
+                              total_activity_percent: subjectData.totalActivityPercent
+                            });
+                            setShowActivityModal(true);
+                          }}
+                          title="ดูรายละเอียดกิจกรรม"
+                        >
+                          📊
+                        </button>
+                      ) : (
+                        <button 
+                          className="btn-details-icon"
+                          onClick={() => {
+                            setExpandedSubject(expandedSubject === tableKey ? null : tableKey);
+                          }}
+                          title="ดูรายละเอียด"
+                        >
+                          ℹ️
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         )}
       </div>
 
@@ -421,55 +484,55 @@ export default function AcademicTranscript({ studentId, studentSubjects }) {
                 </thead>
                 <tbody>
                   <tr>
-                    <td>A+</td>
+                    <td><span className="grade-legend-badge Aplus">A+</span></td>
                     <td>95 - 100%</td>
                     <td>ดีเยี่ยม — ผลการเรียนยอดเยี่ยมทุกด้าน</td>
                     <td>4.0</td>
                   </tr>
                   <tr>
-                    <td>A</td>
+                    <td><span className="grade-legend-badge A">A</span></td>
                     <td>80 - 94%</td>
                     <td>ดีมาก — ทำงานครบถ้วน มีความเข้าใจดี</td>
                     <td>4.0</td>
                   </tr>
                   <tr>
-                    <td>B+</td>
+                    <td><span className="grade-legend-badge Bplus">B+</span></td>
                     <td>75 - 79%</td>
                     <td>ดี — ผลการเรียนดี มีจุดที่พัฒนาได้</td>
                     <td>3.5</td>
                   </tr>
                   <tr>
-                    <td>B</td>
+                    <td><span className="grade-legend-badge B">B</span></td>
                     <td>70 - 74%</td>
                     <td>ดี — ทำได้ตามมาตรฐาน ส่วนบางเรื่องต้องปรับ</td>
                     <td>3.0</td>
                   </tr>
                   <tr>
-                    <td>C+</td>
+                    <td><span className="grade-legend-badge Cplus">C+</span></td>
                     <td>65 - 69%</td>
                     <td>พอใจ — ทำได้พอประมาณ ต้องพัฒนาทักษะเพิ่ม</td>
                     <td>2.5</td>
                   </tr>
                   <tr>
-                    <td>C</td>
+                    <td><span className="grade-legend-badge C">C</span></td>
                     <td>60 - 64%</td>
                     <td>พอใช้ — ผลการเรียนอยู่ระดับพื้นฐาน</td>
                     <td>2.0</td>
                   </tr>
                   <tr>
-                    <td>D+</td>
+                    <td><span className="grade-legend-badge Dplus">D+</span></td>
                     <td>55 - 59%</td>
                     <td>ผ่าน — พื้นฐานอ่อน ต้องฝึกฝนเพิ่มเติม</td>
                     <td>1.5</td>
                   </tr>
                   <tr>
-                    <td>D</td>
+                    <td><span className="grade-legend-badge D">D</span></td>
                     <td>50 - 54%</td>
                     <td>ผ่านต่ำ — ต้องได้รับการดูแลและติดตาม</td>
                     <td>1.0</td>
                   </tr>
                   <tr>
-                    <td>F</td>
+                    <td><span className="grade-legend-badge F">F</span></td>
                     <td>&lt; 50%</td>
                     <td>ไม่ผ่าน — ต้องเรียนซ่อม/ปรับปรุงอย่างเร่งด่วน</td>
                     <td>0</td>
@@ -485,6 +548,67 @@ export default function AcademicTranscript({ studentId, studentSubjects }) {
           </div>
         </div>
       )}
+
+      <ActivityDetailModal
+        isOpen={showActivityModal}
+        onClose={() => {
+          setShowActivityModal(false);
+          setSelectedActivityData(null);
+        }}
+        activityData={selectedActivityData}
+        studentName={studentId}
+      />
+
+      {/* GPA Information Modal */}
+      {showGPAModal && (
+        <div
+          className="grade-modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setShowGPAModal(false)}
+        >
+          <div className="grade-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="grade-modal-header">
+              <h4>📊 ข้อมูลเกรดเฉลี่ย (GPA)</h4>
+              <button
+                className="grade-modal-close"
+                aria-label="ปิด"
+                onClick={() => setShowGPAModal(false)}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="grade-modal-body">
+              <div className="gpa-info-section">
+                <h5>GPA ของคุณ</h5>
+                <div className="gpa-display-large">
+                  <span className="gpa-value-modal">{typeof transcriptSummary.gpa === 'number' ? transcriptSummary.gpa.toFixed(2) : transcriptSummary.gpa}</span>
+                  <span className="gpa-max">/ 4.0</span>
+                </div>
+                <p className="gpa-rating">
+                  {transcriptSummary.gpa >= 3.6 && '🌟 ยอดเยี่ยม - ผลการเรียนสูงมาก'}
+                  {transcriptSummary.gpa >= 3.0 && transcriptSummary.gpa < 3.6 && '⭐ ดี - ผลการเรียนดี'}
+                  {transcriptSummary.gpa >= 2.0 && transcriptSummary.gpa < 3.0 && '👍 พอใจ - ผลการเรียนปานกลาง'}
+                  {transcriptSummary.gpa < 2.0 && '📚 ต้องพยายามมากขึ้น'}
+                </p>
+              </div>
+
+              <div className="gpa-notes-section">
+                <h5>📌 หมายเหตุสำคัญ</h5>
+                <ul className="gpa-notes-list">
+                  <li>คะแนนกิจกรรม <strong>ไม่ได้นำมาคำนวณใน GPA</strong> เนื่องจากเป็นการประเมินแบบ ผ่าน/ไม่ผ่าน</li>
+                  <li>GPA คำนวณจากวิชาปกติ (รายวิชา) เท่านั้น</li>
+                  <li>วิธีการคำนวณคือ <strong>weighted average</strong>: (ผลรวมของ GPA × หน่วยกิต) ÷ (ผลรวมหน่วยกิตทั้งหมด)</li>
+                  <li>ระบบจะใช้ค่าหน่วยกิตที่แอดมินกำหนดในแต่ละวิชา</li>
+                </ul>
+              </div>
+
+              {/* removed example calculation section as requested */}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+

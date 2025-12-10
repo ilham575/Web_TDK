@@ -1,9 +1,10 @@
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Union
 from datetime import time
 
 class ScheduleSlotBase(BaseModel):
-    day_of_week: str
+    # Accept string or int (0-6) as day_of_week for flexibility in clients
+    day_of_week: Union[int, str]
     start_time: time
     end_time: time
 
@@ -23,7 +24,7 @@ class ScheduleSlot(ScheduleSlotBase):
 
 class SubjectScheduleBase(BaseModel):
     subject_id: int
-    day_of_week: str  # Day of week (0-6, where 0=Sunday)
+    day_of_week: Union[int, str]  # Day of week (0-6, where 0=Sunday). Accepts int or string.
     start_time: time
     end_time: time
     schedule_slot_id: Optional[int] = None  # Optional reference to operating hours

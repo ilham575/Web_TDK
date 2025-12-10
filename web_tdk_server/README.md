@@ -139,3 +139,7 @@ The server will be available at `http://localhost:8000`
 - Pydantic schemas for request/response validation
 - JWT authentication and role-based access control
 - CORS enabled for frontend integration
+
+## Local Docker Compose (Development)
+
+To run the server locally in Docker using a local MySQL database, see `README_DOCKER_LOCAL.md` which contains quick steps and instructions for a `docker-compose` setup using `Dockerfile.local`.

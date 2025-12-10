@@ -5,6 +5,7 @@ import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
 import Loading from '../../Loading';
+import PageHeader from '../../PageHeader';
 
 import ConfirmModal from '../../ConfirmModal';
 
@@ -21,6 +22,10 @@ import EditClassroomModal from './EditClassroomModal';
 import AddStudentsModal from './AddStudentsModal';
 import SubjectManagementModal from '../../SubjectManagementModal';
 import ScheduleManagementModal from '../../ScheduleManagementModal';
+import CreateUserModal from './CreateUserModal';
+import PasswordResetModal from './PasswordResetModal';
+import AdminScheduleModal from './AdminScheduleModal';
+import HomeroomTeacherModal from './HomeroomTeacherModal';
 import { API_BASE_URL } from '../../../endpoints';
 import { setSchoolFavicon } from '../../../../utils/faviconUtils';
 import { logout } from '../../../../utils/authUtils';
@@ -606,8 +611,6 @@ function AdminPage() {
     }
   }, [activeTab, currentUser]);
 
-  const initials = (name) => (name ? name.split(' ').map(n=>n[0]).slice(0,2).join('').toUpperCase() : 'A');
-
   // Parse server-provided datetime strings into a local Date object.
   const parseLocalDatetime = (s) => {
     if (!s) return null;
@@ -755,13 +758,20 @@ function AdminPage() {
     });
   };
 
-  const createScheduleSlot = async () => {
-    if (!newScheduleDay || !newScheduleStartTime || !newScheduleEndTime) {
+  const createScheduleSlot = async (vals = {}) => {
+    const day = (vals.day ?? newScheduleDay) ? String(vals.day ?? newScheduleDay).trim() : '';
+    const daysArray = Array.isArray(vals.days) && vals.days.length > 0 ? vals.days.map(d => String(d).trim()) : null;
+    const start = (vals.start_time ?? newScheduleStartTime) ? String(vals.start_time ?? newScheduleStartTime).trim() : '';
+    const end = (vals.end_time ?? newScheduleEndTime) ? String(vals.end_time ?? newScheduleEndTime).trim() : '';
+    if ((!daysArray || daysArray.length === 0) && !day) {
+      toast.error('กรุณาเลือกวันในสัปดาห์อย่างน้อยหนึ่งวัน');
+      return;
+    }
+    if (!start || !end) {
       toast.error('กรุณากรอกข้อมูลให้ครบทุกช่อง');
       return;
     }
-
-    if (newScheduleStartTime >= newScheduleEndTime) {
+    if (start >= end) {
       toast.error('เวลาเริ่มต้องน้อยกว่าเวลาสิ้นสุด');
       return;
     }
@@ -774,22 +784,45 @@ function AdminPage() {
 
     try {
       const token = localStorage.getItem('token');
-      const body = {
-        school_id: Number(schoolId),
-        day_of_week: newScheduleDay,
-        start_time: newScheduleStartTime,
-        end_time: newScheduleEndTime
-      };
 
-      const res = await fetch(`${API_BASE_URL}/schedule/slots`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify(body)
-      });
+      // If there are multiple days to create, create them in parallel and summarize results
+      if (Array.isArray(daysArray) && daysArray.length > 0) {
+        const results = await Promise.allSettled(daysArray.map(async (d) => {
+          const body = { school_id: Number(schoolId), day_of_week: Number(d), start_time: start, end_time: end };
+          const res = await fetch(`${API_BASE_URL}/schedule/slots`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+            body: JSON.stringify(body)
+          });
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            return { ok: false, day: d, detail: data.detail || 'ไม่ทราบสาเหตุ' };
+          }
+          return { ok: true, day: d };
+        }));
 
+        const failed = results.filter(r => r.status === 'fulfilled' && r.value && r.value.ok === false).map(r => r.value) || [];
+        const createdCount = results.filter(r => r.status === 'fulfilled' && r.value && r.value.ok === true).length;
+        if (createdCount > 0 && failed.length === 0) {
+          toast.success(`เพิ่มช่วงเวลาเรียบร้อยสำหรับ ${createdCount} วัน`);
+        } else if (createdCount > 0 && failed.length > 0) {
+          toast.warn(`สร้างสำเร็จ ${createdCount} วัน, ล้มเหลว ${failed.length} วัน: ${failed.map(f => f.day).join(', ')}`);
+        } else {
+          toast.error(`สร้างช่วงเวลาไม่สำเร็จ: ${failed.map(f => f.detail).join('; ')}`);
+        }
+
+        setShowScheduleModal(false);
+        setNewScheduleDay('');
+        setNewScheduleStartTime('');
+        setNewScheduleEndTime('');
+        setNewScheduleDay('');
+        loadScheduleSlots();
+        return;
+      }
+
+      // Single day create
+      const body = { school_id: Number(schoolId), day_of_week: Number(day), start_time: start, end_time: end };
+      const res = await fetch(`${API_BASE_URL}/schedule/slots`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(body) });
       if (res.ok) {
         toast.success('เพิ่มช่วงเวลาเรียนเรียบร้อย');
         setShowScheduleModal(false);
@@ -815,13 +848,15 @@ function AdminPage() {
     setShowScheduleModal(true);
   };
 
-  const updateScheduleSlot = async () => {
-    if (!newScheduleDay || !newScheduleStartTime || !newScheduleEndTime) {
+  const updateScheduleSlot = async (vals = {}) => {
+    const day = (vals.day ?? newScheduleDay) ? String(vals.day ?? newScheduleDay).trim() : '';
+    const start = (vals.start_time ?? newScheduleStartTime) ? String(vals.start_time ?? newScheduleStartTime).trim() : '';
+    const end = (vals.end_time ?? newScheduleEndTime) ? String(vals.end_time ?? newScheduleEndTime).trim() : '';
+    if (!day || !start || !end) {
       toast.error('กรุณากรอกข้อมูลให้ครบทุกช่อง');
       return;
     }
-
-    if (newScheduleStartTime >= newScheduleEndTime) {
+    if (start >= end) {
       toast.error('เวลาเริ่มต้องน้อยกว่าเวลาสิ้นสุด');
       return;
     }
@@ -829,9 +864,9 @@ function AdminPage() {
     try {
       const token = localStorage.getItem('token');
       const body = {
-        day_of_week: newScheduleDay,
-        start_time: newScheduleStartTime,
-        end_time: newScheduleEndTime
+        day_of_week: day,
+        start_time: start,
+        end_time: end
       };
 
       const res = await fetch(`${API_BASE_URL}/schedule/slots/${editingSchedule.id}`, {
@@ -952,27 +987,39 @@ function AdminPage() {
     });
   };
 
+  // Get classroom names (e.g., "2" or "2 เทอม 1") for a given grade level
+  const getClassroomNamesByGrade = (gradeLevel) => {
+    return classrooms
+      .filter(c => c.grade_level === gradeLevel)
+      .map(c => c.name)
+      .sort((a, b) => a.localeCompare(b, 'th')); // Sort Thai names properly
+  };
+
   const loadAvailableGradeLevels = async () => {
     // Use grade levels from admin-created classrooms
     const gradeLevels = getClassroomGradeLevels();
     setAvailableGradeLevels(gradeLevels);
   };
 
-  const createHomeroomTeacher = async () => {
+  const createHomeroomTeacher = async (teacherId = null, gradeLevel = null, academicYear = null) => {
     const schoolId = localStorage.getItem('school_id');
     const token = localStorage.getItem('token');
     
-    if (!newHomeroomTeacherId || !newHomeroomGradeLevel) {
+    const teacher_id_to_use = teacherId ?? newHomeroomTeacherId;
+    const grade_level_to_use = gradeLevel ?? newHomeroomGradeLevel;
+    const academic_year_to_use = academicYear ?? newHomeroomAcademicYear;
+
+    if (!teacher_id_to_use || !grade_level_to_use) {
       toast.error('กรุณาเลือกครูและชั้นเรียน');
       return;
     }
     
     try {
       const body = {
-        teacher_id: Number(newHomeroomTeacherId),
-        grade_level: newHomeroomGradeLevel,
+        teacher_id: Number(teacher_id_to_use),
+        grade_level: grade_level_to_use,
         school_id: Number(schoolId),
-        academic_year: newHomeroomAcademicYear || null
+        academic_year: academic_year_to_use || null
       };
       
       const res = await fetch(`${API_BASE_URL}/homeroom`, {
@@ -999,20 +1046,23 @@ function AdminPage() {
     }
   };
 
-  const updateHomeroomTeacher = async () => {
+  const updateHomeroomTeacher = async (teacherId = null, academicYear = null) => {
     if (!editingHomeroom) return;
     
     const token = localStorage.getItem('token');
     
-    if (!newHomeroomTeacherId) {
+    const teacher_id_to_use = teacherId ?? newHomeroomTeacherId;
+    const academic_year_to_use = academicYear ?? newHomeroomAcademicYear;
+
+    if (!teacher_id_to_use) {
       toast.error('กรุณาเลือกครู');
       return;
     }
     
     try {
       const body = {
-        teacher_id: Number(newHomeroomTeacherId),
-        academic_year: newHomeroomAcademicYear || null
+        teacher_id: Number(teacher_id_to_use),
+        academic_year: academic_year_to_use || null
       };
       
       const res = await fetch(`${API_BASE_URL}/homeroom/${editingHomeroom.id}`, {
@@ -1513,8 +1563,8 @@ function AdminPage() {
   };
 
   const createClassroom = async (formData) => {
-    if (!formData.name || !formData.gradeLevel) {
-      toast.error('กรุณากรอกชื่อและชั้นเรียน');
+    if (!formData.gradeLevel) {
+      toast.error('กรุณากรอกชั้นปี');
       return;
     }
 
@@ -1729,8 +1779,8 @@ function AdminPage() {
   };
 
   const updateClassroomModal = async (formData) => {
-    if (!selectedClassroom || !formData.name || !formData.gradeLevel) {
-      toast.error('กรุณากรอกชื่อชั้นเรียนและชั้นปี');
+    if (!selectedClassroom || !formData.gradeLevel) {
+      toast.error('กรุณากรอกชั้นปี');
       return;
     }
 
@@ -1972,8 +2022,13 @@ function AdminPage() {
 
       const data = await response.json();
       if (response.ok) {
-        // แสดง success message
-        toast.success(data.message || `✓ เลื่อนชั้น ${data.promoted_count} นักเรียนสำเร็จ`);
+        // Build success message with classroom names if available
+        let successMsg = data.message || `✓ เลื่อนชั้น ${data.promoted_count} นักเรียนสำเร็จ`;
+        if (payload.new_classroom_names && payload.new_classroom_names.length > 0) {
+          const classroomNamesList = payload.new_classroom_names.join(', ');
+          successMsg = `✓ เลื่อนชั้น ${data.promoted_count} นักเรียนไปชั้น: ${classroomNamesList} สำเร็จ`;
+        }
+        toast.success(successMsg);
         
         // แสดง error/warning messages ถ้ามี
         if (data.errors && data.errors.length > 0) {
@@ -1982,21 +2037,29 @@ function AdminPage() {
           }, 1000);
         }
         
-        // Close modal and reset state
-        setShowPromoteStudentModal(false);
+        // Note: Do NOT close modal here - let PromoteStudentModal handle modal closure via useEffect after reset completes
+        // This ensures the selected grade gets properly cleared before modal closes
         setClassroomStudents([]);
         setClassroomForStudentPromotion(null);
+        // Note: Do NOT reset promotionNewGradeLevel here - let PromoteStudentModal handle cleanup via resetForm()
+        // This ensures the grade name displays correctly in the select after success
         
         // Clear cached student counts so they get recalculated with fresh data
         setClassroomStudentCounts({});
         
         // Refresh classrooms data to reflect promotion changes
         await refreshClassrooms();
+        
+        // After refresh completes, close modal to show updated data
+        setShowPromoteStudentModal(false);
       } else {
+        // On error, close the modal immediately
+        setShowPromoteStudentModal(false);
         toast.error(data.detail || 'เลื่อนชั้นไม่สำเร็จ');
       }
     } catch (err) {
       console.error('Error promoting students:', err);
+      setShowPromoteStudentModal(false);
       toast.error('เกิดข้อผิดพลาดในการเลื่อนชั้น');
     } finally {
       setPromotingIndividualStudents(false);
@@ -2008,63 +2071,58 @@ function AdminPage() {
       <div className="admin-dashboard">
         <ToastContainer />
 
-        <div className="admin-header">
-          <div className="header-left">
-            <div className="admin-avatar" aria-hidden>{initials(currentUser?.full_name || currentUser?.username)}</div>
-            <div className="user-info">
-              <h1>{`สวัสดี, ${currentUser ? (currentUser.full_name || currentUser.username) : 'Admin'}! 👋`}</h1>
-              <div className="user-info-subtitle">
-                🏫 จัดการผู้ใช้และประกาศของโรงเรียน{displaySchool !== '-' ? displaySchool : ''}
+        <PageHeader 
+          currentUser={currentUser}
+          role="admin"
+          displaySchool={displaySchool}
+          rightContent={
+            <>
+              <button
+                className="header-menu-btn"
+                onClick={() => setShowHeaderMenu(s => !s)}
+                aria-expanded={showHeaderMenu}
+                aria-label="Open header menu"
+              >
+                ☰
+              </button>
+              <div className="header-menu" style={{ display: showHeaderMenu ? 'block' : 'none' }}>
+                <button role="menuitem" className="admin-btn-primary" onClick={() => { setShowModal(true); setShowHeaderMenu(false); }}>➕ เพิ่มผู้ใช้ใหม่</button>
+                <button role="menuitem" className="admin-btn-secondary" onClick={() => { navigate('/profile'); setShowHeaderMenu(false); }}>👤 โปรไฟล์</button>
+                <button role="menuitem" className="admin-btn-danger" onClick={() => { handleSignout(); setShowHeaderMenu(false); }}>🚪 ออกจากระบบ</button>
               </div>
-            </div>
-          </div>
-
-          <div className="header-right">
-            <button
-              className="header-menu-btn"
-              onClick={() => setShowHeaderMenu(s => !s)}
-              aria-expanded={showHeaderMenu}
-              aria-label="Open header menu"
-            >
-              ☰
-            </button>
-            <div className="header-menu" style={{ display: showHeaderMenu ? 'block' : 'none' }}>
-              <button role="menuitem" className="admin-btn-primary" onClick={() => { setShowModal(true); setShowHeaderMenu(false); }}>➕ เพิ่มผู้ใช้ใหม่</button>
-              <button role="menuitem" className="admin-btn-secondary" onClick={() => { navigate('/profile'); setShowHeaderMenu(false); }}>👤 โปรไฟล์</button>
-              <button role="menuitem" className="admin-btn-danger" onClick={() => { handleSignout(); setShowHeaderMenu(false); }}>🚪 ออกจากระบบ</button>
-            </div>
-          </div>
-          <div className="header-actions">
-            <button 
-              className="admin-btn-primary" 
-              onClick={() => setShowLogoUploadModal(true)}
-              title="อัพโหลดโลโก้"
-            >
-              📸 อัพโหลดโลโก้
-            </button>
-            <button 
-              className="admin-btn-primary" 
-              onClick={() => setShowModal(true)}
-              title="สร้างผู้ใช้ใหม่"
-            >
-              ➕ เพิ่มผู้ใช้ใหม่
-            </button>
-            <button 
-              className="admin-btn-secondary" 
-              onClick={() => navigate('/profile')}
-              title="ดูโปรไฟล์"
-            >
-              👤 โปรไฟล์
-            </button>
-            <button 
-              className="admin-btn-danger" 
-              onClick={handleSignout}
-              title="ออกจากระบบ"
-            >
-              🚪 ออกจากระบบ
-            </button>
-          </div>
-        </div>
+              <div className="header-actions">
+                <button 
+                  className="admin-btn-primary" 
+                  onClick={() => setShowLogoUploadModal(true)}
+                  title="อัพโหลดโลโก้"
+                >
+                  📸 อัพโหลดโลโก้
+                </button>
+                <button 
+                  className="admin-btn-primary" 
+                  onClick={() => setShowModal(true)}
+                  title="สร้างผู้ใช้ใหม่"
+                >
+                  ➕ เพิ่มผู้ใช้ใหม่
+                </button>
+                <button 
+                  className="admin-btn-secondary" 
+                  onClick={() => navigate('/profile')}
+                  title="ดูโปรไฟล์"
+                >
+                  👤 โปรไฟล์
+                </button>
+                <button 
+                  className="admin-btn-danger" 
+                  onClick={handleSignout}
+                  title="ออกจากระบบ"
+                >
+                  🚪 ออกจากระบบ
+                </button>
+              </div>
+            </>
+          }
+        />
       </div>
 
       <div className="stats-section">
@@ -2657,7 +2715,7 @@ function AdminPage() {
         {activeTab === 'classrooms' && (
           <div className="content-card">
             <div className="card-header">
-              <h2><span className="card-icon">🏫</span> จัดการชั้นเรียน (กลุ่ม A)</h2>
+              <h2><span className="card-icon">🏫</span> จัดการชั้นเรียน</h2>
             </div>
             <div className="card-content">
               {/* คำอธิบาย */}
@@ -2787,7 +2845,7 @@ function AdminPage() {
         {activeTab === 'promotions' && (
           <div className="content-card">
             <div className="card-header">
-              <h2><span className="card-icon">⬆️</span> เลื่อนชั้นเรียน (กลุ่ม B)</h2>
+              <h2><span className="card-icon">⬆️</span> เลื่อนชั้นเรียน</h2>
             </div>
             <div className="card-content">
               {/* คำอธิบาย */}
@@ -3347,28 +3405,17 @@ function AdminPage() {
       </div>
 
       {showModal && (
-        <div className="admin-modal-overlay">
-          <div className="admin-modal">
-            <div className="admin-modal-header">
-              <h3>สร้างผู้ใช้ใหม่</h3>
-              <button className="admin-modal-close" onClick={()=>setShowModal(false)}>×</button>
-            </div>
-            <div className="admin-modal-body">
-              <input className="admin-form-input" type="text" value={newUsername} onChange={e=>setNewUsername(e.target.value)} placeholder="Username" required />
-              <input className="admin-form-input" type="email" value={newEmail} onChange={e=>setNewEmail(e.target.value)} placeholder="Email" required />
-              <input className="admin-form-input" type="text" value={newFullName} onChange={e=>setNewFullName(e.target.value)} placeholder="Full name" required />
-              <input className="admin-form-input" type="password" value={newPassword} onChange={e=>setNewPassword(e.target.value)} placeholder="Password" required />
-              <select className="admin-form-input" value={newRole} onChange={e=>setNewRole(e.target.value)}>
-                <option value="teacher">Teacher</option>
-                <option value="student">Student</option>
-              </select>
-            </div>
-            <div className="admin-modal-footer">
-              <button type="button" className="admin-btn-secondary" onClick={()=>setShowModal(false)}>ยกเลิก</button>
-              <button type="button" className="admin-btn-primary" disabled={creatingUser} onClick={handleCreateUser}>{creatingUser ? 'กำลังสร้าง...' : 'สร้าง'}</button>
-            </div>
-          </div>
-        </div>
+        <CreateUserModal 
+          isOpen={showModal}
+          onClose={() => setShowModal(false)}
+          onSuccess={(data) => {
+            if (data.role === 'teacher') {
+              setTeachers(prev => [data, ...prev]);
+            } else if (data.role === 'student') {
+              setStudents(prev => [data, ...prev]);
+            }
+          }}
+        />
       )}
       {/* Confirm & Alert modals (shared) */}
   <ExpiryModal isOpen={showExpiryModal} initialValue={expiryModalValue} onClose={() => setShowExpiryModal(false)} onSave={saveExpiry} title="ตั้งวันหมดอายุ" />
@@ -3390,214 +3437,23 @@ function AdminPage() {
       />
 
       {/* Password Reset Approval Modal */}
-      {showResetPasswordModal && selectedResetRequest && (
-        <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
-          <div className="modal-content" style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '12px', maxWidth: '450px', width: '90%', boxShadow: '0 10px 40px rgba(0,0,0,0.3)' }}>
-            <h3 style={{ marginTop: 0, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span>🔐</span> อนุมัติรีเซ็ตรหัสผ่าน
-            </h3>
-            <div style={{ marginBottom: '1.5rem', padding: '1rem', backgroundColor: '#f3f4f6', borderRadius: '8px' }}>
-              <div><strong>ชื่อผู้ใช้:</strong> {selectedResetRequest.username}</div>
-              <div><strong>ชื่อ:</strong> {selectedResetRequest.full_name || '-'}</div>
-              <div><strong>บทบาท:</strong> {selectedResetRequest.role === 'teacher' ? 'ครู' : 'นักเรียน'}</div>
-            </div>
-            <div style={{ marginBottom: '1.5rem' }}>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600' }}>รหัสผ่านใหม่</label>
-              <input
-                type="text"
-                value={newPasswordForReset}
-                onChange={(e) => setNewPasswordForReset(e.target.value)}
-                placeholder="กรอกรหัสผ่านใหม่"
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  borderRadius: '8px',
-                  border: '1px solid #ddd',
-                  fontSize: '1rem'
-                }}
-              />
-              <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: '#666' }}>
-                💡 แนะนำ: ใช้รหัสผ่านที่ง่ายต่อการจำ และแจ้งให้ผู้ใช้เปลี่ยนรหัสผ่านหลังเข้าสู่ระบบ
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => {
-                  setShowResetPasswordModal(false);
-                  setSelectedResetRequest(null);
-                  setNewPasswordForReset('');
-                }}
-                style={{
-                  padding: '10px 20px',
-                  borderRadius: '8px',
-                  border: '1px solid #ddd',
-                  backgroundColor: '#f3f4f6',
-                  cursor: 'pointer',
-                  fontWeight: '500'
-                }}
-              >
-                ยกเลิก
-              </button>
-              <button
-                onClick={() => {
-                  if (!newPasswordForReset.trim()) {
-                    toast.error('กรุณากรอกรหัสผ่านใหม่');
-                    return;
-                  }
-                  approvePasswordReset(selectedResetRequest.id, selectedResetRequest.user_id, newPasswordForReset);
-                }}
-                disabled={!newPasswordForReset.trim()}
-                style={{
-                  padding: '10px 20px',
-                  borderRadius: '8px',
-                  border: 'none',
-                  backgroundColor: newPasswordForReset.trim() ? '#22c55e' : '#9ca3af',
-                  color: 'white',
-                  cursor: newPasswordForReset.trim() ? 'pointer' : 'not-allowed',
-                  fontWeight: '500'
-                }}
-              >
-                ✅ อนุมัติ
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <PasswordResetModal
+        isOpen={showResetPasswordModal}
+        selectedRequest={selectedResetRequest}
+        onClose={() => {
+          setShowResetPasswordModal(false);
+          setSelectedResetRequest(null);
+        }}
+        onApprove={approvePasswordReset}
+      />
 
       {/* Schedule Modal */}
-      {showScheduleModal && (
-        <div className="schedule-modal-overlay">
-          <div className="schedule-modal">
-            <div className="schedule-modal-header">
-              <h3>{editingSchedule ? 'แก้ไขช่วงเวลาเรียน' : 'เพิ่มช่วงเวลาเรียนใหม่'}</h3>
-              <button className="schedule-modal-close" onClick={cancelScheduleModal}>×</button>
-            </div>
-            <div className="schedule-modal-body">
-                <div className="schedule-form-group">
-                <label className="schedule-form-label">วันในสัปดาห์</label>
-                <select 
-                  className="schedule-form-select form-field" 
-                  value={newScheduleDay} 
-                  onChange={e => setNewScheduleDay(e.target.value)}
-                  required
-                >
-                  <option value="">เลือกวันในสัปดาห์</option>
-                  <option value="1">จันทร์</option>
-                  <option value="2">อังคาร</option>
-                  <option value="3">พุธ</option>
-                  <option value="4">พฤหัสบดี</option>
-                  <option value="5">ศุกร์</option>
-                  <option value="6">เสาร์</option>
-                  <option value="0">อาทิตย์</option>
-                </select>
-                <div className="schedule-helper">เลือกวันในสัปดาห์ (0 = อาทิตย์, 1 = จันทร์, ... 6 = เสาร์)</div>
-              </div>
-                <div className="schedule-time-inputs">
-                <div className="schedule-form-group">
-                  <label className="schedule-form-label">เวลาเริ่มเรียน</label>
-                    <input 
-                    className="schedule-form-input form-field" 
-                    type="text" 
-                    placeholder="08:30"
-                    value={newScheduleStartTime} 
-                    onChange={e => {
-                      // Allow digits and colon, auto-insert colon
-                      let val = e.target.value.replace(/[^\d:]/g, '');
-                      // Auto-insert colon after 2 digits if not present
-                      if (val.length === 2 && !val.includes(':') && e.nativeEvent.inputType !== 'deleteContentBackward') {
-                        val = val + ':';
-                      }
-                      // Limit format to HH:MM
-                      if (val.length <= 5) {
-                        setNewScheduleStartTime(val);
-                      }
-                    }}
-                    onBlur={e => {
-                      // Format time on blur
-                      let val = e.target.value.replace(/[^\d]/g, ''); // Remove all non-digits
-                      if (val.length === 4) {
-                        // Format HHMM to HH:MM
-                        const h = val.substring(0, 2);
-                        const m = val.substring(2, 4);
-                        if (parseInt(h) <= 23 && parseInt(m) <= 59) {
-                          setNewScheduleStartTime(`${h}:${m}`);
-                        }
-                      } else if (val.length === 3) {
-                        // Format HMM to 0H:MM
-                        const h = val.substring(0, 1).padStart(2, '0');
-                        const m = val.substring(1, 3);
-                        if (parseInt(h) <= 23 && parseInt(m) <= 59) {
-                          setNewScheduleStartTime(`${h}:${m}`);
-                        }
-                      }
-                    }}
-                    required 
-                    maxLength={5}
-                  />
-                  <div className="schedule-helper">รูปแบบเวลา 24 ชั่วโมง เช่น 08:30</div>
-                </div>
-                <div className="schedule-form-group">
-                  <label className="schedule-form-label">เวลาสิ้นสุดการเรียน</label>
-                    <input 
-                    className="schedule-form-input form-field" 
-                    type="text" 
-                    placeholder="16:30"
-                    value={newScheduleEndTime} 
-                    onChange={e => {
-                      // Allow digits and colon, auto-insert colon
-                      let val = e.target.value.replace(/[^\d:]/g, '');
-                      // Auto-insert colon after 2 digits if not present
-                      if (val.length === 2 && !val.includes(':') && e.nativeEvent.inputType !== 'deleteContentBackward') {
-                        val = val + ':';
-                      }
-                      // Limit format to HH:MM
-                      if (val.length <= 5) {
-                        setNewScheduleEndTime(val);
-                      }
-                    }}
-                    onBlur={e => {
-                      // Format time on blur
-                      let val = e.target.value.replace(/[^\d]/g, ''); // Remove all non-digits
-                      if (val.length === 4) {
-                        // Format HHMM to HH:MM
-                        const h = val.substring(0, 2);
-                        const m = val.substring(2, 4);
-                        if (parseInt(h) <= 23 && parseInt(m) <= 59) {
-                          setNewScheduleEndTime(`${h}:${m}`);
-                        }
-                      } else if (val.length === 3) {
-                        // Format HMM to 0H:MM
-                        const h = val.substring(0, 1).padStart(2, '0');
-                        const m = val.substring(1, 3);
-                        if (parseInt(h) <= 23 && parseInt(m) <= 59) {
-                          setNewScheduleEndTime(`${h}:${m}`);
-                        }
-                      }
-                    }}
-                    required 
-                    maxLength={5}
-                  />
-                  <div className="schedule-helper">รูปแบบเวลา 24 ชั่วโมง เช่น 09:30</div>
-                </div>
-              </div>
-            </div>
-            <div className="schedule-modal-footer">
-              <button type="button" className="admin-btn-secondary" onClick={cancelScheduleModal}>
-                <span>❌</span>
-                ยกเลิก
-              </button>
-              <button 
-                type="button" 
-                className="admin-btn-primary" 
-                onClick={editingSchedule ? updateScheduleSlot : createScheduleSlot}
-              >
-                <span>{editingSchedule ? '✏️' : '➕'}</span>
-                {editingSchedule ? 'แก้ไขช่วงเวลา' : 'เพิ่มช่วงเวลา'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <AdminScheduleModal
+        isOpen={showScheduleModal}
+        editingSchedule={editingSchedule}
+        onClose={cancelScheduleModal}
+        onSubmit={editingSchedule ? updateScheduleSlot : createScheduleSlot}
+      />
 
       {/* Classroom Management Modal - แยกเป็น 3 modal */}
       <CreateClassroomModal
@@ -3661,9 +3517,14 @@ function AdminPage() {
         setShowPromoteStudentModal(false);
         setClassroomForStudentPromotion(null);
         setClassroomStudents([]);
+        // Note: Do NOT reset promotionNewGradeLevel here
+        // PromoteStudentModal will handle cleanup via resetForm() in handleClose()
       }}
       isPromoting={promotingIndividualStudents}
       getClassroomGradeLevels={getClassroomGradeLevels}
+      getClassroomNamesByGrade={getClassroomNamesByGrade}
+      promotionNewGradeLevel={promotionNewGradeLevel}
+      setPromotionNewGradeLevel={setPromotionNewGradeLevel}
     />
 
     {/* Logo Upload Modal */}
@@ -3679,94 +3540,24 @@ function AdminPage() {
     />
 
     {/* Homeroom Teacher Modal */}
-    {showHomeroomModal && (
-      <div className="admin-modal-overlay">
-        <div className="modal homeroom-modal">
-          <div className="admin-modal-header">
-            <h3>{editingHomeroom ? 'แก้ไขครูประจำชั้น' : 'กำหนดครูประจำชั้นใหม่'}</h3>
-            <button className="admin-modal-close" onClick={cancelHomeroomModal}>×</button>
-          </div>
-          <div className="admin-modal-body">
-            <div className="admin-form-group">
-              <label className="admin-form-label">ชั้นเรียน</label>
-              {editingHomeroom ? (
-                <input 
-                  className="admin-form-input" 
-                  type="text" 
-                  value={newHomeroomGradeLevel} 
-                  disabled 
-                  style={{ backgroundColor: '#f5f5f5' }}
-                />
-              ) : (
-                <select 
-                  className="admin-form-input"
-                  value={newHomeroomGradeLevel}
-                  onChange={e => setNewHomeroomGradeLevel(e.target.value)}
-                  required
-                >
-                  <option value="">เลือกชั้นเรียน</option>
-                  {availableGradeLevels.map((grade, idx) => (
-                    <option key={idx} value={grade}>
-                      {grade}
-                    </option>
-                  ))}
-                </select>
-              )}
-              {!editingHomeroom && availableGradeLevels.length === 0 && (
-                <div className="form-helper" style={{ color: '#666', fontSize: '12px', marginTop: '4px' }}>
-                  ⚠️ ไม่พบข้อมูลชั้นเรียน - กรุณาเพิ่มนักเรียนและระบุชั้นเรียนก่อน
-                </div>
-              )}
-            </div>
-            
-            <div className="admin-form-group">
-              <label className="admin-form-label">ครูผู้สอน</label>
-              <select 
-                className="admin-form-input"
-                value={newHomeroomTeacherId}
-                onChange={e => setNewHomeroomTeacherId(e.target.value)}
-                required
-              >
-                <option value="">เลือกครู</option>
-                {teachers.filter(t => t.is_active).map((teacher) => {
-                  // Check if this teacher is already assigned to another class
-                  const alreadyAssigned = homeroomTeachers.some(hr => hr.teacher_id === teacher.id && (!editingHomeroom || editingHomeroom.id !== hr.id));
-                  return (
-                    <option key={teacher.id} value={teacher.id} disabled={alreadyAssigned}>
-                      {teacher.full_name || teacher.username} ({teacher.email}){alreadyAssigned ? ' - ประจำชั้น ' + homeroomTeachers.find(hr => hr.teacher_id === teacher.id)?.grade_level : ''}
-                    </option>
-                  );
-                })}
-              </select>
-            </div>
-
-            <div className="admin-form-group">
-              <label className="admin-form-label">ปีการศึกษา (ไม่บังคับ)</label>
-              <input 
-                className="admin-form-input" 
-                type="text" 
-                value={newHomeroomAcademicYear}
-                onChange={e => setNewHomeroomAcademicYear(e.target.value)}
-                placeholder="เช่น 2567"
-              />
-            </div>
-          </div>
-          <div className="admin-modal-footer">
-            <button type="button" className="admin-btn-secondary" onClick={cancelHomeroomModal}>
-              ยกเลิก
-            </button>
-            <button 
-              type="button" 
-              className="admin-btn-primary" 
-              onClick={editingHomeroom ? updateHomeroomTeacher : createHomeroomTeacher}
-              disabled={!newHomeroomTeacherId || (!editingHomeroom && !newHomeroomGradeLevel)}
-            >
-              {editingHomeroom ? 'บันทึกการแก้ไข' : 'กำหนดครูประจำชั้น'}
-            </button>
-          </div>
-        </div>
-      </div>
-    )}
+    <HomeroomTeacherModal
+      isOpen={showHomeroomModal}
+      editingHomeroom={editingHomeroom}
+      teachers={teachers}
+      availableGradeLevels={availableGradeLevels}
+      homeroomTeachers={homeroomTeachers}
+      onClose={cancelHomeroomModal}
+      onSave={(teacherId, gradeLevel, academicYear) => {
+        setNewHomeroomTeacherId(teacherId);
+        setNewHomeroomGradeLevel(gradeLevel);
+        setNewHomeroomAcademicYear(academicYear);
+        if (editingHomeroom) {
+          updateHomeroomTeacher(teacherId, academicYear);
+        } else {
+          createHomeroomTeacher(teacherId, gradeLevel, academicYear);
+        }
+      }}
+    />
 
     {/* Subject Management Modal */}
     <SubjectManagementModal

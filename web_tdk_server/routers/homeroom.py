@@ -317,7 +317,7 @@ def get_homeroom_summary(
     db: Session = Depends(get_db),
     current_user: UserModel = Depends(get_current_user)
 ):
-    """ดึงข้อมูลสรุปของนักเรียนในชั้นที่ครูประจำ (คะแนน + การเข้าเรียน)"""
+    """ดึงข้อมูลสรุปของนักเรียนในชั้นที่ครูประจำ (คะแนน + การเข้าเรียน จัดกลุ่มตามวิชา)"""
     if current_user.role not in ['teacher', 'admin']:
         raise HTTPException(status_code=403, detail="ต้องเป็นครูหรือแอดมินเท่านั้น")
     
@@ -349,80 +349,98 @@ def get_homeroom_summary(
             
             students_data = []
             for enrollment, student in enrollments:
-                # Get grades for this student
-                grades = db.query(GradeModel).filter(
+                # Get grades for this student grouped by subject
+                grades_query = db.query(GradeModel, SubjectModel).join(
+                    SubjectModel, GradeModel.subject_id == SubjectModel.id
+                ).filter(
                     GradeModel.student_id == student.id
                 ).all()
                 
-                total_score = 0
-                total_max_score = 0
-                assignments_count = 0
-                
-                for grade in grades:
+                grades_by_subject = {}
+                for grade, subject in grades_query:
+                    if subject.id not in grades_by_subject:
+                        grades_by_subject[subject.id] = {
+                            'subject_id': subject.id,
+                            'subject_name': subject.name,
+                            'is_activity': subject.subject_type == 'activity',
+                            'credits': subject.credits if hasattr(subject, 'credits') else None,
+                            'assignments': [],
+                            'total_score': 0,
+                            'total_max_score': 0
+                        }
                     if grade.grade is not None and grade.max_score:
-                        total_score += float(grade.grade)
-                        total_max_score += float(grade.max_score)
-                        assignments_count += 1
+                        grades_by_subject[subject.id]['assignments'].append({
+                            'title': grade.title,
+                            'score': float(grade.grade),
+                            'max_score': float(grade.max_score)
+                        })
+                        grades_by_subject[subject.id]['total_score'] += float(grade.grade)
+                        grades_by_subject[subject.id]['total_max_score'] += float(grade.max_score)
                 
-                avg_percentage = (total_score / total_max_score * 100) if total_max_score > 0 else 0
-                
-                # Get attendance for this student
-                # Find subjects this student is enrolled in
+                # Get attendance grouped by subject
                 enrolled_subjects = db.query(SubjectStudentModel.subject_id).filter(
                     SubjectStudentModel.student_id == student.id
                 ).all()
                 enrolled_subject_ids = [s[0] for s in enrolled_subjects]
                 
-                # Count attendance records
-                total_days = 0
-                present_days = 0
-                absent_days = 0
-                late_days = 0
-                sick_leave_days = 0
-                
+                attendance_by_subject = {}
                 if enrolled_subject_ids:
-                    attendance_records = db.query(AttendanceModel).filter(
-                        AttendanceModel.subject_id.in_(enrolled_subject_ids)
-                    ).all()
-                    
-                    for record in attendance_records:
-                        try:
-                            attendance_data = json.loads(record.present_json) if record.present_json else {}
-                            student_id_str = str(student.id)
-                            if student_id_str in attendance_data:
-                                status = attendance_data[student_id_str]
-                                total_days += 1
-                                if status == 'present':
-                                    present_days += 1
-                                elif status == 'absent':
-                                    absent_days += 1
-                                elif status == 'late':
-                                    late_days += 1
-                                elif status == 'sick_leave':
-                                    sick_leave_days += 1
-                        except:
-                            pass
+                    for subject_id in enrolled_subject_ids:
+                        subject = db.query(SubjectModel).filter(SubjectModel.id == subject_id).first()
+                        if not subject:
+                            continue
+                        
+                        attendance_records = db.query(AttendanceModel).filter(
+                            AttendanceModel.subject_id == subject_id
+                        ).all()
+                        
+                        subject_attendance = {
+                            'subject_id': subject_id,
+                            'subject_name': subject.name,
+                            'total_days': 0,
+                            'present_days': 0,
+                            'absent_days': 0,
+                            'late_days': 0,
+                            'sick_leave_days': 0
+                        }
+                        
+                        for record in attendance_records:
+                            try:
+                                attendance_data = json.loads(record.present_json) if record.present_json else {}
+                                student_id_str = str(student.id)
+                                if student_id_str in attendance_data:
+                                    status = attendance_data[student_id_str]
+                                    subject_attendance['total_days'] += 1
+                                    if status == 'present':
+                                        subject_attendance['present_days'] += 1
+                                    elif status == 'absent':
+                                        subject_attendance['absent_days'] += 1
+                                    elif status == 'late':
+                                        subject_attendance['late_days'] += 1
+                                    elif status == 'sick_leave':
+                                        subject_attendance['sick_leave_days'] += 1
+                            except:
+                                pass
+                        
+                        attendance_by_subject[subject_id] = subject_attendance
                 
-                attendance_rate = (present_days / total_days * 100) if total_days > 0 else 0
+                # Calculate overall attendance rate
+                total_attendance_days = sum(s['total_days'] for s in attendance_by_subject.values())
+                total_attendance_present = sum(s['present_days'] for s in attendance_by_subject.values())
                 
                 students_data.append({
                     'id': student.id,
                     'username': student.username,
                     'full_name': student.full_name,
                     'email': student.email,
-                    'grades': {
-                        'total_score': round(total_score, 2),
-                        'total_max_score': round(total_max_score, 2),
-                        'avg_percentage': round(avg_percentage, 2),
-                        'assignments_count': assignments_count
-                    },
+                    'grades_by_subject': list(grades_by_subject.values()),
+                    'attendance_by_subject': list(attendance_by_subject.values()),
                     'attendance': {
-                        'total_days': total_days,
-                        'present_days': present_days,
-                        'absent_days': absent_days,
-                        'late_days': late_days,
-                        'sick_leave_days': sick_leave_days,
-                        'attendance_rate': round(attendance_rate, 2)
+                        'attendance_rate': round((total_attendance_present / total_attendance_days * 100) if total_attendance_days > 0 else 0, 2),
+                        'present_days': total_attendance_present,
+                        'absent_days': sum(s['absent_days'] for s in attendance_by_subject.values()),
+                        'late_days': sum(s['late_days'] for s in attendance_by_subject.values()),
+                        'sick_leave_days': sum(s['sick_leave_days'] for s in attendance_by_subject.values())
                     }
                 })
             
@@ -485,6 +503,8 @@ def get_homeroom_classroom_students(
                 grades_by_subject[subject.id] = {
                     'subject_id': subject.id,
                     'subject_name': subject.name,
+                    'is_activity': subject.subject_type == 'activity',
+                    'credits': subject.credits if hasattr(subject, 'credits') else None,
                     'assignments': [],
                     'total_score': 0,
                     'total_max_score': 0

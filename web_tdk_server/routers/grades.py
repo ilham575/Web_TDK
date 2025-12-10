@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Dict
 from sqlalchemy import distinct, func
 
 from database.connection import get_db
@@ -13,6 +13,87 @@ from models.classroom import ClassroomStudent as ClassroomStudentModel
 from schemas.grade import GradesBulk, GradeResponse, AssignmentCreate, AssignmentUpdate, AssignmentResponse
 
 router = APIRouter(prefix="/grades", tags=["grades"])
+
+
+def calculate_activity_grades(db: Session, student_id: int, classroom_id: int = None):
+    """
+    Aggregate grades for all activity-type subjects for a student.
+    Returns: {
+        'activity_subjects': [list of activity subjects with breakdown],
+        'total_activity_score': aggregated score (sum of score*percent, capped at 100),
+        'total_activity_percent': sum of percentages
+    }
+    """
+    # Find all activity subjects that have grades for this student
+    activity_data = db.query(
+        SubjectModel.id,
+        SubjectModel.name,
+        SubjectModel.activity_percentage
+    ).filter(
+        SubjectModel.subject_type == 'activity',
+        SubjectModel.is_ended == False
+    ).all()
+    
+    if not activity_data:
+        return {
+            'activity_subjects': [],
+            'total_activity_score': None,
+            'total_activity_percent': 0
+        }
+    
+    activity_subjects = []
+    total_score = 0
+    total_percent = 0
+    
+    for subject_id, subject_name, activity_percent in activity_data:
+        # Get all grades for this student in this subject
+        grades = db.query(GradeModel).filter(
+            GradeModel.subject_id == subject_id,
+            GradeModel.student_id == student_id
+        )
+        
+        if classroom_id:
+            grades = grades.filter(GradeModel.classroom_id == classroom_id)
+        
+        grades = grades.all()
+        
+        if not grades:
+            continue
+        
+        # Calculate average score for this subject
+        valid_grades = [g for g in grades if g.grade is not None and g.max_score]
+        if not valid_grades:
+            continue
+        
+        avg_score = sum([g.grade for g in valid_grades]) / len(valid_grades)
+        max_score = valid_grades[0].max_score  # Assume all have same max_score
+        
+        # Normalize to 100 scale
+        normalized_score = (avg_score / max_score) * 100 if max_score else 0
+        
+        # Calculate contribution
+        percent = activity_percent or 0
+        contribution = (normalized_score * percent) / 100
+        
+        activity_subjects.append({
+            'subject_id': subject_id,
+            'subject_name': subject_name,
+            'raw_score': round(avg_score, 2),
+            'max_score': round(max_score, 2),
+            'normalized_score': round(normalized_score, 2),
+            'percentage': percent,
+            'contribution': round(contribution, 2),
+            'grade_count': len(valid_grades)
+        })
+        
+        total_score += contribution
+        total_percent += percent
+    
+    return {
+        'activity_subjects': activity_subjects,
+        'total_activity_score': min(round(total_score, 2), 100),  # Cap at 100
+        'total_activity_percent': total_percent
+    }
 
 
 @router.post('/bulk', status_code=status.HTTP_201_CREATED)
@@ -313,3 +394,111 @@ def delete_assignment(subject_id: int, assignment_title: str, classroom_id: int 
     db.commit()
 
     return {'detail': 'Assignment deleted successfully'}
+
+
+@router.get('/student/{student_id}/activity-breakdown')
+def get_student_activity_breakdown(student_id: int, classroom_id: int = None, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    """
+    Get activity grade breakdown for a student.
+    Includes individual activity subjects with their raw scores, percentages, and calculated contributions.
+    """
+    # Authorization: student can view own, admin can view all
+    if getattr(current_user, 'role', None) != 'admin' and getattr(current_user, 'id', None) != student_id:
+        raise HTTPException(status_code=403, detail='Not authorized to view this student grades')
+    
+    # Check student exists
+    student = db.query(UserModel).filter(UserModel.id == student_id).first()
+    if not student:
+        raise HTTPException(status_code=404, detail='Student not found')
+    
+    return calculate_activity_grades(db, student_id, classroom_id)
+
+
+@router.get('/student/{student_id}/transcript')
+def get_student_transcript(student_id: int, classroom_id: int = None, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    """
+    Get student's full transcript with activity grades aggregated into a single "Activity" entry.
+    Regular subjects show individual entries; activity subjects are combined.
+    """
+    # Authorization
+    if getattr(current_user, 'role', None) != 'admin' and getattr(current_user, 'id', None) != student_id:
+        raise HTTPException(status_code=403, detail='Not authorized to view this student transcript')
+    
+    # Check student exists
+    student = db.query(UserModel).filter(UserModel.id == student_id).first()
+    if not student:
+        raise HTTPException(status_code=404, detail='Student not found')
+    
+    # Get all subjects this student is enrolled in
+    query = db.query(
+        SubjectModel.id,
+        SubjectModel.name,
+        SubjectModel.subject_type,
+        SubjectModel.activity_percentage,
+        SubjectModel.credits
+    ).join(
+        SubjectStudentModel, SubjectModel.id == SubjectStudentModel.subject_id
+    ).filter(SubjectStudentModel.student_id == student_id)
+    
+    if classroom_id:
+        query = query.join(
+            ClassroomStudentModel, ClassroomStudentModel.student_id == student_id
+        ).filter(ClassroomStudentModel.classroom_id == classroom_id)
+    
+    subjects = query.all()
+    
+    regular_subjects = []
+    
+    # Process regular subjects
+    for subject_id, subject_name, subject_type, activity_percent, credits in subjects:
+        if subject_type != 'activity':
+            # Get average grade for regular subject
+            grades = db.query(GradeModel).filter(
+                GradeModel.subject_id == subject_id,
+                GradeModel.student_id == student_id
+            )
+            
+            if classroom_id:
+                grades = grades.filter(GradeModel.classroom_id == classroom_id)
+            
+            grades = grades.all()
+            
+            if not grades:
+                continue
+            
+            valid_grades = [g for g in grades if g.grade is not None and g.max_score]
+            if not valid_grades:
+                continue
+            
+            avg_score = sum([g.grade for g in valid_grades]) / len(valid_grades)
+            max_score = valid_grades[0].max_score
+            normalized = (avg_score / max_score) * 100 if max_score else 0
+            
+            regular_subjects.append({
+                'subject_id': subject_id,
+                'subject_name': subject_name,
+                'subject_type': 'regular',
+                'credits': credits,
+                'score': round(avg_score, 2),
+                'max_score': round(max_score, 2),
+                'normalized_score': round(normalized, 2)
+            })
+    
+    # Calculate activity grades
+    activity_breakdown = calculate_activity_grades(db, student_id, classroom_id)
+    
+    # Build transcript
+    transcript = regular_subjects
+    
+    if activity_breakdown['activity_subjects']:
+        transcript.append({
+            'subject_id': None,
+            'subject_name': 'กิจกรรม (Activity)',
+            'subject_type': 'activity',
+            'credits': 0,
+            'score': activity_breakdown['total_activity_score'],
+            'breakdown': activity_breakdown['activity_subjects'],
+            'total_percent': activity_breakdown['total_activity_percent']
+        })
+    
+    return transcript
