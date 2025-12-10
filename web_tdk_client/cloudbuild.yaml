@@ -1,0 +1,37 @@
+steps:
+  # Build Docker image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '--build-arg'
+      - 'REACT_APP_API_BASE_URL=${_BACKEND_URL}'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/${_SERVICE_NAME}:latest'
+      - '.'
+
+  # Push to Container Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args: [ 'push', 'gcr.io/$PROJECT_ID/${_SERVICE_NAME}:latest' ]
+
+  # Deploy to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        gcloud run deploy "${_SERVICE_NAME}" \
+          --image "gcr.io/$PROJECT_ID/${_SERVICE_NAME}:latest" \
+          --region "${_REGION}" \
+          --platform managed \
+          --allow-unauthenticated
+
+images:
+  - 'gcr.io/$PROJECT_ID/${_SERVICE_NAME}:latest'
+
+substitutions:
+  _SERVICE_NAME: 'web-tdk-client'
+  # แก้ Region เป็น Asia Southeast 1
+  _REGION: 'asia-southeast1'
+  _BACKEND_URL: 'https://web-tdk-server-20868466778.asia-southeast1.run.app'
+
+timeout: '1200s'

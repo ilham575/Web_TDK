@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import { API_BASE_URL } from '../../../endpoints';
 
 function useQuery() {
   return new URLSearchParams(useLocation().search);
@@ -14,6 +15,11 @@ function ResetPasswordPage() {
   const navigate = useNavigate();
   const query = useQuery();
   const token = query.get('token') || '';
+
+  // Set page title
+  useEffect(() => {
+    document.title = 'ตั้งรหัสผ่านใหม่ - ศูนย์การเรียนรู้อิสลามประจำมัสยิด';
+  }, []);
 
   useEffect(() => {
     if (!token) {
@@ -34,7 +40,7 @@ function ResetPasswordPage() {
     }
     setIsLoading(true);
     try {
-      const res = await fetch('http://127.0.0.1:8000/users/reset_password', {
+      const res = await fetch(`${API_BASE_URL}/users/reset_password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, new_password: password })

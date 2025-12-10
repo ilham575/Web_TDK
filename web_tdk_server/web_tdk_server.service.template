@@ -1,0 +1,17 @@
+[Unit]
+Description=Web TDK FastAPI Server
+After=network.target
+
+[Service]
+Type=simple
+User=__USER__
+Group=__GROUP__
+WorkingDirectory=__WORK_DIR__
+# Uncomment if you want to provide environment variables from a file
+# EnvironmentFile=__WORK_DIR__/.env
+ExecStart=__VENV_BIN__ main:app --host 0.0.0.0 --port 8000
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

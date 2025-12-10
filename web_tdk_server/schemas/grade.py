@@ -1,0 +1,50 @@
+from pydantic import BaseModel
+from typing import List, Optional
+
+
+class GradeEntry(BaseModel):
+    student_id: int
+    grade: Optional[float] = None
+
+
+class GradesBulk(BaseModel):
+    subject_id: int
+    title: str  # Assignment title
+    max_score: float = 100.0  # Maximum possible score
+    grades: List[GradeEntry]
+    classroom_id: Optional[int] = None
+
+
+class GradeResponse(BaseModel):
+    id: int
+    subject_id: int
+    student_id: int
+    classroom_id: Optional[int] = None
+    title: Optional[str] = None
+    max_score: Optional[float] = None
+    grade: Optional[float] = None
+
+    class Config:
+        from_attributes = True
+
+
+class AssignmentCreate(BaseModel):
+    title: str
+    max_score: float = 100.0
+    classroom_id: Optional[int] = None
+
+
+class AssignmentUpdate(BaseModel):
+    title: Optional[str] = None
+    max_score: Optional[float] = None
+    classroom_id: Optional[int] = None
+
+
+class AssignmentResponse(BaseModel):
+    id: int
+    title: str
+    max_score: float
+    classroom_id: Optional[int] = None
+
+    class Config:
+        from_attributes = True

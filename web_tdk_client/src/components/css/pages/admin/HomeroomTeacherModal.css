@@ -1,0 +1,51 @@
+/* Styles specifically for HomeroomTeacherModal */
+.homeroom-modal.admin-modal {
+  max-width: 760px; /* slightly narrower to prevent overflow */
+  width: 96%;
+  box-sizing: border-box;
+}
+.homeroom-modal .admin-modal-body {
+  padding: 1rem 1.25rem; /* smaller padding for more space */
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+.homeroom-modal .admin-modal-header { padding: 1rem 1.25rem; }
+
+/* Tighter inputs and header sizes for more compact modal */
+.homeroom-modal .admin-modal-header h3 { font-size: 1.45rem; }
+.homeroom-modal .admin-form-input { padding: 0.65rem 0.9rem; font-size: 0.95rem; }
+.homeroom-modal .form-helper { font-size: 12px; color: #667085; }
+.homeroom-modal .form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(220px, 1fr));
+  gap: 0.75rem;
+}
+.homeroom-modal .admin-form-help { color: #6b7280; font-size: 12px; margin-top: 6px; }
+.homeroom-modal .admin-form-group { gap: 0.75rem; }
+.homeroom-modal .current-assignment {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.6rem;
+  background: rgba(99,102,241,0.08);
+  color: #3730a3;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+.homeroom-modal .current-assignment .teacher-name { font-weight: 800; color: #0f172a; }
+.homeroom-modal .admin-modal-footer { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 0.85rem 1rem; }
+.homeroom-modal .footer-actions-left { display: flex; gap: 0.5rem; align-items: center; }
+.homeroom-modal .assign-btn { display: inline-flex; align-items: center; gap: 0.45rem; padding: 0.6rem 1rem; border-radius: 10px; font-size: 0.95rem; }
+.homeroom-modal .assign-btn .btn-icon { font-size: 0.95rem; line-height: 1; }
+.homeroom-modal .assign-btn[disabled] { opacity: 0.6; transform: none; cursor: not-allowed; }
+
+.homeroom-modal .admin-modal-close { width: 34px; height: 34px; font-size: 1rem; }
+.homeroom-modal .admin-btn-primary { min-width: 120px; padding: 0.55rem 0.9rem; font-weight: 700; }
+.homeroom-modal .admin-btn-secondary { padding: 0.45rem 0.8rem; }
+@media (max-width: 768px) {
+  .homeroom-modal.admin-modal { width: 95%; }
+  .homeroom-modal .form-grid { grid-template-columns: 1fr; }
+  .homeroom-modal .admin-modal-footer { flex-direction: column-reverse; align-items: stretch; }
+}

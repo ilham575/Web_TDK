@@ -1,0 +1,50 @@
+steps:
+  # Build the init image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/web-tdk-init:latest'
+      - '-f'
+      - 'Dockerfile.init'
+      - '.'
+
+  # Push the image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'gcr.io/$PROJECT_ID/web-tdk-init:latest'
+
+  # Deploy as a temporary Cloud Run service to execute the initialization
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: bash
+    args:
+      - '-c'
+      - |
+        # Deploy temporary Cloud Run service
+        gcloud run deploy web-tdk-init-owner-temp \
+          --image gcr.io/$PROJECT_ID/web-tdk-init:latest \
+          --region ${_REGION} \
+          --no-allow-unauthenticated \
+          --set-env-vars "DATABASE_URL=mysql+pymysql://admin_tdk:${_DB_PASSWORD}@/tadika_db?unix_socket=/cloudsql/${_CLOUDSQL_INSTANCE}" \
+          --add-cloudsql-instances ${_CLOUDSQL_INSTANCE} \
+          --memory 512Mi \
+          --cpu 1 \
+          --timeout 300 || true
+        
+        # Get the service URL
+        SERVICE_URL=$(gcloud run services describe web-tdk-init-owner-temp --region ${_REGION} --format='value(status.url)')
+        echo "Service deployed at: $SERVICE_URL"
+        
+        # Wait a few seconds for the service to initialize
+        sleep 10
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+substitutions:
+  _REGION: 'asia-southeast1'
+  _CLOUDSQL_INSTANCE: 'tdk-proj:asia-southeast1:web-tdk-db'
+  _DB_PASSWORD: 'Ihsan53295'
+  _JWT_SECRET_KEY: 'dYY4eEoeLVpHVGnZrzP6boTfBIRCerJ7e59qzh1GYN0='
+  _CORS_ORIGINS: '*'

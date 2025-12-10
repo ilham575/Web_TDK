@@ -1,0 +1,552 @@
+/* Schedule Detail Modal Styles (isolated) */
+
+.schedule-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3000;
+  animation: fadeInOverlay 0.25s ease-out;
+}
+
+@keyframes fadeInOverlay {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.schedule-modal {
+  background: linear-gradient(145deg, rgba(255,255,255,0.98) 0%, rgba(248,250,252,0.98) 100%);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: 24px;
+  border: 1px solid rgba(255,255,255,0.6);
+  box-shadow: 
+    0 25px 60px rgba(0,0,0,0.2),
+    0 10px 25px rgba(0,0,0,0.1),
+    inset 0 1px 0 rgba(255,255,255,0.8);
+  width: 92%;
+  max-width: 580px;
+  max-height: 90vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  animation: modalSlideIn 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(-15px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* legacy .fullscreen class kept for compatibility */
+.schedule-modal.fullscreen { /* no-op on desktop */ }
+
+/* ===== Header ===== */
+.schedule-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.25rem 1.5rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 24px 24px 0 0;
+  position: relative;
+}
+
+.schedule-modal-header::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+}
+
+.schedule-modal-header-content {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.schedule-modal-icon {
+  font-size: 1.75rem;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
+}
+
+.schedule-modal-header h3 {
+  font-size: 1.25rem;
+  font-weight: 800;
+  margin: 0;
+  color: white;
+  letter-spacing: -0.25px;
+}
+
+.schedule-modal-subtitle {
+  font-size: 0.8rem;
+  color: rgba(255,255,255,0.85);
+  font-weight: 500;
+}
+
+.schedule-modal-close {
+  background: rgba(255,255,255,0.2);
+  border: 2px solid rgba(255,255,255,0.3);
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  cursor: pointer;
+  color: white;
+  transition: all 0.25s ease;
+}
+
+.schedule-modal-close:hover {
+  transform: rotate(90deg) scale(1.1);
+  background: rgba(255,255,255,0.3);
+}
+.schedule-modal-close:focus {
+  outline: 2px solid rgba(255,255,255,0.5);
+  outline-offset: 2px;
+}
+
+/* Visual improvements to layout inside full-screen modal */
+.schedule-modal.schedule-modal-full {
+  padding: 0;
+  width: 92%;
+  height: auto;
+  max-width: 580px;
+  max-height: 90vh;
+  border-radius: 24px;
+}
+
+/* ===== Body ===== */
+.schedule-modal-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  padding: 1.5rem;
+  background: #f8fafc;
+}
+
+/* Info Cards */
+.schedule-info-card {
+  background: white;
+  border-radius: 16px;
+  padding: 1rem 1.25rem;
+  border: 1px solid rgba(0,0,0,0.06);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  transition: all 0.2s ease;
+}
+
+.schedule-info-card:hover {
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  transform: translateY(-2px);
+}
+
+.schedule-info-card.full-width {
+  grid-column: 1 / -1;
+}
+
+.info-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px dashed rgba(0,0,0,0.08);
+}
+
+.info-card-icon {
+  font-size: 1.1rem;
+}
+
+.info-card-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.info-card-content {
+  /* content area */
+}
+
+/* Time Card Specific */
+.schedule-time-card {
+  grid-column: 1 / -1;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border-color: rgba(59, 130, 246, 0.15);
+}
+
+.time-display {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.time-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: white;
+  padding: 0.75rem 1.25rem;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  min-width: 90px;
+}
+
+.time-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.time-value {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #1e40af;
+  font-family: 'SF Mono', 'Consolas', monospace;
+}
+
+.time-separator {
+  font-size: 1.5rem;
+  color: #3b82f6;
+  font-weight: 700;
+}
+
+.time-duration {
+  text-align: center;
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  color: #3b82f6;
+  font-weight: 600;
+}
+
+/* Day Card */
+.schedule-day-card {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  border-color: rgba(245, 158, 11, 0.2);
+}
+
+.day-badge {
+  display: inline-block;
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #92400e;
+  background: white;
+  padding: 0.5rem 1rem;
+  border-radius: 10px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+}
+
+/* Teacher Card */
+.schedule-teacher-card {
+  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+  border-color: rgba(16, 185, 129, 0.15);
+}
+
+.teacher-name {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #065f46;
+}
+
+/* Classroom Card */
+.schedule-classroom-card {
+  background: linear-gradient(135deg, #ecf0ff 0%, #dbeafe 100%);
+  border-color: rgba(59, 130, 246, 0.15);
+}
+
+.classroom-badge-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.classroom-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 14px;
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  color: #ffffff;
+  border-radius: 20px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+/* Room Card */
+.schedule-room-card {
+  background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%);
+  border-color: rgba(147, 51, 234, 0.15);
+}
+
+.room-value {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #6b21a8;
+}
+
+/* Note Card */
+.schedule-note-card {
+  background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+  border-color: rgba(249, 115, 22, 0.15);
+}
+
+.note-text {
+  font-size: 0.9rem;
+  color: #9a3412;
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* ===== Footer ===== */
+.schedule-modal-footer {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: stretch;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem;
+  background: rgba(248,250,252,0.8);
+  border-top: 1px solid rgba(0,0,0,0.06);
+  border-radius: 0 0 24px 24px;
+}
+
+/* Buttons inside schedule modal */
+.schedule-modal-btn-secondary,
+.schedule-modal-btn-primary,
+.schedule-modal-btn-danger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.65rem 1.25rem;
+  border-radius: 12px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  border: none;
+  white-space: nowrap;
+  height: 40px;
+  width: 100%;
+}
+
+.schedule-modal-btn-secondary {
+  background: white;
+  color: #475569;
+  border: 1.5px solid #e2e8f0;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+}
+
+.schedule-modal-btn-secondary:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  transform: translateY(-2px);
+}
+
+.schedule-modal-btn-secondary:active {
+  transform: translateY(0);
+}
+
+.schedule-modal-btn-primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.35);
+}
+
+.schedule-modal-btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.45);
+}
+
+.schedule-modal-btn-primary:active {
+  transform: translateY(0);
+}
+
+.schedule-modal-btn-danger {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+  box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3);
+}
+
+.schedule-modal-btn-danger:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(239, 68, 68, 0.4);
+}
+
+.schedule-modal-btn-danger:active {
+  transform: translateY(0);
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 640px) {
+  .schedule-modal {
+    width: 95%;
+    max-width: none;
+    border-radius: 20px;
+  }
+
+  .schedule-modal-body {
+    grid-template-columns: 1fr;
+    padding: 1rem;
+    gap: 0.75rem;
+  }
+
+  .schedule-info-card {
+    padding: 0.875rem 1rem;
+  }
+
+  .time-display {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .time-separator {
+    transform: rotate(90deg);
+    font-size: 1.25rem;
+  }
+
+  .time-block {
+    min-width: unset;
+    width: 100%;
+  }
+
+  .schedule-modal-header h3 {
+    font-size: 1.1rem;
+  }
+
+  .schedule-modal-footer {
+    gap: 0.5rem;
+    padding: 1rem 1rem;
+  }
+
+  .schedule-modal-btn-secondary,
+  .schedule-modal-btn-primary,
+  .schedule-modal-btn-danger {
+    width: 100%;
+    padding: 0.6rem 1rem;
+    font-size: 0.85rem;
+    height: 40px;
+  }
+}
+
+/* Small screens: fullscreen modal */
+@media (max-width: 480px) {
+  .schedule-modal.schedule-modal-full {
+    width: 100vw;
+    height: 100vh;
+    max-width: none;
+    max-height: none;
+    border-radius: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .schedule-modal-header {
+    border-radius: 0;
+    padding: 1rem;
+  }
+
+  .schedule-modal-header-content {
+    gap: 0.5rem;
+  }
+
+  .schedule-modal-icon {
+    font-size: 1.5rem;
+  }
+
+  .schedule-modal-header h3 {
+    font-size: 1rem;
+  }
+
+  .schedule-modal-subtitle {
+    font-size: 0.75rem;
+  }
+
+  .schedule-modal-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0.75rem;
+    gap: 0.5rem;
+  }
+
+  .schedule-info-card {
+    padding: 0.75rem;
+  }
+
+  .info-card-header {
+    gap: 0.4rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .info-card-title {
+    font-size: 0.75rem;
+  }
+
+  .time-value {
+    font-size: 1.25rem;
+  }
+
+  .day-badge {
+    font-size: 1rem;
+    padding: 0.4rem 0.8rem;
+  }
+
+  .teacher-name,
+  .room-value {
+    font-size: 0.9rem;
+  }
+
+  .note-text {
+    font-size: 0.85rem;
+  }
+
+  .schedule-modal-footer {
+    border-radius: 0;
+    padding: 0.75rem;
+    gap: 0.5rem;
+  }
+
+  .schedule-modal-btn-secondary,
+  .schedule-modal-btn-primary,
+  .schedule-modal-btn-danger {
+    width: 100%;
+    padding: 0.55rem 0.75rem;
+    font-size: 0.8rem;
+    height: 38px;
+  }
+
+  .schedule-modal-btn-secondary span,
+  .schedule-modal-btn-primary span,
+  .schedule-modal-btn-danger span {
+    font-size: 0.9rem;
+  }
+
+  .schedule-modal-overlay {
+    align-items: stretch;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}

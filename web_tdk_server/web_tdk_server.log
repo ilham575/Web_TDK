@@ -1,0 +1,221 @@
+INFO:     Started server process [5076]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+Initializing database schema...
+Database schema ensured successfully!
+INFO:     127.0.0.1:59692 - "POST /users/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59692 - "GET /schools/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59692 - "OPTIONS /users/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59706 - "OPTIONS /users/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59714 - "GET /users/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59714 - "GET /users/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59714 - "GET /schools/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59714 - "GET /schools/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59692 - "OPTIONS /classrooms/list/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59714 - "GET /users?limit=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59740 - "GET /classrooms/list/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59728 - "GET /schools/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59706 - "GET /announcements/?school_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59706 - "GET /users?limit=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59740 - "GET /classrooms/list/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59728 - "GET /announcements/?school_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59728 - "OPTIONS /classrooms/list/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59740 - "GET /classrooms/list/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59740 - "GET /schools/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59728 - "GET /users/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59728 - "GET /schools/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59740 - "GET /users/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59740 - "GET /schools/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59740 - "GET /schools/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59740 - "GET /users?limit=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59728 - "GET /announcements/?school_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59714 - "GET /schools/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59706 - "GET /classrooms/list/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59728 - "GET /classrooms/list/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59714 - "GET /announcements/?school_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59706 - "GET /users?limit=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59706 - "GET /schools/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59714 - "GET /users/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59714 - "GET /schools/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59706 - "GET /users/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59706 - "GET /schools/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59706 - "GET /schools/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59740 - "GET /schools/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59706 - "GET /users?limit=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59728 - "GET /classrooms/list/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59714 - "GET /announcements/?school_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59714 - "GET /users?limit=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59706 - "GET /classrooms/list/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59728 - "GET /announcements/?school_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59728 - "GET /classrooms/list/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37634 - "GET /schools/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37638 - "GET /users/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37634 - "GET /users/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37638 - "GET /schools/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37634 - "GET /schools/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37634 - "GET /schools/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37668 - "GET /schools/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37652 - "GET /classrooms/list/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37634 - "GET /users?limit=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37638 - "GET /announcements/?school_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37638 - "GET /users?limit=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37652 - "GET /classrooms/list/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37634 - "GET /announcements/?school_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37634 - "GET /classrooms/list/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51816 - "OPTIONS /classrooms/create HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51832 - "POST /classrooms/create HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51832 - "GET /classrooms/list/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37058 - "OPTIONS /users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37070 - "POST /users HTTP/1.1" 201 Created
+INFO:     127.0.0.1:33396 - "POST /users HTTP/1.1" 201 Created
+INFO:     127.0.0.1:33396 - "GET /classrooms/list/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53790 - "OPTIONS /classrooms/12/add-students HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53796 - "POST /classrooms/12/add-students HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53796 - "GET /classrooms/list/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48908 - "POST /classrooms/12/add-students HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48908 - "GET /classrooms/list/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55412 - "GET /users/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55412 - "GET /schools/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55428 - "GET /classrooms/list/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55422 - "GET /users?limit=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55424 - "GET /announcements/?school_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55436 - "GET /schools/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55436 - "OPTIONS /users/3/deletion_status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55424 - "OPTIONS /users/4/deletion_status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55424 - "GET /users?limit=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55422 - "GET /users/3/deletion_status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55436 - "GET /users/4/deletion_status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55412 - "GET /classrooms/list/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55428 - "GET /announcements/?school_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55428 - "GET /users/3/deletion_status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55412 - "GET /users/4/deletion_status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46342 - "GET /users/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46342 - "GET /schools/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46342 - "GET /users?limit=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46380 - "GET /schools/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46364 - "GET /classrooms/list/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46354 - "GET /announcements/?school_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46364 - "GET /users/4/deletion_status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46382 - "GET /classrooms/list/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46354 - "GET /users/3/deletion_status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46342 - "GET /announcements/?school_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46380 - "GET /users?limit=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46342 - "GET /users/4/deletion_status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46380 - "GET /users/3/deletion_status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48384 - "OPTIONS /users/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48396 - "GET /users/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48396 - "GET /schools/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48412 - "OPTIONS /classrooms/list/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48418 - "GET /schools/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48384 - "GET /users?limit=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48408 - "GET /announcements/?school_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48396 - "GET /classrooms/list/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48384 - "GET /classrooms/list/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48396 - "GET /users?limit=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48408 - "GET /announcements/?school_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48418 - "GET /users/3/deletion_status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48412 - "GET /users/4/deletion_status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48412 - "GET /users/3/deletion_status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48418 - "GET /users/4/deletion_status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60036 - "GET /users/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60036 - "GET /schools/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60058 - "GET /schools/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60052 - "GET /classrooms/list/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60042 - "GET /users?limit=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60044 - "GET /announcements/?school_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60044 - "GET /users?limit=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60052 - "GET /classrooms/list/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60058 - "GET /users/3/deletion_status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60042 - "GET /announcements/?school_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60036 - "GET /users/4/deletion_status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60036 - "GET /users/3/deletion_status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60042 - "GET /users/4/deletion_status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54306 - "GET /users/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54306 - "GET /schools/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54334 - "GET /classrooms/list/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54348 - "GET /schools/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54324 - "GET /announcements/?school_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54308 - "GET /users?limit=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54306 - "GET /classrooms/list/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54348 - "GET /users?limit=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54334 - "GET /announcements/?school_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54308 - "GET /users/3/deletion_status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54324 - "GET /users/4/deletion_status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54324 - "GET /users/3/deletion_status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54308 - "GET /users/4/deletion_status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59368 - "GET /users/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59368 - "GET /schools/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59382 - "GET /classrooms/list/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59372 - "GET /users?limit=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59386 - "GET /schools/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59380 - "GET /announcements/?school_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59386 - "GET /users/4/deletion_status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59380 - "GET /users/3/deletion_status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59368 - "GET /classrooms/list/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59382 - "GET /announcements/?school_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59372 - "GET /users?limit=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59382 - "GET /users/4/deletion_status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59372 - "GET /users/3/deletion_status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48650 - "POST /users/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48650 - "GET /schools/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48650 - "GET /users/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48650 - "GET /users/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48652 - "GET /schools/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48658 - "GET /users?limit=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48650 - "GET /classrooms/list/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48676 - "GET /schools/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48670 - "GET /announcements/?school_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48652 - "GET /schools/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48658 - "GET /users?limit=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48676 - "GET /classrooms/list/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48650 - "GET /schools/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48670 - "GET /announcements/?school_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48652 - "GET /users/4/deletion_status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48658 - "GET /users/3/deletion_status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48650 - "GET /classrooms/list/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48652 - "GET /announcements/?school_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48658 - "GET /users?limit=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48652 - "GET /users/4/deletion_status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48658 - "GET /users/3/deletion_status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48650 - "GET /classrooms/list/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48652 - "GET /announcements/?school_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48658 - "GET /users?limit=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48658 - "GET /users/3/deletion_status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48652 - "GET /users/4/deletion_status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48652 - "GET /users/3/deletion_status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48658 - "GET /users/4/deletion_status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48658 - "OPTIONS /classrooms/list/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48652 - "GET /classrooms/list/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44460 - "OPTIONS /classrooms/12 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44470 - "PUT /classrooms/12 HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:44470 - "PUT /classrooms/12 HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:47440 - "PUT /classrooms/12 HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:46836 - "PUT /classrooms/12 HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:46836 - "PUT /classrooms/12 HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:46836 - "PUT /classrooms/12 HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:46836 - "PUT /classrooms/12 HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:46836 - "PUT /classrooms/12 HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:46836 - "PUT /classrooms/12 HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:46836 - "PUT /classrooms/12 HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:46836 - "PUT /classrooms/12 HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:46836 - "PUT /classrooms/12 HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:46836 - "PUT /classrooms/12 HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:46836 - "PUT /classrooms/12 HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:46844 - "GET /classrooms/list/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46844 - "OPTIONS /homeroom?school_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35364 - "GET /homeroom?school_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35368 - "OPTIONS /homeroom HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35378 - "POST /homeroom HTTP/1.1" 201 Created
+INFO:     127.0.0.1:35378 - "GET /homeroom?school_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35378 - "GET /classrooms/list/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35378 - "PUT /classrooms/12 HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:41238 - "PUT /classrooms/12 HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:41238 - "PUT /classrooms/12 HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:43174 - "PUT /classrooms/12 HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:43174 - "PUT /classrooms/12 HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:43174 - "PUT /classrooms/12 HTTP/1.1" 500 Internal Server Error
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [5076]

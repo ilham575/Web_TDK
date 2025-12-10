@@ -1,8 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import '../../../css/pages/admin/admin-home.css';
+import '../../../css/pages/admin/admin-teacher-detail.css';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+
+import Loading from '../../Loading';
+import ConfirmModal from '../../ConfirmModal';
+import { API_BASE_URL } from '../../../endpoints';
+import { logout } from '../../../../utils/authUtils';
 
 function TeacherDetail() {
   const { id } = useParams();
@@ -12,12 +17,48 @@ function TeacherDetail() {
   const [loading, setLoading] = useState(true);
   const [newSubjectName, setNewSubjectName] = useState('');
   const [creating, setCreating] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [confirmTitle, setConfirmTitle] = useState('');
+  const [confirmMessage, setConfirmMessage] = useState('');
+  const [onConfirmAction, setOnConfirmAction] = useState(() => {});
+  const [currentUser, setCurrentUser] = useState(null);
+
+  const openConfirmModal = (title, message, onConfirm) => {
+    setConfirmTitle(title);
+    setConfirmMessage(message);
+    setOnConfirmAction(() => onConfirm);
+    setShowConfirmModal(true);
+  };
 
   useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) { navigate('/signin'); return; }
+    fetch(`${API_BASE_URL}/users/me`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(res => res.json())
+      .then(data => {
+        if (data.role !== 'admin') {
+          logout();
+          toast.error('Invalid token or role. Please sign in again.');
+          setTimeout(() => navigate('/signin'), 1500);
+        } else {
+          // persist school name when available so other parts of the app can read it
+          const schoolName = data?.school_name || data?.school?.name || data?.school?.school_name || '';
+          if (schoolName) localStorage.setItem('school_name', schoolName);
+          // persist school id (try multiple possible field names) so school-scoped endpoints work
+          const sid = data?.school_id || data?.school?.id || data?.school?.school_id || data?.schoolId || null;
+          if (sid) localStorage.setItem('school_id', String(sid));
+          setCurrentUser(data);
+        }
+      })
+      .catch(() => { logout(); toast.error('Invalid token or role. Please sign in again.'); setTimeout(() => navigate('/signin'), 1500); });
+  }, [navigate]);
+
+  useEffect(() => {
+    if (!currentUser) return;
     const fetchTeacher = async () => {
       try {
         // fetch all users and find teacher by id (no single-user endpoint available)
-        const res = await fetch(`http://127.0.0.1:8000/users?limit=500`);
+        const res = await fetch(`${API_BASE_URL}/users?limit=500`);
         const users = await res.json();
         if (Array.isArray(users)) {
           const t = users.find(u => String(u.id) === String(id));
@@ -30,7 +71,7 @@ function TeacherDetail() {
 
     const fetchSubjects = async () => {
       try {
-        const res = await fetch(`http://127.0.0.1:8000/subjects/teacher/${id}`);
+        const res = await fetch(`${API_BASE_URL}/subjects/teacher/${id}`);
         const data = await res.json();
         if (Array.isArray(data)) setSubjects(data);
         else setSubjects([]);
@@ -40,7 +81,42 @@ function TeacherDetail() {
     };
 
     Promise.all([fetchTeacher(), fetchSubjects()]).finally(() => setLoading(false));
-  }, [id]);
+  }, [currentUser, id]);
+
+  // Determine school name from multiple possible sources (API shape may vary)
+  const displaySchool = currentUser?.school_name || currentUser?.school?.name || localStorage.getItem('school_name') || '-';
+
+  // If backend only returns school_id (not name), try to load school name from /schools/
+  useEffect(() => {
+    const tryResolveSchoolName = async () => {
+      if (!currentUser) return;
+      // already have a name
+      if (currentUser?.school_name || currentUser?.school?.name) return;
+      const sid = currentUser?.school_id || localStorage.getItem('school_id');
+      if (!sid) return;
+      try {
+        const res = await fetch(`${API_BASE_URL}/schools/`);
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          const found = data.find(s => String(s.id) === String(sid));
+          if (found) {
+            // persist and update currentUser so UI updates
+            localStorage.setItem('school_name', found.name);
+            setCurrentUser(prev => prev ? ({...prev, school_name: found.name}) : prev);
+          }
+        }
+      } catch (err) {
+        // ignore quietly
+      }
+    };
+    tryResolveSchoolName();
+  }, [currentUser]);
+
+  // Update document title with school name
+  useEffect(() => {
+    const baseTitle = 'ระบบโรงเรียน';
+    document.title = (displaySchool && displaySchool !== '-') ? `${baseTitle} - ${displaySchool}` : baseTitle;
+  }, [displaySchool]);
 
   const handleAdd = async (e) => {
     e.preventDefault();
@@ -51,7 +127,7 @@ function TeacherDetail() {
     setCreating(true);
     try {
       const body = { name: newSubjectName, teacher_id: Number(id), school_id: Number(schoolId) };
-      const res = await fetch('http://127.0.0.1:8000/subjects/', {
+      const res = await fetch(`${API_BASE_URL}/subjects/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify(body)
@@ -73,10 +149,9 @@ function TeacherDetail() {
   };
 
   const handleDelete = async (subjectId) => {
-    if (!window.confirm('ต้องการลบรายวิชานี้ใช่หรือไม่?')) return;
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`http://127.0.0.1:8000/subjects/${subjectId}`, { method: 'DELETE', headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+      const res = await fetch(`${API_BASE_URL}/subjects/${subjectId}`, { method: 'DELETE', headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
       if (res.status === 204 || res.ok) {
         toast.success('ลบรายวิชาเรียบร้อย');
         setSubjects(prev => (prev||[]).filter(s => s.id !== subjectId));
@@ -90,35 +165,120 @@ function TeacherDetail() {
     }
   };
 
-  if (loading) return <div className="admin-container"><p>Loading...</p></div>;
+  if (loading) return <Loading message="กำลังโหลดข้อมูลครู..." />;
 
   if (!teacher) return (
     <div className="admin-container">
-      <h3>ไม่พบข้อมูลครู</h3>
-      <button className="create-user-btn" onClick={() => navigate('/admin')}>Back</button>
+      <div className="subjects-empty">
+        <div className="subjects-empty-icon">❌</div>
+        <div className="subjects-empty-text">ไม่พบข้อมูลครู</div>
+        <div className="subjects-empty-subtitle">กรุณาตรวจสอบ ID หรือติดต่อผู้ดูแลระบบ</div>
+        <button 
+          className="user-submit" 
+          onClick={() => navigate('/admin')}
+          style={{ marginTop: '1rem' }}
+        >
+          🔙 กลับหน้าหลัก
+        </button>
+      </div>
     </div>
   );
 
   return (
     <div className="admin-container">
       <ToastContainer />
-      <h2 className="admin-title">Teacher: {teacher.full_name || teacher.username}</h2>
-      <div style={{marginTop:'1rem', textAlign:'left'}}>
-        <h4>Subjects</h4>
-        <div style={{display:'flex', gap:'0.5rem', flexWrap:'wrap', marginBottom:'0.75rem'}}>
-          {(subjects || []).map(s => (
-            <div key={s.id} className="subject-chip">
-              <span>{s.name}</span>
-              <button className="small-btn" style={{marginLeft:'0.4rem'}} onClick={() => handleDelete(s.id)}>x</button>
+      <h2 className="admin-title">
+        👨‍🏫 {teacher.full_name || teacher.username}
+      </h2>
+      
+      <div className="teacher-detail-section">
+        <div className="subjects-container">
+          <h4 className="subjects-title">รายวิชาทั้งหมด</h4>
+          
+          {(subjects || []).length === 0 ? (
+            <div className="subjects-empty">
+              <div className="subjects-empty-icon">📚</div>
+              <div className="subjects-empty-text">ยังไม่มีรายวิชา</div>
+              <div className="subjects-empty-subtitle">เริ่มต้นโดยการเพิ่มรายวิชาใหม่ด้านล่าง</div>
             </div>
-          ))}
+          ) : (
+            <div className="subjects-list">
+              {(subjects || []).map(s => (
+                <div key={s.id} className="subject-chip">
+                  <div className="subject-info">
+                    <span>{s.name}</span>
+                    <span className={`subject-status ${s.is_ended ? 'ended' : 'active'}`}>
+                      {s.is_ended ? '✅ จบแล้ว' : '🔄 กำลังดำเนินการ'}
+                    </span>
+                  </div>
+                  <div className="subject-actions">
+                    <button 
+                      className="small-btn" 
+                      onClick={() => navigate(`/admin/subject/${s.id}/details`)}
+                      title="ดูรายละเอียด"
+                    >
+                      📊 รายละเอียด
+                    </button>
+                    {s.is_ended && (
+                      <button 
+                        className="small-btn" 
+                        onClick={() => openConfirmModal(
+                          'ลบรายวิชา', 
+                          `ต้องการลบรายวิชา "${s.name}" ใช่หรือไม่?`, 
+                          async () => { await handleDelete(s.id); }
+                        )}
+                        title="ลบรายวิชา"
+                      >
+                        🗑️ ลบ
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
-        <form onSubmit={handleAdd} style={{display:'flex', gap:'0.5rem'}}>
-          <input className="user-input" placeholder="ชื่อรายวิชาใหม่" value={newSubjectName} onChange={e => setNewSubjectName(e.target.value)} />
-          <button className="user-submit" type="submit" disabled={creating}>{creating ? 'Adding...' : 'Add'}</button>
-          <button type="button" className="btn-cancel" onClick={() => navigate('/admin')}>Back</button>
+        
+        <form className="add-subject-form" onSubmit={handleAdd}>
+          <input 
+            className="user-input" 
+            placeholder="กรอกชื่อรายวิชาใหม่..." 
+            value={newSubjectName} 
+            onChange={e => setNewSubjectName(e.target.value)}
+            autoComplete="off"
+          />
+          <button 
+            className="user-submit" 
+            type="submit" 
+            disabled={creating || !newSubjectName.trim()}
+          >
+            {creating ? '⏳ กำลังเพิ่ม...' : '➕ เพิ่มรายวิชา'}
+          </button>
+          <button 
+            type="button" 
+            className="btn-cancel" 
+            onClick={() => navigate(-1)}
+          >
+            🔙 กลับ
+          </button>
         </form>
       </div>
+      
+      <ConfirmModal
+        isOpen={showConfirmModal}
+        title={confirmTitle}
+        message={confirmMessage}
+        onCancel={() => setShowConfirmModal(false)}
+        onConfirm={async () => { 
+          setShowConfirmModal(false); 
+          try { 
+            await onConfirmAction(); 
+          } catch (e) { 
+            console.error(e);
+            toast.error('เกิดข้อผิดพลาดขณะดำเนินการ');
+          } 
+        }}
+      />
     </div>
   );
 }

@@ -1,0 +1,57 @@
+steps:
+  # Build the Docker image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      # เปลี่ยน $COMMIT_SHA เป็น latest
+      - 'gcr.io/$PROJECT_ID/web-tdk-server:latest'
+      - '.'
+
+  # Push the Docker image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      # ต้องเปลี่ยนให้ตรงกับด้านบน
+      - 'gcr.io/$PROJECT_ID/web-tdk-server:latest'
+
+  # Deploy to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'web-tdk-server'
+      - '--image'
+      # ต้องเปลี่ยนให้ตรงกับด้านบน
+      - 'gcr.io/$PROJECT_ID/web-tdk-server:latest'
+      - '--region'
+      - '${_REGION}'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+      - '--port'
+      - '8080'
+      - '--memory'
+      - '${_MEMORY}'
+      - '--cpu'
+      - '${_CPU}'
+      - '--max-instances'
+      - '${_MAX_INSTANCES}'
+      - '--add-cloudsql-instances'
+      - '${_CLOUDSQL_INSTANCE}'
+      - '--set-env-vars'
+      - 'DATABASE_URL=mysql+pymysql://admin_tdk:${_DB_PASSWORD}@/tadika_db?unix_socket=/cloudsql/${_CLOUDSQL_INSTANCE},JWT_SECRET_KEY=${_JWT_SECRET_KEY},CORS_ORIGINS=${_CORS_ORIGINS}'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+substitutions:
+  _REGION: 'asia-southeast1'
+  _MEMORY: '1Gi'
+  _CPU: '1'
+  _MAX_INSTANCES: '10'
+  _CLOUDSQL_INSTANCE: 'tdk-proj:asia-southeast1:web-tdk-db'
+  _DB_PASSWORD: 'Ihsan53295Ilham'
+  _JWT_SECRET_KEY: 'dYY4eEoeLVpHVGnZrzP6boTfBIRCerJ7e59qzh1GYN0='
+  _CORS_ORIGINS: '*'

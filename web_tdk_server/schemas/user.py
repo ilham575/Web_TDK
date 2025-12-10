@@ -9,6 +9,7 @@ class UserBase(BaseModel):
     full_name: str
     role: str = "student"
     school_id: Optional[int] = None
+    grade_level: Optional[str] = None  # For students: e.g., "ชั้นประถมศึกษาปีที่ 1", "ป.1"
 
 # Schema for creating user
 class UserCreate(UserBase):
@@ -21,11 +22,17 @@ class UserUpdate(BaseModel):
     role: Optional[str] = None
     is_active: Optional[bool] = None
     school_id: Optional[int] = None
+    grade_level: Optional[str] = None
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
 
 # Schema for response
 class User(UserBase):
     id: int
     is_active: bool
+    must_change_password: bool
     created_at: datetime
     updated_at: datetime
     
@@ -41,3 +48,34 @@ class Token(BaseModel):
     access_token: str
     token_type: str
     user_info: User
+
+# Admin request schema
+class AdminRequestCreate(BaseModel):
+    username: str
+    email: EmailStr
+    full_name: str
+    password: str
+    school_name: str
+
+# Password reset request schemas
+class PasswordResetRequestCreate(BaseModel):
+    username: str
+
+class PasswordResetRequestResponse(BaseModel):
+    id: int
+    user_id: int
+    username: str
+    full_name: Optional[str]
+    email: Optional[str]
+    role: str
+    school_id: Optional[int]
+    status: str
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+class PasswordResetByAdminRequest(BaseModel):
+    user_id: int
+    new_password: str

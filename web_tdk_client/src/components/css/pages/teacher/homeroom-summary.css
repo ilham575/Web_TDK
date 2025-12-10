@@ -1,0 +1,703 @@
+/* Homeroom Summary Styles */
+
+.homeroom-summary-container {
+  padding: 1rem;
+}
+
+.homeroom-classroom-selector {
+  margin-bottom: 1.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.homeroom-classroom-btn {
+  padding: 0.75rem 1.25rem;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 150px;
+}
+
+.homeroom-classroom-btn:hover {
+  border-color: #3b82f6;
+  background: rgba(59, 130, 246, 0.05);
+}
+
+.homeroom-classroom-btn.active {
+  border-color: #3b82f6;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(59, 130, 246, 0.05));
+}
+
+.homeroom-classroom-name {
+  font-weight: 700;
+  font-size: 1rem;
+  color: #1e293b;
+}
+
+.homeroom-classroom-count {
+  font-size: 0.8rem;
+  color: #64748b;
+  margin-top: 0.25rem;
+}
+
+/* Summary Stats */
+.homeroom-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.homeroom-stat-card {
+  background: white;
+  border-radius: 12px;
+  padding: 1.25rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e2e8f0;
+}
+
+.homeroom-stat-card.grades {
+  border-left: 4px solid #10b981;
+}
+
+.homeroom-stat-card.attendance {
+  border-left: 4px solid #3b82f6;
+}
+
+.homeroom-stat-card.students {
+  border-left: 4px solid #f59e0b;
+}
+
+.homeroom-stat-label {
+  font-size: 0.85rem;
+  color: #64748b;
+  margin-bottom: 0.5rem;
+}
+
+.homeroom-stat-value {
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: #1e293b;
+}
+
+.homeroom-stat-subtitle {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  margin-top: 0.25rem;
+}
+
+/* Student Table */
+.homeroom-students-table-container {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+}
+
+.homeroom-students-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.homeroom-students-table th,
+.homeroom-students-table td {
+  padding: 0.875rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.homeroom-students-table th {
+  background: #f8fafc;
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.homeroom-students-table tbody tr:hover {
+  background: rgba(59, 130, 246, 0.04);
+}
+
+.homeroom-students-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.student-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.student-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.student-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.student-fullname {
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.student-username {
+  font-size: 0.8rem;
+  color: #94a3b8;
+}
+
+/* Grade Display */
+.grade-display {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.grade-score {
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.grade-percentage {
+  font-size: 0.8rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+.grade-percentage.excellent {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.grade-percentage.good {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.grade-percentage.average {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.grade-percentage.poor {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+/* Attendance Display */
+.attendance-display {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.attendance-rate {
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.attendance-details {
+  display: flex;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+}
+
+.attendance-badge {
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+}
+
+.attendance-badge.present {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.attendance-badge.absent {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.attendance-badge.late {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.attendance-badge.sick {
+  background: #e0e7ff;
+  color: #4338ca;
+}
+
+/* View Detail Button */
+.btn-view-detail {
+  padding: 0.5rem 0.75rem;
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: all 0.2s ease;
+}
+
+.btn-view-detail:hover {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  transform: translateY(-1px);
+}
+
+/* Student Detail Modal */
+.student-detail-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.student-detail-modal {
+  background: white;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 800px;
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.student-detail-header {
+  padding: 1.5rem;
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: white;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.student-detail-title {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.student-detail-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 1.25rem;
+}
+
+.student-detail-name h3 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.student-detail-name p {
+  margin: 0.25rem 0 0 0;
+  opacity: 0.9;
+  font-size: 0.9rem;
+}
+
+.student-detail-close {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  font-size: 1.5rem;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.student-detail-close:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.student-detail-content {
+  padding: 1.5rem;
+  overflow-y: auto;
+}
+
+.student-detail-section {
+  margin-bottom: 1.5rem;
+}
+
+.student-detail-section h4 {
+  font-size: 1rem;
+  color: #1e293b;
+  margin-bottom: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.subject-grades-list,
+.subject-attendance-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.subject-grade-item,
+.subject-attendance-item {
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 1rem;
+  border: 1px solid #e2e8f0;
+}
+
+.subject-grade-header,
+.subject-attendance-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.subject-name {
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.subject-total {
+  font-size: 0.9rem;
+  color: #64748b;
+}
+
+.assignments-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.assignment-badge {
+  padding: 0.35rem 0.65rem;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 0.8rem;
+}
+
+.assignment-title {
+  color: #64748b;
+  margin-right: 0.25rem;
+}
+
+.assignment-score {
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.attendance-stats {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.attendance-stat {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+}
+
+.attendance-stat-icon {
+  font-size: 1rem;
+}
+
+/* Loading State */
+.homeroom-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+  color: #64748b;
+}
+
+.homeroom-loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #e2e8f0;
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 1rem;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Empty State */
+.homeroom-empty {
+  text-align: center;
+  padding: 3rem;
+  color: #64748b;
+}
+
+.homeroom-empty-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.homeroom-empty-text {
+  font-size: 1.1rem;
+  margin-bottom: 0.5rem;
+}
+
+.homeroom-empty-subtitle {
+  font-size: 0.9rem;
+  color: #94a3b8;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .homeroom-stats-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .homeroom-students-table {
+    font-size: 0.85rem;
+  }
+  
+  .homeroom-students-table th,
+  .homeroom-students-table td {
+    padding: 0.65rem 0.5rem;
+  }
+  
+  .student-avatar {
+    width: 32px;
+    height: 32px;
+    font-size: 0.75rem;
+  }
+  
+  .attendance-details {
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+}
+
+/* Homeroom Transcript Table Format */
+.homeroom-transcript-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+.homeroom-transcript-table thead {
+  background: #f8fafc;
+}
+
+.homeroom-transcript-table th {
+  padding: 12px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.homeroom-transcript-table tbody tr {
+  border-bottom: 1px solid #e2e8f0;
+  transition: background 0.2s ease;
+}
+
+.homeroom-transcript-table tbody tr:hover {
+  background: rgba(59, 130, 246, 0.04);
+}
+
+.homeroom-transcript-table tbody tr.first-row:hover {
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.homeroom-transcript-table tbody tr.empty-grades:hover {
+  background: rgba(255, 193, 7, 0.04);
+}
+
+.homeroom-transcript-table td {
+  padding: 12px;
+  color: #333;
+}
+
+/* Column Styles */
+.homeroom-transcript-table .col-subject {
+  width: 30%;
+  min-width: 180px;
+}
+
+.homeroom-transcript-table .col-type {
+  width: 25%;
+  min-width: 150px;
+}
+
+.homeroom-transcript-table .col-score {
+  width: 10%;
+  min-width: 80px;
+  text-align: center;
+}
+
+.homeroom-transcript-table .col-grade {
+  width: 10%;
+  min-width: 70px;
+  text-align: center;
+}
+
+.homeroom-transcript-table .col-credits {
+  width: 8%;
+  min-width: 60px;
+  text-align: center;
+}
+
+.homeroom-transcript-table .col-gpa {
+  width: 8%;
+  min-width: 60px;
+  text-align: center;
+}
+
+.homeroom-transcript-table .col-action {
+  width: 12%;
+  min-width: 100px;
+  text-align: center;
+}
+
+/* Empty Data Cell */
+.empty-data {
+  text-align: center;
+  color: #94a3b8;
+  font-style: italic;
+  padding: 1rem !important;
+}
+
+/* Subject Cell Content */
+.subject-cell-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.subject-cell-text {
+  font-weight: 600;
+  color: #1e293b;
+}
+
+/* Score Cell */
+.score-cell {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 3px;
+}
+
+.score-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #667eea;
+}
+
+.score-unit {
+  font-size: 0.8rem;
+  color: #999;
+}
+
+/* Grade Badge */
+.grade-badge-table {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  color: white;
+  font-weight: 700;
+  font-size: 0.95rem;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+/* Credits Value */
+.credit-value {
+  font-weight: 700;
+  color: #1e293b;
+}
+
+/* GPA Value */
+.gpa-value-table {
+  font-weight: 700;
+  font-size: 1rem;
+  color: #667eea;
+}
+
+/* Attendance Display - Compact */
+.attendance-display-compact {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.attendance-rate-compact {
+  font-weight: 700;
+  color: #1e293b;
+  font-size: 0.95rem;
+}
+
+.attendance-badges-compact {
+  display: flex;
+  gap: 0.35rem;
+  flex-direction: column;
+  align-items: center;
+}
+
+.attendance-badge-compact {
+  display: inline-block;
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.attendance-badge-compact.present {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.attendance-badge-compact.absent {
+  background: #fee2e2;
+  color: #991b1b;
+}

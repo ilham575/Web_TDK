@@ -2,10 +2,13 @@ from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import inspect
+from dotenv import load_dotenv
 import os
 
+load_dotenv()  # Load environment variables from .env file
+
 # Database configuration
-DATABASE_URL = os.getenv("DATABASE_URL", "mysql+pymysql://ilham:Ihsan53295@localhost:3306/web_tdk_db")
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 # Create SQLAlchemy engine
 engine = create_engine(
@@ -35,5 +38,5 @@ def table_exists(table_name):
 
 def create_all_tables():
     # Import models to register them with Base
-    from models import user, school, announcement, document, subject
+    from models import user, school, announcement, document, subject, subject_student, attendance, grade, schedule, admin_request
     Base.metadata.create_all(bind=engine)

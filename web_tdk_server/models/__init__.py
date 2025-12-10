@@ -3,6 +3,15 @@ from .announcement import Announcement
 from .document import Document
 from .school import School
 from .subject import Subject
+from .subject_student import SubjectStudent
+from .classroom_subject import ClassroomSubject
+from .schedule import ScheduleSlot, SubjectSchedule
+from .admin_request import AdminRequest
+from .absence import Absence
+from .homeroom import HomeroomTeacher
+from .grade import Grade
+from .classroom import Classroom, ClassroomStudent
+from .password_reset_request import PasswordResetRequest
 
 # Add relationships to User model
 from sqlalchemy.orm import relationship
@@ -11,5 +20,6 @@ from sqlalchemy.orm import relationship
 User.announcements = relationship("Announcement", back_populates="author")
 User.documents = relationship("Document", back_populates="uploader")
 User.subjects = relationship("Subject", back_populates=None)
+User.enrolled = relationship("SubjectStudent", back_populates=None)
 
-__all__ = ["User", "Announcement", "Document", "School", "Subject"]
+__all__ = ["User", "Announcement", "Document", "School", "Subject", "SubjectStudent", "ClassroomSubject", "ScheduleSlot", "SubjectSchedule", "Absence", "HomeroomTeacher", "Classroom", "ClassroomStudent", "Grade", "PasswordResetRequest"]

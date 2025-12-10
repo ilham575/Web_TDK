@@ -1,0 +1,48 @@
+services:
+  db:
+    image: mysql:8.0
+    container_name: web_tdk_db
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-tadika_db}
+      MYSQL_USER: ${MYSQL_USER:-tadika_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-tadika_password}
+    # Do not bind the DB port to the host to avoid conflicts with a local DB service
+    # If you need host access to MySQL, change mapping to '3307:3306' or disable your local MySQL service
+    # ports:
+    #   - "3307:3306"
+    expose:
+      - "3306"
+    volumes:
+      - db_data:/var/lib/mysql
+    networks:
+      - web_tdk_network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.local
+    container_name: web_tdk_server
+    env_file:
+      - .env.local
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+    volumes:
+      - ./:/app:cached
+    networks:
+      - web_tdk_network
+    restart: unless-stopped
+
+volumes:
+  db_data:
+
+networks:
+  web_tdk_network:
+    driver: bridge

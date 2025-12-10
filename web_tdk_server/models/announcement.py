@@ -12,6 +12,7 @@ class Announcement(Base):
     author_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     school_id = Column(Integer, ForeignKey("schools.id"), nullable=False)  # เพิ่มบรรทัดนี้
     is_published = Column(Boolean, default=True, nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
