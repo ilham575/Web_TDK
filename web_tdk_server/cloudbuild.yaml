@@ -15,6 +15,19 @@ steps:
       # ต้องเปลี่ยนให้ตรงกับด้านบน
       - 'gcr.io/$PROJECT_ID/web-tdk-server:latest'
 
+  # Run database migrations before deployment
+  - name: 'python:3.11-slim'
+    dir: '.'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        pip install --no-cache-dir -q -r requirements.txt
+        export DATABASE_URL="mysql+pymysql://admin_tdk:${_DB_PASSWORD}@/tadika_db?unix_socket=/cloudsql/${_CLOUDSQL_INSTANCE}"
+        python3 run_migration.py
+    env:
+      - 'CLOUDSQL_INSTANCE=${_CLOUDSQL_INSTANCE}'
+
   # Deploy to Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
