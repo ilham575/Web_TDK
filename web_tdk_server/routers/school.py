@@ -85,9 +85,13 @@ def update_school(school_id: int, school_update: SchoolUpdate, db: Session = Dep
     if school_update.name:
         school.name = school_update.name
     
+    # Update grade_announcement_date if provided
+    update_data = school_update.dict(exclude_unset=True)
+    if 'grade_announcement_date' in update_data:
+        school.grade_announcement_date = school_update.grade_announcement_date
+    
     # Update logo_url if provided (can be None to delete logo)
     # Check using dict to see if field was explicitly set in request
-    update_data = school_update.dict(exclude_unset=True)
     if 'logo_url' in update_data:
         old_logo = school.logo_url
         # update to new url (can be None to delete)

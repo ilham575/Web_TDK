@@ -163,7 +163,8 @@ function StudentSubjectDetails() {
 
   let letterGrade = 'N/A';
   if (totalMax > 0) {
-    if (gradePercentage >= 80) letterGrade = 'A';
+    if (gradePercentage >= 95) letterGrade = 'A+';
+    else if (gradePercentage >= 80) letterGrade = 'A';
     else if (gradePercentage >= 75) letterGrade = 'B+';
     else if (gradePercentage >= 70) letterGrade = 'B';
     else if (gradePercentage >= 65) letterGrade = 'C+';

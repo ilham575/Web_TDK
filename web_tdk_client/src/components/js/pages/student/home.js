@@ -331,7 +331,7 @@ function StudentPage() {
             ) : (
               <table className="student-subject-table">
                 <thead>
-                  <tr><th>ชื่อวิชา</th><th>รหัส</th><th>สถานะ</th><th></th></tr>
+                  <tr><th>ชื่อวิชา</th><th>รหัส</th><th>สถานะ</th></tr>
                 </thead>
                 <tbody>
                   {studentSubjects.map(sub => (
@@ -342,11 +342,6 @@ function StudentPage() {
                         <span className={`status-badge ${sub.is_ended ? 'ended' : 'active'}`}>
                           {sub.is_ended ? '✅ จบแล้ว' : '📚 กำลังเรียน'}
                         </span>
-                      </td>
-                      <td>
-                        <button className="student-btn-view-details" onClick={() => navigate(`/student/subject/${sub.id}/details`)}>
-                          ดูรายละเอียด
-                        </button>
                       </td>
                     </tr>
                   ))}

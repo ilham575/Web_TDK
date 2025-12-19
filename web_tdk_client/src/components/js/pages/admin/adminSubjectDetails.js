@@ -199,7 +199,8 @@ function AdminSubjectDetails() {
     // Letter grade
     let letterGrade = 'N/A';
     if (totalMax > 0) {
-      if (gradePercentage >= 80) letterGrade = 'A';
+      if (gradePercentage >= 95) letterGrade = 'A+';
+      else if (gradePercentage >= 80) letterGrade = 'A';
       else if (gradePercentage >= 75) letterGrade = 'B+';
       else if (gradePercentage >= 70) letterGrade = 'B';
       else if (gradePercentage >= 65) letterGrade = 'C+';
@@ -287,7 +288,7 @@ function AdminSubjectDetails() {
                     </td>
                     <td className="grade-cell">
                       <div className="grade-stats">
-                        <div className={`letter-grade grade-${student.grade.letter.toLowerCase()}`}>
+                        <div className={`letter-grade grade-${student.grade.letter.toLowerCase().replace('+', 'plus')}`}>
                           {student.grade.letter}
                         </div>
                         <div className="percentage">{student.grade.percentage}%</div>
