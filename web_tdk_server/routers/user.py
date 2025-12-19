@@ -537,15 +537,16 @@ def change_password(
     db: Session = Depends(get_db)
 ):
     """เปลี่ยนรหัสผ่าน"""
-    # Verify current password
-    if not verify_password(password_data.current_password, current_user.hashed_password):
-        raise HTTPException(status_code=400, detail="รหัสผ่านปัจจุบันไม่ถูกต้อง")
-    
-    # Update to new password
+    # If the account is not in forced-change state, require current password verification
+    if not getattr(current_user, 'must_change_password', False):
+        if not password_data.current_password or not verify_password(password_data.current_password, current_user.hashed_password):
+            raise HTTPException(status_code=400, detail="รหัสผ่านปัจจุบันไม่ถูกต้อง")
+
+    # Update to new password (allowed when forced change or after successful verification)
     current_user.hashed_password = hash_password(password_data.new_password)
     current_user.must_change_password = False  # Clear the flag
     db.commit()
-    
+
     return {"message": "เปลี่ยนรหัสผ่านเรียบร้อยแล้ว"}
 
 

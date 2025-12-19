@@ -397,6 +397,26 @@
   background: rgba(249,250,251,0.9);
   border-bottom: 1px solid rgba(226,232,240,0.8);
 }
+
+/* Constrain subject credit column header and cells to avoid wide labels */
+.subjects-table th.subject-credit,
+.subjects-table td.subject-credit {
+  text-align: center;
+  width: 120px;
+  max-width: 140px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 720px) {
+  .subjects-table th.subject-credit,
+  .subjects-table td.subject-credit {
+    width: 90px;
+    max-width: 110px;
+    font-size: 0.85rem;
+  }
+}
 .admin-table tbody td {
   padding: 0.9rem 1rem;
   border-bottom: 1px solid rgba(226,232,240,0.7);

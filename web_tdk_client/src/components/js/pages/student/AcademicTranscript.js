@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { API_BASE_URL } from '../../../endpoints';
-import { toast } from 'react-toastify';
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 import '../../../css/pages/student/academic-transcript.css';
 import ActivityDetailModal from '../../ActivityDetailModal';
 
@@ -12,6 +13,9 @@ export default function AcademicTranscript({ studentId, studentSubjects }) {
   const [showActivityModal, setShowActivityModal] = useState(false);
   const [showGPAModal, setShowGPAModal] = useState(false);
   const [selectedActivityData, setSelectedActivityData] = useState(null);
+  const [gradesAnnounced, setGradesAnnounced] = useState(true);
+  const [gradeAnnouncementDate, setGradeAnnouncementDate] = useState(null);
+  const [countdown, setCountdown] = useState('');
   const [transcriptSummary, setTranscriptSummary] = useState({
     totalSubjects: 0,
     regularSubjectsCount: 0,
@@ -151,6 +155,65 @@ export default function AcademicTranscript({ studentId, studentSubjects }) {
     loadGrades();
   }, [studentId]);
 
+  // Check grade announcement date
+  useEffect(() => {
+    const checkGradeAnnouncement = async () => {
+      if (!studentId) return;
+      try {
+        const token = localStorage.getItem('token');
+        // Get school_id from localStorage or try to fetch it
+        let schoolId = localStorage.getItem('school_id');
+        if (!schoolId) {
+          // Try to fetch from user data if needed
+          const userRes = await fetch(`${API_BASE_URL}/users/me`, {
+            headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
+          });
+          const userData = await userRes.json();
+          schoolId = userData.school_id;
+        }
+        if (!schoolId) return;
+        
+        const res = await fetch(`${API_BASE_URL}/schools/${schoolId}`);
+        if (!res.ok) return;
+        const school = await res.json();
+        if (school.grade_announcement_date) {
+          setGradeAnnouncementDate(new Date(school.grade_announcement_date));
+          const now = new Date();
+          setGradesAnnounced(now >= new Date(school.grade_announcement_date));
+        }
+      } catch (err) {
+        // ignore quietly
+      }
+    };
+    checkGradeAnnouncement();
+  }, [studentId]);
+
+  // Countdown timer until announcement
+  useEffect(() => {
+    if (!gradeAnnouncementDate) return;
+    let mounted = true;
+    const update = () => {
+      const now = new Date();
+      const diff = gradeAnnouncementDate - now;
+      if (diff <= 0) {
+        if (mounted) {
+          setGradesAnnounced(true);
+          setCountdown('');
+        }
+        return;
+      }
+      const days = Math.floor(diff / 86400000);
+      const hours = Math.floor((diff % 86400000) / 3600000);
+      const minutes = Math.floor((diff % 3600000) / 60000);
+      const seconds = Math.floor((diff % 60000) / 1000);
+      const text = `${days} วัน ${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`;
+      if (mounted) setCountdown(text);
+    };
+    update();
+    const t = setInterval(update, 1000);
+    return () => { mounted = false; clearInterval(t); };
+  }, [gradeAnnouncementDate]);
+
   // ระบบเกรด: A+, A, B+, B, C+, C, D+, D, F
   const getLetterGrade = (percentage) => {
     percentage = parseFloat(percentage);
@@ -238,6 +301,51 @@ export default function AcademicTranscript({ studentId, studentSubjects }) {
 
   if (loading) {
     return <div className="transcript-loading">⏳ กำลังโหลดข้อมูลการเรียน...</div>;
+  }
+
+  // If grades are not announced yet, hide full transcript and show announcement message
+  if (!gradesAnnounced) {
+    return (
+      <div className="academic-transcript-container">
+        <ToastContainer />
+        {/* ส่วนหัว */}
+        <div className="transcript-header">
+          <div className="transcript-header-content">
+            <h2>📊 ใบแสดงผลการเรียน</h2>
+            <p className="transcript-subtitle">ข้อมูลคะแนนและผลการเรียนของคุณ</p>
+          </div>
+        </div>
+
+        <div style={{ padding: '1.5rem' }}>
+          <div className="alert-box" style={{
+            padding: '1.5rem',
+            backgroundColor: '#fff3cd',
+            border: '1px solid #ffc107',
+            borderRadius: '8px',
+            marginBottom: '1.5rem',
+            color: '#856404'
+          }}>
+            <strong>🔔 ยังไม่ถึงเวลาประกาศผลคะแนน</strong><br/>
+            ผลคะแนนจะเปิดดูได้ในวันที่: <strong>{gradeAnnouncementDate ? gradeAnnouncementDate.toLocaleDateString('th-TH', {
+              day: 'numeric',
+              month: 'long',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit'
+            }) : '-'}</strong>
+            {countdown && (
+              <div style={{ marginTop: 8, fontSize: '1.15rem', fontWeight: 600 }}>
+                นับถอยหลัง: {countdown}
+              </div>
+            )}
+          </div>
+          <div className="empty-transcript">
+            <div className="empty-icon">📭</div>
+            <div className="empty-text">ข้อมูลใบแสดงผลจะปรากฏเมื่อครูประกาศผลคะแนนแล้ว</div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -333,13 +441,34 @@ export default function AcademicTranscript({ studentId, studentSubjects }) {
           </div>
         </div>
 
-        {grades.length === 0 ? (
+        {!gradesAnnounced && (
+          <div className="alert-box" style={{
+            padding: '1.5rem',
+            backgroundColor: '#fff3cd',
+            border: '1px solid #ffc107',
+            borderRadius: '8px',
+            marginBottom: '1.5rem',
+            color: '#856404'
+          }}>
+            <strong>🔔 ยังไม่ถึงเวลาประกาศผลคะแนน</strong><br/>
+            ผลคะแนนจะเปิดดูได้ในวันที่: <strong>{gradeAnnouncementDate?.toLocaleDateString('th-TH', {
+              day: 'numeric',
+              month: 'long',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit'
+            })}</strong>
+          </div>
+        )}
+
+        {gradesAnnounced && grades.length === 0 ? (
           <div className="empty-transcript">
             <div className="empty-icon">📭</div>
             <div className="empty-text">ยังไม่มีข้อมูลคะแนน</div>
             <div className="empty-subtitle">รอดูคะแนนจากครูผู้สอน</div>
           </div>
         ) : (
+          gradesAnnounced && (
           <table className="transcript-table">
             <thead>
               <tr>
@@ -443,6 +572,7 @@ export default function AcademicTranscript({ studentId, studentSubjects }) {
               })}
             </tbody>
           </table>
+          )
         )}
       </div>
 

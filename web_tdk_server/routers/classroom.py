@@ -20,7 +20,7 @@ from schemas.classroom import (
     PromoteClassroomResponse,
     BulkClassroomCreate
 )
-from utils.security import get_current_user
+from utils.security import get_current_user, get_optional_current_user
 
 router = APIRouter(prefix="/classrooms", tags=["classrooms"])
 
@@ -264,7 +264,7 @@ async def list_classrooms(
     academic_year: Optional[str] = None,
     grade_level: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: Optional[User] = Depends(get_optional_current_user)
 ):
     """ดึงรายการชั้นเรียนทั้งหมดของโรงเรียน (ใช้ path parameter)"""
     query = db.query(Classroom).filter(
@@ -449,7 +449,7 @@ async def add_students_to_classroom(
 async def get_students_in_classroom(
     classroom_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: Optional[User] = Depends(get_optional_current_user)
 ):
     """ดึงรายชื่อนักเรียนในชั้นเรียน (รวม active และ inactive)"""
     classroom = get_classroom_or_404(classroom_id, db)

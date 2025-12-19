@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends, status
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import json
+from datetime import datetime, timezone
 
 from schemas.homeroom import HomeroomTeacher, HomeroomTeacherCreate, HomeroomTeacherUpdate, HomeroomTeacherWithDetails
 from models.homeroom import HomeroomTeacher as HomeroomTeacherModel
@@ -11,6 +12,7 @@ from models.grade import Grade as GradeModel
 from models.attendance import Attendance as AttendanceModel
 from models.subject import Subject as SubjectModel
 from models.subject_student import SubjectStudent as SubjectStudentModel
+from models.school import School as SchoolModel
 from database.connection import get_db
 from routers.user import get_current_user
 
@@ -329,6 +331,20 @@ def get_homeroom_summary(
     if not homerooms:
         return {"classrooms": [], "message": "ไม่พบข้อมูลครูประจำชั้น"}
     
+    # Check if grades are announced (for non-admin teachers)
+    grades_announced = True
+    if current_user.role == 'teacher':
+        for hr in homerooms:
+            school = db.query(SchoolModel).filter(SchoolModel.id == hr.school_id).first()
+            if school and school.grade_announcement_date:
+                now = datetime.now(timezone.utc)
+                announcement_date = school.grade_announcement_date
+                if announcement_date.tzinfo is None:
+                    announcement_date = announcement_date.replace(tzinfo=timezone.utc)
+                if now < announcement_date:
+                    grades_announced = False
+                    break
+    
     result = []
     
     for hr in homerooms:
@@ -368,7 +384,8 @@ def get_homeroom_summary(
                             'total_score': 0,
                             'total_max_score': 0
                         }
-                    if grade.grade is not None and grade.max_score:
+                    # Only include grades if they are announced
+                    if grades_announced and grade.grade is not None and grade.max_score:
                         grades_by_subject[subject.id]['assignments'].append({
                             'title': grade.title,
                             'score': float(grade.grade),

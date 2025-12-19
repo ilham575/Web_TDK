@@ -76,3 +76,22 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         return user
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
+
+
+# Optional OAuth2 scheme for endpoints that allow anonymous access
+oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="/users/login", auto_error=False)
+
+def get_optional_current_user(token: str = Depends(oauth2_scheme_optional), db: Session = Depends(get_db)):
+    """Return current user if token present and valid, otherwise None."""
+    if not token:
+        return None
+    try:
+        payload = decode_access_token(token)
+        username = payload.get("sub")
+        if not username:
+            return None
+        from models.user import User as UserModel
+        user = db.query(UserModel).filter(UserModel.username == username).first()
+        return user
+    except Exception:
+        return None

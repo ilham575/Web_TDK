@@ -13,6 +13,7 @@ function ChangePasswordPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
+  const [isStudentFirstLogin, setIsStudentFirstLogin] = useState(false);
 
   useEffect(() => {
     // ตรวจสอบว่ามี token หรือไม่
@@ -34,6 +35,8 @@ function ChangePasswordPage() {
           navigate('/signin');
         } else {
           setCurrentUser(data);
+          // Check if this is a student's first login (must_change_password = true)
+          setIsStudentFirstLogin(data.role === 'student' && data.must_change_password === true);
           // ถ้าไม่จำเป็นต้องเปลี่ยนรหัสผ่าน ให้ redirect ไปหน้าหลัก
           if (!data.must_change_password) {
             redirectToHomePage(data.role);
@@ -70,8 +73,15 @@ function ChangePasswordPage() {
     setIsLoading(true);
 
     // ตรวจสอบข้อมูล
-    if (!currentPassword || !newPassword || !confirmPassword) {
-      toast.error('กรุณากรอกข้อมูลให้ครบทุกช่อง');
+    if (!newPassword || !confirmPassword) {
+      toast.error('กรุณากรอกรหัสผ่านใหม่และยืนยันรหัสผ่าน');
+      setIsLoading(false);
+      return;
+    }
+    
+    // For non-student first login, still require current password
+    if (!isStudentFirstLogin && !currentPassword) {
+      toast.error('กรุณากรอกรหัสผ่านปัจจุบัน');
       setIsLoading(false);
       return;
     }
@@ -90,22 +100,30 @@ function ChangePasswordPage() {
 
     try {
       const token = localStorage.getItem('token');
+      
+      // For student first login, we send empty current_password or the backend should allow skipping it
+      const bodyData = {
+        new_password: newPassword
+      };
+      
+      // Include current_password only if not student first login OR if user filled it
+      if (!isStudentFirstLogin || currentPassword) {
+        bodyData.current_password = currentPassword || '';
+      }
+      
       const response = await fetch(`${API_BASE_URL}/users/change_password`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({
-          current_password: currentPassword,
-          new_password: newPassword
-        })
+        body: JSON.stringify(bodyData)
       });
 
       const data = await response.json();
 
       if (response.ok) {
-        toast.success(data.message);
+        toast.success(data.message || 'เปลี่ยนรหัสผ่านสำเร็จ');
         setTimeout(() => {
           redirectToHomePage(currentUser?.role);
         }, 1500);
@@ -132,23 +150,34 @@ function ChangePasswordPage() {
         <div className="change-password-header">
           <h2>🔒 เปลี่ยนรหัสผ่าน</h2>
           <p className="change-password-subtitle">
-            เนื่องจากรหัสผ่านของคุณถูกรีเซ็ตโดยผู้ดูแลระบบ<br/>
-            กรุณาตั้งรหัสผ่านใหม่เพื่อความปลอดภัย
+            {isStudentFirstLogin ? (
+              <>
+                ยินดีต้อนรับ! 🎉<br/>
+                กรุณาตั้งรหัสผ่านใหม่ของคุณเพื่อความปลอดภัย
+              </>
+            ) : (
+              <>
+                เนื่องจากรหัสผ่านของคุณถูกรีเซ็ตโดยผู้ดูแลระบบ<br/>
+                กรุณาตั้งรหัสผ่านใหม่เพื่อความปลอดภัย
+              </>
+            )}
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="change-password-form">
-          <div className="change-password-form-group">
-            <label className="change-password-form-label">รหัสผ่านปัจจุบัน (รหัสชั่วคราว)</label>
-            <input
-              type="password"
-              className="change-password-form-input"
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              placeholder="รหัสผ่านชั่วคราวที่แอดมินให้ไว้"
-              required
-            />
-          </div>
+          {!isStudentFirstLogin && (
+            <div className="change-password-form-group">
+              <label className="change-password-form-label">รหัสผ่านปัจจุบัน (รหัสชั่วคราว)</label>
+              <input
+                type="password"
+                className="change-password-form-input"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                placeholder="รหัสผ่านชั่วคราวที่แอดมินให้ไว้"
+                required
+              />
+            </div>
+          )}
 
           <div className="change-password-form-group">
             <label className="change-password-form-label">รหัสผ่านใหม่</label>
@@ -174,6 +203,20 @@ function ChangePasswordPage() {
               required
             />
           </div>
+
+          {isStudentFirstLogin && (
+            <div style={{ 
+              marginBottom: '1rem', 
+              padding: '0.75rem', 
+              background: '#FEF3C7', 
+              border: '1px solid #FCD34D', 
+              borderRadius: '6px',
+              fontSize: '0.875rem',
+              color: '#92400E'
+            }}>
+              💡 <strong>หมายเหตุ:</strong> นี่เป็นการตั้งรหัสผ่านครั้งแรก คุณไม่จำเป็นต้องกรอกรหัสผ่านเดิม
+            </div>
+          )}
 
           <button 
             type="submit" 

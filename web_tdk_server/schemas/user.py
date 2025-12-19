@@ -25,7 +25,7 @@ class UserUpdate(BaseModel):
     grade_level: Optional[str] = None
 
 class ChangePasswordRequest(BaseModel):
-    current_password: str
+    current_password: Optional[str] = None
     new_password: str
 
 # Schema for response

@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List, Dict
 from sqlalchemy import distinct, func
+from datetime import datetime
 
 from database.connection import get_db
 from routers.user import get_current_user
@@ -10,6 +11,7 @@ from models.grade import Grade as GradeModel
 from models.user import User as UserModel
 from models.subject_student import SubjectStudent as SubjectStudentModel
 from models.classroom import ClassroomStudent as ClassroomStudentModel
+from models.school import School as SchoolModel
 from schemas.grade import GradesBulk, GradeResponse, AssignmentCreate, AssignmentUpdate, AssignmentResponse
 
 router = APIRouter(prefix="/grades", tags=["grades"])
@@ -148,6 +150,26 @@ def bulk_grades(payload: GradesBulk, db: Session = Depends(get_db), current_user
 @router.get('', response_model=List[GradeResponse])
 @router.get('/', response_model=List[GradeResponse])
 def get_grades(subject_id: int = None, classroom_id: int = None, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    # Check if grades are announced (only for students)
+    if getattr(current_user, 'role', None) == 'student' and subject_id is not None:
+        subject = db.query(SubjectModel).filter(SubjectModel.id == subject_id).first()
+        if subject and subject.classroom_id:
+            # Get classroom and school to check grade_announcement_date
+            from models.classroom import Classroom as ClassroomModel
+            classroom = db.query(ClassroomModel).filter(ClassroomModel.id == subject.classroom_id).first()
+            if classroom:
+                school = db.query(SchoolModel).filter(SchoolModel.id == classroom.school_id).first()
+                if school and school.grade_announcement_date:
+                    # Use UTC-aware datetime comparison (check if current time is before announcement date)
+                    from datetime import timezone
+                    now = datetime.now(timezone.utc)
+                    announcement_date = school.grade_announcement_date
+                    # Ensure announcement_date is timezone-aware for proper comparison
+                    if announcement_date.tzinfo is None:
+                        announcement_date = announcement_date.replace(tzinfo=timezone.utc)
+                    if now < announcement_date:
+                        raise HTTPException(status_code=403, detail='Grades have not been announced yet')
+    
     query = db.query(GradeModel)
     if subject_id is not None:
         query = query.filter(GradeModel.subject_id == subject_id)
@@ -470,17 +492,23 @@ def get_student_transcript(student_id: int, classroom_id: int = None, db: Sessio
             if not valid_grades:
                 continue
             
-            avg_score = sum([g.grade for g in valid_grades]) / len(valid_grades)
-            max_score = valid_grades[0].max_score
-            normalized = (avg_score / max_score) * 100 if max_score else 0
-            
+            # Compute totals across all assignments for this subject.
+            # Previously code used the average of grades and then (incorrectly)
+            # used the first assignment's max_score which could produce
+            # incorrect normalized percentages when assignments have
+            # different max scores. To match teacher view (sum(scores)/sum(maxes))
+            # we sum scores and sum max_scores and compute percentage from those.
+            total_score = sum([float(g.grade) for g in valid_grades])
+            total_max = sum([float(g.max_score) for g in valid_grades])
+            normalized = (total_score / total_max) * 100 if total_max else 0
+
             regular_subjects.append({
                 'subject_id': subject_id,
                 'subject_name': subject_name,
                 'subject_type': 'regular',
                 'credits': credits,
-                'score': round(avg_score, 2),
-                'max_score': round(max_score, 2),
+                'score': round(total_score, 2),
+                'max_score': round(total_max, 2),
                 'normalized_score': round(normalized, 2)
             })
     

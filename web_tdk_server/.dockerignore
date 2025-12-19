@@ -31,7 +31,8 @@ coverage.xml
 README.md
 .gitignore
 .dockerignore
-Dockerfile
+# Do not ignore Dockerfile (required for docker build)
+# Dockerfile
 docker-compose.yml
 run_server.bat
 run_server.ps1

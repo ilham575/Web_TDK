@@ -26,6 +26,7 @@ import CreateUserModal from './CreateUserModal';
 import PasswordResetModal from './PasswordResetModal';
 import AdminScheduleModal from './AdminScheduleModal';
 import HomeroomTeacherModal from './HomeroomTeacherModal';
+import AdminTabs from './AdminTabs';
 import { API_BASE_URL } from '../../../endpoints';
 import { setSchoolFavicon } from '../../../../utils/faviconUtils';
 import { logout } from '../../../../utils/authUtils';
@@ -101,6 +102,14 @@ function AdminPage() {
   const [deletionStatuses, setDeletionStatuses] = useState({});
 
   const [activeTab, setActiveTab] = useState('users');
+
+  // Responsive: detect mobile viewport to stack tabs above content
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Schedule management state
   const [scheduleSlots, setScheduleSlots] = useState([]);
@@ -191,6 +200,17 @@ function AdminPage() {
   const [subjectTypeFilter, setSubjectTypeFilter] = useState('all');
   const [subjectCurrentPage, setSubjectCurrentPage] = useState(1);
 
+  // Grade announcement date state (split date and time)
+  const [gradeAnnouncementDate, setGradeAnnouncementDate] = useState(''); // YYYY-MM-DD
+  const [gradeAnnouncementTime, setGradeAnnouncementTime] = useState(''); // HH:MM (24-hour)
+  const [gradeAnnouncementHour, setGradeAnnouncementHour] = useState('');
+  const [gradeAnnouncementMinute, setGradeAnnouncementMinute] = useState('');
+  // add explicit day/month/year parts to enforce dd/mm/yyyy input
+  const [gradeAnnouncementDay, setGradeAnnouncementDay] = useState('');
+  const [gradeAnnouncementMonth, setGradeAnnouncementMonth] = useState('');
+  const [gradeAnnouncementYear, setGradeAnnouncementYear] = useState('');
+  const [savingGradeAnnouncement, setSavingGradeAnnouncement] = useState(false);
+
   useEffect(() => {
     const onDocClick = (e) => {
       if (!headerMenuRef.current) return;
@@ -269,8 +289,8 @@ function AdminPage() {
   // Re-fetch when classrooms change OR when switching to classrooms/promotions tabs (to ensure fresh data)
   useEffect(() => {
     if (!Array.isArray(classrooms) || classrooms.length === 0) return;
-    // Only run when on tabs that need student counts
-    if (activeTab !== 'classrooms' && activeTab !== 'promotions') return;
+    // Only run when on tabs that need student counts (include homeroom list)
+    if (activeTab !== 'classrooms' && activeTab !== 'promotions' && activeTab !== 'homeroom') return;
     
     const token = localStorage.getItem('token');
     classrooms.forEach(classroom => {
@@ -319,7 +339,7 @@ function AdminPage() {
     tryResolveSchoolName();
   }, [currentUser]);
 
-  // Load full school data (including logo) for current user if available
+  // Load full school data (including logo and grade_announcement_date) for current user if available
   useEffect(() => {
     const loadSchoolData = async () => {
       const sid = currentUser?.school_id || localStorage.getItem('school_id');
@@ -332,6 +352,31 @@ function AdminPage() {
         if (!res.ok) return;
         const data = await res.json();
         setSchoolData(data);
+        // Load grade announcement date if available
+        if (data.grade_announcement_date) {
+          // Parse the datetime string into separate date and time parts
+          const d = new Date(data.grade_announcement_date);
+          const year = d.getFullYear();
+          const month = String(d.getMonth() + 1).padStart(2, '0');
+          const day = String(d.getDate()).padStart(2, '0');
+          const hours = String(d.getHours()).padStart(2, '0');
+          const minutes = String(d.getMinutes()).padStart(2, '0');
+          setGradeAnnouncementDate(`${year}-${month}-${day}`);
+          setGradeAnnouncementTime(`${hours}:${minutes}`);
+          setGradeAnnouncementHour(hours);
+          setGradeAnnouncementMinute(minutes);
+          setGradeAnnouncementDay(day);
+          setGradeAnnouncementMonth(month);
+          setGradeAnnouncementYear(String(year));
+        } else {
+          setGradeAnnouncementDate('');
+          setGradeAnnouncementTime('');
+          setGradeAnnouncementHour('');
+          setGradeAnnouncementMinute('');
+          setGradeAnnouncementDay('');
+          setGradeAnnouncementMonth('');
+          setGradeAnnouncementYear('');
+        }
       } catch (err) {
         // ignore
       }
@@ -447,6 +492,52 @@ function AdminPage() {
   const handleSignout = () => {
     logout();
     navigate('/signin', { state: { signedOut: true } });
+  };
+
+  const saveGradeAnnouncementDate = async () => {
+    if (!currentUser || !currentUser.school_id) {
+      toast.error('ไม่พบข้อมูลโรงเรียน');
+      return;
+    }
+
+    const token = localStorage.getItem('token');
+    if (!token) {
+      toast.error('กรุณาเข้าสู่ระบบเพื่อดำเนินการ');
+      return;
+    }
+
+    setSavingGradeAnnouncement(true);
+    try {
+      // build naive local datetime string: "YYYY-MM-DD HH:MM:SS"
+      let ann = null;
+      if (gradeAnnouncementDate) {
+        const timePart = gradeAnnouncementTime && gradeAnnouncementTime.length ? gradeAnnouncementTime : '00:00';
+        ann = `${gradeAnnouncementDate} ${timePart}:00`;
+      }
+      const body = { grade_announcement_date: ann };
+
+      const res = await fetch(`${API_BASE_URL}/schools/${currentUser.school_id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(body)
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        toast.success('บันทึกวันประกาศผลคะแนนเรียบร้อย');
+        setSchoolData(data);
+      } else {
+        toast.error(data.detail || 'บันทึกไม่สำเร็จ');
+      }
+    } catch (err) {
+      console.error('Save grade announcement date error:', err);
+      toast.error('เกิดข้อผิดพลาดในการบันทึกวันประกาศผลคะแนน');
+    } finally {
+      setSavingGradeAnnouncement(false);
+    }
   };
 
   const deleteAnnouncement = async (id) => {
@@ -2155,40 +2246,37 @@ function AdminPage() {
         </div>
       </div>
 
-      <div className="tabs-header">
-        <button className={`admin-tab-button ${activeTab === 'users' ? 'active' : ''}`} onClick={() => setActiveTab('users')}>จัดการผู้ใช้</button>
-        <button className={`admin-tab-button ${activeTab === 'classrooms' ? 'active' : ''}`} onClick={() => setActiveTab('classrooms')}>จัดการชั้นเรียน</button>
-        <button className={`admin-tab-button ${activeTab === 'promotions' ? 'active' : ''}`} onClick={() => setActiveTab('promotions')}>เลื่อนชั้นเรียน</button>
-        <button className={`admin-tab-button ${activeTab === 'homeroom' ? 'active' : ''}`} onClick={() => setActiveTab('homeroom')}>ครูประจำชั้น</button>
-        <button className={`admin-tab-button ${activeTab === 'subjects' ? 'active' : ''}`} onClick={() => setActiveTab('subjects')}>📚 จัดการรายวิชา</button>
-        <button className={`admin-tab-button ${activeTab === 'announcements' ? 'active' : ''}`} onClick={() => setActiveTab('announcements')}>จัดการประกาศข่าว</button>
-        <button className={`admin-tab-button ${activeTab === 'absences' ? 'active' : ''}`} onClick={() => setActiveTab('absences')}>อนุมัติการลา</button>
-        <button className={`admin-tab-button ${activeTab === 'schedule' ? 'active' : ''}`} onClick={() => setActiveTab('schedule')}>🗓️ ตั้งค่าเวลา</button>
-        <button className={`admin-tab-button ${activeTab === 'schedules' ? 'active' : ''}`} onClick={() => { setActiveTab('schedules'); loadSubjects(); }}>📅 เพิ่มตารางเรียน</button>
-      </div>
-      <div className="tab-content">
-        {activeTab === 'users' && (
-          <div className="content-card">
-            <div className="card-header">
-              <h2><span className="card-icon">👥</span> จัดการผู้ใช้</h2>
-            </div>
-            <div className="card-content">
-              {loadingUsers && <Loading message="กำลังโหลดข้อมูลผู้ใช้..." />}
-              {usersError && <div className="error-message">❌ {usersError}</div>}
+      {/* Responsive layout: Sidebar (tabs) + Main content — stacks on mobile */}
+      <div style={{ display: 'flex', gap: isMobile ? '1rem' : '2rem', marginTop: '2rem', flexDirection: isMobile ? 'column' : 'row' }}>
+        {/* Left Sidebar - AdminTabs */}
+        <div style={{ flexShrink: 0, width: isMobile ? '100%' : 'auto', marginBottom: isMobile ? '0.75rem' : '0' }}>
+          <AdminTabs isMobile={isMobile} activeTab={activeTab} setActiveTab={setActiveTab} loadSubjects={loadSubjects} />
+        </div>
 
-              <div className="user-management">
-                {/* ===== Render UserTableSection for Teachers ===== */}
-                <div className="user-section">
-                  <h3><span className="card-icon">👨‍🏫</span> ครูผู้สอน ({teachers.length} คน)</h3>
-                  
-                  {/* Search, Filter, and Stats */}
-                  <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
-                    <input
-                      type="text"
-                      placeholder="🔍 ค้นหาชื่อ หรือ email"
-                      value={teacherSearchTerm}
-                      onChange={(e) => {
-                        setTeacherSearchTerm(e.target.value);
+        {/* Right Content - Tab content */}
+        <div className="tab-content" style={{ flex: 1, minWidth: 0 }}>
+          {activeTab === 'users' && (
+            <div className="content-card">
+              <div className="card-header">
+                <h2><span className="card-icon">👥</span> จัดการผู้ใช้</h2>
+              </div>
+              <div className="card-content">
+                {loadingUsers && <Loading message="กำลังโหลดข้อมูลผู้ใช้..." />}
+                {usersError && <div className="error-message">❌ {usersError}</div>}
+
+                <div className="user-management">
+                  {/* ===== Render UserTableSection for Teachers ===== */}
+                  <div className="user-section">
+                    <h3><span className="card-icon">👨‍🏫</span> ครูผู้สอน ({teachers.length} คน)</h3>
+                    
+                    {/* Search, Filter, and Stats */}
+                    <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
+                      <input
+                        type="text"
+                        placeholder="🔍 ค้นหาชื่อ หรือ email"
+                        value={teacherSearchTerm}
+                        onChange={(e) => {
+                          setTeacherSearchTerm(e.target.value);
                         setTeacherCurrentPage(1);
                       }}
                       style={{
@@ -3324,7 +3412,7 @@ function AdminPage() {
                             <th>ชื่อรายวิชา</th>
                             <th>รหัส</th>
                             <th>ประเภท</th>
-                            <th>หน่วยกิต / เปอร์เซ็นต์</th>
+                            <th className="subject-credit">{subjectTypeFilter === 'main' ? 'หน่วยกิต' : subjectTypeFilter === 'activity' ? 'เปอร์เซ็นต์' : 'หน่วยกิต / เปอร์เซ็นต์'}</th>
                             <th>ครูผู้สอน</th>
                             <th style={{ textAlign: 'center' }}>ชั้นเรียน</th>
                             <th style={{ textAlign: 'center' }}>นักเรียน</th>
@@ -3417,6 +3505,261 @@ function AdminPage() {
             </div>
           </div>
         )}
+
+        {activeTab === 'settings' && (
+          <div className="content-card">
+            <div className="card-header">
+              <h2><span className="card-icon">⚙️</span> ตั้งค่า</h2>
+            </div>
+            <div className="card-content">
+              <div className="settings-section" style={{ maxWidth: '600px' }}>
+                <div className="settings-card" style={{
+                  padding: '2rem',
+                  backgroundColor: '#f8f9fa',
+                  borderRadius: '12px',
+                  border: '1px solid #ddd'
+                }}>
+                  <h3 style={{ marginTop: 0, marginBottom: '1.5rem', color: '#333' }}>📢 วันประกาศผลคะแนน</h3>
+                  
+                  <div style={{
+                    padding: '1.5rem',
+                    backgroundColor: '#fff3cd',
+                    borderRadius: '8px',
+                    border: '1px solid #ffc107',
+                    marginBottom: '1.5rem'
+                  }}>
+                    <div style={{ color: '#856404', lineHeight: '1.6' }}>
+                      <strong>📋 คำอธิบาย:</strong><br/>
+                      กำหนดวันและเวลาที่นักเรียนและครูสามารถดูผลคะแนนได้ ก่อนถึงวันที่กำหนด นักเรียนจะไม่สามารถดูผลการเรียนได้ และครูประจำชั้นจะไม่สามารถดูสรุปคะแนนได้
+                    </div>
+                  </div>
+
+                  <div className="admin-form-group" style={{ marginBottom: '1.5rem' }}>
+                    <label className="admin-form-label" style={{ fontWeight: '600', marginBottom: '0.5rem' }}>
+                      เลือกวันและเวลาแยกกัน:
+                    </label>
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                      {/* Day Input */}
+                      <input
+                        type="number"
+                        placeholder="วัน"
+                        min="1"
+                        max="31"
+                        value={gradeAnnouncementDay}
+                        onChange={(e) => {
+                          let dd = e.target.value;
+                          if (dd) {
+                            dd = String(parseInt(dd)).padStart(2, '0');
+                            if (parseInt(dd) > 31) dd = '31';
+                            if (parseInt(dd) < 1) dd = '01';
+                          }
+                          setGradeAnnouncementDay(dd);
+                          const mm = gradeAnnouncementMonth && gradeAnnouncementMonth.length ? gradeAnnouncementMonth : '01';
+                          const yy = gradeAnnouncementYear && gradeAnnouncementYear.length ? gradeAnnouncementYear : String(new Date().getFullYear());
+                          setGradeAnnouncementDate(`${yy}-${mm}-${dd}`);
+                        }}
+                        style={{
+                          width: '70px',
+                          padding: '10px',
+                          borderRadius: '8px',
+                          border: '1px solid #ddd',
+                          fontSize: '1rem',
+                          boxSizing: 'border-box'
+                        }}
+                      />
+
+                      {/* Month Input */}
+                      <input
+                        type="number"
+                        placeholder="เดือน"
+                        min="1"
+                        max="12"
+                        value={gradeAnnouncementMonth}
+                        onChange={(e) => {
+                          let mm = e.target.value;
+                          if (mm) {
+                            mm = String(parseInt(mm)).padStart(2, '0');
+                            if (parseInt(mm) > 12) mm = '12';
+                            if (parseInt(mm) < 1) mm = '01';
+                          }
+                          setGradeAnnouncementMonth(mm);
+                          const dd = gradeAnnouncementDay && gradeAnnouncementDay.length ? gradeAnnouncementDay : '01';
+                          const yy = gradeAnnouncementYear && gradeAnnouncementYear.length ? gradeAnnouncementYear : String(new Date().getFullYear());
+                          setGradeAnnouncementDate(`${yy}-${mm}-${dd}`);
+                        }}
+                        style={{
+                          width: '80px',
+                          padding: '10px',
+                          borderRadius: '8px',
+                          border: '1px solid #ddd',
+                          fontSize: '1rem',
+                          boxSizing: 'border-box'
+                        }}
+                      />
+
+                      {/* Year Input */}
+                      <input
+                        type="number"
+                        placeholder="ปี"
+                        value={gradeAnnouncementYear}
+                        onChange={(e) => {
+                          let yy = e.target.value;
+                          if (yy && yy.length === 4) {
+                            yy = String(parseInt(yy));
+                          }
+                          setGradeAnnouncementYear(yy);
+                          const mm = gradeAnnouncementMonth && gradeAnnouncementMonth.length ? gradeAnnouncementMonth : '01';
+                          const dd = gradeAnnouncementDay && gradeAnnouncementDay.length ? gradeAnnouncementDay : '01';
+                          setGradeAnnouncementDate(`${yy}-${mm}-${dd}`);
+                        }}
+                        style={{
+                          width: '100px',
+                          padding: '10px',
+                          borderRadius: '8px',
+                          border: '1px solid #ddd',
+                          fontSize: '1rem',
+                          boxSizing: 'border-box'
+                        }}
+                      />
+
+                      {/* Hour / Minute Inputs */}
+                      <div style={{ display: 'flex', gap: '0.5rem', marginLeft: 8 }}>
+                        <input
+                          type="number"
+                          placeholder="ชั่วโมง"
+                          min="0"
+                          max="23"
+                          value={gradeAnnouncementHour}
+                          onChange={(e) => {
+                            let h = e.target.value;
+                            if (h) {
+                              h = String(parseInt(h)).padStart(2, '0');
+                              if (parseInt(h) > 23) h = '23';
+                              if (parseInt(h) < 0) h = '00';
+                            }
+                            setGradeAnnouncementHour(h);
+                            const m = gradeAnnouncementMinute && gradeAnnouncementMinute.length ? gradeAnnouncementMinute : '00';
+                            setGradeAnnouncementTime(`${h}:${m}`);
+                          }}
+                          style={{
+                            width: '70px',
+                            padding: '10px',
+                            borderRadius: '8px',
+                            border: '1px solid #ddd',
+                            fontSize: '1rem',
+                            boxSizing: 'border-box'
+                          }}
+                        />
+
+                        <input
+                          type="number"
+                          placeholder="นาที"
+                          min="0"
+                          max="59"
+                          value={gradeAnnouncementMinute}
+                          onChange={(e) => {
+                            let mm = e.target.value;
+                            if (mm) {
+                              mm = String(parseInt(mm)).padStart(2, '0');
+                              if (parseInt(mm) > 59) mm = '59';
+                              if (parseInt(mm) < 0) mm = '00';
+                            }
+                            setGradeAnnouncementMinute(mm);
+                            const h = gradeAnnouncementHour && gradeAnnouncementHour.length ? gradeAnnouncementHour : '00';
+                            setGradeAnnouncementTime(`${h}:${mm}`);
+                          }}
+                          style={{
+                            width: '70px',
+                            padding: '10px',
+                            borderRadius: '8px',
+                            border: '1px solid #ddd',
+                            fontSize: '1rem',
+                            boxSizing: 'border-box'
+                          }}
+                        />
+                      </div>
+                    </div>
+                    {(gradeAnnouncementDate || gradeAnnouncementTime) && (
+                      <div style={{
+                        marginTop: '0.75rem',
+                        padding: '0.75rem',
+                        backgroundColor: '#d4edda',
+                        borderRadius: '6px',
+                        color: '#155724',
+                        fontSize: '0.9rem'
+                      }}>
+                        ✅ วันประกาศ: {(() => {
+                          if (!gradeAnnouncementDate) return '-';
+                          // combine date and time (time may be empty)
+                          const timePart = gradeAnnouncementTime && gradeAnnouncementTime.length ? gradeAnnouncementTime : '00:00';
+                          const iso = `${gradeAnnouncementDate}T${timePart}:00`;
+                          const d = new Date(iso);
+                          // display day/month/year explicitly
+                          const day = String(d.getDate()).padStart(2,'0');
+                          const month = String(d.getMonth()+1).padStart(2,'0');
+                          const year = d.getFullYear();
+                          const time = d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', hour12: false });
+                          return `${day}/${month}/${year} เวลา ${time}`;
+                        })()}
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '1rem' }}>
+                    <button
+                      onClick={saveGradeAnnouncementDate}
+                      disabled={savingGradeAnnouncement}
+                      style={{
+                        flex: 1,
+                        padding: '12px 20px',
+                        backgroundColor: '#2196F3',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '8px',
+                        fontSize: '1rem',
+                        fontWeight: '600',
+                        cursor: savingGradeAnnouncement ? 'not-allowed' : 'pointer',
+                        opacity: savingGradeAnnouncement ? 0.6 : 1,
+                        transition: 'all 0.3s'
+                      }}
+                      onMouseEnter={(e) => !savingGradeAnnouncement && (e.target.style.backgroundColor = '#1976D2')}
+                      onMouseLeave={(e) => !savingGradeAnnouncement && (e.target.style.backgroundColor = '#2196F3')}
+                    >
+                      {savingGradeAnnouncement ? '⏳ กำลังบันทึก...' : '💾 บันทึก'}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setGradeAnnouncementDate('');
+                        setGradeAnnouncementTime('');
+                        setGradeAnnouncementHour('');
+                        setGradeAnnouncementMinute('');
+                        setGradeAnnouncementDay('');
+                        setGradeAnnouncementMonth('');
+                        setGradeAnnouncementYear('');
+                      }}
+                      style={{
+                        padding: '12px 20px',
+                        backgroundColor: '#f44336',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '8px',
+                        fontSize: '1rem',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        transition: 'all 0.3s'
+                      }}
+                      onMouseEnter={(e) => (e.target.style.backgroundColor = '#da190b')}
+                      onMouseLeave={(e) => (e.target.style.backgroundColor = '#f44336')}
+                    >
+                      ❌ ล้าง
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        </div>
       </div>
 
       {showModal && (

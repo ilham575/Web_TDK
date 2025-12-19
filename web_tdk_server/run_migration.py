@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Migration script to add grade_level column to users table
-Run this after updating the User model
+Run all SQL migrations from the migrations/ directory
+Executes all .sql files in alphabetical order
 """
 
 import os
@@ -19,55 +19,69 @@ except ImportError as e:
     print("Make sure you have run: pip install -r requirements.txt")
     sys.exit(1)
 
-def run_migration():
-    """Run migration to add grade_level column to users table"""
+def run_all_migrations():
+    """Run all SQL migration files from migrations/ directory"""
+    migrations_dir = Path(__file__).parent / "migrations"
+    
+    if not migrations_dir.exists():
+        print(f"❌ Migrations directory not found: {migrations_dir}")
+        return False
+    
+    # Get all .sql files sorted alphabetically
+    migration_files = sorted(migrations_dir.glob("*.sql"))
+    
+    if not migration_files:
+        print("⚠️  No SQL migration files found in migrations/ directory")
+        return True
+    
+    print(f"📂 Found {len(migration_files)} migration files")
+    print("=" * 70)
+    
     try:
         with engine.connect() as connection:
-            print("🔍 Checking if grade_level column already exists...")
+            for migration_file in migration_files:
+                print(f"\n🔄 Running: {migration_file.name}")
+                
+                try:
+                    # Read SQL file
+                    with open(migration_file, 'r', encoding='utf-8') as f:
+                        sql_content = f.read().strip()
+                    
+                    if not sql_content:
+                        print(f"   ⏭️  Skipped (empty file)")
+                        continue
+                    
+                    # Execute SQL
+                    statements = [s.strip() for s in sql_content.split(';') if s.strip()]
+                    for statement in statements:
+                        connection.execute(text(statement))
+                    
+                    connection.commit()
+                    print(f"   ✅ Success")
+                    
+                except Exception as e:
+                    connection.rollback()
+                    print(f"   ⚠️  {str(e)[:100]}")
+                    # Continue with next migration instead of failing
             
-            # Check if column already exists
-            try:
-                connection.execute(text("SELECT grade_level FROM users LIMIT 1"))
-                print("✓ Column 'grade_level' already exists in 'users' table")
-                return True
-            except:
-                pass
-            
-            # Add the column
-            print("📝 Adding grade_level column to users table...")
-            connection.execute(text("""
-                ALTER TABLE users ADD COLUMN grade_level VARCHAR(50) NULL AFTER school_id
-            """))
-            
-            # Create index
-            print("📇 Creating index on grade_level column...")
-            try:
-                connection.execute(text("""
-                    CREATE INDEX idx_users_grade_level ON users(grade_level)
-                """))
-                print("✓ Index created successfully")
-            except Exception as e:
-                print(f"⚠️  Index creation skipped or already exists: {e}")
-            
-            connection.commit()
-            print("\n✅ Migration completed successfully!")
-            print("grade_level column has been added to users table\n")
+            print("\n" + "=" * 70)
+            print("✅ All migrations processed successfully!")
             return True
             
     except Exception as e:
-        print(f"\n❌ Migration failed: {e}\n")
+        print(f"\n❌ Database connection failed: {e}\n")
         print("Possible solutions:")
         print("1. Check DATABASE_URL environment variable")
         print("2. Verify MySQL credentials and connection")
-        print("3. Ensure tadika_db database exists")
-        print("4. Run migration manually using MySQL CLI or Workbench\n")
+        print("3. Ensure database exists and is accessible")
+        print("4. Run migrations manually using MySQL CLI\n")
         return False
 
 if __name__ == "__main__":
-    print("=" * 60)
-    print("Adding grade_level column to users table")
-    print("=" * 60)
+    print("=" * 70)
+    print("Running All SQL Migrations")
+    print("=" * 70)
     print()
     
-    success = run_migration()
+    success = run_all_migrations()
     sys.exit(0 if success else 1)

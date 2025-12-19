@@ -22,6 +22,9 @@ function TeacherPage() {
   const navigate = useNavigate();
   const [teacherSubjects, setTeacherSubjects] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
+  const [gradesAnnounced, setGradesAnnounced] = useState(true);
+  const [gradeAnnouncementDate, setGradeAnnouncementDate] = useState(null);
+  const [countdown, setCountdown] = useState('');
   
 
   const [title, setTitle] = useState("");
@@ -187,6 +190,64 @@ function TeacherPage() {
     const baseTitle = 'ระบบโรงเรียน';
     document.title = (displaySchool && displaySchool !== '-') ? `${baseTitle} - ${displaySchool}` : baseTitle;
   }, [displaySchool]);
+
+  // Check grade announcement date for gating homeroom summary
+  useEffect(() => {
+    const checkGradeAnnouncement = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        let schoolId = localStorage.getItem('school_id');
+        if (!schoolId) {
+          // try to fetch from user
+          if (token) {
+            const userRes = await fetch(`${API_BASE_URL}/users/me`, { headers: { Authorization: `Bearer ${token}` } });
+            if (userRes.ok) {
+              const ud = await userRes.json();
+              schoolId = ud.school_id || ud?.school?.id || null;
+            }
+          }
+        }
+        if (!schoolId) return;
+        const res = await fetch(`${API_BASE_URL}/schools/${schoolId}`);
+        if (!res.ok) return;
+        const school = await res.json();
+        if (school && school.grade_announcement_date) {
+          const d = new Date(school.grade_announcement_date);
+          setGradeAnnouncementDate(d);
+          setGradesAnnounced(new Date() >= d);
+        }
+      } catch (err) {
+        // ignore
+      }
+    };
+    checkGradeAnnouncement();
+  }, []);
+
+  // Countdown timer for homeroom gating
+  useEffect(() => {
+    if (!gradeAnnouncementDate) return;
+    let mounted = true;
+    const update = () => {
+      const now = new Date();
+      const diff = gradeAnnouncementDate - now;
+      if (diff <= 0) {
+        if (mounted) {
+          setGradesAnnounced(true);
+          setCountdown('');
+        }
+        return;
+      }
+      const days = Math.floor(diff / 86400000);
+      const hours = Math.floor((diff % 86400000) / 3600000);
+      const minutes = Math.floor((diff % 3600000) / 60000);
+      const seconds = Math.floor((diff % 60000) / 1000);
+      const text = `${days} วัน ${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`;
+      if (mounted) setCountdown(text);
+    };
+    update();
+    const t = setInterval(update, 1000);
+    return () => { mounted = false; clearInterval(t); };
+  }, [gradeAnnouncementDate]);
 
   const handleSignout = () => {
     logout();
@@ -792,152 +853,177 @@ function TeacherPage() {
           <div className="homeroom-summary-container">
             <h3 className="section-title">🏫 สรุปข้อมูลนักเรียนในชั้นที่ประจำ</h3>
             
-            {teacherHomerooms.length === 0 ? (
-              <div className="homeroom-empty">
-                <div className="homeroom-empty-icon">🏫</div>
-                <div className="homeroom-empty-text">คุณยังไม่ได้รับมอบหมายให้เป็นครูประจำชั้น</div>
-                <div className="homeroom-empty-subtitle">กรุณาติดต่อผู้ดูแลระบบเพื่อกำหนดชั้นเรียนที่ประจำ</div>
-              </div>
-            ) : loadingHomeroomSummary ? (
-              <div className="homeroom-loading">
-                <div className="homeroom-loading-spinner"></div>
-                <span>กำลังโหลดข้อมูล...</span>
-              </div>
-            ) : homeroomSummary && homeroomSummary.classrooms && homeroomSummary.classrooms.length > 0 ? (
-              <>
-                {/* Classroom Selector */}
-                <div className="homeroom-classroom-selector">
-                  {homeroomSummary.classrooms.map(classroom => (
-                    <button
-                      key={classroom.classroom_id}
-                      className={`homeroom-classroom-btn ${selectedHomeroomClassroom?.classroom_id === classroom.classroom_id ? 'active' : ''}`}
-                      onClick={() => setSelectedHomeroomClassroom(classroom)}
-                    >
-                      <span className="homeroom-classroom-name">{classroom.classroom_name}</span>
-                      <span className="homeroom-classroom-count">{classroom.student_count} นักเรียน</span>
-                    </button>
-                  ))}
-                </div>
-
-                {selectedHomeroomClassroom && (
-                  <>
-                    {/* Summary Stats */}
-                    <div className="homeroom-stats-grid">
-                      <div className="homeroom-stat-card students">
-                        <div className="homeroom-stat-label">👥 จำนวนนักเรียน</div>
-                        <div className="homeroom-stat-value">{selectedHomeroomClassroom.student_count}</div>
-                        <div className="homeroom-stat-subtitle">คน</div>
-                      </div>
-                      <div className="homeroom-stat-card grades">
-                        <div className="homeroom-stat-label">📊 คะแนนเฉลี่ยห้อง</div>
-                        <div className="homeroom-stat-value">
-                          {selectedHomeroomClassroom.students && selectedHomeroomClassroom.students.length > 0
-                            ? (() => {
-                                // คำนวณเฉพาะนักเรียนที่มีข้อมูลคะแนน
-                                const studentsWithGrades = selectedHomeroomClassroom.students.filter(s => {
-                                  const score = calculateMainSubjectsScore(s.grades_by_subject || []);
-                                  return score.totalMaxScore > 0;
-                                });
-                                
-                                if (studentsWithGrades.length === 0) {
-                                  return 'ไม่มีข้อมูล';
-                                }
-                                
-                                const avgPercentage = studentsWithGrades.reduce((sum, s) => {
-                                  const mainSubjectsScore = calculateMainSubjectsScore(s.grades_by_subject || []);
-                                  return sum + mainSubjectsScore.percentage;
-                                }, 0) / studentsWithGrades.length;
-                                return avgPercentage.toFixed(1);
-                              })()
-                            : 'ไม่มีข้อมูล'}%
-                        </div>
-                        <div className="homeroom-stat-subtitle">ของคะแนนเต็ม</div>
-                      </div>
-                      <div className="homeroom-stat-card attendance">
-                        <div className="homeroom-stat-label">✅ อัตราการมาเรียนเฉลี่ย</div>
-                        <div className="homeroom-stat-value">
-                          {selectedHomeroomClassroom.students.length > 0
-                            ? (selectedHomeroomClassroom.students.reduce((sum, s) => sum + (s.attendance?.attendance_rate || 0), 0) / selectedHomeroomClassroom.students.length).toFixed(1)
-                            : 0}%
-                        </div>
-                        <div className="homeroom-stat-subtitle">ของวันเรียนทั้งหมด</div>
-                      </div>
-                    </div>
-
-                    {/* Students Table */}
-                    <div className="homeroom-students-table-container">
-                      <table className="homeroom-students-table">
-                        <thead>
-                          <tr>
-                            <th>นักเรียน</th>
-                            <th>คะแนนรวม</th>
-                            <th>การเข้าเรียน</th>
-                            <th>รายละเอียด</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {selectedHomeroomClassroom.students.map(student => (
-                            <tr key={student.id}>
-                              <td>
-                                <div className="student-name-cell">
-                                  <div className="student-avatar">{getInitials(student.full_name, 'S')}</div>
-                                  <div className="student-info">
-                                    <span className="student-fullname">{student.full_name}</span>
-                                    <span className="student-username">@{student.username}</span>
-                                  </div>
-                                </div>
-                              </td>
-                              <td>
-                                <div className="grade-display">
-                                  {(() => {
-                                    const mainSubjectsScore = calculateMainSubjectsScore(student.grades_by_subject || []);
-                                    // ถ้าไม่มีข้อมูลคะแนนเลย แสดง "ไม่มีข้อมูล"
-                                    if (mainSubjectsScore.totalMaxScore === 0) {
-                                      return <span style={{ color: '#999', fontSize: '0.9rem' }}>ไม่มีข้อมูล</span>;
-                                    }
-                                    return (
-                                      <>
-                                        <span className="grade-score">
-                                          {mainSubjectsScore.totalScore}/{mainSubjectsScore.totalMaxScore}
-                                        </span>
-                                        <span className={`grade-percentage ${getGradeClass(mainSubjectsScore.percentage || 0)}`}>
-                                          {mainSubjectsScore.percentage.toFixed(1)}%
-                                        </span>
-                                      </>
-                                    );
-                                  })()}
-                                </div>
-                              </td>
-                              <td>
-                                <div className="attendance-display">
-                                  <span className="attendance-rate">{(student.attendance?.attendance_rate || 0).toFixed(1)}%</span>
-                                  <div className="attendance-details">
-                                    <span className="attendance-badge present">มา {student.attendance?.present_days || 0}</span>
-                                    <span className="attendance-badge absent">ขาด {student.attendance?.absent_days || 0}</span>
-                                    <span className="attendance-badge late">สาย {student.attendance?.late_days || 0}</span>
-                                    <span className="attendance-badge sick">ลา {student.attendance?.sick_leave_days || 0}</span>
-                                  </div>
-                                </div>
-                              </td>
-                              <td>
-                                <button className="btn-view-detail" onClick={() => viewStudentDetail(student)}>
-                                  ดูรายละเอียด
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </>
+            {!gradesAnnounced ? (
+              <div className="alert-box" style={{
+                padding: '1.5rem',
+                backgroundColor: '#fff3cd',
+                border: '1px solid #ffc107',
+                borderRadius: '8px',
+                marginBottom: '1.5rem',
+                color: '#856404'
+              }}>
+                <strong>🔔 ยังไม่ถึงเวลาประกาศผลคะแนน</strong><br/>
+                ผลคะแนนจะเปิดดูได้ในวันที่: <strong>{gradeAnnouncementDate ? gradeAnnouncementDate.toLocaleDateString('th-TH', {
+                  day: 'numeric',
+                  month: 'long',
+                  year: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                }) : '-'}</strong>
+                {countdown && (
+                  <div style={{ marginTop: 8, fontSize: '1.15rem', fontWeight: 600 }}>
+                    นับถอยหลัง: {countdown}
+                  </div>
                 )}
-              </>
-            ) : (
-              <div className="homeroom-empty">
-                <div className="homeroom-empty-icon">📋</div>
-                <div className="homeroom-empty-text">ไม่พบข้อมูลนักเรียนในชั้นที่ประจำ</div>
-                <div className="homeroom-empty-subtitle">อาจยังไม่มีการเพิ่มนักเรียนเข้าชั้นเรียน</div>
               </div>
+            ) : (
+              (teacherHomerooms.length === 0 ? (
+                <div className="homeroom-empty">
+                  <div className="homeroom-empty-icon">🏫</div>
+                  <div className="homeroom-empty-text">คุณยังไม่ได้รับมอบหมายให้เป็นครูประจำชั้น</div>
+                  <div className="homeroom-empty-subtitle">กรุณาติดต่อผู้ดูแลระบบเพื่อกำหนดชั้นเรียนที่ประจำ</div>
+                </div>
+              ) : loadingHomeroomSummary ? (
+                <div className="homeroom-loading">
+                  <div className="homeroom-loading-spinner"></div>
+                  <span>กำลังโหลดข้อมูล...</span>
+                </div>
+              ) : homeroomSummary && homeroomSummary.classrooms && homeroomSummary.classrooms.length > 0 ? (
+                <>
+                  {/* Classroom Selector */}
+                  <div className="homeroom-classroom-selector">
+                    {homeroomSummary.classrooms.map(classroom => (
+                      <button
+                        key={classroom.classroom_id}
+                        className={`homeroom-classroom-btn ${selectedHomeroomClassroom?.classroom_id === classroom.classroom_id ? 'active' : ''}`}
+                        onClick={() => setSelectedHomeroomClassroom(classroom)}
+                      >
+                        <span className="homeroom-classroom-name">{classroom.classroom_name}</span>
+                        <span className="homeroom-classroom-count">{classroom.student_count} นักเรียน</span>
+                      </button>
+                    ))}
+                  </div>
+
+                  {selectedHomeroomClassroom && (
+                    <>
+                      {/* Summary Stats */}
+                      <div className="homeroom-stats-grid">
+                        <div className="homeroom-stat-card students">
+                          <div className="homeroom-stat-label">👥 จำนวนนักเรียน</div>
+                          <div className="homeroom-stat-value">{selectedHomeroomClassroom.student_count}</div>
+                          <div className="homeroom-stat-subtitle">คน</div>
+                        </div>
+                        <div className="homeroom-stat-card grades">
+                          <div className="homeroom-stat-label">📊 คะแนนเฉลี่ยห้อง</div>
+                          <div className="homeroom-stat-value">
+                            {selectedHomeroomClassroom.students && selectedHomeroomClassroom.students.length > 0
+                              ? (() => {
+                                  // คำนวณเฉพาะนักเรียนที่มีข้อมูลคะแนน
+                                  const studentsWithGrades = selectedHomeroomClassroom.students.filter(s => {
+                                    const score = calculateMainSubjectsScore(s.grades_by_subject || []);
+                                    return score.totalMaxScore > 0;
+                                  });
+                                  
+                                  if (studentsWithGrades.length === 0) {
+                                    return 'ไม่มีข้อมูล';
+                                  }
+                                  
+                                  const avgPercentage = studentsWithGrades.reduce((sum, s) => {
+                                    const mainSubjectsScore = calculateMainSubjectsScore(s.grades_by_subject || []);
+                                    return sum + mainSubjectsScore.percentage;
+                                  }, 0) / studentsWithGrades.length;
+                                  return avgPercentage.toFixed(1);
+                                })()
+                              : 'ไม่มีข้อมูล'}%
+                          </div>
+                          <div className="homeroom-stat-subtitle">ของคะแนนเต็ม</div>
+                        </div>
+                        <div className="homeroom-stat-card attendance">
+                          <div className="homeroom-stat-label">✅ อัตราการมาเรียนเฉลี่ย</div>
+                          <div className="homeroom-stat-value">
+                            {selectedHomeroomClassroom.students.length > 0
+                              ? (selectedHomeroomClassroom.students.reduce((sum, s) => sum + (s.attendance?.attendance_rate || 0), 0) / selectedHomeroomClassroom.students.length).toFixed(1)
+                              : 0}%
+                          </div>
+                          <div className="homeroom-stat-subtitle">ของวันเรียนทั้งหมด</div>
+                        </div>
+                      </div>
+
+                      {/* Students Table */}
+                      <div className="homeroom-students-table-container">
+                        <table className="homeroom-students-table">
+                          <thead>
+                            <tr>
+                              <th>นักเรียน</th>
+                              <th>คะแนนรวม</th>
+                              <th>การเข้าเรียน</th>
+                              <th>รายละเอียด</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {selectedHomeroomClassroom.students.map(student => (
+                              <tr key={student.id}>
+                                <td>
+                                  <div className="student-name-cell">
+                                    <div className="student-avatar">{getInitials(student.full_name, 'S')}</div>
+                                    <div className="student-info">
+                                      <span className="student-fullname">{student.full_name}</span>
+                                      <span className="student-username">@{student.username}</span>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td>
+                                  <div className="grade-display">
+                                    {(() => {
+                                      const mainSubjectsScore = calculateMainSubjectsScore(student.grades_by_subject || []);
+                                      // ถ้าไม่มีข้อมูลคะแนนเลย แสดง "ไม่มีข้อมูล"
+                                      if (mainSubjectsScore.totalMaxScore === 0) {
+                                        return <span style={{ color: '#999', fontSize: '0.9rem' }}>ไม่มีข้อมูล</span>;
+                                      }
+                                      return (
+                                        <>
+                                          <span className="grade-score">
+                                            {mainSubjectsScore.totalScore}/{mainSubjectsScore.totalMaxScore}
+                                          </span>
+                                          <span className={`grade-percentage ${getGradeClass(mainSubjectsScore.percentage || 0)}`}>
+                                            {mainSubjectsScore.percentage.toFixed(1)}%
+                                          </span>
+                                        </>
+                                      );
+                                    })()}
+                                  </div>
+                                </td>
+                                <td>
+                                  <div className="attendance-display">
+                                    <span className="attendance-rate">{(student.attendance?.attendance_rate || 0).toFixed(1)}%</span>
+                                    <div className="attendance-details">
+                                      <span className="attendance-badge present">มา {student.attendance?.present_days || 0}</span>
+                                      <span className="attendance-badge absent">ขาด {student.attendance?.absent_days || 0}</span>
+                                      <span className="attendance-badge late">สาย {student.attendance?.late_days || 0}</span>
+                                      <span className="attendance-badge sick">ลา {student.attendance?.sick_leave_days || 0}</span>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td>
+                                  <button className="btn-view-detail" onClick={() => viewStudentDetail(student)}>
+                                    ดูรายละเอียด
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </>
+                  )}
+                </>
+              ) : (
+                <div className="homeroom-empty">
+                  <div className="homeroom-empty-icon">📋</div>
+                  <div className="homeroom-empty-text">ไม่พบข้อมูลนักเรียนในชั้นที่ประจำ</div>
+                  <div className="homeroom-empty-subtitle">อาจยังไม่มีการเพิ่มนักเรียนเข้าชั้นเรียน</div>
+                </div>
+              ))
             )}
           </div>
         )}
