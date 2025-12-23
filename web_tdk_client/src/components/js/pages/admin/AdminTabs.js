@@ -1,17 +1,22 @@
 import React, { useState, useEffect } from 'react';
 
-function AdminTabs({ activeTab, setActiveTab, loadSubjects }) {
+function AdminTabs({ isMobile: propIsMobile, activeTab, setActiveTab, loadSubjects }) {
   const [open, setOpen] = useState(true);
   const [hoveredTab, setHoveredTab] = useState(null);
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
-  useEffect(() => {
-    const handleResize = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  // prefer parent's detection but fallback to window
+  const isMobile = typeof propIsMobile === 'boolean' ? propIsMobile : (typeof window !== 'undefined' ? window.innerWidth < 768 : false);
+
+  const computeSidebarWidth = () => {
+    if (isMobile) return '100%';
+    if (typeof window === 'undefined') return '280px';
+    const w = window.innerWidth;
+    if (w < 1000) return '220px';
+    if (w < 1300) return '250px';
+    return '280px';
+  };
+
+  const sidebarWidth = computeSidebarWidth();
 
   const containerOpenStyle = isMobile ? {
     display: 'flex',
@@ -22,7 +27,9 @@ function AdminTabs({ activeTab, setActiveTab, loadSubjects }) {
     borderRadius: '0px',
     background: 'linear-gradient(90deg, #ffffff 0%, #fafbfc 100%)',
     boxShadow: '0 2px 6px rgba(0,0,0,0.06)',
-    border: 'none',
+    borderTop: 'none',
+    borderRight: 'none',
+    borderLeft: 'none',
     borderBottom: '1px solid #e8ecf1',
     transition: 'all 200ms ease',
     overflowX: 'auto',
@@ -32,12 +39,15 @@ function AdminTabs({ activeTab, setActiveTab, loadSubjects }) {
     display: 'flex',
     flexDirection: 'column',
     gap: '0.75rem',
-    width: '280px',
+    width: sidebarWidth,
     padding: '16px',
     borderRadius: '14px',
     background: 'linear-gradient(135deg, #ffffff 0%, #fafbfc 100%)',
     boxShadow: '0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04)',
-    border: '1px solid #e8ecf1',
+    borderTop: '1px solid #e8ecf1',
+    borderRight: '1px solid #e8ecf1',
+    borderLeft: '1px solid #e8ecf1',
+    borderBottom: '1px solid #e8ecf1',
     transition: 'all 200ms ease'
   };
 
@@ -52,7 +62,10 @@ function AdminTabs({ activeTab, setActiveTab, loadSubjects }) {
     borderRadius: '14px',
     background: 'linear-gradient(135deg, #1976D2 0%, #1565c0 100%)',
     boxShadow: '0 4px 12px rgba(25, 118, 210, 0.25)',
-    border: 'none',
+    borderTop: 'none',
+    borderRight: 'none',
+    borderLeft: 'none',
+    borderBottom: 'none',
     transition: 'all 200ms ease',
     alignItems: 'center',
     justifyContent: 'center'
@@ -118,8 +131,9 @@ function AdminTabs({ activeTab, setActiveTab, loadSubjects }) {
     color: isActive ? '#1565c0' : '#4a5568',
     cursor: 'pointer',
     transition: 'all 140ms cubic-bezier(0.4, 0, 0.2, 1)',
-    border: isActive ? (isMobile ? 'none' : '1px solid #90caf9') : '1px solid transparent',
-    borderBottom: isActive && isMobile ? '3px solid #1976D2' : 'none',
+    borderTop: '1px solid transparent',
+    borderRight: '1px solid transparent',
+    borderBottom: isActive && isMobile ? '3px solid #1976D2' : '1px solid transparent',
     borderLeft: isActive && !isMobile ? '3px solid #1976D2' : '3px solid transparent',
     fontSize: isMobile ? '0.85rem' : '0.95rem',
     fontWeight: isActive ? 700 : 500,

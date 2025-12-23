@@ -2253,8 +2253,8 @@ function AdminPage() {
           <AdminTabs isMobile={isMobile} activeTab={activeTab} setActiveTab={setActiveTab} loadSubjects={loadSubjects} />
         </div>
 
-        {/* Right Content - Tab content */}
-        <div className="tab-content" style={{ flex: 1, minWidth: 0 }}>
+        {/* Right Content - Tab content (freeze minimum width on desktop to avoid squeeze) */}
+        <div className="tab-content" style={{ flex: 1, minWidth: isMobile ? 0 : 640 }}>
           {activeTab === 'users' && (
             <div className="content-card">
               <div className="card-header">
