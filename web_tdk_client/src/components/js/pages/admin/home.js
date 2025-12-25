@@ -156,6 +156,10 @@ function AdminPage() {
   const [promotionFile, setPromotionFile] = useState(null);
   const [promotionDragOver, setPromotionDragOver] = useState(false);
 
+  // Bulk password reset (students)
+  const [selectedStudentsForReset, setSelectedStudentsForReset] = useState(new Set());
+  const [bulkResetLoading, setBulkResetLoading] = useState(false);
+
   // Classroom management state
   const [classrooms, setClassrooms] = useState([]);
   const [classroomStudentCounts, setClassroomStudentCounts] = useState({});
@@ -625,6 +629,44 @@ function AdminPage() {
         window.location.reload();
       }
     } catch (err) { console.error(err); toast.error('เกิดข้อผิดพลาดในการลบผู้ใช้'); }
+  };
+
+  // Bulk reset selected students' passwords
+  const bulkResetSelectedStudents = async () => {
+    if (!selectedStudentsForReset || selectedStudentsForReset.size === 0) { toast.error('กรุณาเลือกนักเรียนก่อน'); return; }
+    const token = localStorage.getItem('token');
+    if (!token) { toast.error('กรุณาเข้าสู่ระบบเพื่อดำเนินการ'); return; }
+    setBulkResetLoading(true);
+    try {
+      const ids = Array.from(selectedStudentsForReset);
+      const results = await Promise.all(ids.map(async (id) => {
+        try {
+          const res = await fetch(`${API_BASE_URL}/users/${id}/admin_reset`, { method: 'POST', headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
+          const data = await res.json();
+          if (!res.ok) return { id, ok: false, error: data && data.detail ? data.detail : 'รีเซ็ตไม่สำเร็จ' };
+          return { id, ok: true, temp_password: data.temp_password };
+        } catch (err) {
+          return { id, ok: false, error: err.message || 'Network error' };
+        }
+      }));
+
+      let message = '';
+      results.forEach(r => {
+        const user = students.find(s => s.id === r.id);
+        const display = user ? (user.username || user.email || user.full_name) : r.id;
+        if (r.ok) message += `${display}: 🔑 ${r.temp_password}\n`;
+        else message += `${display}: ❌ ${r.error}\n`;
+      });
+
+      openAlertModal('ผลการรีเซ็ตรหัสผ่าน', message);
+      toast.success('ดำเนินการรีเซ็ตรหัสผ่านเสร็จสิ้น');
+      setSelectedStudentsForReset(new Set());
+    } catch (err) {
+      console.error(err);
+      toast.error('เกิดข้อผิดพลาดขณะรีเซ็ตรหัสผ่าน');
+    } finally {
+      setBulkResetLoading(false);
+    }
   };
 
   // Password Reset Request Functions
@@ -2489,6 +2531,17 @@ function AdminPage() {
                       <option value="active">✅ ใช้งาน</option>
                       <option value="inactive">🚫 ปิดใช้งาน</option>
                     </select>
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                      <button
+                        type="button"
+                        className="admin-btn-warning"
+                        onClick={() => openConfirmModal('รีเซ็ตรหัสผ่านจำนวนมาก', `รีเซ็ตรหัสผ่านของ ${selectedStudentsForReset.size} คนที่เลือก?`, async () => { await bulkResetSelectedStudents(); })}
+                        disabled={selectedStudentsForReset.size === 0 || bulkResetLoading}
+                        title="รีเซ็ตรหัสผ่านที่เลือก"
+                      >
+                        {bulkResetLoading ? '⏳ กำลังรีเซ็ต...' : `🔄 รีเซ็ตรหัสผ่านที่เลือก (${selectedStudentsForReset.size})`}
+                      </button>
+                    </div>
                   </div>
 
                   {students.length === 0 ? (
@@ -2519,6 +2572,22 @@ function AdminPage() {
                           <table className="admin-table" style={{ minWidth: '100%', fontSize: '0.95rem' }}>
                             <thead>
                               <tr>
+                                <th style={{ width: '44px', textAlign: 'center' }}>
+                                  {/* header checkbox: select/deselect all on current page */}
+                                  <input
+                                    type="checkbox"
+                                    checked={paginatedStudents && paginatedStudents.length > 0 ? paginatedStudents.every(s => selectedStudentsForReset.has(s.id)) : false}
+                                    onChange={(e) => {
+                                      const next = new Set(selectedStudentsForReset);
+                                      if (e.target.checked) {
+                                        paginatedStudents.forEach(s => next.add(s.id));
+                                      } else {
+                                        paginatedStudents.forEach(s => next.delete(s.id));
+                                      }
+                                      setSelectedStudentsForReset(next);
+                                    }}
+                                  />
+                                </th>
                                 <th>ชื่อ</th>
                                 <th>Email</th>
                                 <th>Username</th>
@@ -2528,7 +2597,21 @@ function AdminPage() {
                             </thead>
                             <tbody>
                               {paginatedStudents.map(student => (
-                                <tr key={student.id}>
+                                <tr key={student.id} className={selectedStudentsForReset.has(student.id) ? 'selected-row' : ''}>
+                                  <td style={{ textAlign: 'center' }}>
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedStudentsForReset.has(student.id)}
+                                      onChange={() => {
+                                        setSelectedStudentsForReset(prev => {
+                                          const next = new Set(prev);
+                                          if (next.has(student.id)) next.delete(student.id);
+                                          else next.add(student.id);
+                                          return next;
+                                        });
+                                      }}
+                                    />
+                                  </td>
                                   <td><strong>{student.full_name || student.username}</strong></td>
                                   <td>{student.email}</td>
                                   <td style={{ color: '#666' }}>{student.username}</td>
