@@ -294,8 +294,8 @@ def delete_school_as_owner(school_id: int, db: Session = Depends(get_db), curren
         # 12. Delete attendance records (by subject_id) BEFORE subjects
         db.query(AttendanceModel).filter(AttendanceModel.subject_id.in_(subject_ids)).delete(synchronize_session=False)
         # 13. Delete classroom_subject relations for this school's subjects (must be removed before deleting subjects)
-        if subject_ids:
-            db.query(ClassroomSubjectModel).filter(ClassroomSubjectModel.subject_id.in_(subject_ids)).delete(synchronize_session=False)
+        # Use a join to ensure we remove any classroom_subject rows referencing subjects of this school
+        db.query(ClassroomSubjectModel).join(SubjectModel, ClassroomSubjectModel.subject_id == SubjectModel.id).filter(SubjectModel.school_id == school_id).delete(synchronize_session=False)
 
         # 14. Delete subjects for this school (after schedule cleanup and attendances)
         db.query(SubjectModel).filter(SubjectModel.school_id == school_id).delete(synchronize_session=False)
