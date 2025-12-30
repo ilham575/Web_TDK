@@ -13,6 +13,7 @@ from models.admin_request import AdminRequest as AdminRequestModel
 from models.document import Document as DocumentModel
 from models.subject_student import SubjectStudent as SubjectStudentModel
 from models.classroom import Classroom as ClassroomModel, ClassroomStudent as ClassroomStudentModel
+from models.classroom_subject import ClassroomSubject as ClassroomSubjectModel
 from models.schedule import ScheduleSlot as ScheduleSlotModel, SubjectSchedule as SubjectScheduleModel
 from models.absence import Absence as AbsenceModel
 from models.homeroom import HomeroomTeacher as HomeroomTeacherModel
@@ -292,14 +293,17 @@ def delete_school_as_owner(school_id: int, db: Session = Depends(get_db), curren
 
         # 12. Delete attendance records (by subject_id) BEFORE subjects
         db.query(AttendanceModel).filter(AttendanceModel.subject_id.in_(subject_ids)).delete(synchronize_session=False)
+        # 13. Delete classroom_subject relations for this school's subjects (must be removed before deleting subjects)
+        if subject_ids:
+            db.query(ClassroomSubjectModel).filter(ClassroomSubjectModel.subject_id.in_(subject_ids)).delete(synchronize_session=False)
 
-        # 13. Delete subjects for this school (after schedule cleanup and attendances)
+        # 14. Delete subjects for this school (after schedule cleanup and attendances)
         db.query(SubjectModel).filter(SubjectModel.school_id == school_id).delete(synchronize_session=False)
 
-        # 14. Delete classrooms for this school
+        # 15. Delete classrooms for this school
         db.query(ClassroomModel).filter(ClassroomModel.school_id == school_id).delete(synchronize_session=False)
 
-        # 15. Delete all users belonging to this school
+        # 16. Delete all users belonging to this school
         db.query(UserModel).filter(UserModel.school_id == school_id).delete(synchronize_session=False)
 
         # Keep logo path for safe deletion after commit
