@@ -100,14 +100,14 @@ function OwnerPage() {
     if (!currentUser) return;
     if (activeTab === 'schools') {
       loadSchools();
+      // load school deletion requests so Owner can see per-school requests inside the school cards
+      loadSchoolDeletionRequests();
     } else if (activeTab === 'activities') {
       loadActivities();
     } else if (activeTab === 'admin_requests') {
       loadAdminRequests();
     } else if (activeTab === 'password_reset_requests') {
       fetchPasswordResetRequests();
-    } else if (activeTab === 'school_deletion_requests') {
-      loadSchoolDeletionRequests();
     }
   }, [currentUser, activeTab]);
 
@@ -556,7 +556,6 @@ function OwnerPage() {
         activeTab={activeTab} 
         setActiveTab={setActiveTab}
         passwordResetCount={passwordResetRequests.length}
-        schoolDeletionCount={schoolDeletionRequests.length}
       />
 
       <div className="tab-content">
@@ -614,6 +613,62 @@ function OwnerPage() {
                             </button>
                           </div>
                         </div>
+
+                        {/* Deletion request (if any) shown inline with the school card */}
+                        {(() => {
+                          const req = schoolDeletionRequests.find(r => r.school_id === school.id);
+                          if (!req) return null;
+                          return (
+                            <div className="deletion-request-card" style={{
+                              marginTop: '0.75rem',
+                              padding: '0.75rem',
+                              borderRadius: '8px',
+                              backgroundColor: req.status === 'pending' ? '#fff7ed' : req.status === 'approved' ? '#ecfdf5' : '#fff1f2',
+                              border: '1px solid rgba(0,0,0,0.06)',
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              gap: '1rem',
+                              alignItems: 'flex-start'
+                            }}>
+                              <div style={{ flex: 1 }}>
+                                <div style={{ fontWeight: 700, marginBottom: 6 }}>{req.school_name} — {req.status === 'pending' ? '⏳ รอดำเนินการ' : req.status === 'approved' ? '✅ อนุมัติแล้ว' : '❌ ปฏิเสธแล้ว'}</div>
+                                <div style={{ fontSize: '0.95rem', color: '#374151' }}><strong>โดย:</strong> {req.requester_name}</div>
+                                <div style={{ marginTop: '0.5rem', fontSize: '0.95rem' }}><strong>เหตุผล:</strong> {req.reason}</div>
+                                {req.review_notes && (
+                                  <div style={{ marginTop: 6, fontSize: '0.9rem', color: '#6b7280' }}><strong>หมายเหตุ:</strong> {req.review_notes}</div>
+                                )}
+                              </div>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                {req.status === 'pending' && (
+                                  <>
+                                    <button
+                                      className="owner-btn-danger"
+                                      onClick={() => openConfirmModal(
+                                        'อนุมัติคำขอลบโรงเรียน',
+                                        `คุณต้องการอนุมัติคำขอลบโรงเรียน "${school.name}" ใช่หรือไม่? การอนุมัติจะลบโรงเรียนและข้อมูลทั้งหมดอย่างถาวร.`,
+                                        () => approveSchoolDeletionRequest(req.id)
+                                      )}
+                                    >
+                                      ✅ อนุมัติและลบ
+                                    </button>
+                                    <button
+                                      className="owner-btn-secondary"
+                                      onClick={() => {
+                                        const notes = prompt('กรุณากรอกหมายเหตุสำหรับการปฏิเสธ (ไม่บังคับ):');
+                                        if (notes !== null) {
+                                          rejectSchoolDeletionRequest(req.id, notes);
+                                        }
+                                      }}
+                                    >
+                                      ❌ ปฏิเสธ
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })()}
+
                         <div className="school-stats">
                           <div className="stat-item">
                             <span className="stat-icon">👨‍💼</span>
@@ -993,85 +1048,7 @@ function OwnerPage() {
           </div>
         )}
 
-        {activeTab === 'school_deletion_requests' && (
-          <div className="content-card">
-            <div className="card-header">
-              <h2><span className="card-icon">🗑️</span> จัดการคำขอลบโรงเรียน</h2>
-            </div>
-            <div className="card-content">
-              {loadingDeletionRequests ? (
-                <Loading message="กำลังโหลดคำขอ..." />
-              ) : schoolDeletionRequests.length === 0 ? (
-                <div className="empty-state">
-                  <div className="empty-icon">✅</div>
-                  <div className="empty-text">ไม่มีคำขอลบโรงเรียน</div>
-                  <div className="empty-subtitle">คำขอใหม่จะปรากฏที่นี่เมื่อแอดมินส่งคำขอ</div>
-                </div>
-              ) : (
-                <div className="requests-list">
-                  {schoolDeletionRequests.map(request => (
-                    <div key={request.id} className="request-item">
-                      <div className="request-header">
-                        <div className="request-info">
-                          <h4>{request.school_name}</h4>
-                          <div className="request-meta">
-                            <span className="request-requester">โดย: {request.requester_name}</span>
-                            <span className="request-date">{new Date(request.created_at).toLocaleDateString('th-TH')}</span>
-                            <span className={`request-status ${request.status.toLowerCase()}`} style={{
-                              backgroundColor: request.status === 'pending' ? '#fef3c7' : request.status === 'approved' ? '#d1fae5' : '#fee2e2',
-                              color: request.status === 'pending' ? '#92400e' : request.status === 'approved' ? '#065f46' : '#991b1b',
-                              padding: '2px 8px',
-                              borderRadius: '10px',
-                              fontSize: '0.8rem',
-                              fontWeight: '500'
-                            }}>
-                              {request.status === 'pending' ? '⏳ รอดำเนินการ' : request.status === 'approved' ? '✅ อนุมัติแล้ว' : '❌ ปฏิเสธแล้ว'}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="request-details">
-                        <div className="request-reason">
-                          <strong>เหตุผล:</strong> {request.reason}
-                        </div>
-                        {request.review_notes && (
-                          <div className="request-review-notes">
-                            <strong>หมายเหตุ:</strong> {request.review_notes}
-                          </div>
-                        )}
-                      </div>
-                      {request.status === 'pending' && (
-                        <div className="request-actions">
-                          <button
-                            className="btn-approve"
-                            onClick={() => openConfirmModal(
-                              'อนุมัติคำขอลบโรงเรียน',
-                              `คุณต้องการอนุมัติคำขอลบโรงเรียน "${request.school_name}" ใช่หรือไม่? การดำเนินการนี้จะลบโรงเรียนและข้อมูลทั้งหมดอย่างถาวร`,
-                              () => approveSchoolDeletionRequest(request.id)
-                            )}
-                          >
-                            ✅ อนุมัติและลบ
-                          </button>
-                          <button
-                            className="btn-reject"
-                            onClick={() => {
-                              const reviewNotes = prompt('กรุณากรอกหมายเหตุสำหรับการปฏิเสธ (ไม่บังคับ):');
-                              if (reviewNotes !== null) {
-                                rejectSchoolDeletionRequest(request.id, reviewNotes);
-                              }
-                            }}
-                          >
-                            ❌ ปฏิเสธ
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+        {/* School deletion requests are shown inline in the Schools tab per-school cards */}
       </div>
 
       <ConfirmModal

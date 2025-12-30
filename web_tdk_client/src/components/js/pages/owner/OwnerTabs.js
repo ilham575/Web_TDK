@@ -1,6 +1,6 @@
 import React from 'react';
 
-function OwnerTabs({ activeTab, setActiveTab, passwordResetCount = 0, schoolDeletionCount = 0 }) {
+function OwnerTabs({ activeTab, setActiveTab, passwordResetCount = 0 }) {
   return (
     <div className="tabs-header">
       <button 
@@ -45,24 +45,7 @@ function OwnerTabs({ activeTab, setActiveTab, passwordResetCount = 0, schoolDele
           </span>
         )}
       </button>
-      <button 
-        className={`tab-button ${activeTab === 'school_deletion_requests' ? 'active' : ''}`} 
-        onClick={() => setActiveTab('school_deletion_requests')}
-      >
-        🏫 จัดการคำขอลบโรงเรียน
-        {schoolDeletionCount > 0 && (
-          <span style={{ 
-            backgroundColor: '#ef4444', 
-            color: 'white', 
-            padding: '2px 6px', 
-            borderRadius: '10px', 
-            fontSize: '0.75rem',
-            marginLeft: '0.5rem'
-          }}>
-            {schoolDeletionCount}
-          </span>
-        )}
-      </button>
+      {/* School deletion requests are now shown inside each school card in the Schools tab */}
     </div>
   );
 }
