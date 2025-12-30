@@ -198,6 +198,12 @@ function AdminPage() {
   // Subject management state
   const [subjects, setSubjects] = useState([]);
   const [loadingSubjects, setLoadingSubjects] = useState(false);
+
+  // School deletion request state
+  const [schoolDeletionRequests, setSchoolDeletionRequests] = useState([]);
+  const [loadingDeletionRequests, setLoadingDeletionRequests] = useState(false);
+  const [deletionReason, setDeletionReason] = useState('');
+  const [requestingDeletion, setRequestingDeletion] = useState(false);
   const [showSubjectModal, setShowSubjectModal] = useState(false);
   const [selectedSubject, setSelectedSubject] = useState(null);
   const [subjectSearchTerm, setSubjectSearchTerm] = useState('');
@@ -1336,10 +1342,81 @@ function AdminPage() {
   React.useEffect(() => {
     if (activeTab === 'subjects') {
       loadSubjects();
+    } else if (activeTab === 'school_deletion') {
+      loadSchoolDeletionRequests();
     }
   }, [activeTab, currentUser?.school_id]);
 
-  // Grade level assignment functions
+  // School deletion request functions
+  const loadSchoolDeletionRequests = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    setLoadingDeletionRequests(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/school_deletion_requests`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSchoolDeletionRequests(data);
+      } else {
+        toast.error('Failed to load school deletion requests');
+      }
+    } catch (err) {
+      console.error('Failed to load school deletion requests:', err);
+      toast.error('Failed to load school deletion requests');
+    } finally {
+      setLoadingDeletionRequests(false);
+    }
+  };
+
+  const requestSchoolDeletion = async () => {
+    if (!deletionReason.trim()) {
+      toast.error('กรุณากรอกเหตุผลในการลบโรงเรียน');
+      return;
+    }
+
+    const schoolId = localStorage.getItem('school_id');
+    if (!schoolId) {
+      toast.error('ไม่พบข้อมูลโรงเรียน');
+      return;
+    }
+
+    const token = localStorage.getItem('token');
+    if (!token) {
+      toast.error('กรุณาเข้าสู่ระบบ');
+      return;
+    }
+
+    setRequestingDeletion(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/request_school_deletion`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          school_id: parseInt(schoolId),
+          reason: deletionReason.trim()
+        })
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        toast.success('ส่งคำขอการลบโรงเรียนเรียบร้อยแล้ว กรุณารอการอนุมัติจาก Owner');
+        setDeletionReason('');
+        loadSchoolDeletionRequests();
+      } else {
+        toast.error(data.detail || 'ส่งคำขอไม่สำเร็จ');
+      }
+    } catch (err) {
+      console.error('Request school deletion error:', err);
+      toast.error('เกิดข้อผิดพลาดในการส่งคำขอ');
+    } finally {
+      setRequestingDeletion(false);
+    }
+  };
   const handleGradeFileDrop = (e) => {
     e.preventDefault();
     setGradeDragOver(false);
@@ -3353,6 +3430,141 @@ function AdminPage() {
           </div>
         )}
 
+        {activeTab === 'school_deletion' && (
+          <div className="content-card">
+            <div className="card-header">
+              <h2><span className="card-icon">🏫</span> ขอลบโรงเรียน</h2>
+            </div>
+            <div className="card-content">
+              <div style={{
+                padding: '2rem',
+                backgroundColor: '#fff3cd',
+                borderRadius: '12px',
+                border: '1px solid #ffc107',
+                marginBottom: '2rem'
+              }}>
+                <h3 style={{ marginTop: 0, color: '#856404' }}>⚠️ คำเตือนสำคัญ</h3>
+                <ul style={{ color: '#856404', lineHeight: '1.6', marginBottom: 0 }}>
+                  <li>การลบโรงเรียนจะลบข้อมูลทั้งหมดที่เกี่ยวข้อง รวมถึงผู้ใช้ วิชา คะแนน และประกาศ</li>
+                  <li>การดำเนินการนี้ไม่สามารถยกเลิกได้</li>
+                  <li>ต้องได้รับการอนุมัติจาก Owner ก่อนจึงจะดำเนินการลบได้</li>
+                </ul>
+              </div>
+
+              <div className="settings-section" style={{ maxWidth: '600px' }}>
+                <div className="settings-card" style={{
+                  padding: '2rem',
+                  backgroundColor: '#f8f9fa',
+                  borderRadius: '12px',
+                  border: '1px solid #ddd'
+                }}>
+                  <h3 style={{ marginTop: 0, marginBottom: '1.5rem', color: '#333' }}>📝 ส่งคำขอการลบโรงเรียน</h3>
+
+                  <div className="admin-form-group" style={{ marginBottom: '1.5rem' }}>
+                    <label className="admin-form-label" style={{ fontWeight: '600', marginBottom: '0.5rem' }}>
+                      เหตุผลในการลบโรงเรียน *
+                    </label>
+                    <textarea
+                      className="admin-form-input"
+                      value={deletionReason}
+                      onChange={(e) => setDeletionReason(e.target.value)}
+                      placeholder="กรุณาอธิบายเหตุผลในการลบโรงเรียน..."
+                      rows="4"
+                      style={{
+                        width: '100%',
+                        padding: '12px',
+                        borderRadius: '8px',
+                        border: '1px solid #ddd',
+                        fontSize: '1rem',
+                        resize: 'vertical'
+                      }}
+                    />
+                  </div>
+
+                  <div className="admin-form-actions" style={{ marginTop: '2rem' }}>
+                    <button
+                      className="admin-btn-danger"
+                      onClick={() => openConfirmModal(
+                        'ยืนยันการส่งคำขอ',
+                        'คุณแน่ใจว่าต้องการส่งคำขอการลบโรงเรียนหรือไม่? การดำเนินการนี้ต้องได้รับการอนุมัติจาก Owner',
+                        requestSchoolDeletion
+                      )}
+                      disabled={requestingDeletion || !deletionReason.trim()}
+                      style={{
+                        padding: '12px 24px',
+                        fontSize: '1rem',
+                        fontWeight: '600',
+                        borderRadius: '8px'
+                      }}
+                    >
+                      {requestingDeletion ? 'กำลังส่งคำขอ...' : '📤 ส่งคำขอการลบโรงเรียน'}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="settings-card" style={{
+                  padding: '2rem',
+                  backgroundColor: '#f8f9fa',
+                  borderRadius: '12px',
+                  border: '1px solid #ddd',
+                  marginTop: '2rem'
+                }}>
+                  <h3 style={{ marginTop: 0, marginBottom: '1.5rem', color: '#333' }}>📋 สถานะคำขอ</h3>
+
+                  {loadingDeletionRequests ? (
+                    <Loading message="กำลังโหลดข้อมูล..." />
+                  ) : schoolDeletionRequests.length === 0 ? (
+                    <div style={{
+                      textAlign: 'center',
+                      padding: '2rem',
+                      color: '#666'
+                    }}>
+                      <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📝</div>
+                      <div>ยังไม่มีคำขอการลบโรงเรียน</div>
+                    </div>
+                  ) : (
+                    <div className="requests-list">
+                      {schoolDeletionRequests.map(request => (
+                        <div key={request.id} className="request-item" style={{
+                          padding: '1rem',
+                          border: '1px solid #ddd',
+                          borderRadius: '8px',
+                          marginBottom: '1rem',
+                          backgroundColor: '#fff'
+                        }}>
+                          <div className="request-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <div className="request-info">
+                              <h4 style={{ margin: '0 0 0.5rem 0' }}>คำขอการลบโรงเรียน</h4>
+                              <div className="request-meta" style={{ fontSize: '0.9rem', color: '#666' }}>
+                                <div>ส่งเมื่อ: {new Date(request.created_at).toLocaleDateString('th-TH')}</div>
+                              </div>
+                            </div>
+                            <div className={`request-status status-${request.status}`} style={{
+                              padding: '0.25rem 0.75rem',
+                              borderRadius: '20px',
+                              fontSize: '0.8rem',
+                              fontWeight: '600',
+                              textTransform: 'uppercase'
+                            }}>
+                              {request.status === 'pending' ? '⏳ รอดำเนินการ' :
+                               request.status === 'approved' ? '✅ อนุมัติแล้ว' : '❌ ปฏิเสธแล้ว'}
+                            </div>
+                          </div>
+                          {request.reason && (
+                            <div style={{ marginTop: '1rem' }}>
+                              <strong>เหตุผล:</strong> {request.reason}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {activeTab === 'schedules' && (
           <div className="content-card">
             <div className="card-header">
@@ -3511,6 +3723,8 @@ function AdminPage() {
                                 <div className="subject-meta-mobile">
                                   {subject.subject_type === 'main' ? (subject.credits != null ? `${subject.credits} กิต` : '-') : (subject.activity_percentage != null ? `${subject.activity_percentage}%` : '-')}
                                 </div>
+                                {/* Mobile only badge for type (visible on narrow screens) */}
+                                <div className="subject-type-badge">{subject.subject_type === 'main' ? '📖 รายวิชาหลัก' : '🎯 รายวิชากิจกรรม'}</div>
                               </td>
                               <td>{subject.code || '-'}</td>
                               <td>{subject.subject_type === 'main' ? '📖 รายวิชาหลัก' : '🎯 รายวิชากิจกรรม'}</td>
@@ -3520,37 +3734,13 @@ function AdminPage() {
                               <td><div className="teacher-cell">{subject.teacher_name || 'ยังไม่มีครู'}</div></td>
                               <td style={{ textAlign: 'center' }}>{subject.classroom_count}</td>
                               <td style={{ textAlign: 'center' }}>{subject.student_count}</td>
-                              <td style={{ display: 'flex', gap: '0.5rem' }}>
+                              <td>
                                 <button
-                                  style={{
-                                    flex: '0 0 auto',
-                                    minWidth: '84px',
-                                    padding: '8px 12px',
-                                    backgroundColor: '#2196F3',
-                                    color: 'white',
-                                    border: 'none',
-                                    borderRadius: '4px',
-                                    cursor: 'pointer',
-                                    fontSize: '0.9rem',
-                                    fontWeight: '600'
-                                  }}
                                   onClick={() => handleEditSubject(subject)}
                                 >
                                   ✏️ แก้ไข
                                 </button>
                                 <button
-                                  style={{
-                                    flex: '0 0 auto',
-                                    minWidth: '84px',
-                                    padding: '8px 12px',
-                                    backgroundColor: '#f44336',
-                                    color: 'white',
-                                    border: 'none',
-                                    borderRadius: '4px',
-                                    cursor: 'pointer',
-                                    fontSize: '0.9rem',
-                                    fontWeight: '600'
-                                  }}
                                   onClick={() => handleDeleteSubject(subject)}
                                 >
                                   🗑️ ลบ

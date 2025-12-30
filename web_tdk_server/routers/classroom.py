@@ -219,7 +219,7 @@ async def get_classrooms(
     academic_year: Optional[str] = None,
     grade_level: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: Optional[User] = Depends(get_optional_current_user)
 ):
     """ดึงรายการชั้นเรียนทั้งหมดของโรงเรียน (ใช้ query parameter)"""
     query = db.query(Classroom).filter(

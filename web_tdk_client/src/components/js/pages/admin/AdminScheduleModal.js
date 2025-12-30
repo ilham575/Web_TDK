@@ -83,8 +83,8 @@ function AdminScheduleModal({ isOpen, editingSchedule, onClose, onSubmit }) {
         </div>
         <div className="schedule-modal-body">
           {/* Day Selection Section */}
-          <div className="schedule-section">
-            <div className="schedule-form-group">
+          <div className="schedule-section schedule-section--days">
+            <div className="schedule-form-group schedule-form-group--days">
               <label className="schedule-form-label">
                 <FaCalendarAlt className="icon" />
                 วันในสัปดาห์
@@ -130,28 +130,31 @@ function AdminScheduleModal({ isOpen, editingSchedule, onClose, onSubmit }) {
                 </>
               ) : (
                 <>
-                  <div className="schedule-multi-day-grid">
-                    {[
-                      { v: '1', l: 'จ' }, { v: '2', l: 'อ' }, { v: '3', l: 'พ' }, { v: '4', l: 'พฤ' }, 
-                      { v: '5', l: 'ศ' }, { v: '6', l: 'ส' }, { v: '0', l: 'อา' }
-                    ].map(d => (
-                      <label key={d.v} className="schedule-day-checkbox-label">
-                        <input
-                          type="checkbox"
-                          checked={newScheduleDays.includes(d.v)}
-                          onChange={() => {
-                            setNewScheduleDays(prev => prev.includes(d.v) ? prev.filter(x => x !== d.v) : [...prev, d.v].sort());
-                          }}
-                        />
-                        <span>{d.l}</span>
-                      </label>
-                    ))}
-                  </div>
-                  {newScheduleDays.length > 0 && (
-                    <div className="schedule-selected-days-preview">
-                      เลือก: {newScheduleDays.map(d => dayLabelMap[d]).filter(Boolean).join(', ')}
+                  <div className="schedule-multi-day-row">
+                    <div className="schedule-multi-day-grid">
+                      {[
+                        { v: '1', l: 'จ' }, { v: '2', l: 'อ' }, { v: '3', l: 'พ' }, { v: '4', l: 'พฤ' }, 
+                        { v: '5', l: 'ศ' }, { v: '6', l: 'ส' }, { v: '0', l: 'อา' }
+                      ].map(d => (
+                        <label key={d.v} className="schedule-day-checkbox-label">
+                          <input
+                            type="checkbox"
+                            checked={newScheduleDays.includes(d.v)}
+                            onChange={() => {
+                              setNewScheduleDays(prev => prev.includes(d.v) ? prev.filter(x => x !== d.v) : [...prev, d.v].sort());
+                            }}
+                          />
+                          <span>{d.l}</span>
+                        </label>
+                      ))}
                     </div>
-                  )}
+
+                    {newScheduleDays.length > 0 && (
+                      <div className="schedule-selected-days-preview">
+                        เลือก: {newScheduleDays.map(d => dayLabelMap[d]).filter(Boolean).join(', ')}
+                      </div>
+                    )}
+                  </div>
                 </>
               )}
             </div>

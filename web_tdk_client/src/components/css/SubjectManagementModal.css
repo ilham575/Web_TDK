@@ -156,3 +156,48 @@
 .btn-cancel:hover {
   background-color: #e8e8e8;
 }
+
+/* Responsive adjustments to prevent modal overflow on small screens */
+@media (max-width: 720px) {
+  .modal-content {
+    max-width: 680px;
+    width: 96%;
+    padding: 0.9rem 1rem;
+    border-radius: 12px;
+    max-height: 92vh;
+  }
+
+  .subject-form .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .classroom-list {
+    max-height: min(220px, 36vh);
+    padding: 0.75rem;
+  }
+
+  .modal-footer {
+    position: sticky;
+    bottom: 0;
+    background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0.95));
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
+    margin-top: 0.75rem;
+    border-top: 1px solid rgba(0,0,0,0.04);
+  }
+}
+
+/* Larger screens: constrain and center content more tightly */
+@media (min-width: 1100px) {
+  .modal-content {
+    max-width: 900px;
+    width: 86%;
+    padding: 1.5rem 2rem;
+    max-height: 88vh;
+  }
+
+  .classroom-list {
+    max-height: min(360px, 50vh);
+  }
+}
+

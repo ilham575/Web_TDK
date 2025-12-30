@@ -21,6 +21,7 @@ function AdminTabs({ isMobile: propIsMobile, activeTab, setActiveTab, loadSubjec
   const containerOpenStyle = isMobile ? {
     display: 'flex',
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: '0.5rem',
     width: '100%',
     padding: '10px 12px',
@@ -32,8 +33,8 @@ function AdminTabs({ isMobile: propIsMobile, activeTab, setActiveTab, loadSubjec
     borderLeft: 'none',
     borderBottom: '1px solid #e8ecf1',
     transition: 'all 200ms ease',
-    overflowX: 'auto',
-    overflowY: 'hidden',
+    overflowX: 'visible',
+    overflowY: 'visible',
     WebkitOverflowScrolling: 'touch'
   } : {
     display: 'flex',
@@ -125,9 +126,11 @@ function AdminTabs({ isMobile: propIsMobile, activeTab, setActiveTab, loadSubjec
     display: 'flex',
     alignItems: 'center',
     gap: isMobile ? '0.5rem' : '0.85rem',
-    padding: isMobile ? '8px 10px' : '11px 13px',
-    borderRadius: isMobile ? '8px' : '10px',
-    background: isActive ? (isMobile ? '#e3f2fd' : 'linear-gradient(135deg, #e3f2fd 0%, #f0f7ff 100%)') : 'transparent',
+    padding: isMobile ? '8px 12px' : '11px 13px',
+    borderRadius: isMobile ? '12px' : '10px',
+    background: isActive
+      ? (isMobile ? 'linear-gradient(90deg, #e8f4ff 0%, #f8fcff 100%)' : 'linear-gradient(135deg, #e3f2fd 0%, #f0f7ff 100%)')
+      : (isMobile ? '#ffffff' : 'transparent'),
     color: isActive ? '#1565c0' : '#4a5568',
     cursor: 'pointer',
     transition: 'all 140ms cubic-bezier(0.4, 0, 0.2, 1)',
@@ -135,11 +138,13 @@ function AdminTabs({ isMobile: propIsMobile, activeTab, setActiveTab, loadSubjec
     borderRight: '1px solid transparent',
     borderBottom: isActive && isMobile ? '3px solid #1976D2' : '1px solid transparent',
     borderLeft: isActive && !isMobile ? '3px solid #1976D2' : '3px solid transparent',
-    fontSize: isMobile ? '0.85rem' : '0.95rem',
-    fontWeight: isActive ? 700 : 500,
+    fontSize: isMobile ? '0.9rem' : '0.95rem',
+    fontWeight: isActive ? 700 : 600,
     userSelect: 'none',
     whiteSpace: 'nowrap',
-    flexShrink: 0
+    flexShrink: 0,
+    boxShadow: isMobile ? (isActive ? '0 6px 18px rgba(25,118,210,0.08)' : '0 1px 4px rgba(2,6,23,0.04)') : 'none',
+    border: isMobile ? '1px solid rgba(15,23,42,0.06)' : 'none'
   });
 
   const getHoverStyle = (isActive) =>
@@ -161,67 +166,94 @@ function AdminTabs({ isMobile: propIsMobile, activeTab, setActiveTab, loadSubjec
   return (
     <div style={open || isMobile ? containerOpenStyle : containerClosedStyle}>
       {isMobile ? (
-        // Mobile: Horizontal tabs only
+        // Mobile: Horizontal pills with label
         <>
           <button
-            style={getItemStyle(activeTab === 'users')}
+            style={{ ...getItemStyle(activeTab === 'users'), display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '8px 12px', borderRadius: '12px', flex: '0 0 calc(33.333% - 12px)', margin: '0 6px 10px 0', textAlign: 'center' }}
             onClick={() => setActiveTab('users')}
           >
             <span>👥</span>
+            <span>ผู้ใช้</span>
           </button>
+
           <button
-            style={getItemStyle(activeTab === 'classrooms')}
+            style={{ ...getItemStyle(activeTab === 'classrooms'), display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '8px 12px', borderRadius: '12px', flex: '0 0 calc(33.333% - 12px)', margin: '0 6px 10px 0', textAlign: 'center' }}
             onClick={() => setActiveTab('classrooms')}
           >
             <span>🏫</span>
+            <span>ชั้นเรียน</span>
           </button>
+
           <button
-            style={getItemStyle(activeTab === 'homeroom')}
+            style={{ ...getItemStyle(activeTab === 'homeroom'), display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '8px 12px', borderRadius: '12px', flex: '0 0 calc(33.333% - 12px)', margin: '0 6px 10px 0', textAlign: 'center' }}
             onClick={() => setActiveTab('homeroom')}
           >
             <span>👨‍🏫</span>
+            <span>ครู</span>
           </button>
+
           <button
-            style={getItemStyle(activeTab === 'subjects')}
+            style={{ ...getItemStyle(activeTab === 'subjects'), display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '8px 12px', borderRadius: '12px', flex: '0 0 calc(33.333% - 12px)', margin: '0 6px 10px 0', textAlign: 'center' }}
             onClick={() => setActiveTab('subjects')}
           >
             <span>📚</span>
+            <span>รายวิชา</span>
           </button>
+
           <button
-            style={getItemStyle(activeTab === 'announcements')}
+            style={{ ...getItemStyle(activeTab === 'announcements'), display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '8px 12px', borderRadius: '12px', flex: '0 0 calc(33.333% - 12px)', margin: '0 6px 10px 0', textAlign: 'center' }}
             onClick={() => setActiveTab('announcements')}
           >
             <span>📢</span>
+            <span>ประกาศ</span>
           </button>
+
           <button
-            style={getItemStyle(activeTab === 'absences')}
+            style={{ ...getItemStyle(activeTab === 'absences'), display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '8px 12px', borderRadius: '12px', flex: '0 0 calc(33.333% - 12px)', margin: '0 6px 10px 0', textAlign: 'center' }}
             onClick={() => setActiveTab('absences')}
           >
             <span>✋</span>
+            <span>อนุมัติลา</span>
           </button>
+
           <button
-            style={getItemStyle(activeTab === 'promotions')}
+            style={{ ...getItemStyle(activeTab === 'promotions'), display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '8px 12px', borderRadius: '12px', flex: '0 0 calc(33.333% - 12px)', margin: '0 6px 10px 0', textAlign: 'center' }}
             onClick={() => setActiveTab('promotions')}
           >
             <span>📈</span>
+            <span>เลื่อนชั้น</span>
           </button>
+
           <button
-            style={getItemStyle(activeTab === 'schedule')}
+            style={{ ...getItemStyle(activeTab === 'schedule'), display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '8px 12px', borderRadius: '12px', flex: '0 0 calc(33.333% - 12px)', margin: '0 6px 10px 0', textAlign: 'center' }}
             onClick={() => setActiveTab('schedule')}
           >
             <span>🕐</span>
+            <span>เวลา</span>
           </button>
+
           <button
-            style={getItemStyle(activeTab === 'schedules')}
+            style={{ ...getItemStyle(activeTab === 'schedules'), display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '8px 12px', borderRadius: '12px', flex: '0 0 calc(33.333% - 12px)', margin: '0 6px 10px 0', textAlign: 'center' }}
             onClick={() => { setActiveTab('schedules'); loadSubjects(); }}
           >
             <span>📅</span>
+            <span>ตารางเรียน</span>
           </button>
+
           <button
-            style={getItemStyle(activeTab === 'settings')}
+            style={{ ...getItemStyle(activeTab === 'settings'), display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '8px 12px', borderRadius: '12px', flex: '0 0 calc(33.333% - 12px)', margin: '0 6px 10px 0', textAlign: 'center' }}
             onClick={() => setActiveTab('settings')}
           >
             <span>⚙️</span>
+            <span>ตั้งค่า</span>
+          </button>
+
+          <button
+            style={{ ...getItemStyle(activeTab === 'school_deletion'), display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '8px 12px', borderRadius: '12px', flex: '0 0 calc(33.333% - 12px)', margin: '0 6px 10px 0', textAlign: 'center' }}
+            onClick={() => setActiveTab('school_deletion')}
+          >
+            <span>🏫</span>
+            <span>ขอลบโรงเรียน</span>
           </button>
         </>
       ) : open ? (
@@ -353,6 +385,16 @@ function AdminTabs({ isMobile: propIsMobile, activeTab, setActiveTab, loadSubjec
             >
               <span>⚙️</span>
               <span>ตั้งค่าระบบ</span>
+            </button>
+
+            <button
+              style={getItemStyle(activeTab === 'school_deletion')}
+              onMouseEnter={() => setHoveredTab('school_deletion')}
+              onMouseLeave={() => setHoveredTab(null)}
+              onClick={() => setActiveTab('school_deletion')}
+            >
+              <span>🏫</span>
+              <span>ขอลบโรงเรียน</span>
             </button>
           </nav>
         </>

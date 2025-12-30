@@ -90,7 +90,7 @@ function SigninPage() {
       setClassrooms([]);
       setStudents([]);
       
-      fetch(`${API_BASE_URL}/classrooms/list/${selectedSchoolId}`)
+      fetch(`${API_BASE_URL}/classrooms/?school_id=${selectedSchoolId}`)
         .then(res => res.json())
         .then(data => {
           if (Array.isArray(data)) {
@@ -417,6 +417,7 @@ function SigninPage() {
                   placeholder="รหัสผ่านของคุณ"
                   required
                   className="signin-form-input"
+                  disabled={!selectedSchoolId || !selectedClassroomId || !selectedStudentId}
                 />
                 <div style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: '#6B7280' }}>
                   💡 ครั้งแรกใช้รหัสผ่านที่ผู้ดูแลระบบให้ไว้

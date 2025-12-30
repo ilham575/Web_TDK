@@ -574,11 +574,290 @@
   .admin-pagination .pagination-summary { display: none; }
 }
 
+/* Subjects table: improve mobile layout */
+@media (max-width: 720px) {
+  /* show condensed meta under subject name */
+  .subject-meta-mobile { display: block; color: #6b7280; font-size: 0.9rem; margin-top: 6px; }
+
+  /* hide less important columns on small screens (code, type, credit, teacher, counts) */
+  .subjects-table thead th:nth-child(2),
+  .subjects-table thead th:nth-child(3),
+  .subjects-table thead th:nth-child(4),
+  .subjects-table thead th:nth-child(5),
+  .subjects-table thead th:nth-child(6),
+  .subjects-table thead th:nth-child(7),
+  .subjects-table tbody td:nth-child(2),
+  .subjects-table tbody td:nth-child(3),
+  .subjects-table tbody td:nth-child(4),
+  .subjects-table tbody td:nth-child(5),
+  .subjects-table tbody td:nth-child(6),
+  .subjects-table tbody td:nth-child(7) {
+    display: none;
+  }
+
+  /* Make actions stack vertically and buttons full width */
+  .subjects-table tbody td:last-child {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: stretch;
+  }
+
+  .subjects-table tbody td:last-child button {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-weight: 700;
+  }
+
+  /* Make the subject name wrap and ellipsis if very long */
+  .subjects-table .subject-name { white-space: normal; line-height: 1.2; }
+}
+
+/* Desktop: hide subject-meta-mobile (only mobile shows it) */
+.subject-meta-mobile { display: none; }
+
+/* === DESKTOP SUBJECTS TABLE BUTTONS === */
+.subjects-table tbody td:last-child button {
+  padding: 8px 12px;
+  margin-right: 0.5rem;
+  background-color: #2196F3;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.subjects-table tbody td:last-child button:hover {
+  background-color: #1976D2;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(33, 150, 243, 0.3);
+}
+
+.subjects-table tbody td:last-child button:last-child {
+  background-color: #f44336;
+  margin-right: 0;
+}
+
+.subjects-table tbody td:last-child button:last-child:hover {
+  background-color: #d32f2f;
+  box-shadow: 0 4px 12px rgba(244, 67, 54, 0.3);
+}
+
+/* ===== MOBILE SUBJECTS TABLE REDESIGN (720px and below) ===== */
+@media (max-width: 720px) {
+  /* Hide desktop table header entirely */
+  .subjects-table {
+    border: none;
+    background: transparent;
+    width: 100%;
+  }
+
+  .subjects-table thead {
+    display: none;
+  }
+
+  .subjects-table tbody {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  /* === CARD CONTAINER === */
+  .subjects-table tbody tr {
+    display: block;
+    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+    border-radius: 16px;
+    padding: 18px;
+    margin-bottom: 0;
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
+    border: 1px solid rgba(59, 130, 246, 0.1);
+    box-sizing: border-box;
+    overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .subjects-table tbody tr:hover {
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+    border-color: rgba(59, 130, 246, 0.2);
+    transform: translateY(-2px);
+  }
+
+  /* === HIDDEN COLUMNS === */
+  .subjects-table tbody td:nth-child(2),
+  .subjects-table tbody td:nth-child(3),
+  .subjects-table tbody td:nth-child(4),
+  .subjects-table tbody td:nth-child(5),
+  .subjects-table tbody td:nth-child(6),
+  .subjects-table tbody td:nth-child(7) {
+    display: none;
+  }
+
+  /* === SUBJECT INFO (FIRST CELL) === */
+  .subjects-table tbody td:first-child {
+    display: block;
+    padding: 0;
+    border: none;
+    margin-bottom: 14px;
+    min-width: 0;
+  }
+
+  /* Subject Name - Large and Bold */
+  .subjects-table .subject-name {
+    font-size: 1.15rem;
+    font-weight: 900;
+    color: #0f172a;
+    margin: 0;
+    margin-bottom: 12px;
+    line-height: 1.3;
+    word-break: break-word;
+    letter-spacing: -0.5px;
+  }
+
+  /* Type Badge */
+  .subject-type-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 7px 13px;
+    border-radius: 22px;
+    background: linear-gradient(135deg, #eef2ff 0%, #dbeafe 100%);
+    color: #1e40af;
+    font-weight: 800;
+    font-size: 0.82rem;
+    margin-bottom: 12px;
+    margin-right: 10px;
+    white-space: nowrap;
+    box-shadow: 0 2px 8px rgba(30, 64, 175, 0.1);
+    border: 1px solid rgba(30, 64, 175, 0.2);
+  }
+
+  /* Meta Information (Credits/Percentage) */
+  .subject-meta-mobile {
+    display: inline-block;
+    color: #5a6b7d;
+    font-size: 0.92rem;
+    font-weight: 600;
+    margin-top: 0;
+    word-break: break-word;
+    background: rgba(59, 130, 246, 0.05);
+    padding: 4px 10px;
+    border-radius: 6px;
+  }
+
+  /* === ACTION BUTTONS (LAST CELL) === */
+  .subjects-table tbody td:last-child {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 11px !important;
+    padding: 0 !important;
+    border: none !important;
+    border-top: 2px solid rgba(15, 23, 42, 0.1) !important;
+    padding-top: 14px !important;
+    margin: 0 !important;
+    width: 100% !important;
+    flex: unset !important;
+  }
+
+  /* Button Styling - Override ALL inline styles */
+  .subjects-table tbody td:last-child button {
+    width: 100% !important;
+    padding: 13px 15px !important;
+    border-radius: 11px !important;
+    font-size: 0.93rem !important;
+    font-weight: 700 !important;
+    border: none !important;
+    cursor: pointer !important;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 6px !important;
+    min-width: unset !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
+    line-height: 1.4 !important;
+    height: auto !important;
+    flex: 1 !important;
+    font-family: inherit !important;
+    letter-spacing: 0.3px !important;
+  }
+
+  .subjects-table tbody td:last-child button:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12) !important;
+  }
+
+  .subjects-table tbody td:last-child button:active {
+    transform: translateY(0) !important;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08) !important;
+  }
+
+  /* Edit Button (Blue) */
+  .subjects-table tbody td:last-child button:first-child {
+    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%) !important;
+    color: #ffffff !important;
+  }
+
+  .subjects-table tbody td:last-child button:first-child:hover {
+    background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%) !important;
+  }
+
+  /* Delete Button (Red) */
+  .subjects-table tbody td:last-child button:last-child {
+    background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%) !important;
+    color: #ffffff !important;
+  }
+
+  .subjects-table tbody td:last-child button:last-child:hover {
+    background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%) !important;
+  }
+}
+
+/* === EXTRA SMALL SCREENS (420px and below) === */
 @media (max-width: 420px) {
+  /* Pagination optimization */
   .admin-pagination { justify-content: space-between; padding: 0 0.5rem; }
   .admin-pagination .pagination-pages { overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 6px; }
   .admin-pagination .pagination-pages::-webkit-scrollbar { height: 6px; }
   .admin-pagination .pagination-pages::-webkit-scrollbar-thumb { background: rgba(99,102,241,0.35); border-radius: 6px; }
+
+  /* Further optimize subjects cards on very small screens */
+  .subjects-table tbody tr {
+    padding: 14px;
+    gap: 10px;
+    border-radius: 14px;
+  }
+
+  .subjects-table .subject-name {
+    font-size: 1rem;
+    margin-bottom: 8px;
+  }
+
+  .subject-type-badge {
+    padding: 5px 10px;
+    font-size: 0.75rem;
+  }
+
+  .subject-meta-mobile {
+    font-size: 0.85rem;
+  }
+
+  .subjects-table tbody td:last-child {
+    gap: 8px;
+    margin-top: 10px;
+  }
+
+  .subjects-table tbody td:last-child button {
+    padding: 10px 10px !important;
+    font-size: 0.85rem !important;
+    border-radius: 8px !important;
+  }
 }
 
 .admin-stats-card::before {

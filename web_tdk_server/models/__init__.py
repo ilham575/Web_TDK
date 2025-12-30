@@ -12,6 +12,7 @@ from .homeroom import HomeroomTeacher
 from .grade import Grade
 from .classroom import Classroom, ClassroomStudent
 from .password_reset_request import PasswordResetRequest
+from .school_deletion_request import SchoolDeletionRequest
 
 # Add relationships to User model
 from sqlalchemy.orm import relationship
@@ -22,4 +23,4 @@ User.documents = relationship("Document", back_populates="uploader")
 User.subjects = relationship("Subject", back_populates=None)
 User.enrolled = relationship("SubjectStudent", back_populates=None)
 
-__all__ = ["User", "Announcement", "Document", "School", "Subject", "SubjectStudent", "ClassroomSubject", "ScheduleSlot", "SubjectSchedule", "Absence", "HomeroomTeacher", "Classroom", "ClassroomStudent", "Grade", "PasswordResetRequest"]
+__all__ = ["User", "Announcement", "Document", "School", "Subject", "SubjectStudent", "ClassroomSubject", "ScheduleSlot", "SubjectSchedule", "Absence", "HomeroomTeacher", "Classroom", "ClassroomStudent", "Grade", "PasswordResetRequest", "AdminRequest", "SchoolDeletionRequest"]
