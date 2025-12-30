@@ -645,16 +645,7 @@ function OwnerPage() {
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                                 {req.status === 'pending' && (
                                   <>
-                                    <button
-                                      className="owner-btn-danger"
-                                      onClick={() => openConfirmModal(
-                                        'อนุมัติคำขอลบโรงเรียน',
-                                        `คุณต้องการอนุมัติคำขอลบโรงเรียน "${school.name}" ใช่หรือไม่? การอนุมัติจะลบโรงเรียนและข้อมูลทั้งหมดอย่างถาวร.`,
-                                        () => approveSchoolDeletionRequest(req.id)
-                                      )}
-                                    >
-                                      ✅ อนุมัติและลบ
-                                    </button>
+                                    {/* Approve action kept on the main header button to avoid duplicate actions */}
                                     <button
                                       className="owner-btn-secondary"
                                       onClick={() => {
