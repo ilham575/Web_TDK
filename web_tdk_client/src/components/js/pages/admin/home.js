@@ -1404,7 +1404,7 @@ function AdminPage() {
 
       const data = await res.json();
       if (res.ok) {
-        toast.success('ส่งคำขอการลบโรงเรียนเรียบร้อยแล้ว กรุณารอการอนุมัติจาก Owner');
+        toast.success('ส่งคำขอการลบโรงเรียนเรียบร้อยแล้ว กรุณาบอก Owner ให้รีเฟรชหน้าในแท็บจัดการโรงเรียน');
         setDeletionReason('');
         loadSchoolDeletionRequests();
       } else {

@@ -250,7 +250,6 @@ function OwnerPage() {
       const res = await fetch(`${API_BASE_URL}/owner/school_deletion_requests`, { headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) {
         const data = await res.json();
-        console.log('Loaded school deletion requests:', data);
         setSchoolDeletionRequests(data);
       } else {
         toast.error('Failed to load school deletion requests');
@@ -311,9 +310,7 @@ function OwnerPage() {
   };
 
   const hasDeletionRequest = (schoolId) => {
-    const result = schoolDeletionRequests.some(request => request.school_id === schoolId);
-    console.log('Checking deletion request for school', schoolId, 'requests:', schoolDeletionRequests, 'result:', result);
-    return result;
+    return schoolDeletionRequests.some(request => request.school_id === schoolId);
   };
 
   const approveRequest = async (requestId) => {
@@ -567,12 +564,21 @@ function OwnerPage() {
           <div className="content-card">
             <div className="card-header">
               <h2><span className="card-icon">🏫</span> จัดการโรงเรียน</h2>
-              <button 
-                className="owner-btn-create-school" 
-                onClick={() => setShowCreateSchoolModal(true)}
-              >
-                ➕ สร้างโรงเรียนใหม่
-              </button>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button 
+                  className="owner-btn-create-school" 
+                  onClick={() => setShowCreateSchoolModal(true)}
+                >
+                  ➕ สร้างโรงเรียนใหม่
+                </button>
+                <button 
+                  className="owner-btn-secondary" 
+                  onClick={() => { loadSchools(); loadSchoolDeletionRequests(); }}
+                  title="รีเฟรชข้อมูลโรงเรียนและคำขอลบ"
+                >
+                  🔄 รีเฟรช
+                </button>
+              </div>
             </div>
             <div className="card-content">
               <div className="schools-list">
