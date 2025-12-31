@@ -1197,6 +1197,7 @@ function TeacherPage() {
         calculateGPA={calculateGPA}
         getLetterGrade={getLetterGrade}
         initials={getInitials}
+        initialTab={homeroomSubTab}
       />
 
       <ConfirmModal

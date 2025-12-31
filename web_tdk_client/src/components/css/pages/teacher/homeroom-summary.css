@@ -364,6 +364,35 @@
   overflow-y: auto;
 }
 
+.student-detail-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.student-detail-tab {
+  padding: 0.75rem 1rem;
+  border: none;
+  background: none;
+  color: #64748b;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 8px 8px 0 0;
+  transition: all 0.2s ease;
+}
+
+.student-detail-tab:hover {
+  background: #f1f5f9;
+  color: #334155;
+}
+
+.student-detail-tab.active {
+  background: #3b82f6;
+  color: white;
+}
+
 .student-detail-section {
   margin-bottom: 1.5rem;
 }

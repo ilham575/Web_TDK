@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends, status
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from typing import List
 from schemas.user import UserCreate, User, AdminRequestCreate
 from schemas.school import SchoolCreate, School
@@ -197,7 +198,7 @@ def request_admin(request: AdminRequestCreate, db: Session = Depends(get_db)):
     if existing_user:
         raise HTTPException(status_code=400, detail="Username already exists")
     
-    existing_request = db.query(AdminRequestModel).filter(AdminRequestModel.username == request.username).first()
+    existing_request = db.query(AdminRequestModel).filter(AdminRequestModel.username == request.username, AdminRequestModel.status == "pending").first()
     if existing_request:
         raise HTTPException(status_code=400, detail="Request already exists for this username")
     
@@ -206,9 +207,13 @@ def request_admin(request: AdminRequestCreate, db: Session = Depends(get_db)):
     if existing_email:
         raise HTTPException(status_code=400, detail="Email already exists")
     
-    existing_email_request = db.query(AdminRequestModel).filter(AdminRequestModel.email == request.email).first()
+    existing_email_request = db.query(AdminRequestModel).filter(AdminRequestModel.email == request.email, AdminRequestModel.status == "pending").first()
     if existing_email_request:
         raise HTTPException(status_code=400, detail="Request already exists for this email")
+    
+    # Delete any non-pending requests for this username and email to allow re-requesting
+    db.query(AdminRequestModel).filter(AdminRequestModel.username == request.username, AdminRequestModel.status != "pending").delete()
+    db.query(AdminRequestModel).filter(AdminRequestModel.email == request.email, AdminRequestModel.status != "pending").delete()
     
     # Hash password
     hashed = hash_password(request.password)
@@ -250,6 +255,15 @@ def delete_school_as_owner(school_id: int, db: Session = Depends(get_db), curren
 
     # Get all user IDs belonging to this school for cascade deletions
     user_ids = [u.id for u in db.query(UserModel).filter(UserModel.school_id == school_id).all()]
+    # Get all subject IDs for this school
+    subject_ids = [s.id for s in db.query(SubjectModel).filter(SubjectModel.school_id == school_id).all()]
+    # Get all classroom IDs for this school
+    classroom_ids = [c.id for c in db.query(ClassroomModel).filter(ClassroomModel.school_id == school_id).all()]
+
+    print(f"Deleting school {school_id}")
+    print(f"user_ids: {user_ids}")
+    print(f"subject_ids: {subject_ids}")
+    print(f"classroom_ids: {classroom_ids}")
 
     # Delete in dependency order (respecting FK constraints)
     try:
@@ -259,18 +273,25 @@ def delete_school_as_owner(school_id: int, db: Session = Depends(get_db), curren
         # 2. Delete documents uploaded by users in this school
         db.query(DocumentModel).filter(DocumentModel.uploaded_by.in_(user_ids)).delete(synchronize_session=False)
 
-        # 3. Delete grades for students in this school
-        db.query(GradeModel).filter(GradeModel.student_id.in_(user_ids)).delete(synchronize_session=False)
+        # 3. Delete grades for students in this school OR for subjects/classrooms in this school
+        db.query(GradeModel).filter(
+            (GradeModel.student_id.in_(user_ids)) |
+            (GradeModel.subject_id.in_(subject_ids)) |
+            (GradeModel.classroom_id.in_(classroom_ids))
+        ).delete(synchronize_session=False)
 
-        # 4. Delete subject enrollments for students in this school
-        db.query(SubjectStudentModel).filter(SubjectStudentModel.student_id.in_(user_ids)).delete(synchronize_session=False)
+        # 4. Delete subject enrollments for students in this school OR for subjects in this school
+        db.query(SubjectStudentModel).filter(
+            (SubjectStudentModel.student_id.in_(user_ids)) |
+            (SubjectStudentModel.subject_id.in_(subject_ids))
+        ).delete(synchronize_session=False)
 
-        # 5. Delete subject schedules (teacher assignments) for teachers in this school BEFORE schedule_slots
-        # Find subject IDs for this school first
-        subject_ids = [s.id for s in db.query(SubjectModel).filter(SubjectModel.school_id == school_id).all()]
-        # Delete by subject_id AND by teacher_id (both can reference school users/subjects)
-        db.query(SubjectScheduleModel).filter(SubjectScheduleModel.subject_id.in_(subject_ids)).delete(synchronize_session=False)
-        db.query(SubjectScheduleModel).filter(SubjectScheduleModel.teacher_id.in_(user_ids)).delete(synchronize_session=False)
+        # 5. Delete subject schedules (teacher assignments) for teachers/subjects/classrooms in this school
+        db.query(SubjectScheduleModel).filter(
+            (SubjectScheduleModel.subject_id.in_(subject_ids)) |
+            (SubjectScheduleModel.teacher_id.in_(user_ids)) |
+            (SubjectScheduleModel.classroom_id.in_(classroom_ids))
+        ).delete(synchronize_session=False)
 
         # 6. Delete schedule slots created by users in this school (after subject_schedules cleanup)
         db.query(ScheduleSlotModel).filter(ScheduleSlotModel.created_by.in_(user_ids)).delete(synchronize_session=False)
@@ -291,14 +312,22 @@ def delete_school_as_owner(school_id: int, db: Session = Depends(get_db), curren
         # 11. Delete homeroom teacher assignments for teachers in this school
         db.query(HomeroomTeacherModel).filter(HomeroomTeacherModel.teacher_id.in_(user_ids)).delete(synchronize_session=False)
 
-        # 12. Delete attendance records (by subject_id) BEFORE subjects
+        # 12. Delete attendance records for subjects in this school
         db.query(AttendanceModel).filter(AttendanceModel.subject_id.in_(subject_ids)).delete(synchronize_session=False)
-        # 13. Delete classroom_subject relations for this school's subjects (must be removed before deleting subjects)
-        # Use a join to ensure we remove any classroom_subject rows referencing subjects of this school
-        db.query(ClassroomSubjectModel).join(SubjectModel, ClassroomSubjectModel.subject_id == SubjectModel.id).filter(SubjectModel.school_id == school_id).delete(synchronize_session=False)
 
-        # 14. Delete subjects for this school (after schedule cleanup and attendances)
-        db.query(SubjectModel).filter(SubjectModel.school_id == school_id).delete(synchronize_session=False)
+        # 13. Delete classroom_subject relations for subjects/classrooms in this school
+        print("Deleting classroom_subjects by subject_ids")
+        if subject_ids:
+            db.execute(text("DELETE FROM classroom_subjects WHERE subject_id IN :subject_ids"), {"subject_ids": tuple(subject_ids)})
+        print("Deleting classroom_subjects by classroom_ids")
+        if classroom_ids:
+            db.execute(text("DELETE FROM classroom_subjects WHERE classroom_id IN :classroom_ids"), {"classroom_ids": tuple(classroom_ids)})
+        print("Flushing classroom_subjects")
+        db.flush()  # Ensure the deletes are executed before proceeding
+
+        # 14. Delete subjects for this school (after all references are cleaned up)
+        print("Deleting subjects")
+        db.execute(text("DELETE FROM subjects WHERE school_id = :school_id"), {"school_id": school_id})
 
         # 15. Delete classrooms for this school
         db.query(ClassroomModel).filter(ClassroomModel.school_id == school_id).delete(synchronize_session=False)
@@ -309,7 +338,7 @@ def delete_school_as_owner(school_id: int, db: Session = Depends(get_db), curren
         # Keep logo path for safe deletion after commit
         old_logo = school.logo_url
 
-        # 15. Delete the school
+        # 17. Delete the school
         db.delete(school)
         db.commit()
 
