@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import '../../../css/pages/admin/AdminScheduleModal.css';
+import { useTranslation } from 'react-i18next';
 import { FaCalendarAlt, FaClock } from 'react-icons/fa';
 
 function AdminScheduleModal({ isOpen, editingSchedule, onClose, onSubmit }) {
+  const { t } = useTranslation();
   const [newScheduleDay, setNewScheduleDay] = useState('');
   const [useMultipleDays, setUseMultipleDays] = useState(false);
   const [newScheduleDays, setNewScheduleDays] = useState([]);
@@ -72,13 +74,13 @@ function AdminScheduleModal({ isOpen, editingSchedule, onClose, onSubmit }) {
 
   if (!isOpen) return null;
 
-  const dayLabelMap = { '0': 'อาทิตย์', '1': 'จันทร์', '2': 'อังคาร', '3': 'พุธ', '4': 'พฤหัสบดี', '5': 'ศุกร์', '6': 'เสาร์' };
+  const dayLabelMap = { '0': t('admin.sunday'), '1': t('admin.monday'), '2': t('admin.tuesday'), '3': t('admin.wednesday'), '4': t('admin.thursday'), '5': t('admin.friday'), '6': t('admin.saturday') };
 
   return (
     <div className="schedule-modal-overlay">
       <div className="schedule-modal">
         <div className="schedule-modal-header">
-          <h3>{editingSchedule ? 'แก้ไขช่วงเวลาเรียน' : 'เพิ่มช่วงเวลาเรียนใหม่'}</h3>
+          <h3>{editingSchedule ? t('admin.editSchedulePeriodTitle') : t('admin.addSchedulePeriodTitle')}</h3>
           <button className="schedule-modal-close" onClick={handleClose}>×</button>
         </div>
         <div className="schedule-modal-body">
@@ -87,7 +89,7 @@ function AdminScheduleModal({ isOpen, editingSchedule, onClose, onSubmit }) {
             <div className="schedule-form-group schedule-form-group--days">
               <label className="schedule-form-label">
                 <FaCalendarAlt className="icon" />
-                วันในสัปดาห์
+                {t('admin.weekDays')}
               </label>
               
               {!editingSchedule && (
@@ -102,7 +104,7 @@ function AdminScheduleModal({ isOpen, editingSchedule, onClose, onSubmit }) {
                         else setNewScheduleDays([]); 
                       }} 
                     />
-                    <span>ใช้หลายวัน</span>
+                    <span>{t('admin.useMultipleDays')}</span>
                   </label>
                 </div>
               )}
@@ -115,17 +117,17 @@ function AdminScheduleModal({ isOpen, editingSchedule, onClose, onSubmit }) {
                     onChange={e => setNewScheduleDay(e.target.value)}
                     required
                   >
-                    <option value="">เลือกวันในสัปดาห์</option>
-                    <option value="1">จันทร์</option>
-                    <option value="2">อังคาร</option>
-                    <option value="3">พุธ</option>
-                    <option value="4">พฤหัสบดี</option>
-                    <option value="5">ศุกร์</option>
-                    <option value="6">เสาร์</option>
-                    <option value="0">อาทิตย์</option>
+                    <option value="">{t('admin.selectDayOfWeek')}</option>
+                    <option value="1">{t('admin.monday')}</option>
+                    <option value="2">{t('admin.tuesday')}</option>
+                    <option value="3">{t('admin.wednesday')}</option>
+                    <option value="4">{t('admin.thursday')}</option>
+                    <option value="5">{t('admin.friday')}</option>
+                    <option value="6">{t('admin.saturday')}</option>
+                    <option value="0">{t('admin.sunday')}</option>
                   </select>
                   <div className="schedule-helper">
-                    เลือกวันในสัปดาห์ (0 = อาทิตย์, 1 = จันทร์...)
+                    {t('admin.selectDayHelper')}
                   </div>
                 </>
               ) : (
@@ -151,7 +153,7 @@ function AdminScheduleModal({ isOpen, editingSchedule, onClose, onSubmit }) {
 
                     {newScheduleDays.length > 0 && (
                       <div className="schedule-selected-days-preview">
-                        เลือก: {newScheduleDays.map(d => dayLabelMap[d]).filter(Boolean).join(', ')}
+                        {t('admin.days')}: {newScheduleDays.map(d => dayLabelMap[d]).filter(Boolean).join(', ')}
                       </div>
                     )}
                   </div>
@@ -165,7 +167,7 @@ function AdminScheduleModal({ isOpen, editingSchedule, onClose, onSubmit }) {
             <div className="schedule-form-group">
               <label className="schedule-form-label">
                 <FaClock className="icon" />
-                เวลาเริ่มเรียน
+                {t('admin.startTime')}
               </label>
               <input 
                 className="schedule-form-input" 
@@ -182,7 +184,7 @@ function AdminScheduleModal({ isOpen, editingSchedule, onClose, onSubmit }) {
             <div className="schedule-form-group">
               <label className="schedule-form-label">
                 <FaClock className="icon" />
-                เวลาสิ้นสุดการเรียน
+                {t('admin.endTime')}
               </label>
               <input 
                 className="schedule-form-input" 
@@ -201,7 +203,7 @@ function AdminScheduleModal({ isOpen, editingSchedule, onClose, onSubmit }) {
         <div className="schedule-modal-footer">
           <button type="button" className="admin-btn-secondary" onClick={handleClose}>
             <span>❌</span>
-            ยกเลิก
+            {t('common.cancel')}
           </button>
           <button 
             type="button" 
@@ -210,7 +212,7 @@ function AdminScheduleModal({ isOpen, editingSchedule, onClose, onSubmit }) {
             disabled={!canSubmit}
           >
             <span>{editingSchedule ? '✏️' : '➕'}</span>
-            {editingSchedule ? 'แก้ไขช่วงเวลา' : 'เพิ่มช่วงเวลา'}
+            {editingSchedule ? t('admin.editSchedulePeriodTitle') : t('admin.addSchedulePeriodTitle')}
           </button>
         </div>
       </div>

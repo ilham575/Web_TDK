@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import '../../../css/pages/admin/AbsenceApproval.css';
+import { useTranslation } from 'react-i18next';
 import { API_BASE_URL } from '../../../endpoints';
 import { toast } from 'react-toastify';
 
 export default function AbsenceApproval() {
+  const { t } = useTranslation();
   const [absences, setAbsences] = useState([]);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState('pending'); // 'pending', 'approved', 'rejected', 'all'
@@ -28,7 +30,7 @@ export default function AbsenceApproval() {
       }
     } catch (err) {
       console.error('Failed to load absences:', err);
-      toast.error('ไม่สามารถโหลดข้อมูลการลา');
+      toast.error(t('admin.loadAbsencesError'));
     } finally {
       setLoading(false);
     }
@@ -47,7 +49,7 @@ export default function AbsenceApproval() {
   const handleApprove = async (absenceId, version) => {
     // Prevent double-click
     if (processingIds.has(absenceId)) {
-      toast.warning('กำลังประมวลผล กรุณารอสักครู่...');
+      toast.warning(t('admin.processing'));
       return;
     }
 
@@ -70,7 +72,7 @@ export default function AbsenceApproval() {
       if (res.ok) {
         const updated = await res.json();
         setAbsences(absences.map(a => a.id === absenceId ? updated : a));
-        toast.success('✅ อนุมัติการลาเรียบร้อย');
+        toast.success(t('admin.approveAbsenceSuccess'));
       } else {
         const error = await res.json();
         
@@ -82,12 +84,12 @@ export default function AbsenceApproval() {
         } else if (res.status === 403) {
           toast.error(`🚫 ${error.detail}`);
         } else {
-          toast.error(error.detail || 'ไม่สามารถอนุมัติการลา');
+          toast.error(error.detail || t('admin.approveAbsenceSuccess'));
         }
       }
     } catch (err) {
       console.error('Error:', err);
-      toast.error('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+      toast.error(t('admin.connectionError'));
     } finally {
       setProcessingIds(prev => {
         const newSet = new Set(prev);
@@ -100,13 +102,13 @@ export default function AbsenceApproval() {
   // Reject absence with optimistic locking
   const handleReject = async () => {
     if (!rejectReason.trim()) {
-      toast.error('กรุณาระบุเหตุผลการปฏิเสธ');
+      toast.error(t('admin.rejectReason'));
       return;
     }
 
     // Prevent double-click
     if (processingIds.has(selectedAbsenceId)) {
-      toast.warning('กำลังประมวลผล กรุณารอสักครู่...');
+      toast.warning(t('admin.processing'));
       return;
     }
 
@@ -130,7 +132,7 @@ export default function AbsenceApproval() {
       if (res.ok) {
         const updated = await res.json();
         setAbsences(absences.map(a => a.id === selectedAbsenceId ? updated : a));
-        toast.success('❌ ปฏิเสธการลาเรียบร้อย');
+        toast.success(t('admin.rejectAbsenceSuccess'));
         setShowRejectModal(false);
         setRejectReason('');
         setSelectedAbsenceId(null);
@@ -150,12 +152,12 @@ export default function AbsenceApproval() {
         } else if (res.status === 403) {
           toast.error(`🚫 ${error.detail}`);
         } else {
-          toast.error(error.detail || 'ไม่สามารถปฏิเสธการลา');
+          toast.error(error.detail || t('admin.rejectAbsenceError'));
         }
       }
     } catch (err) {
       console.error('Error:', err);
-      toast.error('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+      toast.error(t('admin.connectionError'));
     } finally {
       setProcessingIds(prev => {
         const newSet = new Set(prev);

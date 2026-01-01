@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { toast } from 'react-toastify';
+import { useTranslation } from 'react-i18next';
 import { API_BASE_URL } from '../../../endpoints';
 
 function CreateUserModal({ isOpen, onClose, onSuccess }) {
+  const { t } = useTranslation();
   const [newUsername, setNewUsername] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [newFullName, setNewFullName] = useState('');
@@ -13,7 +15,7 @@ function CreateUserModal({ isOpen, onClose, onSuccess }) {
   const handleCreateUser = async (e) => {
     e.preventDefault();
     if (!newUsername || !newEmail || !newFullName || !newPassword) {
-      toast.error('กรุณากรอกข้อมูลให้ครบถ้วน');
+      toast.error(t('admin.fillAllFields'));
       return;
     }
     setCreatingUser(true);
@@ -21,7 +23,7 @@ function CreateUserModal({ isOpen, onClose, onSuccess }) {
       const token = localStorage.getItem('token');
       const schoolId = localStorage.getItem('school_id');
       if (!schoolId) {
-        toast.error('ไม่พบ school_id ของผู้ดูแลระบบ');
+        toast.error(t('admin.schoolIdNotFound'));
         setCreatingUser(false);
         return;
       }
@@ -32,9 +34,9 @@ function CreateUserModal({ isOpen, onClose, onSuccess }) {
       });
       const data = await res.json();
       if (!res.ok) {
-        toast.error(data.detail || 'สร้างผู้ใช้ไม่สำเร็จ');
+        toast.error(data.detail || t('admin.createUserError'));
       } else {
-        toast.success('สร้างผู้ใช้เรียบร้อย');
+        toast.success(t('admin.createUserSuccess'));
         setNewUsername('');
         setNewEmail('');
         setNewFullName('');
@@ -45,7 +47,7 @@ function CreateUserModal({ isOpen, onClose, onSuccess }) {
       }
     } catch (err) {
       console.error(err);
-      toast.error('เกิดข้อผิดพลาดในการสร้างผู้ใช้');
+      toast.error(t('admin.errorCreatingUser'));
     } finally {
       setCreatingUser(false);
     }
@@ -57,7 +59,7 @@ function CreateUserModal({ isOpen, onClose, onSuccess }) {
     <div className="admin-modal-overlay">
       <div className="admin-modal">
         <div className="admin-modal-header">
-          <h3>สร้างผู้ใช้ใหม่</h3>
+          <h3>{t('admin.createNewUser')}</h3>
           <button className="admin-modal-close" onClick={onClose}>×</button>
         </div>
         <form onSubmit={handleCreateUser}>
@@ -67,7 +69,7 @@ function CreateUserModal({ isOpen, onClose, onSuccess }) {
               type="text" 
               value={newUsername} 
               onChange={e => setNewUsername(e.target.value)} 
-              placeholder="Username" 
+              placeholder={t('auth.username')} 
               required 
             />
             <input 
@@ -75,7 +77,7 @@ function CreateUserModal({ isOpen, onClose, onSuccess }) {
               type="email" 
               value={newEmail} 
               onChange={e => setNewEmail(e.target.value)} 
-              placeholder="Email" 
+              placeholder={t('auth.email')} 
               required 
             />
             <input 
@@ -83,7 +85,7 @@ function CreateUserModal({ isOpen, onClose, onSuccess }) {
               type="text" 
               value={newFullName} 
               onChange={e => setNewFullName(e.target.value)} 
-              placeholder="Full name" 
+              placeholder={t('user.fullName')} 
               required 
             />
             <input 
@@ -91,7 +93,7 @@ function CreateUserModal({ isOpen, onClose, onSuccess }) {
               type="password" 
               value={newPassword} 
               onChange={e => setNewPassword(e.target.value)} 
-              placeholder="Password" 
+              placeholder={t('auth.password')} 
               required 
             />
             <select 
@@ -99,20 +101,20 @@ function CreateUserModal({ isOpen, onClose, onSuccess }) {
               value={newRole} 
               onChange={e => setNewRole(e.target.value)}
             >
-              <option value="teacher">Teacher</option>
-              <option value="student">Student</option>
+              <option value="teacher">{t('admin.teacher')}</option>
+              <option value="student">{t('admin.student')}</option>
             </select>
           </div>
           <div className="admin-modal-footer">
             <button type="button" className="admin-btn-secondary" onClick={onClose}>
-              ยกเลิก
+              {t('common.cancel')}
             </button>
             <button 
               type="submit" 
               className="admin-btn-primary" 
               disabled={creatingUser}
             >
-              {creatingUser ? 'กำลังสร้าง...' : 'สร้าง'}
+              {creatingUser ? t('admin.creating') : t('common.add')}
             </button>
           </div>
         </form>

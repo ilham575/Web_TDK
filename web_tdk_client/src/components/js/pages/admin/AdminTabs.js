@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 
 function AdminTabs({ isMobile: propIsMobile, activeTab, setActiveTab, loadSubjects }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(true);
   const [hoveredTab, setHoveredTab] = useState(null);
 
@@ -173,7 +175,7 @@ function AdminTabs({ isMobile: propIsMobile, activeTab, setActiveTab, loadSubjec
             onClick={() => setActiveTab('users')}
           >
             <span>👥</span>
-            <span>ผู้ใช้</span>
+            <span>{t('admin.tabUsers')}</span>
           </button>
 
           <button
@@ -181,7 +183,7 @@ function AdminTabs({ isMobile: propIsMobile, activeTab, setActiveTab, loadSubjec
             onClick={() => setActiveTab('classrooms')}
           >
             <span>🏫</span>
-            <span>ชั้นเรียน</span>
+            <span>{t('admin.tabClassrooms')}</span>
           </button>
 
           <button
@@ -189,7 +191,7 @@ function AdminTabs({ isMobile: propIsMobile, activeTab, setActiveTab, loadSubjec
             onClick={() => setActiveTab('homeroom')}
           >
             <span>👨‍🏫</span>
-            <span>ครู</span>
+            <span>{t('admin.tabHomeroom')}</span>
           </button>
 
           <button
@@ -197,7 +199,7 @@ function AdminTabs({ isMobile: propIsMobile, activeTab, setActiveTab, loadSubjec
             onClick={() => setActiveTab('subjects')}
           >
             <span>📚</span>
-            <span>รายวิชา</span>
+            <span>{t('admin.tabSubjects')}</span>
           </button>
 
           <button
@@ -205,7 +207,7 @@ function AdminTabs({ isMobile: propIsMobile, activeTab, setActiveTab, loadSubjec
             onClick={() => setActiveTab('announcements')}
           >
             <span>📢</span>
-            <span>ประกาศ</span>
+            <span>{t('admin.tabAnnouncements')}</span>
           </button>
 
           <button
@@ -213,7 +215,7 @@ function AdminTabs({ isMobile: propIsMobile, activeTab, setActiveTab, loadSubjec
             onClick={() => setActiveTab('absences')}
           >
             <span>✋</span>
-            <span>อนุมัติลา</span>
+            <span>{t('admin.tabAbsences')}</span>
           </button>
 
           <button
@@ -221,7 +223,7 @@ function AdminTabs({ isMobile: propIsMobile, activeTab, setActiveTab, loadSubjec
             onClick={() => setActiveTab('promotions')}
           >
             <span>📈</span>
-            <span>เลื่อนชั้น</span>
+            <span>{t('admin.tabPromotions')}</span>
           </button>
 
           <button
@@ -229,7 +231,7 @@ function AdminTabs({ isMobile: propIsMobile, activeTab, setActiveTab, loadSubjec
             onClick={() => setActiveTab('schedule')}
           >
             <span>🕐</span>
-            <span>เวลา</span>
+            <span>{t('admin.tabSchedule')}</span>
           </button>
 
           <button
@@ -237,7 +239,7 @@ function AdminTabs({ isMobile: propIsMobile, activeTab, setActiveTab, loadSubjec
             onClick={() => { setActiveTab('schedules'); loadSubjects(); }}
           >
             <span>📅</span>
-            <span>ตารางเรียน</span>
+            <span>{t('admin.tabSchedules')}</span>
           </button>
 
           <button
@@ -245,7 +247,7 @@ function AdminTabs({ isMobile: propIsMobile, activeTab, setActiveTab, loadSubjec
             onClick={() => setActiveTab('settings')}
           >
             <span>⚙️</span>
-            <span>ตั้งค่า</span>
+            <span>{t('admin.tabSettings')}</span>
           </button>
 
           <button
@@ -253,14 +255,14 @@ function AdminTabs({ isMobile: propIsMobile, activeTab, setActiveTab, loadSubjec
             onClick={() => setActiveTab('school_deletion')}
           >
             <span>🏫</span>
-            <span>ขอลบโรงเรียน</span>
+            <span>{t('admin.tabSchoolDeletion')}</span>
           </button>
         </>
       ) : open ? (
         // Desktop: Vertical sidebar expanded
         <>
           <div style={headerStyle}>
-            <strong style={titleStyle}>📋 เมนูแอดมิน</strong>
+            <strong style={titleStyle}>📋 {t('admin.adminMenu')}</strong>
             <button
               onMouseEnter={(e) => {
                 e.target.style.background = '#eef2f7';
@@ -272,7 +274,7 @@ function AdminTabs({ isMobile: propIsMobile, activeTab, setActiveTab, loadSubjec
               }}
               onClick={() => setOpen(false)}
               style={closeButtonStyle}
-              title="ปิดเมนู"
+              title={t('admin.menuCloseBtn')}
             >
               ✕
             </button>
@@ -288,7 +290,7 @@ function AdminTabs({ isMobile: propIsMobile, activeTab, setActiveTab, loadSubjec
               onClick={() => setActiveTab('users')}
             >
               <span>👥</span>
-              <span>จัดการผู้ใช้</span>
+              <span>{t('admin.tabUsersLong')}</span>
             </button>
 
             <button
@@ -298,7 +300,7 @@ function AdminTabs({ isMobile: propIsMobile, activeTab, setActiveTab, loadSubjec
               onClick={() => setActiveTab('classrooms')}
             >
               <span>🏫</span>
-              <span>จัดการชั้นเรียน</span>
+              <span>{t('admin.tabClassroomsLong')}</span>
             </button>
 
             <button
@@ -308,7 +310,7 @@ function AdminTabs({ isMobile: propIsMobile, activeTab, setActiveTab, loadSubjec
               onClick={() => setActiveTab('homeroom')}
             >
               <span>👨‍🏫</span>
-              <span>ครูประจำชั้น</span>
+              <span>{t('admin.tabHomeroomLong')}</span>
             </button>
 
             <button
@@ -318,7 +320,7 @@ function AdminTabs({ isMobile: propIsMobile, activeTab, setActiveTab, loadSubjec
               onClick={() => setActiveTab('subjects')}
             >
               <span>📚</span>
-              <span>จัดการรายวิชา</span>
+              <span>{t('admin.tabSubjectsLong')}</span>
             </button>
 
             <div style={sectionDividerStyle} />
@@ -330,7 +332,7 @@ function AdminTabs({ isMobile: propIsMobile, activeTab, setActiveTab, loadSubjec
               onClick={() => setActiveTab('announcements')}
             >
               <span>📢</span>
-              <span>จัดการประกาศข่าว</span>
+              <span>{t('admin.tabAnnouncementsLong')}</span>
             </button>
 
             <button
@@ -340,7 +342,7 @@ function AdminTabs({ isMobile: propIsMobile, activeTab, setActiveTab, loadSubjec
               onClick={() => setActiveTab('absences')}
             >
               <span>✋</span>
-              <span>อนุมัติการลา</span>
+              <span>{t('admin.tabAbsencesLong')}</span>
             </button>
 
             <div style={sectionDividerStyle} />
@@ -352,7 +354,7 @@ function AdminTabs({ isMobile: propIsMobile, activeTab, setActiveTab, loadSubjec
               onClick={() => setActiveTab('promotions')}
             >
               <span>📈</span>
-              <span>เลื่อนชั้นเรียน</span>
+              <span>{t('admin.tabPromotionsLong')}</span>
             </button>
 
             <button
@@ -362,7 +364,7 @@ function AdminTabs({ isMobile: propIsMobile, activeTab, setActiveTab, loadSubjec
               onClick={() => setActiveTab('schedule')}
             >
               <span>🕐</span>
-              <span>ตั้งค่าเวลา</span>
+              <span>{t('admin.tabScheduleLong')}</span>
             </button>
 
             <button
@@ -372,7 +374,7 @@ function AdminTabs({ isMobile: propIsMobile, activeTab, setActiveTab, loadSubjec
               onClick={() => { setActiveTab('schedules'); loadSubjects(); }}
             >
               <span>📅</span>
-              <span>เพิ่มตารางเรียน</span>
+              <span>{t('admin.tabSchedulesLong')}</span>
             </button>
 
             <div style={sectionDividerStyle} />
@@ -384,7 +386,7 @@ function AdminTabs({ isMobile: propIsMobile, activeTab, setActiveTab, loadSubjec
               onClick={() => setActiveTab('settings')}
             >
               <span>⚙️</span>
-              <span>ตั้งค่าระบบ</span>
+              <span>{t('admin.tabSettingsLong')}</span>
             </button>
 
             <button
@@ -394,7 +396,7 @@ function AdminTabs({ isMobile: propIsMobile, activeTab, setActiveTab, loadSubjec
               onClick={() => setActiveTab('school_deletion')}
             >
               <span>🏫</span>
-              <span>ขอลบโรงเรียน</span>
+              <span>{t('admin.tabSchoolDeletion')}</span>
             </button>
           </nav>
         </>
@@ -411,7 +413,7 @@ function AdminTabs({ isMobile: propIsMobile, activeTab, setActiveTab, loadSubjec
             color: '#fff',
             transition: 'transform 120ms ease'
           }}
-          title="เปิดเมนู"
+          title={t('admin.menuOpenBtn')}
           onMouseEnter={(e) => e.target.style.transform = 'scale(1.1)'}
           onMouseLeave={(e) => e.target.style.transform = 'scale(1)'}
         >

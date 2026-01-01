@@ -1,6 +1,8 @@
 import React from 'react';
 import './App.css';
 import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
+import { I18nextProvider } from 'react-i18next';
+import i18n from './i18n';
 import SigninPage from './components/js/pages/default/signin';
 import SignupPage from './components/js/pages/default/signup';
 import ForgotPage from './components/js/pages/default/forgot';
@@ -85,11 +87,12 @@ function FaviconHandler() {
 // Main App with Router
 function App() {
   return (
-    <BrowserRouter>
-      <FaviconHandler />
-      <Routes>
-        <Route path="/" element={<DefaultHome />} />
-        <Route path="/home" element={<DefaultHome />} />
+    <I18nextProvider i18n={i18n}>
+      <BrowserRouter>
+        <FaviconHandler />
+        <Routes>
+          <Route path="/" element={<DefaultHome />} />
+          <Route path="/home" element={<DefaultHome />} />
         <Route
           path="/student/home"
           element={
@@ -165,6 +168,7 @@ function App() {
       {/* Global footer (shows remaining JWT expiry) */}
       <Footer />
     </BrowserRouter>
+    </I18nextProvider>
   );
 }
 

@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 
 const PromoteStudentModal = ({
   isOpen,
@@ -12,6 +13,7 @@ const PromoteStudentModal = ({
   promotionNewGradeLevel, // <- parent-controlled new grade select value
   setPromotionNewGradeLevel, // <- parent-controlled setter
 }) => {
+  const { t } = useTranslation();
   const [selectedStudents, setSelectedStudents] = useState(new Set());
   const [searchTerm, setSearchTerm] = useState('');
   // Use parent-provided `promotionNewGradeLevel` and `setPromotionNewGradeLevel` if available
@@ -76,12 +78,12 @@ const PromoteStudentModal = ({
 
   const handleSubmit = () => {
     if (selectedStudents.size === 0) {
-      alert('กรุณาเลือกนักเรียนอย่างน้อย 1 คน');
+      alert(t('admin.selectAtLeastOneStudent'));
       return;
     }
 
     if ((promotionType === 'mid_term_with_promotion' || promotionType === 'end_of_year') && !promotionNewGradeLevel) {
-      alert('กรุณาระบุชั้นปีใหม่');
+      alert(t('admin.pleaseSpecifyNewGrade'));
       return;
     }
 
@@ -126,11 +128,11 @@ const PromoteStudentModal = ({
   const getPromotionTypeLabel = () => {
     switch (promotionType) {
       case 'mid_term':
-        return 'เลื่อนเทอม 1 → เทอม 2 (ชั้นปีเดิม)';
+        return t('admin.promoteTermOnly');
       case 'mid_term_with_promotion':
-        return 'เลื่อนเทอม 1 → เทอม 2 ขึ้นชั้น';
+        return t('admin.promoteTermWithGrade');
       case 'end_of_year':
-        return 'เลื่อนปลายปี (ปีใหม่ + ชั้นใหม่)';
+        return t('admin.promoteEndOfYear');
       default:
         return '';
     }
@@ -144,7 +146,7 @@ const PromoteStudentModal = ({
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flex: 1 }}>
             <div>
               <h3 style={{ margin: 0 }}>
-                👨‍🎓 เลื่อนนักเรียนเป็นรายบุคคล
+                👨‍🎓 {t('admin.promoteStudentTitle')}
               </h3>
               <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>
                 {getPromotionTypeLabel()}
@@ -160,11 +162,11 @@ const PromoteStudentModal = ({
           <div style={{ backgroundColor: '#e3f2fd', padding: '1rem', borderRadius: '8px', marginBottom: '1.5rem', border: '1px solid #90caf9' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', fontSize: '14px' }}>
               <div>
-                <span style={{ color: '#666' }}>ชั้นเรียน:</span><br />
+                <span style={{ color: '#666' }}>{t('admin.classroom')}:</span><br />
                 <strong>{classroom.name}</strong>
               </div>
               <div>
-                <span style={{ color: '#666' }}>ชั้นปี:</span><br />
+                <span style={{ color: '#666' }}>{t('admin.gradeLevel')}:</span><br />
                 <strong>{classroom.grade_level}</strong>
               </div>
             </div>
@@ -172,7 +174,7 @@ const PromoteStudentModal = ({
 
           {/* Promotion Type Selection - 3 options for individual student promotion */}
           <div className="admin-form-group" style={{ marginBottom: '1.5rem' }}>
-            <label className="admin-form-label">ประเภทการเลื่อนชั้น <span style={{ color: 'red' }}>*</span></label>
+            <label className="admin-form-label">{t('admin.promotionType')} <span style={{ color: 'red' }}>*</span></label>
             <div style={{ display: 'flex', gap: '1rem', marginTop: '0.75rem', flexWrap: 'wrap' }}>
               <label style={{ 
                 cursor: 'pointer', 
@@ -197,8 +199,8 @@ const PromoteStudentModal = ({
                     }}
                 />
                 <div>
-                  <strong style={{ color: promotionType === 'mid_term' ? '#2e7d32' : '#333' }}>🔄 เลื่อนเทอมเท่านั้น</strong><br />
-                  <span style={{ fontSize: '11px', color: '#666' }}>เทอม 1 → เทอม 2 (ชั้นปีเดิม)</span>
+                  <strong style={{ color: promotionType === 'mid_term' ? '#2e7d32' : '#333' }}>🔄 {t('admin.promoteTermOnlyLabel')}</strong><br />
+                  <span style={{ fontSize: '11px', color: '#666' }}>{t('admin.promoteTermOnlyDesc')}</span>
                 </div>
               </label>
               <label style={{ 
@@ -224,8 +226,8 @@ const PromoteStudentModal = ({
                     }}
                 />
                 <div>
-                  <strong style={{ color: promotionType === 'mid_term_with_promotion' ? '#2e7d32' : '#333' }}>📈 เลื่อนเทอม + ชั้น</strong><br />
-                  <span style={{ fontSize: '11px', color: '#666' }}>เทอม 1 → เทอม 2 ขึ้นชั้น</span>
+                  <strong style={{ color: promotionType === 'mid_term_with_promotion' ? '#2e7d32' : '#333' }}>📈 {t('admin.promoteTermWithGradeLabel')}</strong><br />
+                  <span style={{ fontSize: '11px', color: '#666' }}>{t('admin.promoteTermWithGradeDesc')}</span>
                 </div>
               </label>
               <label style={{ 
@@ -251,8 +253,8 @@ const PromoteStudentModal = ({
                     }}
                 />
                 <div>
-                  <strong style={{ color: promotionType === 'end_of_year' ? '#2e7d32' : '#333' }}>📈 เลื่อนปลายปี</strong><br />
-                  <span style={{ fontSize: '11px', color: '#666' }}>ปีใหม่ + ชั้นใหม่</span>
+                  <strong style={{ color: promotionType === 'end_of_year' ? '#2e7d32' : '#333' }}>📈 {t('admin.promoteEndOfYearLabel')}</strong><br />
+                  <span style={{ fontSize: '11px', color: '#666' }}>{t('admin.promoteEndOfYearDesc')}</span>
                 </div>
               </label>
             </div>
@@ -261,7 +263,7 @@ const PromoteStudentModal = ({
           {/* New Grade Level Selection (for mid_term_with_promotion and end_of_year) */}
           {(promotionType === 'mid_term_with_promotion' || promotionType === 'end_of_year') && (
             <div className="admin-form-group" style={{ marginBottom: '1.5rem' }}>
-              <label className="admin-form-label">ชั้นปีใหม่ <span style={{ color: 'red' }}>*</span></label>
+              <label className="admin-form-label">{t('admin.newGradeLevel')} <span style={{ color: 'red' }}>*</span></label>
               {availableNextGrades.length > 0 ? (
                   <select 
                     className="admin-form-input"
@@ -269,13 +271,13 @@ const PromoteStudentModal = ({
                     onChange={e => typeof setPromotionNewGradeLevel === 'function' ? setPromotionNewGradeLevel(e.target.value) : null}
                   style={{ cursor: 'pointer' }}
                 >
-                  <option value="">-- เลือกชั้นปีใหม่ --</option>
+                  <option value="">-- {t('admin.selectNewGrade')} --</option>
                   {availableNextGrades.map(grade => {
                     const classroomNames = typeof getClassroomNamesByGrade === 'function' ? getClassroomNamesByGrade(grade) : [];
                     const namesList = classroomNames.length > 0 ? classroomNames.join(', ') : grade;
                     return (
                       <option key={grade} value={grade}>
-                        {grade} (ชั้นปีที่ {extractGradeNumber(grade)}) - {namesList}
+                        {grade} ({t('admin.gradeNumber')} {extractGradeNumber(grade)}) - {namesList}
                       </option>
                     );
                   })}
@@ -288,9 +290,9 @@ const PromoteStudentModal = ({
                   color: '#856404',
                   fontSize: '14px'
                 }}>
-                  ⚠️ ไม่พบชั้นปีอื่น
+                  {'\u26a0\ufe0f'} {t('admin.noOtherGrades')}
                   <div style={{ marginTop: '0.5rem', fontSize: '12px' }}>
-                    กรุณาสร้างชั้นเรียนใหม่ก่อนทำการเลื่อนชั้น
+                    {t('admin.createClassroomBeforePromote')}
                   </div>
                 </div>
               )}
@@ -301,7 +303,7 @@ const PromoteStudentModal = ({
           <div style={{ marginBottom: '1.5rem' }}>
             <input 
               type="text"
-              placeholder="🔍 ค้นหาชื่อ, username, หรือ email"
+              placeholder={`🔍 ${t('admin.searchPlaceholder')}`}
               className="admin-form-input"
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
@@ -313,7 +315,7 @@ const PromoteStudentModal = ({
           <div style={{ maxHeight: '400px', overflowY: 'auto', border: '1px solid #e0e0e0', borderRadius: '4px' }}>
             {filteredStudents.length === 0 ? (
               <div style={{ padding: '2rem', textAlign: 'center', color: '#999' }}>
-                {students?.length === 0 ? 'ไม่มีนักเรียนในชั้นนี้' : 'ไม่พบผลการค้นหา'}
+                {students?.length === 0 ? t('admin.noStudentsInClass') : t('admin.noSearchResults')}
               </div>
             ) : (
               <div>
@@ -365,7 +367,7 @@ const PromoteStudentModal = ({
               borderRadius: '4px',
               color: '#2e7d32'
             }}>
-              ✓ เลือกแล้ว {selectedStudents.size} นักเรียน
+              ✓ {t('admin.selectedCount')} {selectedStudents.size} {t('nav.students')}
             </div>
           )}
         </div>
@@ -378,7 +380,7 @@ const PromoteStudentModal = ({
             onClick={handleClose}
             disabled={isPromoting}
           >
-            ยกเลิก
+            {t('common.cancel')}
           </button>
           <button 
             type="button" 
@@ -387,7 +389,7 @@ const PromoteStudentModal = ({
             disabled={isPromoting || selectedStudents.size === 0 || ((promotionType === 'mid_term_with_promotion' || promotionType === 'end_of_year') && !promotionNewGradeLevel)}
             style={{ backgroundColor: '#4caf50' }}
           >
-            {isPromoting ? 'กำลังเลื่อน...' : `✓ เลื่อน ${selectedStudents.size} นักเรียน`}
+            {isPromoting ? t('admin.promoting') : `✓ ${t('admin.promoteCount')} ${selectedStudents.size} ${t('nav.students')}`}
           </button>
         </div>
       </div>

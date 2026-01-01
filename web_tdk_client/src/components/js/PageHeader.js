@@ -1,5 +1,7 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import '../css/PageHeader.css';
+import LanguageSwitcher from './LanguageSwitcher';
 
 /**
  * PageHeader Component - ส่วน Header ที่ใช้ร่วมกันสำหรับทุก role
@@ -27,6 +29,7 @@ function PageHeader({
   stats,
   children 
 }) {
+  const { t } = useTranslation();
   
   // ฟังก์ชันสร้างตัวย่อจากชื่อ (initials)
   // local wrapper: create role-based fallback if none provided
@@ -43,8 +46,8 @@ function PageHeader({
   // กำหนด greeting message ตาม role
   const getGreeting = () => {
     const name = currentUser?.full_name || currentUser?.name || currentUser?.username || 
-                 (role === 'owner' ? 'Owner' : role === 'admin' ? 'Admin' : role === 'teacher' ? 'ครู' : 'นักเรียน');
-    return `สวัสดี, ${name}! ${roleEmoji[role] || ''}`;
+                 (role === 'owner' ? t('user.owner') : role === 'admin' ? t('user.admin') : role === 'teacher' ? t('user.teacher') : t('user.student'));
+    return `${t('common.greeting')}, ${name}! ${roleEmoji[role] || ''}`;
   };
 
   // กำหนด subtitle default ตาม role
@@ -55,11 +58,11 @@ function PageHeader({
     
     switch (role) {
       case 'admin':
-        return `🏫 จัดการผู้ใช้และประกาศของโรงเรียน${schoolName}`;
+        return `🏫 ${t('nav.admin')} ${schoolName}`;
       case 'teacher':
-        return '🎓 จัดการรายวิชา และประกาศข่าวของโรงเรียนอย่างมีประสิทธิภาพ';
+        return t('nav.teacher');
       case 'owner':
-        return '🏢 จัดการโรงเรียนและสิทธิ์การเข้าถึงทั่วทั้งระบบ';
+        return t('nav.owner');
       case 'student':
         return null; // student ใช้ user-info แบบพิเศษ
       default:
@@ -77,10 +80,11 @@ function PageHeader({
           </div>
           <div className="user-info">
             <h3>{getGreeting()}</h3>
-            <p>บทบาท: นักเรียน</p>
+            <p>{t('common.role')}: {t('user.student')}</p>
           </div>
         </div>
         <div className="header-right">
+          {/* <LanguageSwitcher /> */}
           {rightContent}
           {children}
         </div>
@@ -108,17 +112,18 @@ function PageHeader({
               {stats.subjects !== undefined && (
                 <div className="stats-card floating-effect">
                   <div className="teacher-stats-value">{stats.subjects}</div>
-                  <div className="teacher-stats-label">รายวิชา</div>
+                  <div className="teacher-stats-label">{t('nav.subjects')}</div>
                 </div>
               )}
               {stats.announcements !== undefined && (
                 <div className="stats-card floating-effect">
                   <div className="teacher-stats-value">{stats.announcements}</div>
-                  <div className="teacher-stats-label">ข่าวสาร</div>
+                  <div className="teacher-stats-label">{t('nav.announcements')}</div>
                 </div>
               )}
             </div>
           )}
+          {/* <LanguageSwitcher /> */}
           {rightContent}
           {children}
         </div>
@@ -145,6 +150,7 @@ function PageHeader({
       </div>
 
       <div className="header-right">
+        {/* <LanguageSwitcher /> */}
         {rightContent}
         {children}
       </div>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 
 const EditClassroomModal = ({
   isOpen,
@@ -8,6 +9,7 @@ const EditClassroomModal = ({
   onUpdateClassroom,
   onClose,
 }) => {
+  const { t } = useTranslation();
   // Local state สำหรับ modal นี้เท่านั้น
   const [gradeLevel, setGradeLevel] = useState('');
   const [roomNumber, setRoomNumber] = useState('');
@@ -66,10 +68,10 @@ const EditClassroomModal = ({
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flex: 1 }}>
             <div>
               <h3 style={{ margin: 0 }}>
-                ✏️ แก้ไขชั้นเรียน
+                ✏️ {t('admin.editClassroom')}
               </h3>
               <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>
-                อัพเดตรายละเอียดชั้นเรียน
+                {t('admin.editClassroomDetails')}
               </div>
             </div>
           </div>
@@ -81,85 +83,85 @@ const EditClassroomModal = ({
           {/* Instructions box */}
           <div style={{ marginBottom: '1.5rem', padding: '1rem', backgroundColor: '#e3f2fd', borderLeft: '4px solid #1976d2', borderRadius: '4px' }}>
             <p style={{ margin: 0, color: '#1565c0', fontSize: '14px' }}>
-              📝 แก้ไขรายละเอียดชั้นเรียน (ชื่อชั้นเรียนสร้างจากชั้นปี/เลขห้องอัตโนมัติ)
+              📝 {t('admin.fillClassroomDetails')}
             </p>
           </div>
 
           <div className="admin-form-group">
-            <label className="admin-form-label">ชั้นปี <span style={{ color: 'red' }}>*</span></label>
+            <label className="admin-form-label">{t('admin.gradeLevel')} <span style={{ color: 'red' }}>*</span></label>
             <input 
               className="admin-form-input"
               type="text"
               value={gradeLevel}
               onChange={e => setGradeLevel(e.target.value)}
-              placeholder="เช่น ป.1, ป.2, ป.3, มัธยม 1, มัธยม 2"
+              placeholder={t('admin.gradeExample')}
             />
-            <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>ระบุชั้นปีให้ตรงกับโครงสร้างของโรงเรียน</div>
+            <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>{t('admin.specifyGrade')}</div>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
             <div className="admin-form-group">
-              <label className="admin-form-label">เทอม</label>
+              <label className="admin-form-label">{t('admin.semester')}</label>
               <select 
                 className="admin-form-input"
                 value={semester}
                 onChange={e => setSemester(parseInt(e.target.value))}
               >
-                <option value={1}>เทอม 1</option>
-                <option value={2}>เทอม 2</option>
+                <option value={1}>{t('admin.semester1')}</option>
+                <option value={2}>{t('admin.semester2')}</option>
               </select>
             </div>
 
             <div className="admin-form-group">
-              <label className="admin-form-label">ปีการศึกษา</label>
+              <label className="admin-form-label">{t('admin.academicYear')}</label>
               <input 
                 className="admin-form-input"
                 type="text"
                 value={academicYear}
                 onChange={e => setAcademicYear(e.target.value)}
-                placeholder="เช่น 2567"
+                placeholder={t('admin.academicYearExample')}
               />
             </div>
           </div>
 
           <div className="admin-form-group">
-            <label className="admin-form-label">เลขห้อง (ไม่บังคับ)</label>
+            <label className="admin-form-label">{t('admin.roomNumberOptional')}</label>
             <input 
               className="admin-form-input"
               type="text"
               value={roomNumber}
               onChange={e => setRoomNumber(e.target.value)}
-              placeholder="เช่น 101, 102, 201"
+              placeholder={t('admin.roomNumberExample')}
             />
-            <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>สำหรับระบุตำแหน่งห้องเรียน</div>
+            <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>{t('admin.roomNumberDescription')}</div>
           </div>
         </div>
 
         {/* Footer */}
         <div className="admin-modal-footer">
           <div style={{ fontSize: '13px', color: '#666', marginBottom: '1rem' }}>
-            ✓ ชื่อชั้นเรียน: <strong>{generateClassName() || '-'}</strong>
+            ✓ {t('admin.classNamePreview')}: <strong>{generateClassName() || '-'}</strong>
           </div>
           <button 
             type="button" 
             className="admin-btn-secondary"
             onClick={onClose}
           >
-            ยกเลิก
+            {t('common.cancel')}
           </button>
           <button 
             type="button" 
             className="admin-btn-primary save-edit-btn" 
             onClick={handleSubmit}
             disabled={updatingClassroom || !gradeLevel}
-            aria-label={updatingClassroom ? 'กำลังบันทึกการแก้ไข' : 'บันทึกการแก้ไข'}
+            aria-label={updatingClassroom ? t('admin.editingClassroom') : t('admin.editClassroom')}
           >
             {updatingClassroom ? (
-              <span className="btn-loading">⏳ กำลังบันทึก...</span>
+              <span className="btn-loading">⏳ {t('admin.creating')}</span>
             ) : (
               <>
                 <span className="btn-icon">✓</span>
-                <span className="btn-text">บันทึกการแก้ไข</span>
+                <span className="btn-text">{t('admin.editClassroom')}</span>
               </>
             )}
           </button>

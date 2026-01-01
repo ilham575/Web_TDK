@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { API_BASE_URL } from '../../../endpoints';
 
 const AddStudentsModal = ({
@@ -14,6 +15,7 @@ const AddStudentsModal = ({
   onStudentCountUpdate,
   refreshKey,
 }) => {
+  const { t } = useTranslation();
   // Local state สำหรับ modal นี้เท่านั้น
   const [selectedStudentIds, setSelectedStudentIds] = useState(new Set());
   const [searchTerm, setSearchTerm] = useState('');
@@ -132,10 +134,10 @@ const AddStudentsModal = ({
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flex: 1 }}>
             <div>
               <h3 style={{ margin: 0 }}>
-                👨‍🎓 {isViewMode ? 'ดูรายชื่อนักเรียน' : 'เพิ่มนักเรียน'}
+                👨‍🎓 {isViewMode ? t('admin.viewStudents') : t('admin.addStudents')}
               </h3>
               <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>
-                {selectedClassroom && `ชั้นเรียน: ${selectedClassroom.name} (${selectedClassroom.grade_level})`}
+                {selectedClassroom && `${t('admin.classroom')}: ${selectedClassroom.name} (${selectedClassroom.grade_level})`}
               </div>
             </div>
           </div>
@@ -151,7 +153,7 @@ const AddStudentsModal = ({
               textAlign: 'center',
               color: '#666'
             }}>
-              ⏳ กำลังโหลดรายชื่อนักเรียน...
+              ⏳ {t('admin.loading')}
             </div>
           )}
 
@@ -175,7 +177,7 @@ const AddStudentsModal = ({
                   <div style={{ padding: '2rem', textAlign: 'center', color: '#999' }}>
                     {(classroomStep === 'add_students' ? availableStudents.length === 0 : classroomStudents.length === 0)
                       ? (classroomStep === 'add_students' ? '✓ นักเรียนทั้งหมดลงทะเบียนแล้ว' : 'ไม่มีนักเรียนในชั้นเรียนนี้')
-                      : 'ไม่พบผลการค้นหา'}
+                      : t('admin.searchNameOrEmailShort')}
                   </div>
                 ) : (
                   <div>
@@ -267,7 +269,7 @@ const AddStudentsModal = ({
                   borderRadius: '4px',
                   color: '#2e7d32'
                 }}>
-                  ✓ เลือกแล้ว {selectedStudentIds.size} นักเรียน
+                  ✓ {t('admin.selectStudents')} {selectedStudentIds.size}
                 </div>
               )}
             </>
@@ -281,7 +283,7 @@ const AddStudentsModal = ({
             className="admin-btn-secondary"
             onClick={onClose}
           >
-            ✕ ปิด
+            ✕ {t('common.close')}
           </button>
           { !isViewMode && (
             <button 
@@ -292,13 +294,13 @@ const AddStudentsModal = ({
               aria-label={`เพิ่ม ${selectedStudentIds.size} นักเรียน`}
             >
               {addingStudentsToClassroom ? (
-                <span className="btn-loading">⏳ กำลังเพิ่ม...</span>
+                <span className="btn-loading">⏳ {t('admin.loading')}</span>
               ) : (
                 <>
                   <span className="btn-icon">✓</span>
-                  <span className="btn-text">เพิ่ม</span>
+                  <span className="btn-text">{t('common.add')}</span>
                   <span className="btn-count">{selectedStudentIds.size}</span>
-                  <span className="btn-label">นักเรียน</span>
+                  <span className="btn-label">{t('admin.student')}</span>
                 </>
               )}
             </button>

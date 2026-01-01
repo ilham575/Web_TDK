@@ -1,37 +1,39 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 
 function OwnerTabs({ activeTab, setActiveTab, passwordResetCount = 0 }) {
+  const { t } = useTranslation();
   return (
     <div className="tabs-header">
       <button 
         className={`tab-button ${activeTab === 'schools' ? 'active' : ''}`} 
         onClick={() => setActiveTab('schools')}
       >
-        จัดการโรงเรียน
+        {t('owner.manageSchools')}
       </button>
       <button 
         className={`tab-button ${activeTab === 'activities' ? 'active' : ''}`} 
         onClick={() => setActiveTab('activities')}
       >
-        กิจกรรมล่าสุด
+        {t('owner.recentActivities')}
       </button>
       <button 
         className={`tab-button ${activeTab === 'create_admin' ? 'active' : ''}`} 
         onClick={() => setActiveTab('create_admin')}
       >
-        เพิ่มแอดมิน
+        {t('owner.addAdmin')}
       </button>
       <button 
         className={`tab-button ${activeTab === 'admin_requests' ? 'active' : ''}`} 
         onClick={() => setActiveTab('admin_requests')}
       >
-        คำขอสร้างแอดมิน
+        {t('owner.adminRequests')}
       </button>
       <button 
         className={`tab-button ${activeTab === 'password_reset_requests' ? 'active' : ''}`} 
         onClick={() => setActiveTab('password_reset_requests')}
       >
-        🔐 อนุมัติรีเซ็ตรหัสผ่าน
+        {t('owner.passwordResetRequests')}
         {passwordResetCount > 0 && (
           <span style={{ 
             backgroundColor: '#ef4444', 

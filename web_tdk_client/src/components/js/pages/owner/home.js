@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import '../../../css/shared-dashboard.css';
 import '../../../css/pages/owner/owner-home.css';
 import { ToastContainer, toast } from 'react-toastify';
@@ -20,6 +21,7 @@ import OwnerTabs from './OwnerTabs';
 
 function OwnerPage() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [schools, setSchools] = useState([]);
   const [activities, setActivities] = useState([]);
   const [loadingSchools, setLoadingSchools] = useState(false);
@@ -80,7 +82,7 @@ function OwnerPage() {
           setTimeout(() => navigate('/signin'), 1500);
           return;
         } else if (data.must_change_password) {
-          toast.info('กรุณาเปลี่ยนรหัสผ่านเพื่อความปลอดภัย');
+          toast.info(t('owner.changePasswordRequired'));
           setIsAuthChecking(false);
           navigate('/change-password');
           return;
@@ -113,8 +115,8 @@ function OwnerPage() {
 
   // Update document title
   useEffect(() => {
-    document.title = 'ระบบจัดการโรงเรียน - Owner Dashboard';
-  }, []);
+    document.title = t('owner.pageTitle');
+  }, [t]);
 
   const loadSchools = async () => {
     setLoadingSchools(true);
@@ -195,7 +197,7 @@ function OwnerPage() {
 
   const approvePasswordReset = async (requestId, userId, newPassword) => {
     const token = localStorage.getItem('token');
-    if (!token) { toast.error('กรุณาเข้าสู่ระบบ'); return; }
+    if (!token) { toast.error(t('owner.loginRequired')); return; }
     try {
       const res = await fetch(`${API_BASE_URL}/users/password_reset_requests/${requestId}/approve`, {
         method: 'POST',
@@ -207,9 +209,9 @@ function OwnerPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        toast.error(data.detail || 'อนุมัติไม่สำเร็จ');
+        toast.error(data.detail || t('owner.approveFailed'));
       } else {
-        toast.success(data.detail || 'อนุมัติเรียบร้อยแล้ว');
+        toast.success(data.detail || t('owner.approveSuccess'));
         setShowResetPasswordModal(false);
         setNewPasswordForReset('');
         setSelectedResetRequest(null);
@@ -217,13 +219,13 @@ function OwnerPage() {
       }
     } catch (err) {
       console.error(err);
-      toast.error('เกิดข้อผิดพลาด');
+      toast.error(t('owner.error'));
     }
   };
 
   const rejectPasswordReset = async (requestId) => {
     const token = localStorage.getItem('token');
-    if (!token) { toast.error('กรุณาเข้าสู่ระบบ'); return; }
+    if (!token) { toast.error(t('owner.loginRequired')); return; }
     try {
       const res = await fetch(`${API_BASE_URL}/users/password_reset_requests/${requestId}/reject`, {
         method: 'POST',
@@ -231,14 +233,14 @@ function OwnerPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        toast.error(data.detail || 'ปฏิเสธไม่สำเร็จ');
+        toast.error(data.detail || t('owner.rejectFailed'));
       } else {
-        toast.success(data.detail || 'ปฏิเสธเรียบร้อยแล้ว');
+        toast.success(data.detail || t('owner.rejectSuccess'));
         fetchPasswordResetRequests();
       }
     } catch (err) {
       console.error(err);
-      toast.error('เกิดข้อผิดพลาด');
+      toast.error(t('owner.error'));
     }
   };
 
@@ -264,7 +266,7 @@ function OwnerPage() {
 
   const approveSchoolDeletionRequest = async (requestId) => {
     const token = localStorage.getItem('token');
-    if (!token) { toast.error('กรุณาเข้าสู่ระบบ'); return; }
+    if (!token) { toast.error(t('owner.loginRequired')); return; }
     try {
       const res = await fetch(`${API_BASE_URL}/owner/school_deletion_requests/${requestId}/approve`, {
         method: 'PATCH',
@@ -272,21 +274,21 @@ function OwnerPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        toast.error(data.detail || 'อนุมัติไม่สำเร็จ');
+        toast.error(data.detail || t('owner.approveDeletionError'));
       } else {
-        toast.success(data.detail || 'อนุมัติและลบโรงเรียนเรียบร้อยแล้ว');
+        toast.success(data.detail || t('owner.approveDeleteSuccess'));
         loadSchoolDeletionRequests();
         loadSchools(); // Refresh school list
       }
     } catch (err) {
       console.error(err);
-      toast.error('เกิดข้อผิดพลาด');
+      toast.error(t('owner.error'));
     }
   };
 
   const rejectSchoolDeletionRequest = async (requestId, reviewNotes) => {
     const token = localStorage.getItem('token');
-    if (!token) { toast.error('กรุณาเข้าสู่ระบบ'); return; }
+    if (!token) { toast.error(t('owner.loginRequired')); return; }
     try {
       const res = await fetch(`${API_BASE_URL}/owner/school_deletion_requests/${requestId}/reject`, {
         method: 'PATCH',
@@ -298,14 +300,14 @@ function OwnerPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        toast.error(data.detail || 'ปฏิเสธไม่สำเร็จ');
+        toast.error(data.detail || t('owner.rejectDeletionError'));
       } else {
-        toast.success(data.detail || 'ปฏิเสธเรียบร้อยแล้ว');
+        toast.success(data.detail || t('owner.rejectSuccess'));
         loadSchoolDeletionRequests();
       }
     } catch (err) {
       console.error(err);
-      toast.error('เกิดข้อผิดพลาด');
+      toast.error(t('owner.error'));
     }
   };
 
@@ -321,37 +323,37 @@ function OwnerPage() {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
-        toast.success('อนุมัติคำขอเรียบร้อย');
+        toast.success(t('owner.requestApproveSuccess'));
         loadAdminRequests();
         loadSchools(); // Refresh school stats
       } else {
         const data = await res.json();
-        toast.error(data.detail || 'Failed to approve request');
+        toast.error(data.detail || t('owner.requestApproveFailed'));
       }
     } catch (err) {
       console.error('Failed to approve request:', err);
-      toast.error('เกิดข้อผิดพลาดขณะอนุมัติคำขอ');
+      toast.error(t('owner.requestApproveError'));
     }
   };
 
   const deleteSchool = async (schoolId) => {
     const token = localStorage.getItem('token');
-    if (!token) { toast.error('กรุณาเข้าสู่ระบบ'); return; }
+    if (!token) { toast.error(t('owner.loginRequired')); return; }
     try {
       const res = await fetch(`${API_BASE_URL}/owner/schools/${schoolId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.status === 204 || res.ok) {
-        toast.success('ลบโรงเรียนเรียบร้อยแล้ว');
+        toast.success(t('owner.deleteSchoolSuccess'));
         loadSchools();
       } else {
         const data = await res.json().catch(() => ({}));
-        toast.error(data.detail || 'ไม่สามารถลบโรงเรียนได้');
+        toast.error(data.detail || t('owner.deleteSchoolFailed'));
       }
     } catch (err) {
       console.error('Failed to delete school', err);
-      toast.error('เกิดข้อผิดพลาดขณะลบโรงเรียน');
+      toast.error(t('owner.deleteSchoolError'));
     }
   };
 
@@ -363,22 +365,22 @@ function OwnerPage() {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
-        toast.success('ปฏิเสธคำขอเรียบร้อย');
+        toast.success(t('owner.rejectRequestSuccess'));
         loadAdminRequests();
       } else {
         const data = await res.json();
-        toast.error(data.detail || 'Failed to reject request');
+        toast.error(data.detail || t('owner.rejectRequestFailed'));
       }
     } catch (err) {
       console.error('Failed to reject request:', err);
-      toast.error('เกิดข้อผิดพลาดขณะปฏิเสธคำขอ');
+      toast.error(t('owner.rejectRequestError'));
     }
   };
 
   const handleCreateSchool = async (e) => {
     e.preventDefault();
     if (!newSchoolName.trim()) {
-      toast.error('กรุณากรอกชื่อโรงเรียน');
+      toast.error(t('owner.schoolNameRequired'));
       return;
     }
     setCreatingSchool(true);
@@ -391,16 +393,16 @@ function OwnerPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        toast.error(data.detail || 'สร้างโรงเรียนไม่สำเร็จ');
+        toast.error(data.detail || t('owner.createSchoolFailed'));
       } else {
-        toast.success('สร้างโรงเรียนเรียบร้อย');
+        toast.success(t('owner.createSchoolSuccess'));
         setNewSchoolName('');
         setShowCreateSchoolModal(false);
         loadSchools();
       }
     } catch (err) {
       console.error('create school error', err);
-      toast.error('เกิดข้อผิดพลาดขณะสร้างโรงเรียน');
+      toast.error(t('owner.createSchoolError'));
     } finally {
       setCreatingSchool(false);
     }
@@ -409,7 +411,7 @@ function OwnerPage() {
   const handleCreateAdmin = async (e) => {
     e.preventDefault();
     if (!newUsername || !newEmail || !newFullName || !newPassword || !selectedSchoolId) {
-      toast.error('กรุณากรอกข้อมูลให้ครบทุกช่อง');
+      toast.error(t('owner.fillAllFields'));
       return;
     }
     setCreatingAdmin(true);
@@ -428,9 +430,9 @@ function OwnerPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        toast.error(data.detail || 'สร้างแอดมินไม่สำเร็จ');
+        toast.error(data.detail || t('owner.createAdminFailed'));
       } else {
-        toast.success('สร้างแอดมินเรียบร้อย');
+        toast.success(t('owner.createAdminSuccess'));
         setNewUsername('');
         setNewEmail('');
         setNewFullName('');
@@ -440,7 +442,7 @@ function OwnerPage() {
       }
     } catch (err) {
       console.error('create admin error', err);
-      toast.error('เกิดข้อผิดพลาดขณะสร้างแอดมิน');
+      toast.error(t('owner.createAdminError'));
     } finally {
       setCreatingAdmin(false);
     }
@@ -489,7 +491,7 @@ function OwnerPage() {
       <ToastContainer />
 
       {isAuthChecking ? (
-        <Loading message="กำลังตรวจสอบสิทธิ์..." />
+        <Loading message={t('owner.checkingAuth')} />
       ) : (
         <>
       <PageHeader 
@@ -498,23 +500,23 @@ function OwnerPage() {
         rightContent={
           <>
             <div className="account-info">
-              <div className="account-label">บัญชี</div>
+              <div className="account-label">{t('owner.account')}</div>
               <div className="account-email">{currentUser?.email || ''}</div>
             </div>
             <div className="header-actions">
               <button 
                 className="owner-btn-secondary" 
                 onClick={() => navigate('/profile')}
-                title="ดูโปรไฟล์"
+                title={t('owner.viewProfile')}
               >
-                👤 โปรไฟล์
+                👤 {t('owner.profile')}
               </button>
               <button 
                 className="owner-btn-danger" 
                 onClick={handleSignout}
-                title="ออกจากระบบ"
+                title={t('owner.logout')}
               >
-                🚪 ออกจากระบบ
+                🚪 {t('owner.logout')}
               </button>
             </div>
           </>
@@ -526,28 +528,28 @@ function OwnerPage() {
           <div className="stats-icon">🏫</div>
           <div className="stats-content">
             <div className="stats-value">{schools.length}</div>
-            <div className="stats-label">โรงเรียนทั้งหมด</div>
+            <div className="stats-label">{t('owner.totalSchools')}</div>
           </div>
         </div>
         <div className="stats-card stats-admins">
           <div className="stats-icon">👨‍💼</div>
           <div className="stats-content">
             <div className="stats-value">{schools.reduce((sum, s) => sum + s.admins, 0)}</div>
-            <div className="stats-label">แอดมินทั้งหมด</div>
+            <div className="stats-label">{t('owner.totalAdmins')}</div>
           </div>
         </div>
         <div className="stats-card stats-teachers">
           <div className="stats-icon">👨‍🏫</div>
           <div className="stats-content">
             <div className="stats-value">{schools.reduce((sum, s) => sum + s.teachers, 0)}</div>
-            <div className="stats-label">ครูผู้สอนทั้งหมด</div>
+            <div className="stats-label">{t('owner.totalTeachers')}</div>
           </div>
         </div>
         <div className="stats-card stats-students">
           <div className="stats-icon">👨‍🎓</div>
           <div className="stats-content">
             <div className="stats-value">{schools.reduce((sum, s) => sum + s.students, 0)}</div>
-            <div className="stats-label">นักเรียนทั้งหมด</div>
+            <div className="stats-label">{t('owner.totalStudents')}</div>
           </div>
         </div>
       </div>
@@ -562,32 +564,32 @@ function OwnerPage() {
         {activeTab === 'schools' && (
           <div className="content-card">
             <div className="card-header">
-              <h2><span className="card-icon">🏫</span> จัดการโรงเรียน</h2>
+              <h2><span className="card-icon">🏫</span> {t('owner.manageSchools')}</h2>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
                 <button 
                   className="owner-btn-create-school" 
                   onClick={() => setShowCreateSchoolModal(true)}
                 >
-                  ➕ สร้างโรงเรียนใหม่
+                  ➕ {t('owner.createNewSchool')}
                 </button>
                 <button 
                   className="owner-btn-secondary" 
                   onClick={() => { loadSchools(); loadSchoolDeletionRequests(); }}
-                  title="รีเฟรชข้อมูลโรงเรียนและคำขอลบ"
+                  title={t('owner.refreshSchools')}
                 >
-                  🔄 รีเฟรช
+                  🔄 {t('owner.refresh')}
                 </button>
               </div>
             </div>
             <div className="card-content">
               <div className="schools-list">
                 {loadingSchools ? (
-                  <Loading message="กำลังโหลดข้อมูลโรงเรียน..." />
+                  <Loading message={t('owner.loadingSchools')} />
                 ) : schools.length === 0 ? (
                   <div className="empty-state">
                     <div className="empty-icon">🏫</div>
-                    <div className="empty-text">ยังไม่มีโรงเรียน</div>
-                    <div className="empty-subtitle">เริ่มต้นโดยการสร้างโรงเรียนใหม่</div>
+                    <div className="empty-text">{t('owner.noSchools')}</div>
+                    <div className="empty-subtitle">{t('owner.startByCreating')}</div>
                   </div>
                 ) : (
                   <div className="schools-grid">
@@ -599,21 +601,21 @@ function OwnerPage() {
                             <button
                               className={`owner-btn-danger ${!hasDeletionRequest(school.id) ? 'disabled' : ''}`}
                               title={!hasDeletionRequest(school.id)
-                                ? `ต้องมีคำขอลบโรงเรียนจากแอดมินก่อนจึงจะลบได้`
-                                : `อนุมัติคำขอลบและลบโรงเรียน ${school.name}`
+                                ? t('owner.deleteRequestRequired')
+                                : `${t('owner.approveAndDelete')} ${school.name}`
                               }
                               disabled={!hasDeletionRequest(school.id)}
                               onClick={() => {
                                 const req = schoolDeletionRequests.find(r => r.school_id === school.id);
                                 if (!req) return;
                                 openConfirmModal(
-                                  'อนุมัติคำขอลบโรงเรียน',
-                                  `คุณต้องการอนุมัติคำขอลบโรงเรียน "${school.name}" ใช่หรือไม่? การอนุมัติจะลบโรงเรียนและข้อมูลทั้งหมดอย่างถาวร.`,
+                                  t('owner.approveDeleteRequest'),
+                                  `${t('owner.confirmApproveDeleteRequest')} "${school.name}" ${t('owner.sure')} ${t('owner.permanentDeletion')}.`,
                                   () => approveSchoolDeletionRequest(req.id)
                                 );
                               }}
                             >
-                              {!hasDeletionRequest(school.id) ? '🔒 ลบ (รอคำขอจากแอดมิน)' : '✅ อนุมัติและลบ'}
+                              {!hasDeletionRequest(school.id) ? t('owner.deleteWithoutRequest') : '✅ ' + t('owner.approveAndDelete')}
                             </button>
                           </div>
                         </div>
@@ -635,11 +637,11 @@ function OwnerPage() {
                               alignItems: 'flex-start'
                             }}>
                               <div style={{ flex: 1 }}>
-                                <div style={{ fontWeight: 700, marginBottom: 6 }}>{req.school_name} — {req.status === 'pending' ? '⏳ รอดำเนินการ' : req.status === 'approved' ? '✅ อนุมัติแล้ว' : '❌ ปฏิเสธแล้ว'}</div>
-                                <div style={{ fontSize: '0.95rem', color: '#374151' }}><strong>โดย:</strong> {req.requester_name}</div>
-                                <div style={{ marginTop: '0.5rem', fontSize: '0.95rem' }}><strong>เหตุผล:</strong> {req.reason}</div>
+                                <div style={{ fontWeight: 700, marginBottom: 6 }}>{req.school_name} — {req.status === 'pending' ? '⏳ ' + t('owner.pending') : req.status === 'approved' ? '✅ ' + t('owner.approved') : '❌ ' + t('owner.rejected')}</div>
+                                <div style={{ fontSize: '0.95rem', color: '#374151' }}><strong>{t('owner.by')}:</strong> {req.requester_name}</div>
+                                <div style={{ marginTop: '0.5rem', fontSize: '0.95rem' }}><strong>{t('owner.reason')}:</strong> {req.reason}</div>
                                 {req.review_notes && (
-                                  <div style={{ marginTop: 6, fontSize: '0.9rem', color: '#6b7280' }}><strong>หมายเหตุ:</strong> {req.review_notes}</div>
+                                  <div style={{ marginTop: 6, fontSize: '0.9rem', color: '#6b7280' }}><strong>{t('owner.notes')}:</strong> {req.review_notes}</div>
                                 )}
                               </div>
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
@@ -649,13 +651,13 @@ function OwnerPage() {
                                     <button
                                       className="owner-btn-secondary"
                                       onClick={() => {
-                                        const notes = prompt('กรุณากรอกหมายเหตุสำหรับการปฏิเสธ (ไม่บังคับ):');
+                                        const notes = prompt(t('owner.enterRejectionNotes'));
                                         if (notes !== null) {
                                           rejectSchoolDeletionRequest(req.id, notes);
                                         }
                                       }}
                                     >
-                                      ❌ ปฏิเสธ
+                                      ❌ {t('owner.reject')}
                                     </button>
                                   </>
                                 )}
@@ -668,27 +670,27 @@ function OwnerPage() {
                           <div className="stat-item">
                             <span className="stat-icon">👨‍💼</span>
                             <span className="stat-value">{school.admins}</span>
-                            <span className="stat-label">แอดมิน</span>
+                            <span className="stat-label">{t('owner.admins')}</span>
                           </div>
                           <div className="stat-item">
                             <span className="stat-icon">👨‍🏫</span>
                             <span className="stat-value">{school.teachers}</span>
-                            <span className="stat-label">ครู</span>
+                            <span className="stat-label">{t('owner.teachers')}</span>
                           </div>
                           <div className="stat-item">
                             <span className="stat-icon">👨‍🎓</span>
                             <span className="stat-value">{school.students}</span>
-                            <span className="stat-label">นักเรียน</span>
+                            <span className="stat-label">{t('owner.students')}</span>
                           </div>
                           <div className="stat-item">
                             <span className="stat-icon">📚</span>
                             <span className="stat-value">{school.active_subjects}</span>
-                            <span className="stat-label">วิชากำลังเรียน</span>
+                            <span className="stat-label">{t('owner.activeSubjects')}</span>
                           </div>
                           <div className="stat-item">
                             <span className="stat-icon">📢</span>
                             <span className="stat-value">{school.recent_announcements}</span>
-                            <span className="stat-label">ประกาศล่าสุด</span>
+                            <span className="stat-label">{t('owner.latestAnnouncements')}</span>
                           </div>
                         </div>
                       </div>
@@ -703,19 +705,19 @@ function OwnerPage() {
         {activeTab === 'activities' && (
           <div className="content-card">
             <div className="card-header">
-              <h2><span className="card-icon">📋</span> กิจกรรมล่าสุด</h2>
+              <h2><span className="card-icon">📋</span> {t('owner.recentActivities')}</h2>
             </div>
             <div className="card-content">
               {/* School Filter */}
               <div className="activities-filter">
                 <div className="filter-group">
-                  <label className="filter-label">เลือกโรงเรียน</label>
+                  <label className="filter-label">{t('owner.selectSchool')}</label>
                   <select
                     className="filter-select"
                     value={selectedSchoolForActivities}
                     onChange={e => setSelectedSchoolForActivities(e.target.value)}
                   >
-                    <option value="all">📊 ทุกโรงเรียน</option>
+                    <option value="all">📊 {t('owner.allSchools')}</option>
                     {schools.map(school => (
                       <option key={school.id} value={school.id}>
                         🏫 {school.name}
@@ -726,7 +728,7 @@ function OwnerPage() {
               </div>
 
               {loadingActivities ? (
-                <Loading message="กำลังโหลดกิจกรรม..." />
+                <Loading message={t('owner.loadingActivities')} />
               ) : (
                 (() => {
                   // Filter activities based on selected school
@@ -757,7 +759,7 @@ function OwnerPage() {
                     return schoolIds.length === 0 ? (
                       <div className="empty-state">
                         <div className="empty-icon">📋</div>
-                        <div className="empty-text">ไม่มีกิจกรรมล่าสุด</div>
+                        <div className="empty-text">{t('owner.noActivities')}</div>
                       </div>
                     ) : (
                       <div className="activities-by-school">
@@ -770,7 +772,7 @@ function OwnerPage() {
                                   🏫 {schoolData.school_name}
                                 </h3>
                                 <span className="activities-count">
-                                  {schoolData.activities.length} กิจกรรม
+                                  {schoolData.activities.length} {t('owner.activities')}
                                 </span>
                               </div>
                               <div className="activities-list">
@@ -798,7 +800,7 @@ function OwnerPage() {
                       <div className="empty-state">
                         <div className="empty-icon">📋</div>
                         <div className="empty-text">
-                          {selectedSchoolForActivities === 'all' ? 'ไม่มีกิจกรรมล่าสุด' : 'ไม่มีกิจกรรมล่าสุดในโรงเรียนนี้'}
+                          {selectedSchoolForActivities === 'all' ? t('owner.noActivities') : t('owner.noActivitiesThisSchool')}
                         </div>
                       </div>
                     ) : (
@@ -828,20 +830,20 @@ function OwnerPage() {
         {activeTab === 'create_admin' && (
           <div className="content-card">
             <div className="card-header">
-              <h2><span className="card-icon">👨‍💼</span> เพิ่มแอดมินใหม่</h2>
+              <h2><span className="card-icon">👨‍💼</span> {t('owner.addNewAdmin')}</h2>
             </div>
             <div className="card-content">
               <form onSubmit={handleCreateAdmin}>
                 <div className="form-row">
                   <div className="form-group">
-                    <label className="form-label">โรงเรียน</label>
+                    <label className="form-label">{t('owner.school')}</label>
                     <select
                       className="form-input"
                       value={selectedSchoolId}
                       onChange={e => setSelectedSchoolId(e.target.value)}
                       required
                     >
-                      <option value="">เลือกโรงเรียน</option>
+                      <option value="">{t('owner.selectSchool')}</option>
                       {schools.map(school => (
                         <option key={school.id} value={school.id}>{school.name}</option>
                       ))}
@@ -872,7 +874,7 @@ function OwnerPage() {
                 </div>
                 <div className="form-row">
                   <div className="form-group">
-                    <label className="form-label">ชื่อเต็ม</label>
+                    <label className="form-label">{t('owner.fullName')}</label>
                     <input
                       className="form-input"
                       type="text"
@@ -882,7 +884,7 @@ function OwnerPage() {
                     />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">รหัสผ่าน</label>
+                    <label className="form-label">{t('owner.password')}</label>
                     <input
                       className="form-input"
                       type="password"
@@ -894,7 +896,7 @@ function OwnerPage() {
                 </div>
                 <div className="form-actions">
                   <button type="submit" className="owner-btn-create-admin" disabled={creatingAdmin}>
-                    {creatingAdmin ? 'กำลังสร้าง...' : '👨‍💼 สร้างแอดมิน'}
+                    {creatingAdmin ? t('owner.creating') : '👨‍💼 ' + t('owner.createAdmin')}
                   </button>
                 </div>
               </form>
@@ -905,16 +907,16 @@ function OwnerPage() {
         {activeTab === 'admin_requests' && (
           <div className="content-card">
             <div className="card-header">
-              <h2><span className="card-icon">📋</span> คำขอสร้างแอดมิน</h2>
+              <h2><span className="card-icon">📋</span> {t('owner.adminRequests')}</h2>
             </div>
             <div className="card-content">
               {loadingRequests ? (
-                <Loading message="กำลังโหลดคำขอ..." />
+                <Loading message={t('owner.loadingRequests')} />
               ) : adminRequests.length === 0 ? (
                 <div className="empty-state">
                   <div className="empty-icon">📋</div>
-                  <div className="empty-text">ไม่มีคำขอสร้างแอดมิน</div>
-                  <div className="empty-subtitle">คำขอใหม่จะปรากฏที่นี่</div>
+                  <div className="empty-text">{t('owner.noAdminRequests')}</div>
+                  <div className="empty-subtitle">{t('owner.newRequestsWillAppear')}</div>
                 </div>
               ) : (
                 <div className="requests-list">
@@ -930,34 +932,34 @@ function OwnerPage() {
                           </div>
                         </div>
                         <div className={`request-status status-${request.status}`}>
-                          {request.status === 'pending' ? '⏳ รอดำเนินการ' : 
-                           request.status === 'approved' ? '✅ อนุมัติแล้ว' : '❌ ปฏิเสธแล้ว'}
+                          {request.status === 'pending' ? '⏳ ' + t('owner.pending') : 
+                           request.status === 'approved' ? '✅ ' + t('owner.approved') : '❌ ' + t('owner.rejected')}
                         </div>
                       </div>
                       <div className="request-date">
-                        ขอเมื่อ: {formatDate(request.created_at)}
+                        {t('owner.requestedAt')}: {formatDate(request.created_at)}
                       </div>
                       {request.status === 'pending' && (
                         <div className="request-actions">
                           <button 
                             className="owner-btn-success" 
                             onClick={() => openConfirmModal(
-                              'อนุมัติคำขอ',
-                              `คุณต้องการอนุมัติคำขอสร้างแอดมินสำหรับ ${request.full_name} ใช่หรือไม่?`,
+                              t('owner.approveRequest'),
+                              `${t('owner.confirmApproveAdminRequest')} ${request.full_name} ${t('owner.sure')}`,
                               () => approveRequest(request.id)
                             )}
                           >
-                            ✅ อนุมัติ
+                            ✅ {t('owner.approve')}
                           </button>
                           <button 
                             className="owner-btn-danger" 
                             onClick={() => openConfirmModal(
-                              'ปฏิเสธคำขอ',
-                              `คุณต้องการปฏิเสธคำขอสร้างแอดมินสำหรับ ${request.full_name} ใช่หรือไม่?`,
+                              t('owner.rejectPasswordReset'),
+                              `${t('owner.confirmApproveAdminRequest')} ${request.full_name} ${t('owner.sure')}`,
                               () => rejectRequest(request.id)
                             )}
                           >
-                            ❌ ปฏิเสธ
+                            ❌ {t('owner.reject')}
                           </button>
                         </div>
                       )}
@@ -972,16 +974,16 @@ function OwnerPage() {
         {activeTab === 'password_reset_requests' && (
           <div className="content-card">
             <div className="card-header">
-              <h2><span className="card-icon">🔐</span> คำขอรีเซ็ตรหัสผ่านจากแอดมิน</h2>
+              <h2><span className="card-icon">🔐</span> {t('owner.passwordResetRequests')}</h2>
             </div>
             <div className="card-content">
               {loadingResetRequests ? (
-                <Loading message="กำลังโหลดคำขอ..." />
+                <Loading message={t('owner.loadingRequests')} />
               ) : passwordResetRequests.length === 0 ? (
                 <div className="empty-state">
                   <div className="empty-icon">✅</div>
-                  <div className="empty-text">ไม่มีคำขอรีเซ็ตรหัสผ่าน</div>
-                  <div className="empty-subtitle">คำขอใหม่จะปรากฏที่นี่เมื่อแอดมินลืมรหัสผ่าน</div>
+                  <div className="empty-text">{t('owner.noPasswordResetRequests')}</div>
+                  <div className="empty-subtitle">{t('owner.newPasswordResetWillAppear')}</div>
                 </div>
               ) : (
                 <div className="requests-list">
@@ -1000,18 +1002,18 @@ function OwnerPage() {
                               borderRadius: '10px',
                               fontSize: '0.8rem'
                             }}>
-                              👨‍💼 แอดมิน
+                              👨‍💼 {t('owner.admin')}
                             </span>
                           </div>
                         </div>
                         <div className="request-status status-pending">
-                          ⏳ รอดำเนินการ
+                          ⏳ {t('owner.pending')}
                         </div>
                       </div>
                       <div className="request-date">
-                        ขอเมื่อ: {new Date(request.created_at).toLocaleDateString('th-TH', { 
-                          day: 'numeric', month: 'short', year: 'numeric', 
-                          hour: '2-digit', minute: '2-digit' 
+                        {t('owner.requestedAt')}: {new Date(request.created_at).toLocaleDateString('th-TH', {
+                          day: 'numeric', month: 'short', year: 'numeric',
+                          hour: '2-digit', minute: '2-digit'
                         })}
                       </div>
                       <div className="request-actions">
@@ -1022,17 +1024,17 @@ function OwnerPage() {
                             setShowResetPasswordModal(true);
                           }}
                         >
-                          ✅ อนุมัติ
+                          ✅ {t('owner.approve')}
                         </button>
                         <button 
                           className="owner-btn-danger" 
                           onClick={() => openConfirmModal(
-                            'ปฏิเสธคำขอ',
-                            `คุณต้องการปฏิเสธคำขอรีเซ็ตรหัสผ่านของ ${request.full_name || request.username} ใช่หรือไม่?`,
+                            t('owner.rejectPasswordReset'),
+                            `${t('owner.confirmApproveAdminRequest')} ${request.full_name || request.username} ${t('owner.sure')}`,
                             () => rejectPasswordReset(request.id)
                           )}
                         >
-                          ❌ ปฏิเสธ
+                          ❌ {t('owner.reject')}
                         </button>
                       </div>
                     </div>
@@ -1066,20 +1068,20 @@ function OwnerPage() {
         <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
           <div className="modal-content" style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '12px', maxWidth: '450px', width: '90%', boxShadow: '0 10px 40px rgba(0,0,0,0.3)' }}>
             <h3 style={{ marginTop: 0, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span>🔐</span> อนุมัติรีเซ็ตรหัสผ่าน
+              <span>🔐</span> {t('owner.approvePasswordReset')}
             </h3>
             <div style={{ marginBottom: '1.5rem', padding: '1rem', backgroundColor: '#f3f4f6', borderRadius: '8px' }}>
-              <div><strong>ชื่อผู้ใช้:</strong> {selectedResetRequest.username}</div>
-              <div><strong>ชื่อ:</strong> {selectedResetRequest.full_name || '-'}</div>
-              <div><strong>บทบาท:</strong> แอดมิน</div>
+              <div><strong>{t('owner.username')}:</strong> {selectedResetRequest.username}</div>
+              <div><strong>{t('owner.fullName')}:</strong> {selectedResetRequest.full_name || '-'}</div>
+              <div><strong>{t('owner.role')}:</strong> {t('owner.admin')}</div>
             </div>
             <div style={{ marginBottom: '1.5rem' }}>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600' }}>รหัสผ่านใหม่</label>
+              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600' }}>{t('owner.newPassword')}</label>
               <input
                 type="text"
                 value={newPasswordForReset}
                 onChange={(e) => setNewPasswordForReset(e.target.value)}
-                placeholder="กรอกรหัสผ่านใหม่"
+                placeholder={t('owner.enterNewPassword')}
                 style={{
                   width: '100%',
                   padding: '10px 12px',
@@ -1089,7 +1091,7 @@ function OwnerPage() {
                 }}
               />
               <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: '#666' }}>
-                💡 แนะนำ: ใช้รหัสผ่านที่ง่ายต่อการจำ และแจ้งให้แอดมินเปลี่ยนรหัสผ่านหลังเข้าสู่ระบบ
+                💡 {t('owner.passwordHint')}
               </div>
             </div>
             <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
@@ -1108,12 +1110,12 @@ function OwnerPage() {
                   fontWeight: '500'
                 }}
               >
-                ยกเลิก
+                {t('owner.cancel')}
               </button>
               <button
                 onClick={() => {
                   if (!newPasswordForReset.trim()) {
-                    toast.error('กรุณากรอกรหัสผ่านใหม่');
+                    toast.error(t('owner.passwordRequired'));
                     return;
                   }
                   approvePasswordReset(selectedResetRequest.id, selectedResetRequest.user_id, newPasswordForReset);
@@ -1129,7 +1131,7 @@ function OwnerPage() {
                   fontWeight: '500'
                 }}
               >
-                ✅ อนุมัติ
+                ✅ {t('owner.approve')}
               </button>
             </div>
           </div>
@@ -1141,28 +1143,28 @@ function OwnerPage() {
         <div className="modal-overlay">
           <div className="modal" role="dialog" aria-modal="true" aria-labelledby="create-school-modal-title">
             <div className="modal-header">
-              <h3 id="create-school-modal-title">🏫 สร้างโรงเรียนใหม่</h3>
-              <button className="modal-close" onClick={() => { setShowCreateSchoolModal(false); setNewSchoolName(''); }} aria-label="ปิด">×</button>
+              <h3 id="create-school-modal-title">🏫 {t('owner.createNewSchool')}</h3>
+              <button className="modal-close" onClick={() => { setShowCreateSchoolModal(false); setNewSchoolName(''); }} aria-label="close">×</button>
             </div>
             <form onSubmit={handleCreateSchool}>
               <div className="modal-body">
                 <div className="form-group full-width">
-                  <label className="form-label">ชื่อโรงเรียน</label>
+                  <label className="form-label">{t('owner.schoolName')}</label>
                   <input
                     className="form-input"
                     type="text"
                     value={newSchoolName}
                     onChange={e => setNewSchoolName(e.target.value)}
-                    placeholder="เช่น โรงเรียนดาวเรือง"
+                    placeholder={t('owner.schoolNamePlaceholder')}
                     autoFocus
                     required
                   />
                 </div>
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn-cancel" onClick={() => { setShowCreateSchoolModal(false); setNewSchoolName(''); }}>ยกเลิก</button>
+                <button type="button" className="btn-cancel" onClick={() => { setShowCreateSchoolModal(false); setNewSchoolName(''); }}>{t('owner.cancel')}</button>
                 <button type="submit" className="btn-add" disabled={creatingSchool || !newSchoolName.trim()}>
-                  {creatingSchool ? 'กำลังสร้าง...' : '➕ สร้างโรงเรียน'}
+                  {creatingSchool ? t('owner.creating') : '➕ ' + t('owner.createSchool')}
                 </button>
               </div>
             </form>

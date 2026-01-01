@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import '../../../css/pages/admin/admin-home.css';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -33,6 +34,7 @@ import { logout } from '../../../../utils/authUtils';
 
 function AdminPage() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [teachers, setTeachers] = useState([]);
   const [students, setStudents] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
@@ -253,7 +255,7 @@ function AdminPage() {
           toast.error('Invalid token or role. Please sign in again.');
           setTimeout(() => navigate('/signin'), 1500);
         } else if (data.must_change_password) {
-          toast.info('กรุณาเปลี่ยนรหัสผ่านเพื่อความปลอดภัย');
+          toast.info(t('admin.changePasswordRequired'));
           navigate('/change-password');
         } else {
           setCurrentUser(data);
@@ -396,31 +398,31 @@ function AdminPage() {
 
   // Update document title with school name
   useEffect(() => {
-    const baseTitle = 'ระบบโรงเรียน';
+    const baseTitle = t('admin.schoolSystem');
     document.title = (displaySchool && displaySchool !== '-') ? `${baseTitle} - ${displaySchool}` : baseTitle;
   }, [displaySchool]);
 
   const handleCreateUser = async (e) => {
     e.preventDefault();
     const schoolId = localStorage.getItem('school_id');
-    if (!schoolId) { toast.error('ไม่พบ school_id ของ admin'); return; }
-    if (!newUsername || !newEmail || !newFullName || !newPassword) { toast.error('กรุณากรอกข้อมูลให้ครบทุกช่อง'); return; }
+    if (!schoolId) { toast.error(t('admin.noSchoolId')); return; }
+    if (!newUsername || !newEmail || !newFullName || !newPassword) { toast.error(t('admin.fillAllFields')); return; }
     setCreatingUser(true);
     try {
       const token = localStorage.getItem('token');
       const body = { username:newUsername, email:newEmail, full_name:newFullName, password:newPassword, role:newRole, school_id:Number(schoolId) };
       const res = await fetch(`${API_BASE_URL}/users`, { method:'POST', headers:{ 'Content-Type':'application/json', ...(token?{Authorization:`Bearer ${token}`}:{}) }, body:JSON.stringify(body) });
       const data = await res.json();
-      if (!res.ok) toast.error(data.detail || 'สร้างผู้ใช้ไม่สำเร็จ'); else { toast.success('สร้างผู้ใช้เรียบร้อย'); if (data.role==='teacher') setTeachers(prev=>[data,...prev]); else if (data.role==='student') setStudents(prev=>[data,...prev]); setNewUsername(''); setNewEmail(''); setNewFullName(''); setNewPassword(''); setNewRole('teacher'); setShowModal(false); }
-    } catch (err) { console.error('create user error', err); toast.error('เกิดข้อผิดพลาดขณะสร้างผู้ใช้'); } finally { setCreatingUser(false); }
+      if (!res.ok) toast.error(data.detail || t('admin.createUserFailed')); else { toast.success(t('admin.createUserSuccess')); if (data.role==='teacher') setTeachers(prev=>[data,...prev]); else if (data.role==='student') setStudents(prev=>[data,...prev]); setNewUsername(''); setNewEmail(''); setNewFullName(''); setNewPassword(''); setNewRole('teacher'); setShowModal(false); }
+    } catch (err) { console.error('create user error', err); toast.error(t('admin.createUserError')); } finally { setCreatingUser(false); }
   };
 
   const handleAnnouncement = async (e) => {
     e.preventDefault();
     const token = localStorage.getItem('token');
     const schoolId = localStorage.getItem('school_id');
-    if (!title || !content) { toast.error('กรุณากรอกหัวข้อและเนื้อหา'); return; }
-    if (!schoolId) { toast.error('ไม่พบโรงเรียน'); return; }
+    if (!title || !content) { toast.error(t('admin.fillTitleContent')); return; }
+    if (!schoolId) { toast.error(t('admin.schoolNotFound')); return; }
     try {
       const body = { title, content, school_id: Number(schoolId) };
       if (expiry) {
@@ -434,8 +436,8 @@ function AdminPage() {
       }
       const res = await fetch(`${API_BASE_URL}/announcements/`, { method:'POST', headers:{ 'Content-Type':'application/json', ...(token?{Authorization:`Bearer ${token}`}:{}) }, body:JSON.stringify(body) });
       const data = await res.json();
-      if (!res.ok) toast.error(data.detail || 'ประกาศข่าวไม่สำเร็จ'); else { toast.success('ประกาศข่าวสำเร็จ!'); setTitle(''); setContent(''); setExpiry(''); if (data && data.id) setAnnouncements(prev=>Array.isArray(prev)?[data,...prev]:[data]); }
-    } catch (err) { console.error('announcement error', err); toast.error('เกิดข้อผิดพลาดในการประกาศข่าว'); }
+      if (!res.ok) toast.error(data.detail || t('admin.announcementFailed')); else { toast.success(t('admin.announcementSuccess')); setTitle(''); setContent(''); setExpiry(''); if (data && data.id) setAnnouncements(prev=>Array.isArray(prev)?[data,...prev]:[data]); }
+    } catch (err) { console.error('announcement error', err); toast.error(t('admin.announcementError')); }
   };
 
   const handleFileChange = (e) => { const f = e.target.files && e.target.files[0]; setUploadFile(f || null); };
@@ -446,7 +448,7 @@ function AdminPage() {
     return errors
       .map(err => {
         if (typeof err === 'string') return `• ${err}`;
-        if (err.row && err.error) return `• แถว ${err.row}: ${err.error}`;
+        if (err.row && err.error) return `• ${t('admin.rowError')} ${err.row}: ${err.error}`;
         if (err.error) return `• ${err.error}`;
         return `• ${JSON.stringify(err)}`;
       })
@@ -466,7 +468,7 @@ function AdminPage() {
         const errorMsg = data.detail || 'Upload failed';
         const errorDetails = formatErrorMessages(data.errors);
         openAlertModal(
-          '❌ อัพโหลดผู้ใช้ไม่สำเร็จ',
+          `❌ ${t('admin.uploadUsersFailed')}`,
           errorDetails ? `${errorMsg}\n\n${errorDetails}` : errorMsg
         );
       } else {
@@ -475,21 +477,21 @@ function AdminPage() {
         if (errCount > 0) {
           // ถ้ามี error บางส่วน แสดง warning modal พร้อมรายละเอียด
           const errorDetails = formatErrorMessages(data.errors);
-          const moreMsg = data.errors.length > 20 ? `\n... และอีก ${data.errors.length - 20} รายการ` : '';
+          const moreMsg = data.errors.length > 20 ? `\n... ${t('admin.andMore')} ${data.errors.length - 20} ${t('admin.items')}` : '';
           openAlertModal(
-            '⚠️ อัพโหลดสำเร็จบางส่วน',
-            `✓ เพิ่ม ${created} นักเรียน สำเร็จ\n✗ Error ${errCount} รายการ:\n\n${errorDetails}${moreMsg}`
+            `⚠️ ${t('admin.uploadPartialSuccess')}`,
+            `✓ ${t('admin.addedStudents')} ${created} ${t('admin.studentsSuccess')}\n✗ ${t('admin.errorCount')} ${errCount} ${t('admin.items')}:\n\n${errorDetails}${moreMsg}`
           );
         } else {
-          toast.success(`✓ อัพโหลดสำเร็จ: ${created} นักเรียน`);
+          toast.success(`✓ ${t('admin.uploadSuccess')}: ${created} ${t('nav.students')}`);
         }
         if (currentUser) setCurrentUser({...currentUser});
       }
     } catch (err) {
       console.error('upload error', err);
       openAlertModal(
-        '❌ เกิดข้อผิดพลาด',
-        `ไม่สามารถอัพโหลดไฟล์ได้: ${err.message || 'Unknown error'}`
+        `❌ ${t('admin.errorOccurred')}`,
+        `${t('admin.cannotUploadFile')}: ${err.message || 'Unknown error'}`
       );
     } finally {
       setUploading(false);
@@ -506,13 +508,13 @@ function AdminPage() {
 
   const saveGradeAnnouncementDate = async () => {
     if (!currentUser || !currentUser.school_id) {
-      toast.error('ไม่พบข้อมูลโรงเรียน');
+      toast.error(t('admin.noSchoolData'));
       return;
     }
 
     const token = localStorage.getItem('token');
     if (!token) {
-      toast.error('กรุณาเข้าสู่ระบบเพื่อดำเนินการ');
+      toast.error(t('admin.loginRequired'));
       return;
     }
 
@@ -537,14 +539,14 @@ function AdminPage() {
 
       const data = await res.json();
       if (res.ok) {
-        toast.success('บันทึกวันประกาศผลคะแนนเรียบร้อย');
+        toast.success(t('admin.saveDateSuccess'));
         setSchoolData(data);
       } else {
-        toast.error(data.detail || 'บันทึกไม่สำเร็จ');
+        toast.error(data.detail || t('admin.saveFailed'));
       }
     } catch (err) {
       console.error('Save grade announcement date error:', err);
-      toast.error('เกิดข้อผิดพลาดในการบันทึกวันประกาศผลคะแนน');
+      toast.error(t('admin.saveDateError'));
     } finally {
       setSavingGradeAnnouncement(false);
     }
@@ -552,18 +554,18 @@ function AdminPage() {
 
   const deleteAnnouncement = async (id) => {
     const token = localStorage.getItem('token');
-    if (!token) { toast.error('กรุณาเข้าสู่ระบบเพื่อดำเนินการ'); return; }
+    if (!token) { toast.error(t('admin.loginRequired')); return; }
     try {
       const res = await fetch(`${API_BASE_URL}/announcements/${id}`, { method:'DELETE', headers:{ 'Authorization': `Bearer ${token}` } });
       if (res.status===204 || res.ok) {
-        toast.success('ลบข่าวเรียบร้อย');
+        toast.success(t('admin.deleteAnnouncementSuccess'));
         setAnnouncements(prev=>Array.isArray(prev)?prev.filter(a=>a.id!==id):[]);
       } else {
         const data = await res.json();
-        toast.error(data.detail || 'ลบข่าวไม่สำเร็จ');
+        toast.error(data.detail || t('admin.deleteAnnouncementFailed'));
       }
     } catch (err) {
-      toast.error('เกิดข้อผิดพลาดในการลบข่าว');
+      toast.error(t('admin.deleteAnnouncementError'));
     }
   };
 
@@ -583,37 +585,37 @@ function AdminPage() {
 
   const deactivateUser = async (userId, userName) => {
     const token = localStorage.getItem('token');
-    if (!token) { toast.error('กรุณาเข้าสู่ระบบเพื่อดำเนินการ'); return; }
+    if (!token) { toast.error(t('admin.loginRequired')); return; }
     try {
       const res = await fetch(`${API_BASE_URL}/users/${userId}/deactivate`, { method: 'PATCH', headers: { 'Authorization': `Bearer ${token}` } });
       const data = await res.json();
-      if (!res.ok) { toast.error(data.detail || 'ปิดใช้งานผู้ใช้ไม่สำเร็จ'); } 
+      if (!res.ok) { toast.error(data.detail || t('admin.deactivateUserFailed')); } 
       else { 
-        toast.success(`ปิดใช้งานผู้ใช้ ${userName} เรียบร้อย`); 
+        toast.success(`${t('admin.deactivateUserSuccess')} ${userName} ${t('admin.successfully')}`); 
         // refresh user lists
         window.location.reload();
       }
-    } catch (err) { console.error(err); toast.error('เกิดข้อผิดพลาดในการปิดใช้งานผู้ใช้'); }
+    } catch (err) { console.error(err); toast.error(t('admin.deactivateUserError')); }
   };
 
   const activateUser = async (userId, userName) => {
     const token = localStorage.getItem('token');
-    if (!token) { toast.error('กรุณาเข้าสู่ระบบเพื่อดำเนินการ'); return; }
+    if (!token) { toast.error(t('admin.loginRequired')); return; }
     try {
       const res = await fetch(`${API_BASE_URL}/users/${userId}/activate`, { method: 'PATCH', headers: { 'Authorization': `Bearer ${token}` } });
       const data = await res.json();
-      if (!res.ok) { toast.error(data.detail || 'เปิดใช้งานผู้ใช้ไม่สำเร็จ'); } 
+      if (!res.ok) { toast.error(data.detail || t('admin.activateUserFailed')); } 
       else { 
-        toast.success(`เปิดใช้งานผู้ใช้ ${userName} เรียบร้อย`); 
+        toast.success(`${t('admin.activateUserSuccess')} ${userName} ${t('admin.successfully')}`); 
         // refresh user lists
         window.location.reload();
       }
-    } catch (err) { console.error(err); toast.error('เกิดข้อผิดพลาดในการเปิดใช้งานผู้ใช้'); }
+    } catch (err) { console.error(err); toast.error(t('admin.activateUserError')); }
   };
 
   const deleteUser = async (userId, userName) => {
     const token = localStorage.getItem('token');
-    if (!token) { toast.error('กรุณาเข้าสู่ระบบเพื่อดำเนินการ'); return; }
+    if (!token) { toast.error(t('admin.loginRequired')); return; }
     try {
       const res = await fetch(`${API_BASE_URL}/users/${userId}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
       const data = await res.json();
@@ -626,22 +628,22 @@ function AdminPage() {
           });
           toast.error(errorMessage);
         } else {
-          toast.error(data.detail || 'ลบผู้ใช้ไม่สำเร็จ');
+          toast.error(data.detail || t('admin.deleteUserFailed'));
         }
       } 
       else { 
-        toast.success(`ลบผู้ใช้ ${userName} เรียบร้อย`); 
+        toast.success(`${t('admin.deleteUserSuccess')} ${userName} ${t('admin.successfully')}`); 
         // refresh user lists
         window.location.reload();
       }
-    } catch (err) { console.error(err); toast.error('เกิดข้อผิดพลาดในการลบผู้ใช้'); }
+    } catch (err) { console.error(err); toast.error(t('admin.deleteUserError')); }
   };
 
   // Bulk reset selected students' passwords
   const bulkResetSelectedStudents = async () => {
-    if (!selectedStudentsForReset || selectedStudentsForReset.size === 0) { toast.error('กรุณาเลือกนักเรียนก่อน'); return; }
+    if (!selectedStudentsForReset || selectedStudentsForReset.size === 0) { toast.error(t('admin.selectStudentsFirst')); return; }
     const token = localStorage.getItem('token');
-    if (!token) { toast.error('กรุณาเข้าสู่ระบบเพื่อดำเนินการ'); return; }
+    if (!token) { toast.error(t('admin.loginRequired')); return; }
     setBulkResetLoading(true);
     try {
       const ids = Array.from(selectedStudentsForReset);
@@ -649,7 +651,7 @@ function AdminPage() {
         try {
           const res = await fetch(`${API_BASE_URL}/users/${id}/admin_reset`, { method: 'POST', headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
           const data = await res.json();
-          if (!res.ok) return { id, ok: false, error: data && data.detail ? data.detail : 'รีเซ็ตไม่สำเร็จ' };
+          if (!res.ok) return { id, ok: false, error: data && data.detail ? data.detail : t('admin.resetFailed') };
           return { id, ok: true, temp_password: data.temp_password };
         } catch (err) {
           return { id, ok: false, error: err.message || 'Network error' };
@@ -664,12 +666,12 @@ function AdminPage() {
         else message += `${display}: ❌ ${r.error}\n`;
       });
 
-      openAlertModal('ผลการรีเซ็ตรหัสผ่าน', message);
-      toast.success('ดำเนินการรีเซ็ตรหัสผ่านเสร็จสิ้น');
+      openAlertModal(t('admin.resetPasswordResult'), message);
+      toast.success(t('admin.resetPasswordDone'));
       setSelectedStudentsForReset(new Set());
     } catch (err) {
       console.error(err);
-      toast.error('เกิดข้อผิดพลาดขณะรีเซ็ตรหัสผ่าน');
+      toast.error(t('admin.resetPasswordError'));
     } finally {
       setBulkResetLoading(false);
     }
@@ -697,7 +699,7 @@ function AdminPage() {
 
   const approvePasswordReset = async (requestId, userId, newPassword) => {
     const token = localStorage.getItem('token');
-    if (!token) { toast.error('กรุณาเข้าสู่ระบบ'); return; }
+    if (!token) { toast.error(t('admin.pleaseLogin')); return; }
     try {
       const res = await fetch(`${API_BASE_URL}/users/password_reset_requests/${requestId}/approve`, {
         method: 'POST',
@@ -709,9 +711,9 @@ function AdminPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        toast.error(data.detail || 'อนุมัติไม่สำเร็จ');
+        toast.error(data.detail || t('admin.approveFailed'));
       } else {
-        toast.success(data.detail || 'อนุมัติเรียบร้อยแล้ว');
+        toast.success(data.detail || t('admin.approveSuccess'));
         setShowResetPasswordModal(false);
         setNewPasswordForReset('');
         setSelectedResetRequest(null);
@@ -719,13 +721,13 @@ function AdminPage() {
       }
     } catch (err) {
       console.error(err);
-      toast.error('เกิดข้อผิดพลาด');
+      toast.error(t('admin.error'));
     }
   };
 
   const rejectPasswordReset = async (requestId) => {
     const token = localStorage.getItem('token');
-    if (!token) { toast.error('กรุณาเข้าสู่ระบบ'); return; }
+    if (!token) { toast.error(t('admin.pleaseLogin')); return; }
     try {
       const res = await fetch(`${API_BASE_URL}/users/password_reset_requests/${requestId}/reject`, {
         method: 'POST',
@@ -733,14 +735,14 @@ function AdminPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        toast.error(data.detail || 'ปฏิเสธไม่สำเร็จ');
+        toast.error(data.detail || t('admin.rejectFailed'));
       } else {
-        toast.success(data.detail || 'ปฏิเสธเรียบร้อยแล้ว');
+        toast.success(data.detail || t('admin.rejectSuccess'));
         fetchPasswordResetRequests();
       }
     } catch (err) {
       console.error(err);
-      toast.error('เกิดข้อผิดพลาด');
+      toast.error(t('admin.error'));
     }
   };
 
@@ -806,11 +808,11 @@ function AdminPage() {
       }
       const res = await fetch(`${API_BASE_URL}/announcements/${modalAnnouncement.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...(token?{Authorization:`Bearer ${token}`}:{}) }, body: JSON.stringify(body) });
       const data = await res.json();
-      if (!res.ok) { toast.error(data.detail || 'แก้ไขข่าวไม่สำเร็จ'); return; }
-      toast.success('แก้ไขข่าวสำเร็จ!');
+      if (!res.ok) { toast.error(data.detail || t('admin.editAnnouncementFailed')); return; }
+      toast.success(t('admin.editAnnouncementSuccess'));
       setAnnouncements(prev => Array.isArray(prev) ? prev.map(a => a.id === data.id ? data : a) : prev);
       closeAnnouncementModal();
-    } catch (err) { console.error('save announcement modal error', err); toast.error('เกิดข้อผิดพลาดในการแก้ไขข่าว'); }
+    } catch (err) { console.error('save announcement modal error', err); toast.error(t('admin.editAnnouncementError')); }
   };
 
   const openExpiryModal = (item) => {
@@ -828,10 +830,10 @@ function AdminPage() {
       const body = { expires_at: localWithSec ? localWithSec.replace('T', ' ') : null };
       const res = await fetch(`${API_BASE_URL}/announcements/${expiryModalId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...(token?{Authorization:`Bearer ${token}`}:{}) }, body: JSON.stringify(body) });
       const data = await res.json();
-      if (!res.ok) { toast.error(data.detail || 'ตั้งวันหมดอายุไม่สำเร็จ'); return; }
-      toast.success('อัปเดตวันหมดอายุเรียบร้อย');
+      if (!res.ok) { toast.error(data.detail || t('admin.setExpiryFailed')); return; }
+      toast.success(t('admin.setExpirySuccess'));
       setAnnouncements(prev => (Array.isArray(prev) ? prev.map(a => a.id === expiryModalId ? (data && data.id ? data : { ...a, expires_at: body.expires_at }) : a) : prev));
-    } catch (err) { console.error('save expiry error', err); toast.error('เกิดข้อผิดพลาดในการตั้งวันหมดอายุ'); }
+    } catch (err) { console.error('save expiry error', err); toast.error(t('admin.setExpiryError')); }
   };
 
   const openConfirmModal = (title, message, onConfirm) => {
@@ -904,21 +906,21 @@ function AdminPage() {
     const start = (vals.start_time ?? newScheduleStartTime) ? String(vals.start_time ?? newScheduleStartTime).trim() : '';
     const end = (vals.end_time ?? newScheduleEndTime) ? String(vals.end_time ?? newScheduleEndTime).trim() : '';
     if ((!daysArray || daysArray.length === 0) && !day) {
-      toast.error('กรุณาเลือกวันในสัปดาห์อย่างน้อยหนึ่งวัน');
+      toast.error(t('admin.selectAtLeastOneDay'));
       return;
     }
     if (!start || !end) {
-      toast.error('กรุณากรอกข้อมูลให้ครบทุกช่อง');
+      toast.error(t('admin.fillAllFields'));
       return;
     }
     if (start >= end) {
-      toast.error('เวลาเริ่มต้องน้อยกว่าเวลาสิ้นสุด');
+      toast.error(t('admin.startTimeMustBeLess'));
       return;
     }
 
     const schoolId = localStorage.getItem('school_id');
     if (!schoolId) {
-      toast.error('ไม่พบข้อมูลโรงเรียน');
+      toast.error(t('admin.noSchoolData'));
       return;
     }
 
@@ -936,7 +938,7 @@ function AdminPage() {
           });
           if (!res.ok) {
             const data = await res.json().catch(() => ({}));
-            return { ok: false, day: d, detail: data.detail || 'ไม่ทราบสาเหตุ' };
+            return { ok: false, day: d, detail: data.detail || t('admin.unknownError') };
           }
           return { ok: true, day: d };
         }));
@@ -944,11 +946,11 @@ function AdminPage() {
         const failed = results.filter(r => r.status === 'fulfilled' && r.value && r.value.ok === false).map(r => r.value) || [];
         const createdCount = results.filter(r => r.status === 'fulfilled' && r.value && r.value.ok === true).length;
         if (createdCount > 0 && failed.length === 0) {
-          toast.success(`เพิ่มช่วงเวลาเรียบร้อยสำหรับ ${createdCount} วัน`);
+          toast.success(`${t('admin.addScheduleSuccessForDays')} ${createdCount} ${t('admin.days2')}`);
         } else if (createdCount > 0 && failed.length > 0) {
-          toast.warn(`สร้างสำเร็จ ${createdCount} วัน, ล้มเหลว ${failed.length} วัน: ${failed.map(f => f.day).join(', ')}`);
+          toast.warn(`${t('admin.createSuccessDays')} ${createdCount} ${t('admin.days2')}, ${t('admin.failedDays')} ${failed.length} ${t('admin.days2')}: ${failed.map(f => f.day).join(', ')}`);
         } else {
-          toast.error(`สร้างช่วงเวลาไม่สำเร็จ: ${failed.map(f => f.detail).join('; ')}`);
+          toast.error(`${t('admin.createScheduleFailed')}: ${failed.map(f => f.detail).join('; ')}`);
         }
 
         setShowScheduleModal(false);
@@ -964,7 +966,7 @@ function AdminPage() {
       const body = { school_id: Number(schoolId), day_of_week: Number(day), start_time: start, end_time: end };
       const res = await fetch(`${API_BASE_URL}/schedule/slots`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(body) });
       if (res.ok) {
-        toast.success('เพิ่มช่วงเวลาเรียนเรียบร้อย');
+        toast.success(t('admin.addScheduleSuccess'));
         setShowScheduleModal(false);
         setNewScheduleDay('');
         setNewScheduleStartTime('');
@@ -972,11 +974,11 @@ function AdminPage() {
         loadScheduleSlots();
       } else {
         const data = await res.json();
-        toast.error(data.detail || 'เพิ่มช่วงเวลาไม่สำเร็จ');
+        toast.error(data.detail || t('admin.addScheduleFailed'));
       }
     } catch (err) {
       console.error('Create schedule slot error:', err);
-      toast.error('เกิดข้อผิดพลาดในการเพิ่มช่วงเวลา');
+      toast.error(t('admin.addScheduleError'));
     }
   };
 
@@ -993,11 +995,11 @@ function AdminPage() {
     const start = (vals.start_time ?? newScheduleStartTime) ? String(vals.start_time ?? newScheduleStartTime).trim() : '';
     const end = (vals.end_time ?? newScheduleEndTime) ? String(vals.end_time ?? newScheduleEndTime).trim() : '';
     if (!day || !start || !end) {
-      toast.error('กรุณากรอกข้อมูลให้ครบทุกช่อง');
+      toast.error(t('admin.fillAllFields'));
       return;
     }
     if (start >= end) {
-      toast.error('เวลาเริ่มต้องน้อยกว่าเวลาสิ้นสุด');
+      toast.error(t('admin.startTimeMustBeLess'));
       return;
     }
 
@@ -1019,7 +1021,7 @@ function AdminPage() {
       });
 
       if (res.ok) {
-        toast.success('แก้ไขช่วงเวลาเรียนเรียบร้อย');
+        toast.success(t('admin.editScheduleSuccess'));
         // refresh any admin schedule assignments as well
         setAdminSchedules(prev => prev);
         setShowScheduleModal(false);
@@ -1030,11 +1032,11 @@ function AdminPage() {
         loadScheduleSlots();
       } else {
         const data = await res.json();
-        toast.error(data.detail || 'แก้ไขช่วงเวลาไม่สำเร็จ');
+        toast.error(data.detail || t('admin.editScheduleFailed'));
       }
     } catch (err) {
       console.error('Update schedule slot error:', err);
-      toast.error('เกิดข้อผิดพลาดในการแก้ไขช่วงเวลา');
+      toast.error(t('admin.editScheduleError'));
     }
   };
 
@@ -1046,16 +1048,16 @@ function AdminPage() {
         headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
       });
       if (res.ok) {
-        toast.success('ยกเลิกเวลาเรียนเรียบร้อย');
+        toast.success(t('admin.cancelScheduleSuccess'));
         // refresh adminSchedules
         await loadAdminSchedules();
       } else {
         const data = await res.json();
-        toast.error(data.detail || 'ยกเลิกเวลาเรียนไม่สำเร็จ');
+        toast.error(data.detail || t('admin.cancelScheduleFailed'));
       }
     } catch (err) {
       console.error('Delete assignment error:', err);
-      toast.error('เกิดข้อผิดพลาดในการยกเลิกเวลาเรียน');
+      toast.error(t('admin.cancelScheduleError'));
     }
   };
 
@@ -1068,21 +1070,21 @@ function AdminPage() {
       });
 
       if (res.ok) {
-        toast.success('ลบช่วงเวลาเรียนเรียบร้อย');
+        toast.success(t('admin.deleteScheduleSuccess'));
         loadScheduleSlots();
       } else {
         const data = await res.json();
-        toast.error(data.detail || 'ลบช่วงเวลาไม่สำเร็จ');
+        toast.error(data.detail || t('admin.deleteScheduleFailed'));
       }
     } catch (err) {
       console.error('Delete schedule slot error:', err);
-      toast.error('เกิดข้อผิดพลาดในการลบช่วงเวลา');
+      toast.error(t('admin.deleteScheduleError'));
     }
   };
 
   const getDayName = (dayNumber) => {
-    const days = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
-    return days[dayNumber] || 'ไม่ระบุ';
+    const days = [t('admin.sunday'), t('admin.monday'), t('admin.tuesday'), t('admin.wednesday'), t('admin.thursday'), t('admin.friday'), t('admin.saturday')];
+    return days[dayNumber] || t('admin.notSpecified');
   };
 
   const cancelScheduleModal = () => {
@@ -1150,7 +1152,7 @@ function AdminPage() {
     const academic_year_to_use = academicYear ?? newHomeroomAcademicYear;
 
     if (!teacher_id_to_use || !grade_level_to_use) {
-      toast.error('กรุณาเลือกครูและชั้นเรียน');
+      toast.error(t('admin.selectTeacherAndClassroom'));
       return;
     }
     
@@ -1174,15 +1176,15 @@ function AdminPage() {
       const data = await res.json();
       
       if (res.ok) {
-        toast.success('กำหนดครูประจำชั้นเรียบร้อยแล้ว');
+        toast.success(t('admin.assignHomeroomSuccess'));
         cancelHomeroomModal();
         loadHomeroomTeachers();
       } else {
-        toast.error(data.detail || 'กำหนดครูประจำชั้นไม่สำเร็จ');
+        toast.error(data.detail || t('admin.assignHomeroomFailed'));
       }
     } catch (err) {
       console.error('Create homeroom teacher error:', err);
-      toast.error('เกิดข้อผิดพลาดในการกำหนดครูประจำชั้น');
+      toast.error(t('admin.assignHomeroomError'));
     }
   };
 
@@ -1195,7 +1197,7 @@ function AdminPage() {
     const academic_year_to_use = academicYear ?? newHomeroomAcademicYear;
 
     if (!teacher_id_to_use) {
-      toast.error('กรุณาเลือกครู');
+      toast.error(t('admin.selectTeacher'));
       return;
     }
     
@@ -1217,15 +1219,15 @@ function AdminPage() {
       const data = await res.json();
       
       if (res.ok) {
-        toast.success('แก้ไขครูประจำชั้นเรียบร้อยแล้ว');
+        toast.success(t('admin.editHomeroomSuccess'));
         cancelHomeroomModal();
         loadHomeroomTeachers();
       } else {
-        toast.error(data.detail || 'แก้ไขครูประจำชั้นไม่สำเร็จ');
+        toast.error(data.detail || t('admin.editHomeroomFailed'));
       }
     } catch (err) {
       console.error('Update homeroom teacher error:', err);
-      toast.error('เกิดข้อผิดพลาดในการแก้ไขครูประจำชั้น');
+      toast.error(t('admin.editHomeroomError'));
     }
   };
 
@@ -1239,15 +1241,15 @@ function AdminPage() {
       });
       
       if (res.ok) {
-        toast.success('ลบครูประจำชั้นเรียบร้อยแล้ว');
+        toast.success(t('admin.deleteHomeroomSuccess'));
         loadHomeroomTeachers();
       } else {
         const data = await res.json();
-        toast.error(data.detail || 'ลบครูประจำชั้นไม่สำเร็จ');
+        toast.error(data.detail || t('admin.deleteHomeroomFailed'));
       }
     } catch (err) {
       console.error('Delete homeroom teacher error:', err);
-      toast.error('เกิดข้อผิดพลาดในการลบครูประจำชั้น');
+      toast.error(t('admin.deleteHomeroomError'));
     }
   };
 
@@ -1372,19 +1374,19 @@ function AdminPage() {
 
   const requestSchoolDeletion = async () => {
     if (!deletionReason.trim()) {
-      toast.error('กรุณากรอกเหตุผลในการลบโรงเรียน');
+      toast.error(t('admin.fillDeletionReason'));
       return;
     }
 
     const schoolId = localStorage.getItem('school_id');
     if (!schoolId) {
-      toast.error('ไม่พบข้อมูลโรงเรียน');
+      toast.error(t('admin.noSchoolData'));
       return;
     }
 
     const token = localStorage.getItem('token');
     if (!token) {
-      toast.error('กรุณาเข้าสู่ระบบ');
+      toast.error(t('admin.loginRequired'));
       return;
     }
 
@@ -1404,15 +1406,15 @@ function AdminPage() {
 
       const data = await res.json();
       if (res.ok) {
-        toast.success('ส่งคำขอการลบโรงเรียนเรียบร้อยแล้ว กรุณาบอก Owner ให้รีเฟรชหน้าในแท็บจัดการโรงเรียน');
+        toast.success(t('admin.requestDeletionSuccess'));
         setDeletionReason('');
         loadSchoolDeletionRequests();
       } else {
-        toast.error(data.detail || 'ส่งคำขอไม่สำเร็จ');
+        toast.error(data.detail || t('admin.requestDeletionFailed'));
       }
     } catch (err) {
       console.error('Request school deletion error:', err);
-      toast.error('เกิดข้อผิดพลาดในการส่งคำขอ');
+      toast.error(t('admin.requestDeletionError'));
     } finally {
       setRequestingDeletion(false);
     }
@@ -1443,7 +1445,7 @@ function AdminPage() {
 
   const uploadGradeAssignmentFile = async () => {
     if (!gradeAssignmentFile) {
-      toast.error('กรุณาเลือกไฟล์ก่อน');
+      toast.error(t('admin.selectFileFirst'));
       return;
     }
 
@@ -1464,17 +1466,17 @@ function AdminPage() {
       const data = await res.json();
 
       if (res.ok) {
-        toast.success(`เพิ่มชั้นเรียนสำเร็จ: อัปเดต ${data.updated_count} คน, สร้างใหม่ ${data.created_count} คน`);
+        toast.success(`${t('admin.addClassroomSuccess')}: ${t('admin.updated')} ${data.updated_count} ${t('admin.people')}, ${t('admin.created')} ${data.created_count} ${t('admin.people')}`);
         setGradeAssignmentFile(null);
         const inp = document.getElementById('grade-assignment-input');
         if (inp) inp.value = '';
         loadHomeroomTeachers();
       } else {
-        toast.error(data.detail || 'เพิ่มชั้นเรียนไม่สำเร็จ');
+        toast.error(data.detail || t('admin.addClassroomFailed'));
       }
     } catch (err) {
       console.error('Grade assignment error:', err);
-      toast.error('เกิดข้อผิดพลาดในการเพิ่มชั้นเรียน');
+      toast.error(t('admin.addClassroomError'));
     } finally {
       setAssigningGrades(false);
     }
@@ -1498,11 +1500,11 @@ function AdminPage() {
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
       } else {
-        toast.error('ดาวน์โหลดเทมเพลตไม่สำเร็จ');
+        toast.error(t('admin.downloadTemplateFailed'));
       }
     } catch (err) {
       console.error('Download template error:', err);
-      toast.error('เกิดข้อผิดพลาดในการดาวน์โหลดเทมเพลต');
+      toast.error(t('admin.downloadTemplateError'));
     }
   };
 
@@ -1522,7 +1524,7 @@ function AdminPage() {
 
   const assignGradeToStudent = async () => {
     if (!selectedStudentId || !selectedGradeLevel) {
-      toast.error('กรุณาเลือกนักเรียนและชั้นเรียน');
+      toast.error(t('admin.selectStudentAndClassroom'));
       return;
     }
 
@@ -1533,7 +1535,7 @@ function AdminPage() {
       // ตรวจสอบว่าชั้นเรียนที่เลือกมีในรายการที่แอดมินสร้างไว้หรือไม่
       const classroomExists = classrooms.some(c => c.grade_level === selectedGradeLevel);
       if (!classroomExists) {
-        toast.warning(`⚠️ ไม่พบชั้นเรียน "${selectedGradeLevel}" ในรายการ ให้แอดมินสร้างชั้นเรียนก่อน`);
+        toast.warning(`⚠️ ${t('admin.classroomNotFound')} "${selectedGradeLevel}" - ${t('admin.pleaseCreateClassroomFirst')}`);
         return;
       }
 
@@ -1551,7 +1553,7 @@ function AdminPage() {
       if (res.ok) {
         const student = students.find(s => s.id === Number(selectedStudentId));
         const classroom = classrooms.find(c => c.grade_level === selectedGradeLevel);
-        toast.success(`✓ กำหนดนักเรียน "${student?.full_name || 'นักเรียน'}" เข้าชั้นเรียน "${classroom?.name || selectedGradeLevel}" สำเร็จ`);
+        toast.success(`✓ ${t('admin.assignStudentSuccess')} "${student?.full_name || t('admin.studentWord')}" ${t('admin.toClassroom')} "${classroom?.name || selectedGradeLevel}"`);
         setSelectedStudentId('');
         setSelectedGradeLevel('');
         // Reload students
@@ -1570,11 +1572,11 @@ function AdminPage() {
             .catch(err => console.error('Failed to reload students:', err));
         }
       } else {
-        toast.error(data.detail || 'อัปเดตชั้นเรียนไม่สำเร็จ');
+        toast.error(data.detail || t('admin.updateClassroomFailed'));
       }
     } catch (err) {
       console.error('Assign grade error:', err);
-      toast.error('เกิดข้อผิดพลาดในการอัปเดตชั้นเรียน');
+      toast.error(t('admin.updateClassroomError'));
     } finally {
       setAssigningIndividualGrade(false);
     }
@@ -1593,12 +1595,12 @@ function AdminPage() {
 
   const promoteSelectedStudents = async () => {
     if (selectedStudentsForPromotion.size === 0) {
-      toast.warning('กรุณาเลือกนักเรียนที่ต้องการเลื่อนชั้น');
+      toast.warning(t('admin.selectStudentsToPromote'));
       return;
     }
 
     if (promotionType === 'end_of_year' && !promotionNewGradeLevel) {
-      toast.warning('กรุณาระบุชั้นเรียนใหม่');
+      toast.warning(t('admin.specifyNewClassroom'));
       return;
     }
 
@@ -1628,7 +1630,7 @@ function AdminPage() {
       const data = await response.json();
       
       if (response.ok) {
-        toast.success(`เลื่อนชั้นสำเร็จ ${data.promoted_count} นักเรียน`);
+        toast.success(`${t('admin.promotionSuccess')} ${data.promoted_count} ${t('admin.studentWord')}`);
         setSelectedStudentsForPromotion(new Set());
         setPromotionNewGradeLevel('');
         
@@ -1641,11 +1643,11 @@ function AdminPage() {
           })
           .catch(err => console.error('Failed to reload students:', err));
       } else {
-        toast.error(data.detail || data.message || 'เลื่อนชั้นไม่สำเร็จ');
+        toast.error(data.detail || data.message || t('admin.promotionFailed'));
       }
     } catch (err) {
       console.error('Promote error:', err);
-      toast.error('เกิดข้อผิดพลาดในการเลื่อนชั้น');
+      toast.error(t('admin.promotionError'));
     } finally {
       setPromotingStudents(false);
     }
@@ -1674,11 +1676,11 @@ function AdminPage() {
         a.click();
         window.URL.revokeObjectURL(url);
       } else {
-        toast.error('ดาวน์โหลด template ไม่สำเร็จ');
+        toast.error(t('admin.downloadTemplateFailed2'));
       }
     } catch (err) {
       console.error('Download template error:', err);
-      toast.error('เกิดข้อผิดพลาดในการดาวน์โหลด template');
+      toast.error(t('admin.downloadTemplateError2'));
     }
   };
 
@@ -1708,7 +1710,7 @@ function AdminPage() {
 
   const uploadPromotionFile = async () => {
     if (!promotionFile) {
-      toast.warning('กรุณาเลือกไฟล์');
+      toast.warning(t('admin.selectFile'));
       return;
     }
 
@@ -1736,7 +1738,7 @@ function AdminPage() {
       const data = await response.json();
 
       if (response.ok) {
-        toast.success(`เลื่อนชั้นสำเร็จ ${data.promoted_count} นักเรียน`);
+        toast.success(`${t('admin.promotionSuccess')} ${data.promoted_count} ${t('admin.studentWord')}`);
         setPromotionFile(null);
         setPromotionNewGradeLevel('');
 
@@ -1749,11 +1751,11 @@ function AdminPage() {
           })
           .catch(err => console.error('Failed to reload students:', err));
       } else {
-        toast.error(data.detail || data.message || 'เลื่อนชั้นไม่สำเร็จ');
+        toast.error(data.detail || data.message || t('admin.promotionFailed'));
       }
     } catch (err) {
       console.error('Upload promotion file error:', err);
-      toast.error('เกิดข้อผิดพลาดในการอัปโหลดไฟล์');
+      toast.error(t('admin.uploadError'));
     } finally {
       setPromotingStudents(false);
     }
@@ -1780,7 +1782,7 @@ function AdminPage() {
 
   const createClassroom = async (formData) => {
     if (!formData.gradeLevel) {
-      toast.error('กรุณากรอกชั้นปี');
+      toast.error(t('admin.fillGradeLevel'));
       return;
     }
 
@@ -1805,7 +1807,7 @@ function AdminPage() {
 
       const data = await response.json();
       if (response.ok) {
-        toast.success('✓ สร้างชั้นเรียนสำเร็จ');
+        toast.success(`✓ ${t('admin.createClassroomSuccess')}`);
         // อัพเดต state - เพิ่มชั้นเรียนใหม่เข้าไป
         setClassrooms(prevClassrooms => [...prevClassrooms, data]);
         // ปิด modal หลังสร้างสำเร็จ
@@ -1814,11 +1816,11 @@ function AdminPage() {
         // รีเฟรชรายการชั้นเรียนเพื่อให้แน่ใจว่าข้อมูลถูกต้อง
         await refreshClassrooms();
       } else {
-        toast.error(data.detail || 'สร้างชั้นเรียนไม่สำเร็จ');
+        toast.error(data.detail || t('admin.createClassroomFailed'));
       }
     } catch (err) {
       console.error('Error creating classroom:', err);
-      toast.error('เกิดข้อผิดพลาดในการสร้างชั้นเรียน');
+      toast.error(t('admin.createClassroomError'));
     } finally {
       setCreatingClassroom(false);
     }
@@ -1826,7 +1828,7 @@ function AdminPage() {
 
   const addStudentsToClassroom = async (studentIds) => {
     if (!studentIds || studentIds.length === 0) {
-      toast.warning('กรุณาเลือกนักเรียน');
+      toast.warning(t('admin.selectStudents'));
       return;
     }
 
@@ -1845,9 +1847,9 @@ function AdminPage() {
       const data = await response.json();
       if (response.ok) {
         // แสดง success message
-        let successMsg = `✓ เพิ่ม ${data.added_count} นักเรียนสำเร็จ`;
+        let successMsg = `✓ ${t('admin.added')} ${data.added_count} ${t('admin.studentWord')} ${t('admin.successfully')}`;
         if (data.already_enrolled && data.already_enrolled.length > 0) {
-          successMsg += ` (${data.already_enrolled.length} คนลงทะเบียนแล้ว)`;
+          successMsg += ` (${data.already_enrolled.length} ${t('admin.alreadyEnrolled')})`;
         }
         toast.success(successMsg);
         setClassroomStep('view_students');
@@ -1870,12 +1872,12 @@ function AdminPage() {
         if (data.errors && data.errors.length > 0) {
           toast.error(data.errors.join('\n'));
         } else {
-          toast.error('เพิ่มนักเรียนไม่สำเร็จ');
+          toast.error(t('admin.addStudentFailed'));
         }
       }
     } catch (err) {
       console.error('Error adding students:', err);
-      toast.error('เกิดข้อผิดพลาดในการเพิ่มนักเรียน');
+      toast.error(t('admin.addStudentError'));
     } finally {
       setAddingStudentsToClassroom(false);
     }
@@ -1886,7 +1888,7 @@ function AdminPage() {
     setPromotingClassroom(true);
     try {
       if (selectedClassroom) {
-        toast.info(`⏳ เริ่มการเลื่อนชั้นของชั้นเรียน ${selectedClassroom.name}...`);
+        toast.info(`⏳ ${t('admin.startingPromotion')} ${selectedClassroom.name}...`);
       }
       const payload = {
         promotion_type: classroomPromotionType,
@@ -1895,7 +1897,7 @@ function AdminPage() {
 
       if (classroomPromotionType === 'mid_term_with_promotion' || classroomPromotionType === 'end_of_year') {
         if (!classroomPromotionNewGrade) {
-          toast.error('กรุณาระบุชั้นปีใหม่');
+          toast.error(t('admin.specifyNewGradeLevel'));
           setPromotingClassroom(false);
           return;
         }
@@ -1917,18 +1919,18 @@ function AdminPage() {
 
       const data = await response.json();
       if (response.ok) {
-        toast.success(data.message || `✅ เลื่อนชั้น ${selectedClassroom?.name || ''} สำเร็จ`);
+        toast.success(data.message || `✅ ${t('admin.promotionSuccess')} ${selectedClassroom?.name || ''}`);
         setShowClassroomModal(false);
         setClassroomStep('select');
         setClassroomPromotionNewGrade('');
         // รีเฟรชรายการชั้นเรียน
         await refreshClassrooms();
       } else {
-        toast.error(data.message || 'เลื่อนชั้นไม่สำเร็จ');
+        toast.error(data.message || t('admin.promotionFailed'));
       }
     } catch (err) {
       console.error('Error promoting classroom:', err);
-      toast.error(`❌ เลื่อนชั้นไม่สำเร็จ: ${err.message || 'เกิดข้อผิดพลาด'}`);
+      toast.error(`❌ ${t('admin.promotionFailed')}: ${err.message || t('common.error')}`);
     } finally {
       setPromotingClassroom(false);
     }
@@ -1940,7 +1942,7 @@ function AdminPage() {
     try {
       const classroomToUse = classroomParam || selectedClassroom;
       if (!classroomToUse) {
-        toast.error('กรุณาเลือกชั้นเรียนก่อน');
+        toast.error(t('admin.selectClassroomFirst'));
         setPromotingClassroom(false);
         return;
       }
@@ -1951,7 +1953,7 @@ function AdminPage() {
       };
 
       // notify start
-      toast.info(`⏳ เริ่มเลื่อนเทอมของชั้นเรียน ${classroomToUse.name}...`);
+      toast.info(`⏳ ${t('admin.startingSemesterPromotion')} ${classroomToUse.name}...`);
 
       const response = await fetch(`${API_BASE_URL}/classrooms/${classroomToUse.id}/promote`, {
         method: 'POST',
@@ -1964,17 +1966,17 @@ function AdminPage() {
 
       const data = await response.json();
       if (response.ok) {
-        toast.success(data.message || `✅ เลื่อนเทอมของ ${classroomToUse.name} สำเร็จ`);
+        toast.success(data.message || `✅ ${t('admin.semesterPromotionSuccess')} ${classroomToUse.name}`);
         setShowClassroomModal(false);
         setClassroomStep('select');
         // รีเฟรชรายการชั้นเรียน
         await refreshClassrooms();
       } else {
-        toast.error(data.message || `❌ เลื่อนเทอมของ ${classroomToUse.name} ไม่สำเร็จ`);
+        toast.error(data.message || `❌ ${t('admin.semesterPromotionFailed')} ${classroomToUse.name}`);
       }
     } catch (err) {
       console.error('Error promoting semester:', err);
-      toast.error(`❌ เลื่อนเทอมล้มเหลว: ${err.message || 'เกิดข้อผิดพลาด'}`);
+      toast.error(`❌ ${t('admin.promotionTermFailed')}: ${err.message || t('common.error')}`);
     } finally {
       setPromotingClassroom(false);
     }
@@ -1996,7 +1998,7 @@ function AdminPage() {
 
   const updateClassroomModal = async (formData) => {
     if (!selectedClassroom || !formData.gradeLevel) {
-      toast.error('กรุณากรอกชั้นปี');
+      toast.error(t('admin.fillGradeLevel'));
       return;
     }
 
@@ -2022,7 +2024,7 @@ function AdminPage() {
 
       const data = await response.json();
       if (response.ok) {
-        toast.success('✓ แก้ไขชั้นเรียนสำเร็จ');
+        toast.success(`✓ ${t('admin.editClassroomSuccess')}`);
         // อัพเดต state โดยตรง
         setClassrooms(prevClassrooms =>
           prevClassrooms.map(c => c.id === selectedClassroom.id ? data : c)
@@ -2033,11 +2035,11 @@ function AdminPage() {
         // รีเฟรชรายการชั้นเรียนเพื่อให้แน่ใจว่าข้อมูลล่าสุด
         await refreshClassrooms();
       } else {
-        toast.error(data.detail || 'ไม่สามารถแก้ไขชั้นเรียน');
+        toast.error(data.detail || t('admin.editClassroomFailed'));
       }
     } catch (err) {
       console.error('Error updating classroom:', err);
-      toast.error('เกิดข้อผิดพลาดในการแก้ไขชั้นเรียน');
+      toast.error(t('admin.editClassroomError'));
     } finally {
       setCreatingClassroom(false);
     }
@@ -2045,8 +2047,8 @@ function AdminPage() {
 
   const deleteClassroom = async (classroom) => {
     openConfirmModal(
-      'ลบชั้นเรียน',
-      `ต้องการลบชั้นเรียน "${classroom.name}" (${classroom.grade_level}) ใช่หรือไม่?\n\n⚠️ หากชั้นเรียนมีนักเรียน การลบอาจไม่สำเร็จ`,
+      t('admin.deleteClassroomTitle'),
+      `${t('admin.confirmDeleteClassroom')} "${classroom.name}" (${classroom.grade_level})? \n\n⚠️ ${t('admin.deleteClassroomWarning')}`,
       async () => {
         const token = localStorage.getItem('token');
         try {
@@ -2059,7 +2061,7 @@ function AdminPage() {
           });
 
           if (response.ok) {
-            toast.success('✓ ลบชั้นเรียนสำเร็จ');
+            toast.success(`✓ ${t('admin.deleteClassroomSuccess')}`);
             // อัพเดต state โดยตรง - ลบออกจากรายการ
             setClassrooms(prevClassrooms =>
               prevClassrooms.filter(c => c.id !== classroom.id)
@@ -2068,11 +2070,11 @@ function AdminPage() {
             refreshClassrooms();
           } else {
             const data = await response.json();
-            toast.error(data.detail || 'ไม่สามารถลบชั้นเรียน');
+            toast.error(data.detail || t('admin.deleteClassroomFailed'));
           }
         } catch (err) {
           console.error('Error deleting classroom:', err);
-          toast.error('เกิดข้อผิดพลาดในการลบชั้นเรียน');
+          toast.error(t('admin.deleteClassroomError'));
         }
       }
     );
@@ -2081,8 +2083,8 @@ function AdminPage() {
   // Remove a student from a classroom (toggle is_active)
   const removeStudentFromClassroom = async (classroomId, studentId, studentName) => {
     openConfirmModal(
-      'ลบนักเรียนออกจากชั้นเรียน',
-      `ต้องการลบ "${studentName}" ออกจากชั้นเรียนใช่หรือไม่?`,
+      t('admin.removeStudentTitle'),
+      `${t('admin.confirmRemoveStudent')} "${studentName}"?`,
       async () => {
         const token = localStorage.getItem('token');
         try {
@@ -2095,7 +2097,7 @@ function AdminPage() {
           });
 
           if (response.ok) {
-            toast.success('✓ ลบนักเรียนสำเร็จ');
+            toast.success(`✓ ${t('admin.removeStudentSuccess')}`);
             
             // Update student count for this classroom
             const studentRes = await fetch(`${API_BASE_URL}/classrooms/${classroomId}/students`, {
@@ -2116,11 +2118,11 @@ function AdminPage() {
             setClassroomRefreshKey(prev => prev + 1);
           } else {
             const data = await response.json();
-            toast.error(data.detail || 'ไม่สามารถลบนักเรียน');
+            toast.error(data.detail || t('admin.removeStudentFailed'));
           }
         } catch (err) {
           console.error('Error removing student from classroom:', err);
-          toast.error('เกิดข้อผิดพลาดในการลบนักเรียน');
+          toast.error(t('admin.removeStudentError'));
         }
       }
     );
@@ -2152,8 +2154,8 @@ function AdminPage() {
 
   const handleDeleteSubject = async (subject) => {
     openConfirmModal(
-      'ลบรายวิชา',
-      `ต้องการลบรายวิชา "${subject.name}" หรือไม่? โปรดทราบว่าโปรแกรมจะต้องสิ้นสุดรายวิชาก่อนที่จะลบได้`,
+      t('admin.deleteSubjectTitle'),
+      `${t('admin.confirmDeleteSubject')} "${subject.name}"? ${t('admin.subjectMustBeEndedFirst')}`,
       async () => {
         try {
           const token = localStorage.getItem('token');
@@ -2173,15 +2175,15 @@ function AdminPage() {
           });
           
           if (res.ok) {
-            toast.success(`ลบรายวิชา "${subject.name}" สำเร็จ`);
+            toast.success(`${t('admin.deleteSubjectSuccess')} "${subject.name}"`);
             loadSubjects();
           } else {
             const error = await res.json();
-            toast.error(error.detail || 'ไม่สามารถลบรายวิชาได้');
+            toast.error(error.detail || t('admin.deleteSubjectFailed'));
           }
         } catch (err) {
           console.error('Error deleting subject:', err);
-          toast.error('เกิดข้อผิดพลาดในการลบรายวิชา');
+          toast.error(t('admin.deleteSubjectError2'));
         }
       }
     );
@@ -2214,11 +2216,11 @@ function AdminPage() {
         const data = await response.json();
         setClassroomStudents(data);
       } else {
-        toast.error('ไม่สามารถดึงข้อมูลนักเรียน');
+        toast.error(t('admin.fetchStudentFailed'));
       }
     } catch (err) {
       console.error('Error fetching classroom students:', err);
-      toast.error('เกิดข้อผิดพลาดในการดึงข้อมูลนักเรียน');
+      toast.error(t('admin.fetchStudentError'));
     }
   };
 
@@ -2239,10 +2241,10 @@ function AdminPage() {
       const data = await response.json();
       if (response.ok) {
         // Build success message with classroom names if available
-        let successMsg = data.message || `✓ เลื่อนชั้น ${data.promoted_count} นักเรียนสำเร็จ`;
+        let successMsg = data.message || `✓ ${t('admin.promotionSuccess')} ${data.promoted_count} ${t('admin.studentWord')}`;
         if (payload.new_classroom_names && payload.new_classroom_names.length > 0) {
           const classroomNamesList = payload.new_classroom_names.join(', ');
-          successMsg = `✓ เลื่อนชั้น ${data.promoted_count} นักเรียนไปชั้น: ${classroomNamesList} สำเร็จ`;
+          successMsg = `✓ ${t('admin.promotionSuccess')} ${data.promoted_count} ${t('admin.studentWord')} ${t('admin.toClassroom')}: ${classroomNamesList}`;
         }
         toast.success(successMsg);
         
@@ -2271,12 +2273,12 @@ function AdminPage() {
       } else {
         // On error, close the modal immediately
         setShowPromoteStudentModal(false);
-        toast.error(data.detail || 'เลื่อนชั้นไม่สำเร็จ');
+        toast.error(data.detail || t('admin.promotionFailed'));
       }
     } catch (err) {
       console.error('Error promoting students:', err);
       setShowPromoteStudentModal(false);
-      toast.error('เกิดข้อผิดพลาดในการเลื่อนชั้น');
+      toast.error(t('admin.promotionError'));
     } finally {
       setPromotingIndividualStudents(false);
     }
@@ -2302,9 +2304,9 @@ function AdminPage() {
                 ☰
               </button>
               <div className="header-menu" style={{ display: showHeaderMenu ? 'block' : 'none' }}>
-                <button role="menuitem" className="admin-btn-primary" onClick={() => { setShowModal(true); setShowHeaderMenu(false); }}>➕ เพิ่มผู้ใช้ใหม่</button>
-                <button role="menuitem" className="admin-btn-secondary" onClick={() => { navigate('/profile'); setShowHeaderMenu(false); }}>👤 โปรไฟล์</button>
-                <button role="menuitem" className="admin-btn-danger" onClick={() => { handleSignout(); setShowHeaderMenu(false); }}>🚪 ออกจากระบบ</button>
+                <button role="menuitem" className="admin-btn-primary" onClick={() => { setShowModal(true); setShowHeaderMenu(false); }}>➕ {t('admin.addNewUser')}</button>
+                <button role="menuitem" className="admin-btn-secondary" onClick={() => { navigate('/profile'); setShowHeaderMenu(false); }}>👤 {t('admin.profile')}</button>
+                <button role="menuitem" className="admin-btn-danger" onClick={() => { handleSignout(); setShowHeaderMenu(false); }}>🚪 {t('admin.logout')}</button>
               </div>
               <div className="header-actions">
                 <button 
@@ -2342,25 +2344,25 @@ function AdminPage() {
       </div>
 
       <div className="stats-section">
-        <div className="admin-stats-card stats-teachers" title="จำนวนครูทั้งหมดในโรงเรียน">
+        <div className="admin-stats-card stats-teachers" title={t('admin.teachers')}>
           <div className="admin-stats-icon">👨‍🏫</div>
           <div className="admin-stats-content">
             <div className="admin-stats-value">{teachers.length}</div>
-            <div className="admin-stats-label">ครูผู้สอน</div>
+            <div className="admin-stats-label">{t('admin.teachers')}</div>
           </div>
         </div>
-        <div className="admin-stats-card stats-students" title="จำนวนนักเรียนทั้งหมดในโรงเรียน">
+        <div className="admin-stats-card stats-students" title={t('admin.students')}>
           <div className="admin-stats-icon">👨‍🎓</div>
           <div className="admin-stats-content">
             <div className="admin-stats-value">{students.length}</div>
-            <div className="admin-stats-label">นักเรียน</div>
+            <div className="admin-stats-label">{t('admin.students')}</div>
           </div>
         </div>
-        <div className="admin-stats-card stats-announcements" title="จำนวนประกาศที่ยังใช้งานได้">
+        <div className="admin-stats-card stats-announcements" title={t('nav.announcements')}>
           <div className="admin-stats-icon">📢</div>
           <div className="admin-stats-content">
             <div className="admin-stats-value">{(Array.isArray(announcements) ? announcements.filter(a => !isExpired(a)).length : 0)}</div>
-            <div className="admin-stats-label">ประกาศข่าว</div>
+            <div className="admin-stats-label">{t('nav.announcements')}</div>
           </div>
         </div>
       </div>
@@ -2377,16 +2379,16 @@ function AdminPage() {
           {activeTab === 'users' && (
             <div className="content-card">
               <div className="card-header">
-                <h2><span className="card-icon">👥</span> จัดการผู้ใช้</h2>
+                <h2><span className="card-icon">👥</span> {t('admin.userManagement')}</h2>
               </div>
               <div className="card-content">
-                {loadingUsers && <Loading message="กำลังโหลดข้อมูลผู้ใช้..." />}
+                {loadingUsers && <Loading message={t('common.loading')} />}
                 {usersError && <div className="error-message">❌ {usersError}</div>}
 
                 <div className="user-management">
                   {/* ===== Render UserTableSection for Teachers ===== */}
                   <div className="user-section">
-                    <h3><span className="card-icon">👨‍🏫</span> ครูผู้สอน ({teachers.length} คน)</h3>
+                    <h3><span className="card-icon">👨‍🏫</span> {t('admin.teachers')} ({teachers.length} {t('admin.people')})</h3>
                     
                     {/* Search, Filter, and Stats */}
                     <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
@@ -2430,8 +2432,8 @@ function AdminPage() {
                   {teachers.length === 0 ? (
                     <div className="empty-state">
                       <div className="empty-icon">👨‍🏫</div>
-                      <div className="empty-text">ยังไม่มีครูผู้สอน</div>
-                      <div className="empty-subtitle">เริ่มต้นโดยการเพิ่มครูผู้สอนใหม่</div>
+                      <div className="empty-text">{t('admin.noTeachers')}</div>
+                      <div className="empty-subtitle">{t('admin.startByAddingTeacher')}</div>
                     </div>
                   ) : (() => {
                     const filteredTeachers = teachers.filter(t => {
@@ -2455,11 +2457,11 @@ function AdminPage() {
                           <table className="admin-table" style={{ minWidth: '100%', fontSize: '0.95rem' }}>
                             <thead>
                               <tr>
-                                <th>ชื่อ</th>
-                                <th>Email</th>
-                                <th>Username</th>
-                                <th style={{ textAlign: 'center' }}>สถานะ</th>
-                                <th style={{ width: '280px' }}>การจัดการ</th>
+                                <th>{t('admin.name')}</th>
+                                <th>{t('admin.email')}</th>
+                                <th>{t('admin.username')}</th>
+                                <th style={{ textAlign: 'center' }}>{t('admin.status')}</th>
+                                <th style={{ width: '280px' }}>{t('admin.management')}</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -2469,7 +2471,7 @@ function AdminPage() {
                                   <td>{teacher.email}</td>
                                   <td style={{ color: '#666' }}>{teacher.username}</td>
                                   <td style={{ textAlign: 'center' }}>
-                                    {teacher.is_active ? <span style={{ color: 'green', fontWeight: 'bold' }}>✅ ใช้งาน</span> : <span style={{ color: 'red', fontWeight: 'bold' }}>🚫 ปิด</span>}
+                                    {teacher.is_active ? <span style={{ color: 'green', fontWeight: 'bold' }}>✅ {t('admin.activeUsers')}</span> : <span style={{ color: 'red', fontWeight: 'bold' }}>🚫 {t('admin.inactiveUsers')}</span>}
                                   </td>
                                   <td>
                                     <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
@@ -2482,31 +2484,31 @@ function AdminPage() {
                                       </button>
                                       <button 
                                         className="admin-btn-small admin-btn-warning" 
-                                        onClick={() => openConfirmModal('รีเซ็ต', `รีเซ็ตรหัสผ่านของ "${teacher.full_name || teacher.username}"?`, async () => {
+                                        onClick={() => openConfirmModal(t('admin.resetTitle'), `${t('admin.resetPasswordOf')} "${teacher.full_name || teacher.username}"?`, async () => {
                                           const token = localStorage.getItem('token');
                                           try {
                                             const res = await fetch(`${API_BASE_URL}/users/${teacher.id}/admin_reset`, { method:'POST', headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
                                             const data = await res.json();
-                                            if (!res.ok) { toast.error(data.detail || 'รีเซ็ตไม่สำเร็จ'); } else { openAlertModal('รหัสผ่านชั่วคราว', `${teacher.username || teacher.email || ''}\n\n🔑 ${data.temp_password}`); toast.success('รีเซ็ตสำเร็จ'); }
-                                          } catch (err) { console.error(err); toast.error('เกิดข้อผิดพลาด'); }
+                                            if (!res.ok) { toast.error(data.detail || t('admin.resetFailed')); } else { openAlertModal(t('admin.tempPassword'), `${teacher.username || teacher.email || ''}\n\n🔑 ${data.temp_password}`); toast.success(t('admin.resetSuccess')); }
+                                          } catch (err) { console.error(err); toast.error(t('common.error')); }
                                         })}
-                                        title="รีเซ็ตรหัสผ่าน"
+                                        title={t('auth.resetPassword')}
                                       >
                                         🔄
                                       </button>
                                       {teacher.is_active ? (
                                         <button 
                                           className="admin-btn-small admin-btn-secondary" 
-                                          onClick={() => openConfirmModal('ปิดใช้งาน', `ปิดใช้งาน "${teacher.full_name || teacher.username}"?`, async () => { await deactivateUser(teacher.id, teacher.full_name || teacher.username); })}
-                                          title="ปิดใช้งาน"
+                                          onClick={() => openConfirmModal(t('admin.deactivateTitle'), `${t('admin.deactivateTitle')} "${teacher.full_name || teacher.username}"?`, async () => { await deactivateUser(teacher.id, teacher.full_name || teacher.username); })}
+                                          title={t('admin.deactivateTitle')}
                                         >
                                           🚫
                                         </button>
                                       ) : (
                                         <button 
                                           className="admin-btn-small admin-btn-success" 
-                                          onClick={() => openConfirmModal('เปิดใช้งาน', `เปิดใช้งาน "${teacher.full_name || teacher.username}"?`, async () => { await activateUser(teacher.id, teacher.full_name || teacher.username); })}
-                                          title="เปิดใช้งาน"
+                                          onClick={() => openConfirmModal(t('admin.activateTitle'), `${t('admin.activateTitle')} "${teacher.full_name || teacher.username}"?`, async () => { await activateUser(teacher.id, teacher.full_name || teacher.username); })}
+                                          title={t('admin.activateTitle')}
                                         >
                                           ✅
                                         </button>
@@ -2514,8 +2516,8 @@ function AdminPage() {
                                       {!teacher.is_active && deletionStatuses[teacher.id]?.can_delete && (
                                         <button 
                                           className="admin-btn-small admin-btn-danger" 
-                                          onClick={() => openConfirmModal('ลบ', `ลบ "${teacher.full_name || teacher.username}"?`, async () => { await deleteUser(teacher.id, teacher.full_name || teacher.username); })}
-                                          title="ลบผู้ใช้"
+                                          onClick={() => openConfirmModal(t('admin.deleteTitle'), `${t('admin.deleteTitle')} "${teacher.full_name || teacher.username}"?`, async () => { await deleteUser(teacher.id, teacher.full_name || teacher.username); })}
+                                          title={t('admin.deleteUserTitle')}
                                         >
                                           🗑️
                                         </button>
@@ -2559,7 +2561,7 @@ function AdminPage() {
                             >
                               ถัดไป →
                             </button>
-                            <span className="pagination-summary">หน้า {teacherCurrentPage} / {totalPages} ({filteredTeachers.length} คน)</span>
+                            <span className="pagination-summary">{t('admin.page')} {teacherCurrentPage} / {totalPages} ({filteredTeachers.length} {t('admin.people')})</span>
                           </div>
                         )}
                       </>
@@ -2569,7 +2571,7 @@ function AdminPage() {
 
                 {/* ===== Students Section ===== */}
                 <div className="user-section">
-                  <h3><span className="card-icon">👨‍🎓</span> นักเรียน ({students.length} คน)</h3>
+                  <h3><span className="card-icon">👨‍🎓</span> {t('admin.students')} ({students.length} {t('admin.people')})</h3>
 
                   {/* Search, Filter */}
                   <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
@@ -2612,11 +2614,11 @@ function AdminPage() {
                       <button
                         type="button"
                         className="admin-btn-warning"
-                        onClick={() => openConfirmModal('รีเซ็ตรหัสผ่านจำนวนมาก', `รีเซ็ตรหัสผ่านของ ${selectedStudentsForReset.size} คนที่เลือก?`, async () => { await bulkResetSelectedStudents(); })}
+                        onClick={() => openConfirmModal(t('admin.bulkResetTitle'), `${t('admin.bulkResetConfirm')} ${selectedStudentsForReset.size} ${t('admin.peopleSelected')}?`, async () => { await bulkResetSelectedStudents(); })}
                         disabled={selectedStudentsForReset.size === 0 || bulkResetLoading}
-                        title="รีเซ็ตรหัสผ่านที่เลือก"
+                        title={t('admin.resetSelectedPasswords')}
                       >
-                        {bulkResetLoading ? '⏳ กำลังรีเซ็ต...' : `🔄 รีเซ็ตรหัสผ่านที่เลือก (${selectedStudentsForReset.size})`}
+                        {bulkResetLoading ? `⏳ ${t('admin.resetting')}` : `🔄 ${t('admin.resetSelectedPasswords')} (${selectedStudentsForReset.size})`}
                       </button>
                     </div>
                   </div>
@@ -2624,8 +2626,8 @@ function AdminPage() {
                   {students.length === 0 ? (
                     <div className="empty-state">
                       <div className="empty-icon">👨‍🎓</div>
-                      <div className="empty-text">ยังไม่มีนักเรียน</div>
-                      <div className="empty-subtitle">เริ่มต้นโดยการเพิ่มนักเรียนใหม่</div>
+                      <div className="empty-text">{t('admin.noStudents')}</div>
+                      <div className="empty-subtitle">{t('admin.startByAddingStudent')}</div>
                     </div>
                   ) : (() => {
                     const filteredStudents = students.filter(s => {
@@ -2665,11 +2667,11 @@ function AdminPage() {
                                     }}
                                   />
                                 </th>
-                                <th>ชื่อ</th>
-                                <th>Email</th>
-                                <th>Username</th>
-                                <th style={{ textAlign: 'center' }}>สถานะ</th>
-                                <th style={{ width: '260px' }}>การจัดการ</th>
+                                <th>{t('admin.name')}</th>
+                                <th>{t('admin.email')}</th>
+                                <th>{t('admin.username')}</th>
+                                <th style={{ textAlign: 'center' }}>{t('admin.status')}</th>
+                                <th style={{ width: '280px' }}>{t('admin.management')}</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -2693,37 +2695,37 @@ function AdminPage() {
                                   <td>{student.email}</td>
                                   <td style={{ color: '#666' }}>{student.username}</td>
                                   <td style={{ textAlign: 'center' }}>
-                                    {student.is_active ? <span style={{ color: 'green', fontWeight: 'bold' }}>✅ ใช้งาน</span> : <span style={{ color: 'red', fontWeight: 'bold' }}>🚫 ปิด</span>}
+                                    {student.is_active ? <span style={{ color: 'green', fontWeight: 'bold' }}>✅ {t('admin.activeUsers')}</span> : <span style={{ color: 'red', fontWeight: 'bold' }}>🚫 {t('admin.inactiveUsers')}</span>}
                                   </td>
                                   <td>
                                     <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
                                       <button 
                                         className="admin-btn-small admin-btn-warning" 
-                                        onClick={() => openConfirmModal('รีเซ็ต', `รีเซ็ตรหัสผ่านของ "${student.full_name || student.username}"?`, async () => {
+                                        onClick={() => openConfirmModal(t('admin.resetTitle'), `${t('admin.resetPasswordOf')} "${student.full_name || student.username}"?`, async () => {
                                           const token = localStorage.getItem('token');
                                           try {
                                             const res = await fetch(`${API_BASE_URL}/users/${student.id}/admin_reset`, { method:'POST', headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
                                             const data = await res.json();
-                                            if (!res.ok) { toast.error(data.detail || 'รีเซ็ตไม่สำเร็จ'); } else { openAlertModal('รหัสผ่านชั่วคราว', `${student.username || student.email || ''}\n\n🔑 ${data.temp_password}`); toast.success('รีเซ็ตสำเร็จ'); }
-                                          } catch (err) { console.error(err); toast.error('เกิดข้อผิดพลาด'); }
+                                            if (!res.ok) { toast.error(data.detail || t('admin.resetFailed')); } else { openAlertModal(t('admin.tempPassword'), `${student.username || student.email || ''}\n\n🔑 ${data.temp_password}`); toast.success(t('admin.resetSuccess')); }
+                                          } catch (err) { console.error(err); toast.error(t('common.error')); }
                                         })}
-                                        title="รีเซ็ตรหัสผ่าน"
+                                        title={t('auth.resetPassword')}
                                       >
                                         🔄
                                       </button>
                                       {student.is_active ? (
                                         <button 
                                           className="admin-btn-small admin-btn-secondary" 
-                                          onClick={() => openConfirmModal('ปิดใช้งาน', `ปิดใช้งาน "${student.full_name || student.username}"?`, async () => { await deactivateUser(student.id, student.full_name || student.username); })}
-                                          title="ปิดใช้งาน"
+                                          onClick={() => openConfirmModal(t('admin.deactivateTitle'), `${t('admin.deactivateTitle')} "${student.full_name || student.username}"?`, async () => { await deactivateUser(student.id, student.full_name || student.username); })}
+                                          title={t('admin.deactivateTitle')}
                                         >
                                           🚫
                                         </button>
                                       ) : (
                                         <button 
                                           className="admin-btn-small admin-btn-success" 
-                                          onClick={() => openConfirmModal('เปิดใช้งาน', `เปิดใช้งาน "${student.full_name || student.username}"?`, async () => { await activateUser(student.id, student.full_name || student.username); })}
-                                          title="เปิดใช้งาน"
+                                          onClick={() => openConfirmModal(t('admin.activateTitle'), `${t('admin.activateTitle')} "${student.full_name || student.username}"?`, async () => { await activateUser(student.id, student.full_name || student.username); })}
+                                          title={t('admin.activateTitle')}
                                         >
                                           ✅
                                         </button>
@@ -2731,8 +2733,8 @@ function AdminPage() {
                                       {!student.is_active && deletionStatuses[student.id]?.can_delete && (
                                         <button 
                                           className="admin-btn-small admin-btn-danger" 
-                                          onClick={() => openConfirmModal('ลบ', `ลบ "${student.full_name || student.username}"?`, async () => { await deleteUser(student.id, student.full_name || student.username); })}
-                                          title="ลบผู้ใช้"
+                                          onClick={() => openConfirmModal(t('admin.deleteTitle'), `${t('admin.deleteTitle')} "${student.full_name || student.username}"?`, async () => { await deleteUser(student.id, student.full_name || student.username); })}
+                                          title={t('admin.deleteUserTitle')}
                                         >
                                           🗑️
                                         </button>
@@ -2776,7 +2778,7 @@ function AdminPage() {
                             >
                               ถัดไป →
                             </button>
-                            <span className="pagination-summary">หน้า {studentCurrentPage} / {totalPages} ({filteredStudents.length} คน)</span>
+                            <span className="pagination-summary">{t('admin.page')} {studentCurrentPage} / {totalPages} ({filteredStudents.length} {t('admin.people')})</span>
                           </div>
                         )}
                       </>
@@ -2806,7 +2808,7 @@ function AdminPage() {
                       </div>
                       <div className="upload-text">
                         {uploading ? (
-                          <span>กำลังอัปโหลดไฟล์...</span>
+                          <span>{t('admin.uploadingFile')}</span>
                         ) : uploadFile ? (
                           <>
                             <span className="file-name">{uploadFile.name}</span>
@@ -2814,8 +2816,8 @@ function AdminPage() {
                           </>
                         ) : (
                           <>
-                            <span className="primary-text">ลากไฟล์ Excel มาที่นี่ หรือคลิกเพื่อเลือกไฟล์</span>
-                            <span className="secondary-text">รองรับไฟล์ .xlsx เท่านั้น</span>
+                            <span className="primary-text">{t('admin.dragDropExcel')}</span>
+                            <span className="secondary-text">{t('admin.supportsXlsxOnly')}</span>
                           </>
                         )}
                       </div>
@@ -2894,19 +2896,19 @@ function AdminPage() {
                   ) : passwordResetRequests.length === 0 ? (
                     <div style={{ padding: '1.5rem', textAlign: 'center', backgroundColor: '#f0fdf4', borderRadius: '12px', border: '1px solid #86efac' }}>
                       <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>✅</div>
-                      <div style={{ color: '#166534' }}>ไม่มีคำขอรีเซ็ตรหัสผ่านที่รอดำเนินการ</div>
+                      <div style={{ color: '#166534' }}>{t('admin.noPasswordResetRequests')}</div>
                     </div>
                   ) : (
                     <div style={{ overflowX: 'auto' }}>
                       <table className="admin-table" style={{ minWidth: '100%', fontSize: '0.95rem' }}>
                         <thead>
                           <tr>
-                            <th>ชื่อผู้ใช้</th>
-                            <th>ชื่อ-นามสกุล</th>
-                            <th>Email</th>
-                            <th>บทบาท</th>
-                            <th>วันที่ขอ</th>
-                            <th style={{ width: '200px' }}>การจัดการ</th>
+                            <th>{t('admin.username')}</th>
+                            <th>{t('admin.fullName')}</th>
+                            <th>{t('admin.email')}</th>
+                            <th>{t('admin.role')}</th>
+                            <th>{t('admin.requestDate')}</th>
+                            <th style={{ width: '200px' }}>{t('admin.management')}</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -2940,18 +2942,18 @@ function AdminPage() {
                                       setSelectedResetRequest(req);
                                       setShowResetPasswordModal(true);
                                     }}
-                                    title="อนุมัติและตั้งรหัสผ่านใหม่"
+                                    title={t('admin.approveAndSetNewPassword')}
                                   >
-                                    ✅ อนุมัติ
+                                    ✅ {t('admin.approve')}
                                   </button>
                                   <button 
                                     className="admin-btn-small admin-btn-danger" 
-                                    onClick={() => openConfirmModal('ปฏิเสธ', `ปฏิเสธคำขอรีเซ็ตรหัสผ่านของ "${req.full_name || req.username}"?`, async () => {
+                                    onClick={() => openConfirmModal(t('admin.rejectTitle'), `${t('admin.rejectResetPasswordOf')} "${req.full_name || req.username}"?`, async () => {
                                       await rejectPasswordReset(req.id);
                                     })}
-                                    title="ปฏิเสธคำขอ"
+                                    title={t('admin.rejectRequest')}
                                   >
-                                    ❌ ปฏิเสธ
+                                    ❌ {t('admin.reject')}
                                   </button>
                                 </div>
                               </td>
@@ -3022,8 +3024,8 @@ function AdminPage() {
               {classrooms.length === 0 ? (
                 <div className="empty-state">
                   <div className="empty-icon">🏫</div>
-                  <div className="empty-text">ยังไม่มีชั้นเรียน</div>
-                  <div className="empty-subtitle">เริ่มต้นโดยการสร้างชั้นเรียนใหม่</div>
+                  <div className="empty-text">{t('admin.noClassrooms')}</div>
+                  <div className="empty-subtitle">{t('admin.startByCreatingClassroom')}</div>
                 </div>
               ) : (
                 <div style={{ overflowX: 'auto' }}>
@@ -3209,21 +3211,21 @@ function AdminPage() {
                 </div>
                 
                 <div className="homeroom-list">
-                  <h3>รายชื่อครูประจำชั้น ({homeroomTeachers.length} ชั้น)</h3>
+                  <h3>{t('admin.homeroomTeacherList')} ({homeroomTeachers.length} {t('admin.class')})</h3>
                   {homeroomTeachers.length === 0 ? (
                     <div className="homeroom-empty-state">
                       <div className="homeroom-empty-icon">🏠</div>
-                      <div className="homeroom-empty-text">ยังไม่มีการกำหนดครูประจำชั้น</div>
-                      <div className="homeroom-empty-subtitle">เริ่มต้นโดยการกำหนดครูประจำชั้นสำหรับแต่ละระดับชั้น</div>
+                      <div className="homeroom-empty-text">{t('admin.noHomeroomTeachers')}</div>
+                      <div className="homeroom-empty-subtitle">{t('admin.startByAssigningHomeroom')}</div>
                     </div>
                   ) : (
                     <div className="homeroom-table">
                       <div className="table-header">
-                        <div className="table-cell header-grade">ชั้นเรียน</div>
-                        <div className="table-cell header-teacher">ครูประจำชั้น</div>
-                        <div className="table-cell header-students">จำนวนนักเรียน</div>
-                        <div className="table-cell header-year">ปีการศึกษา</div>
-                        <div className="table-cell header-actions">จัดการ</div>
+                        <div className="table-cell header-grade">{t('admin.classroom')}</div>
+                        <div className="table-cell header-teacher">{t('admin.homeroomTeacher')}</div>
+                        <div className="table-cell header-students">{t('admin.studentCount')}</div>
+                        <div className="table-cell header-year">{t('admin.academicYear')}</div>
+                        <div className="table-cell header-actions">{t('admin.management')}</div>
                       </div>
                       <div className="table-body">
                         {homeroomTeachers.map((hr) => (
@@ -3233,7 +3235,7 @@ function AdminPage() {
                             </div>
                             <div className="table-cell cell-teacher">
                               <div className="teacher-info">
-                                <span className="teacher-name">👤 {hr.teacher_name || 'ไม่ระบุ'}</span>
+                                <span className="teacher-name">👤 {hr.teacher_name || t('admin.notSpecified')}</span>
                                 {hr.teacher_email && (
                                   <span className="teacher-email">📧 {hr.teacher_email}</span>
                                 )}
@@ -3249,22 +3251,22 @@ function AdminPage() {
                               <button 
                                 className="admin-btn-small edit" 
                                 onClick={() => openHomeroomModal(hr)}
-                                title="แก้ไขครูประจำชั้น"
+                                title={t('admin.editHomeroom')}
                               >
                                 <span>✏️</span>
-                                แก้ไข
+                                {t('common.edit')}
                               </button>
                               <button 
                                 className="admin-btn-small delete" 
                                 onClick={() => openConfirmModal(
-                                  'ลบครูประจำชั้น', 
-                                  `ต้องการลบครูประจำชั้น ${hr.grade_level} (${hr.teacher_name || 'ไม่ระบุ'}) ใช่หรือไม่?`, 
+                                  t('admin.deleteHomeroomTitle'), 
+                                  `${t('admin.confirmDeleteHomeroom')} ${hr.grade_level} (${hr.teacher_name || t('admin.notSpecified')})?`, 
                                   async () => { await deleteHomeroomTeacher(hr.id); }
                                 )}
-                                title="ลบครูประจำชั้น"
+                                title={t('admin.deleteHomeroomTitle')}
                               >
                                 <span>🗑️</span>
-                                ลบ
+                                {t('common.delete')}
                               </button>
                             </div>
                           </div>
@@ -3291,19 +3293,19 @@ function AdminPage() {
                   <form onSubmit={handleAnnouncement}>
                     <div className="admin-form-row">
                       <div className="admin-form-group full-width">
-                        <label className="admin-form-label">หัวข้อข่าว</label>
+                        <label className="admin-form-label">{t('admin.announcementTitle')}</label>
                         <input className="admin-form-input" type="text" value={title} onChange={e=>setTitle(e.target.value)} required />
                       </div>
                     </div>
                     <div className="admin-form-row">
                       <div className="admin-form-group full-width">
-                        <label className="admin-form-label">เนื้อหาข่าว</label>
+                        <label className="admin-form-label">{t('admin.announcementContent')}</label>
                         <textarea className="admin-form-input admin-form-textarea" value={content} onChange={e=>setContent(e.target.value)} required />
                       </div>
                     </div>
                     <div className="admin-form-row">
                       <div className="admin-form-group full-width">
-                        <label className="admin-form-label">หมดอายุ (ถ้ามี)</label>
+                        <label className="admin-form-label">{t('admin.expiryOptional')}</label>
                         <input className="admin-form-input" type="datetime-local" value={expiry} onChange={e=>setExpiry(e.target.value)} step="60" lang="en-GB" />
                       </div>
                     </div>
@@ -3319,7 +3321,7 @@ function AdminPage() {
 
               <div className="announcements-list">
                 {(Array.isArray(announcements) ? announcements : []).length === 0 ? (
-                  <div className="loading-message">ไม่มีข้อมูลข่าวสาร</div>
+                  <div className="loading-message">{t('admin.noAnnouncements')}</div>
                 ) : (
                   (Array.isArray(announcements) ? announcements : []).filter(item => !isExpired(item) || ownedBy(item)).map(item => (
                     <li key={item.id} className="announcement-item">
@@ -3337,12 +3339,12 @@ function AdminPage() {
                           <div className="announcement-actions">
                             {/* show expire button when announcement is not already expired */}
                             {ownedBy(item) && !(item.expires_at && parseLocalDatetime(item.expires_at) <= new Date()) && (
-                              <button className="admin-btn-secondary btn-small" onClick={() => openExpiryModal(item)}>ตั้งเป็นหมดอายุ</button>
+                              <button className="admin-btn-secondary btn-small" onClick={() => openExpiryModal(item)}>{t('admin.setExpired')}</button>
                             )}
                             {ownedBy(item) ? (
                               <>
-                                <button className="admin-btn-secondary btn-small" onClick={() => openAnnouncementModal(item)}>แก้ไข</button>
-                                <button className="admin-btn-danger btn-small" onClick={() => openConfirmModal('ลบข่าว', 'ต้องการลบข่าวนี้ใช่หรือไม่?', async () => { await deleteAnnouncement(item.id); })}>ลบ</button>
+                                <button className="admin-btn-secondary btn-small" onClick={() => openAnnouncementModal(item)}>{t('common.edit')}</button>
+                                <button className="admin-btn-danger btn-small" onClick={() => openConfirmModal(t('admin.deleteNewsTitle'), t('admin.confirmDeleteNewsShort'), async () => { await deleteAnnouncement(item.id); })}>{t('common.delete')}</button>
                               </>
                             ) : null}
                           </div>
@@ -3359,7 +3361,7 @@ function AdminPage() {
         {activeTab === 'schedule' && (
           <div className="content-card">
             <div className="card-header">
-              <h2><span className="card-icon">🗓️</span> จัดการตารางเรียน</h2>
+              <h2><span className="card-icon">🗓️</span> {t('admin.manageSchedule')}</h2>
             </div>
             <div className="card-content">
               <div className="schedule-form-section">
@@ -3367,30 +3369,30 @@ function AdminPage() {
                   <button 
                     className="admin-btn-primary" 
                     onClick={() => setShowScheduleModal(true)}
-                    title="เพิ่มช่วงเวลาเรียนใหม่"
+                    title={t('admin.addSchedulePeriodTitle')}
                   >
                     <span>➕</span>
-                    เพิ่มช่วงเวลาเรียน
+                    {t('admin.addSchedulePeriod')}
                   </button>
                 </div>
               </div>
 
               <div className="schedule-slots-list">
-                <h3>ช่วงเวลาเรียนที่กำหนด</h3>
+                <h3>{t('admin.schedulePeriods')}</h3>
                 {scheduleSlots.length === 0 ? (
                   <div className="schedule-empty-state">
                     <div className="schedule-empty-icon">🗓️</div>
-                    <div className="schedule-empty-text">ยังไม่มีช่วงเวลาเรียน</div>
-                    <div className="schedule-empty-subtitle">เริ่มต้นโดยการเพิ่มช่วงเวลาเรียนใหม่เพื่อกำหนดเวลาทำการของโรงเรียน</div>
+                    <div className="schedule-empty-text">{t('admin.noSchedulePeriods')}</div>
+                    <div className="schedule-empty-subtitle">{t('admin.startByAddingPeriod')}</div>
                   </div>
                 ) : (
                   <div>
                     <div className="schedule-slots-table">
                       <div className="table-header">
-                        <div className="table-cell header-day">วัน</div>
-                        <div className="table-cell header-time-start">เวลาเริ่ม</div>
-                        <div className="table-cell header-time-end">เวลาสิ้นสุด</div>
-                        <div className="table-cell header-actions">จัดการ</div>
+                        <div className="table-cell header-day">{t('admin.day')}</div>
+                        <div className="table-cell header-time-start">{t('admin.startTime')}</div>
+                        <div className="table-cell header-time-end">{t('admin.endTime')}</div>
+                        <div className="table-cell header-actions">{t('admin.management')}</div>
                       </div>
 
                       <div className="table-body">
@@ -3403,18 +3405,18 @@ function AdminPage() {
                               <button 
                                 className="admin-btn-small edit" 
                                 onClick={() => editScheduleSlot(slot)}
-                                title="แก้ไขช่วงเวลา"
+                                title={t('admin.editSchedulePeriod')}
                               >
                                 <span>✏️</span>
-                                แก้ไข
+                                {t('common.edit')}
                               </button>
                               <button 
                                 className="admin-btn-small delete" 
-                                onClick={() => openConfirmModal('ลบช่วงเวลา', `ต้องการลบช่วงเวลา ${getDayName(slot.day_of_week)} ${slot.start_time}-${slot.end_time} ใช่หรือไม่?`, async () => { await deleteScheduleSlot(slot.id); })}
-                                title="ลบช่วงเวลา"
+                                onClick={() => openConfirmModal(t('admin.deleteSchedulePeriodTitle'), `${t('admin.confirmDeleteSchedulePeriod')} ${getDayName(slot.day_of_week)} ${slot.start_time}-${slot.end_time}?`, async () => { await deleteScheduleSlot(slot.id); })}
+                                title={t('admin.deleteSchedulePeriod')}
                               >
                                 <span>🗑️</span>
-                                ลบ
+                                {t('common.delete')}
                               </button>
                             </div>
                           </div>
@@ -3485,8 +3487,8 @@ function AdminPage() {
                     <button
                       className="admin-btn-danger"
                       onClick={() => openConfirmModal(
-                        'ยืนยันการส่งคำขอ',
-                        'คุณแน่ใจว่าต้องการส่งคำขอการลบโรงเรียนหรือไม่? การดำเนินการนี้ต้องได้รับการอนุมัติจาก Owner',
+                        t('admin.confirmSendRequestTitle'),
+                        t('admin.confirmSendRequestMessage'),
                         requestSchoolDeletion
                       )}
                       disabled={requestingDeletion || !deletionReason.trim()}
@@ -3497,7 +3499,7 @@ function AdminPage() {
                         borderRadius: '8px'
                       }}
                     >
-                      {requestingDeletion ? 'กำลังส่งคำขอ...' : '📤 ส่งคำขอการลบโรงเรียน'}
+                      {requestingDeletion ? t('admin.sendingRequest') : `📤 ${t('admin.sendDeleteSchoolRequest')}`}
                     </button>
                   </div>
                 </div>
@@ -3509,10 +3511,10 @@ function AdminPage() {
                   border: '1px solid #ddd',
                   marginTop: '2rem'
                 }}>
-                  <h3 style={{ marginTop: 0, marginBottom: '1.5rem', color: '#333' }}>📋 สถานะคำขอ</h3>
+                  <h3 style={{ marginTop: 0, marginBottom: '1.5rem', color: '#333' }}>📋 {t('admin.requestStatus')}</h3>
 
                   {loadingDeletionRequests ? (
-                    <Loading message="กำลังโหลดข้อมูล..." />
+                    <Loading message={t('admin.loadingData')} />
                   ) : schoolDeletionRequests.length === 0 ? (
                     <div style={{
                       textAlign: 'center',
@@ -3520,7 +3522,7 @@ function AdminPage() {
                       color: '#666'
                     }}>
                       <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📝</div>
-                      <div>ยังไม่มีคำขอการลบโรงเรียน</div>
+                      <div>{t('admin.noDeleteRequests')}</div>
                     </div>
                   ) : (
                     <div className="requests-list">
@@ -3602,13 +3604,14 @@ function AdminPage() {
               </div>
               {Array.isArray(scheduleSlots) && scheduleSlots.length > 0 && Array.isArray(adminSchedules) && adminSchedules.length > 0 && (
                 <div style={{ marginTop: '1.5rem' }}>
-                  <h4>ตัวอย่างตารางเรียน</h4>
+                  <h4>{t('admin.schedulePreview')}</h4>
                   <ScheduleGrid
                     operatingHours={scheduleSlots}
                     schedules={adminSchedules}
                     role="admin"
-                    onActionDelete={(id)=>{ openConfirmModal('ยกเลิกเวลาเรียน', 'ต้องการยกเลิกเวลาเรียนใช่หรือไม่?', async ()=>{ await deleteAssignment(id); }); }}
+                    onActionDelete={(id)=>{ openConfirmModal(t('admin.cancelScheduleTitle'), t('admin.confirmCancelSchedule'), async ()=>{ await deleteAssignment(id); }); }}
                     onActionEdit={(item)=>{ setEditingAssignment(item); setShowScheduleManagementModal(true); }}
+                  />
                   />
                 </div>
               )}
@@ -3619,10 +3622,10 @@ function AdminPage() {
         {activeTab === 'subjects' && (
           <div className="content-card">
             <div className="card-header">
-              <h2><span className="card-icon">📚</span> จัดการรายวิชา</h2>
+              <h2><span className="card-icon">📚</span> {t('admin.manageSubjects')}</h2>
             </div>
             <div className="card-content">
-              {loadingSubjects && <Loading message="กำลังโหลดข้อมูลรายวิชา..." />}
+              {loadingSubjects && <Loading message={t('admin.loadingSubjects')} />}
 
               <div className="list-header" style={{ marginBottom: '1.5rem' }}>
                 <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap', marginBottom: '1rem' }}>
@@ -3673,7 +3676,7 @@ function AdminPage() {
                       fontSize: '0.95rem'
                     }}
                   >
-                    <option value="all">ทั้งหมด</option>
+                    <option value="all">{t('admin.all')}</option>
                     <option value="main">📖 รายวิชาหลัก</option>
                     <option value="activity">🎯 รายวิชากิจกรรม</option>
                   </select>
@@ -3683,8 +3686,8 @@ function AdminPage() {
               {subjects.length === 0 ? (
                 <div className="empty-state">
                   <div className="empty-icon">📚</div>
-                  <div className="empty-text">ยังไม่มีรายวิชา</div>
-                  <div className="empty-subtitle">สร้างรายวิชาใหม่เพื่อเริ่มต้น</div>
+                  <div className="empty-text">{t('admin.noSubjects')}</div>
+                  <div className="empty-subtitle">{t('admin.startByCreatingSubject')}</div>
                 </div>
               ) : (() => {
                 const filtered = subjects.filter(s => {
@@ -3704,14 +3707,14 @@ function AdminPage() {
                       <table className="admin-table subjects-table" style={{ minWidth: '100%' }}>
                         <thead>
                           <tr>
-                            <th>ชื่อรายวิชา</th>
-                            <th>รหัส</th>
-                            <th>ประเภท</th>
-                            <th className="subject-credit">{subjectTypeFilter === 'main' ? 'หน่วยกิต' : subjectTypeFilter === 'activity' ? 'เปอร์เซ็นต์' : 'หน่วยกิต / เปอร์เซ็นต์'}</th>
-                            <th>ครูผู้สอน</th>
-                            <th style={{ textAlign: 'center' }}>ชั้นเรียน</th>
-                            <th style={{ textAlign: 'center' }}>นักเรียน</th>
-                            <th style={{ width: '200px' }}>การจัดการ</th>
+                            <th>{t('admin.subjectName')}</th>
+                            <th>{t('admin.code')}</th>
+                            <th>{t('admin.type')}</th>
+                            <th className="subject-credit">{subjectTypeFilter === 'main' ? t('admin.credit') : subjectTypeFilter === 'activity' ? t('admin.percentage') : t('admin.creditOrPercentage')}</th>
+                            <th>{t('admin.teacherLabel')}</th>
+                            <th style={{ textAlign: 'center' }}>{t('admin.classroom')}</th>
+                            <th style={{ textAlign: 'center' }}>{t('admin.students')}</th>
+                            <th style={{ width: '200px' }}>{t('admin.management')}</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -3721,29 +3724,29 @@ function AdminPage() {
                                 <div className="subject-name"><strong>{subject.name}</strong></div>
                                 {/* Mobile small mention for credits/percentage */}
                                 <div className="subject-meta-mobile">
-                                  {subject.subject_type === 'main' ? (subject.credits != null ? `${subject.credits} กิต` : '-') : (subject.activity_percentage != null ? `${subject.activity_percentage}%` : '-')}
+                                  {subject.subject_type === 'main' ? (subject.credits != null ? `${subject.credits} ${t('admin.creditUnit')}` : '-') : (subject.activity_percentage != null ? `${subject.activity_percentage}%` : '-')}
                                 </div>
                                 {/* Mobile only badge for type (visible on narrow screens) */}
-                                <div className="subject-type-badge">{subject.subject_type === 'main' ? '📖 รายวิชาหลัก' : '🎯 รายวิชากิจกรรม'}</div>
+                                <div className="subject-type-badge">{subject.subject_type === 'main' ? `📖 ${t('admin.mainSubject')}` : `🎯 ${t('admin.activitySubject')}`}</div>
                               </td>
                               <td>{subject.code || '-'}</td>
-                              <td>{subject.subject_type === 'main' ? '📖 รายวิชาหลัก' : '🎯 รายวิชากิจกรรม'}</td>
+                              <td>{subject.subject_type === 'main' ? `📖 ${t('admin.mainSubject')}` : `🎯 ${t('admin.activitySubject')}`}</td>
                               <td className="subject-credit" style={{ textAlign: 'center' }}>
-                                {subject.subject_type === 'main' ? (subject.credits != null ? `${subject.credits} กิต` : '-') : (subject.activity_percentage != null ? `${subject.activity_percentage}%` : '-')}
+                                {subject.subject_type === 'main' ? (subject.credits != null ? `${subject.credits} ${t('admin.creditUnit')}` : '-') : (subject.activity_percentage != null ? `${subject.activity_percentage}%` : '-')}
                               </td>
-                              <td><div className="teacher-cell">{subject.teacher_name || 'ยังไม่มีครู'}</div></td>
+                              <td><div className="teacher-cell">{subject.teacher_name || t('admin.noTeacherYet')}</div></td>
                               <td style={{ textAlign: 'center' }}>{subject.classroom_count}</td>
                               <td style={{ textAlign: 'center' }}>{subject.student_count}</td>
                               <td>
                                 <button
                                   onClick={() => handleEditSubject(subject)}
                                 >
-                                  ✏️ แก้ไข
+                                  ✏️ {t('common.edit')}
                                 </button>
                                 <button
                                   onClick={() => handleDeleteSubject(subject)}
                                 >
-                                  🗑️ ลบ
+                                  🗑️ {t('common.delete')}
                                 </button>
                               </td>
                             </tr>
