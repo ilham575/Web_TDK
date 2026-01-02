@@ -4,14 +4,14 @@
 
 ## 📋 รายชื่อ Modal
 
-### 1. **StudentDetailModal** 
-📁 `src/components/modals/StudentDetailModal.js`
+### 1. **StudentGradeModal** 
+📁 `src/components/modals/StudentGradeModal.js`
 
-**วัตถุประสงค์:** แสดงข้อมูลรายละเอียดของนักเรียน
+**วัตถุประสงค์:** แสดงสรุปคะแนนและรายละเอียดเกรดของนักเรียน
 
 **Props:**
 - `isOpen` (boolean) - เปิด/ปิด modal
-- `selectedStudentDetail` (object) - ข้อมูลนักเรียนที่ถูกเลือก
+- `student` (object) - ข้อมูลนักเรียนที่ถูกเลือก
 - `onClose` (function) - callback เมื่อปิด modal
 - `calculateMainSubjectsScore` (function) - function คำนวณคะแนนวิชาปกติ
 - `calculateGPA` (function) - function คำนวณ GPA
@@ -20,13 +20,25 @@
 
 **รายละเอียด:**
 - แสดงข้อมูลทั่วไป: ชื่อ, ชื่อผู้ใช้, อีเมล
-- แสดงส่วนคะแนน:
-  - สรุปคะแนนรวม (วิชาปกติเท่านั้น)
-  - รายวิชาปกติ (สีน้ำเงิน)
-  - วิชากิจกรรม (สีส้ม)
-- แสดงส่วนการเข้าเรียน:
-  - สรุปการเข้าเรียนโดยรวม
-  - รายวิชาแต่ละวิชา
+- แสดงสรุปคะแนนรวม (วิชาปกติเท่านั้น), GPA และเกรด
+- แสดงรายการวิชาปกติและวิชากิจกรรม (ถ้ามี)
+
+---
+
+### 2. **StudentAttendanceModal** 
+📁 `src/components/modals/StudentAttendanceModal.js`
+
+**วัตถุประสงค์:** แสดงสรุปการเข้าเรียนของนักเรียน
+
+**Props:**
+- `isOpen` (boolean) - เปิด/ปิด modal
+- `student` (object) - ข้อมูลนักเรียนที่ถูกเลือก
+- `onClose` (function) - callback เมื่อปิด modal
+- `initials` (function) - function สร้าง initials จากชื่อ
+
+**รายละเอียด:**
+- แสดงสรุปการเข้าเรียนโดยรวม (เปอร์เซ็นต์ และสถิติ มา/ขาด/สาย/ลา)
+- แสดงการเข้าเรียนแยกรายวิชา
 
 ---
 
@@ -111,20 +123,29 @@
 
 ### Import
 ```javascript
-import StudentDetailModal from '../../modals/StudentDetailModal';
+import StudentGradeModal from '../../modals/StudentGradeModal';
+import StudentAttendanceModal from '../../modals/StudentAttendanceModal';
 import ScheduleModal from '../../modals/ScheduleModal';
 ```
 
 ### Usage
 ```javascript
-// Student Detail Modal
-<StudentDetailModal
-  isOpen={showStudentDetailModal}
-  selectedStudentDetail={selectedStudentDetail}
-  onClose={() => setShowStudentDetailModal(false)}
+// Student Grade Modal
+<StudentGradeModal
+  isOpen={showStudentGradeModal}
+  student={selectedStudentDetail}
+  onClose={() => setShowStudentGradeModal(false)}
   calculateMainSubjectsScore={calculateMainSubjectsScore}
   calculateGPA={calculateGPA}
   getLetterGrade={getLetterGrade}
+  initials={initials}
+/>
+
+// Student Attendance Modal
+<StudentAttendanceModal
+  isOpen={showStudentAttendanceModal}
+  student={selectedStudentDetail}
+  onClose={() => setShowStudentAttendanceModal(false)}
   initials={initials}
 />
 
@@ -158,7 +179,8 @@ import ScheduleModal from '../../modals/ScheduleModal';
 ```
 src/components/
 ├── modals/
-│   ├── StudentDetailModal.js
+│   ├── StudentGradeModal.js
+│   ├── StudentAttendanceModal.js
 │   └── ScheduleModal.js
 ├── ConfirmModal.js
 ├── ExpiryModal.js

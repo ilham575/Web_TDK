@@ -2,11 +2,37 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import '../../../css/pages/admin/HomeroomTeacherModal.css';
 
-function HomeroomTeacherModal({ isOpen, editingHomeroom, teachers, availableGradeLevels, homeroomTeachers, onClose, onSave }) {
+function HomeroomTeacherModal({ isOpen, editingHomeroom, teachers, availableGradeLevels, homeroomTeachers, classrooms = [], onClose, onSave }) {
   const { t } = useTranslation();
   const [newHomeroomTeacherId, setNewHomeroomTeacherId] = useState('');
   const [newHomeroomGradeLevel, setNewHomeroomGradeLevel] = useState('');
   const [newHomeroomAcademicYear, setNewHomeroomAcademicYear] = useState('');
+
+  // When grade level is selected, derive academic year from existing classrooms
+  useEffect(() => {
+    if (editingHomeroom) return; // keep existing value when editing
+    if (!newHomeroomGradeLevel) {
+      setNewHomeroomAcademicYear('');
+      return;
+    }
+    const years = Array.from(new Set(classrooms.filter(c => String(c.grade_level) === String(newHomeroomGradeLevel)).map(c => c.academic_year))).filter(y => y);
+    if (years.length === 1) {
+      setNewHomeroomAcademicYear(years[0]);
+    } else if (years.length > 1) {
+      // If multiple years exist for the grade, pick the max (latest) academically
+      const numericYears = years.map(y => parseInt(y, 10)).filter(n => !isNaN(n));
+      if (numericYears.length > 0) {
+        const maxYear = Math.max(...numericYears);
+        setNewHomeroomAcademicYear(String(maxYear));
+      } else {
+        // fallback to first
+        setNewHomeroomAcademicYear(years[0]);
+      }
+    } else {
+      // No classrooms found for selected grade
+      setNewHomeroomAcademicYear('');
+    }
+  }, [newHomeroomGradeLevel, classrooms, editingHomeroom]);
 
   useEffect(() => {
     if (editingHomeroom) {
@@ -115,9 +141,15 @@ function HomeroomTeacherModal({ isOpen, editingHomeroom, teachers, availableGrad
               className="admin-form-input" 
               type="text" 
               value={newHomeroomAcademicYear}
-              onChange={e => setNewHomeroomAcademicYear(e.target.value)}
+              readOnly
               placeholder={t('admin.academicYearExample')}
+              style={{ backgroundColor: '#f5f5f5' }}
             />
+            {!editingHomeroom && !newHomeroomAcademicYear && (
+              <div className="form-helper" style={{ color: '#b45309', fontSize: '12px', marginTop: '4px' }}>
+                ⚠️ {t('admin.noClassroomYearForGrade')}
+              </div>
+            )}
           </div>
         </div>
         <div className="admin-modal-footer">

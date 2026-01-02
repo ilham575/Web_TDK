@@ -73,11 +73,11 @@ def admin_reset_user_password(user_id: int, db: Session = Depends(get_db), curre
     through out-of-band channels (SMS/phone/hand-delivery). Use only in trusted admin contexts.
     """
     if getattr(current_user, 'role', None) != 'admin':
-        raise HTTPException(status_code=403, detail='Not authorized')
+        raise HTTPException(status_code=403, detail='ไม่มีสิทธิ์เข้าถึง')
 
     user = db.query(UserModel).filter(UserModel.id == user_id).first()
     if not user:
-        raise HTTPException(status_code=404, detail='User not found')
+        raise HTTPException(status_code=404, detail='ไม่พบผู้ใช้')
 
     # generate a secure temporary password
     temp_password = secrets.token_urlsafe(8)
@@ -85,7 +85,7 @@ def admin_reset_user_password(user_id: int, db: Session = Depends(get_db), curre
     user.must_change_password = True
     db.commit()
     # Do NOT log the plaintext password in real systems; return it only to caller here
-    return { 'detail': 'password reset', 'temp_password': temp_password }
+    return { 'detail': 'รีเซ็ตรหัสผ่านแล้ว', 'temp_password': temp_password }
 
 @router.get("", response_model=List[User])
 @router.get("/", response_model=List[User])
@@ -101,12 +101,12 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
     # Check if username already exists
     db_user = db.query(UserModel).filter(UserModel.username == user.username).first()
     if db_user:
-        raise HTTPException(status_code=400, detail="Username already exists")
+        raise HTTPException(status_code=400, detail="ชื่อผู้ใช้นี้มีการใช้งานแล้ว")
     
     # Check if email already exists
     db_email = db.query(UserModel).filter(UserModel.email == user.email).first()
     if db_email:
-        raise HTTPException(status_code=400, detail="Email already exists")
+        raise HTTPException(status_code=400, detail="อีเมลนี้มีการใช้งานแล้ว")
     
     # Hash password and create user
     hashed_password = hash_password(user.password)
@@ -133,13 +133,13 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid username or password"
+            detail="ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง"
         )
     
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User account is inactive"
+            detail="บัญชีผู้ใช้ถูกปิดใช้งานแล้ว"
         )
     
     access_token = create_access_token(data={"sub": user.username})
@@ -402,20 +402,20 @@ def reset_password(token: str = Body(...), new_password: str = Body(...), db: Se
         raise HTTPException(status_code=400, detail=str(e))
 
     if payload.get('action') != 'reset_password':
-        raise HTTPException(status_code=400, detail='Invalid token action')
+        raise HTTPException(status_code=400, detail='โทเค็นไม่ถูกต้อง')
 
     username = payload.get('sub')
     if not username:
-        raise HTTPException(status_code=400, detail='Invalid token payload')
+        raise HTTPException(status_code=400, detail='ข้อมูลในโทเค็นไม่ถูกต้อง')
 
     user = db.query(UserModel).filter(UserModel.username == username).first()
     if not user:
-        raise HTTPException(status_code=404, detail='User not found')
+        raise HTTPException(status_code=404, detail='ไม่พบผู้ใช้')
 
     # update password
     user.hashed_password = hash_password(new_password)
     db.commit()
-    return {"detail": "Password updated successfully"}
+    return {"detail": "อัปเดตรหัสผ่านเรียบร้อยแล้ว"}
 
 
 @router.post('/bulk_upload')
@@ -450,7 +450,7 @@ def bulk_upload_users(file: UploadFile = File(...), db: Session = Depends(get_db
     required_cols = ['username', 'email', 'full_name', 'password', 'role']
     for col in required_cols:
         if col not in idx:
-            raise HTTPException(status_code=400, detail=f'Missing required column: {col}')
+            raise HTTPException(status_code=400, detail=f'ขาดคอลัมน์ที่จำเป็น: {col}')
 
     created = []
     errors = []
@@ -473,7 +473,7 @@ def bulk_upload_users(file: UploadFile = File(...), db: Session = Depends(get_db
                 grade_level = str(row[idx['grade_level']]).strip()
 
             if not username or not email or not password or role not in ('teacher', 'student'):
-                raise ValueError('Invalid data - required fields missing or role invalid')
+                raise ValueError('ข้อมูลไม่ถูกต้อง - ฟิลด์จำเป็นหายไปหรือบทบาทไม่ถูกต้อง')
 
             # default school_id to admin's school if not provided
             if school_id is None:
@@ -482,7 +482,7 @@ def bulk_upload_users(file: UploadFile = File(...), db: Session = Depends(get_db
             # uniqueness checks
             existing_user = db.query(UserModel).filter((UserModel.username == username) | (UserModel.email == email)).first()
             if existing_user:
-                raise ValueError('Username or email already exists')
+                raise ValueError('ชื่อผู้ใช้หรืออีเมลนี้มีการใช้งานแล้ว')
 
             hashed = hash_password(password)
             new_user = UserModel(username=username, email=email, full_name=full_name, hashed_password=hashed, role=role, school_id=school_id, grade_level=grade_level)
@@ -497,7 +497,7 @@ def bulk_upload_users(file: UploadFile = File(...), db: Session = Depends(get_db
         db.commit()
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f'Failed to commit created users: {str(e)}')
+        raise HTTPException(status_code=500, detail=f'ไม่สามารถบันทึกผู้ใช้ที่สร้างขึ้น: {str(e)}')
 
     return { 'created_count': len(created), 'created': created, 'errors': errors }
 
@@ -513,15 +513,15 @@ def update_current_user(
 
     # Only admins can change role, is_active or school_id
     if 'role' in incoming and getattr(current_user, 'role', None) != 'admin':
-        raise HTTPException(status_code=403, detail='Only admins can change user role')
+        raise HTTPException(status_code=403, detail='เฉพาะแอดมินเท่านั้นที่สามารถเปลี่ยนบทบาทผู้ใช้ได้')
     if 'is_active' in incoming and getattr(current_user, 'role', None) != 'admin':
-        raise HTTPException(status_code=403, detail='Only admins can change account activation')
+        raise HTTPException(status_code=403, detail='เฉพาะแอดมินเท่านั้นที่สามารถเปลี่ยนสถานะการใช้งานได้')
     if 'school_id' in incoming and getattr(current_user, 'role', None) != 'admin':
-        raise HTTPException(status_code=403, detail='Only admins can change school assignment')
+        raise HTTPException(status_code=403, detail='เฉพาะแอดมินเท่านั้นที่สามารถเปลี่ยนการกำหนดโรงเรียนได้')
 
     # Only admins or teachers can update grade_level (prevent students from modifying their own class)
     if 'grade_level' in incoming and getattr(current_user, 'role', None) not in ('admin', 'teacher'):
-        raise HTTPException(status_code=403, detail='Only admin or teacher can update grade_level')
+        raise HTTPException(status_code=403, detail='เฉพาะแอดมินหรือครูเท่านั้นที่สามารถอัปเดตชั้นปีได้')
 
     for field, value in incoming.items():
         setattr(current_user, field, value)
@@ -558,11 +558,11 @@ def check_user_deletion_status(
 ):
     """Admin-only: Check if a user can be deleted and why/why not"""
     if getattr(current_user, 'role', None) != 'admin':
-        raise HTTPException(status_code=403, detail='Only admins can check deletion status')
+        raise HTTPException(status_code=403, detail='เฉพาะแอดมินเท่านั้นที่ตรวจสอบสถานะการลบได้')
     
     user = db.query(UserModel).filter(UserModel.id == user_id).first()
     if not user:
-        raise HTTPException(status_code=404, detail='User not found')
+        raise HTTPException(status_code=404, detail='ไม่พบผู้ใช้')
     
     # Check all conditions
     can_delete = True

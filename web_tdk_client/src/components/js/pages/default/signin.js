@@ -57,7 +57,7 @@ function SigninPage() {
 
   useEffect(() => {
     if (location.state?.signedOut) {
-      toast.success('Signed out successfully!', {
+      toast.success('ออกจากระบบเรียบร้อยแล้ว', {
         position: "top-center",
         hideProgressBar: false,
         theme: "colored"
@@ -137,7 +137,7 @@ function SigninPage() {
     if (userType === 'staff') {
       // Staff login validation
       if (!username || !password) {
-        setError('Please fill in all fields');
+        setError('กรุณากรอกข้อมูลให้ครบถ้วน');
         setIsLoading(false);
         return;
       }
@@ -183,8 +183,9 @@ function SigninPage() {
           })
       });
       const data = await res.json();
+      console.log('Login response data:', data);
       if (!res.ok) {
-        setError(data.detail || 'Invalid username or password');
+        setError(data.detail || 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
         toast.error(data.detail || 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง', {
           position: "top-center",
           hideProgressBar: false,
@@ -221,15 +222,15 @@ function SigninPage() {
         } else if (data.user_info?.role === 'owner') {
           navigate('/owner/home');
         }
-        toast.success('Sign in successful!', {
+        toast.success('เข้าสู่ระบบเรียบร้อยแล้ว', {
           position: "top-center",
           hideProgressBar: false,
           theme: "colored"
         });
       }
     } catch (err) {
-      setError('Signin failed. Please try again.');
-      toast.error('Signin failed. Please try again.', {
+      setError('การเข้าสู่ระบบล้มเหลว กรุณาลองอีกครั้ง');
+      toast.error('การเข้าสู่ระบบล้มเหลว กรุณาลองอีกครั้ง', {
         position: "top-center",
         hideProgressBar: false,
         theme: "colored"

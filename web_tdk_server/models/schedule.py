@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Time
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Time, Boolean
+from sqlalchemy.sql import func
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from database.connection import Base
@@ -31,6 +32,11 @@ class SubjectSchedule(Base):
     day_of_week = Column(String(10), nullable=True)  # Day of week (0-6, where 0=Sunday)
     start_time = Column(Time, nullable=True)  # Custom start time
     end_time = Column(Time, nullable=True)  # Custom end time
+    
+    # Track if this teacher has ended the course
+    is_ended = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
     # Relationships
     subject = relationship("Subject", back_populates="subject_schedules")

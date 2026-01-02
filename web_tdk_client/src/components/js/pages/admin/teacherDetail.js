@@ -15,8 +15,6 @@ function TeacherDetail() {
   const [teacher, setTeacher] = useState(null);
   const [subjects, setSubjects] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [newSubjectName, setNewSubjectName] = useState('');
-  const [creating, setCreating] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmTitle, setConfirmTitle] = useState('');
   const [confirmMessage, setConfirmMessage] = useState('');
@@ -118,35 +116,7 @@ function TeacherDetail() {
     document.title = (displaySchool && displaySchool !== '-') ? `${baseTitle} - ${displaySchool}` : baseTitle;
   }, [displaySchool]);
 
-  const handleAdd = async (e) => {
-    e.preventDefault();
-    if (!newSubjectName) { toast.error('กรุณากรอกชื่อรายวิชา'); return; }
-    const token = localStorage.getItem('token');
-    const schoolId = localStorage.getItem('school_id');
-    if (!schoolId) { toast.error('ไม่พบ school_id'); return; }
-    setCreating(true);
-    try {
-      const body = { name: newSubjectName, teacher_id: Number(id), school_id: Number(schoolId) };
-      const res = await fetch(`${API_BASE_URL}/subjects/`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify(body)
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        toast.error(data.detail || 'เพิ่มรายวิชาไม่สำเร็จ');
-      } else {
-        toast.success('เพิ่มรายวิชาเรียบร้อย');
-        setSubjects(prev => [data, ...(prev||[])]);
-        setNewSubjectName('');
-      }
-    } catch (err) {
-      console.error('add subject error', err);
-      toast.error('เกิดข้อผิดพลาดขณะเพิ่มรายวิชา');
-    } finally {
-      setCreating(false);
-    }
-  };
+
 
   const handleDelete = async (subjectId) => {
     try {
@@ -239,29 +209,13 @@ function TeacherDetail() {
           )}
         </div>
         
-        <form className="add-subject-form" onSubmit={handleAdd}>
-          <input 
-            className="user-input" 
-            placeholder="กรอกชื่อรายวิชาใหม่..." 
-            value={newSubjectName} 
-            onChange={e => setNewSubjectName(e.target.value)}
-            autoComplete="off"
-          />
-          <button 
-            className="user-submit" 
-            type="submit" 
-            disabled={creating || !newSubjectName.trim()}
-          >
-            {creating ? '⏳ กำลังเพิ่ม...' : '➕ เพิ่มรายวิชา'}
-          </button>
-          <button 
-            type="button" 
-            className="btn-cancel" 
-            onClick={() => navigate(-1)}
-          >
-            🔙 กลับ
-          </button>
-        </form>
+        <button 
+          type="button" 
+          className="btn-cancel" 
+          onClick={() => navigate(-1)}
+        >
+          🔙 กลับ
+        </button>
       </div>
       
       <ConfirmModal

@@ -11,7 +11,8 @@ import 'react-toastify/dist/ReactToastify.css';
 import ConfirmModal from '../../ConfirmModal';
 import ExpiryModal from '../../ExpiryModal';
 import AnnouncementModal from '../../AnnouncementModal';
-import StudentDetailModal from '../../../modals/StudentDetailModal';
+import StudentGradeModal from '../../../modals/StudentGradeModal';
+import StudentAttendanceModal from '../../../modals/StudentAttendanceModal';
 import ScheduleModal from '../../../modals/ScheduleModal';
 // import BulkEnrollModal from '../../BulkEnrollModal';
 import { API_BASE_URL } from '../../../endpoints';
@@ -22,6 +23,7 @@ function TeacherPage() {
   const navigate = useNavigate();
   const [teacherSubjects, setTeacherSubjects] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
+  const [subjectTeachersMap, setSubjectTeachersMap] = useState({});  // Map of subject_id -> teachers with is_ended
   const [gradesAnnounced, setGradesAnnounced] = useState(true);
   const [gradeAnnouncementDate, setGradeAnnouncementDate] = useState(null);
   const [countdown, setCountdown] = useState('');
@@ -59,7 +61,8 @@ function TeacherPage() {
   const [loadingHomeroomSummary, setLoadingHomeroomSummary] = useState(false);
   const [selectedHomeroomClassroom, setSelectedHomeroomClassroom] = useState(null);
   const [homeroomSubTab, setHomeroomSubTab] = useState('grades'); // 'grades' or 'attendance'
-  const [showStudentDetailModal, setShowStudentDetailModal] = useState(false);
+  const [showStudentGradeModal, setShowStudentGradeModal] = useState(false);
+  const [showStudentAttendanceModal, setShowStudentAttendanceModal] = useState(false);
   const [selectedStudentDetail, setSelectedStudentDetail] = useState(null);
   const [teacherHomerooms, setTeacherHomerooms] = useState([]);
 
@@ -113,16 +116,55 @@ function TeacherPage() {
       .catch(() => setAnnouncements([]));
   }, []);
 
+  const fetchTeacherSubjects = async () => {
+    if (!currentUser) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/subjects/teacher/${currentUser.id}`);
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        // Map the response: use 'teachers' field and normalize to 'subject_teachers'
+        const mappedData = data.map(sub => {
+          const teachers = sub.teachers || [];
+          
+          return {
+            ...sub,
+            subject_teachers: teachers.map(t => ({
+              id: t.id || t.schedule_id,  // SubjectSchedule.id from backend
+              schedule_id: t.schedule_id || t.id,  // schedule_id from backend
+              teacher_id: t.teacher_id,  // teacher user ID
+              teacher_name: t.teacher_name || t.name || 'Unknown',
+              is_ended: t.is_ended || false
+            })),
+            teacher_is_ended: sub.teacher_is_ended || false
+          };
+        });
+        setTeacherSubjects(mappedData);
+        
+        // Fetch detailed teacher info with is_ended status for each subject
+        const token = localStorage.getItem('token');
+        const teachersMap = {};
+        for (const subject of mappedData) {
+          try {
+            const teachersRes = await fetch(`${API_BASE_URL}/subjects/${subject.id}/teachers`, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            if (teachersRes.ok) {
+              const teachersData = await teachersRes.json();
+              if (Array.isArray(teachersData)) {
+                teachersMap[subject.id] = teachersData;
+              }
+            }
+          } catch (err) {
+            // Silently fail for individual subject teachers fetch
+          }
+        }
+        setSubjectTeachersMap(teachersMap);
+      }
+      else setTeacherSubjects([]);
+    } catch (err) { setTeacherSubjects([]); }
+  };
+
   useEffect(() => {
-    const fetchTeacherSubjects = async () => {
-      if (!currentUser) return;
-      try {
-        const res = await fetch(`${API_BASE_URL}/subjects/teacher/${currentUser.id}`);
-        const data = await res.json();
-        if (Array.isArray(data)) setTeacherSubjects(data);
-        else setTeacherSubjects([]);
-      } catch (err) { setTeacherSubjects([]); }
-    };
     fetchTeacherSubjects();
   }, [currentUser]);
 
@@ -140,21 +182,57 @@ function TeacherPage() {
   const handleEndSubject = async (id) => {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE_URL}/subjects/${id}/end`, { method: 'PATCH', headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
-      if (!res.ok) { const data = await res.json(); toast.error(data.detail || 'จบคอร์สไม่สำเร็จ'); return; }
-      setTeacherSubjects(prev => prev.map(s => s.id === id ? { ...s, is_ended: true } : s));
+      const subject = teacherSubjects.find(s => s.id === id);
+      if (!subject || !subject.subject_teachers) return;
+      
+      // Find the current teacher's schedule
+      const schedule = subject.subject_teachers.find(t => t.teacher_id === currentUser.id);
+      if (!schedule) return;
+      
+      // Call the new endpoint to end the course for this teacher
+      const res = await fetch(`${API_BASE_URL}/subjects/${id}/teachers/${schedule.id}/end`, { 
+        method: 'PATCH', 
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } 
+      });
+      if (!res.ok) { 
+        const data = await res.json(); 
+        toast.error(data.detail || 'จบคอร์สไม่สำเร็จ'); 
+        return; 
+      }
       toast.success('จบคอร์สเรียบร้อยแล้ว');
-    } catch { toast.error('เกิดข้อผิดพลาด'); }
+      // Refetch to update subject_teachers data
+      await fetchTeacherSubjects();
+    } catch { 
+      toast.error('เกิดข้อผิดพลาด'); 
+    }
   };
 
   const handleUnendSubject = async (id) => {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE_URL}/subjects/${id}/unend`, { method: 'PATCH', headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
-      if (!res.ok) { const data = await res.json(); toast.error(data.detail || 'ยกเลิกจบคอร์สไม่สำเร็จ'); return; }
-      setTeacherSubjects(prev => prev.map(s => s.id === id ? { ...s, is_ended: false } : s));
+      const subject = teacherSubjects.find(s => s.id === id);
+      if (!subject || !subject.subject_teachers) return;
+      
+      // Find the current teacher's schedule
+      const schedule = subject.subject_teachers.find(t => t.teacher_id === currentUser.id);
+      if (!schedule) return;
+      
+      // Call the new endpoint to unend the course for this teacher
+      const res = await fetch(`${API_BASE_URL}/subjects/${id}/teachers/${schedule.id}/unend`, { 
+        method: 'PATCH', 
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } 
+      });
+      if (!res.ok) { 
+        const data = await res.json(); 
+        toast.error(data.detail || 'ยกเลิกจบคอร์สไม่สำเร็จ'); 
+        return; 
+      }
       toast.success('ยกเลิกจบคอร์สเรียบร้อยแล้ว');
-    } catch { toast.error('เกิดข้อผิดพลาด'); }
+      // Refetch to update subject_teachers data
+      await fetchTeacherSubjects();
+    } catch { 
+      toast.error('เกิดข้อผิดพลาด'); 
+    }
   };
 
   // Determine school name from multiple possible sources (API shape may vary)
@@ -357,12 +435,13 @@ function TeacherPage() {
   };
 
   // View student detail - fetch detailed data from classroom endpoint
-  const viewStudentDetail = async (student) => {
+  const viewStudentDetail = async (student, origin) => {
     if (!selectedHomeroomClassroom) return;
-    
-    // ใช้ข้อมูลนักเรียนจากตารางแล้ว เพราะมีข้อมูลคะแนนที่ถูกต้อง
+
+    // Use the data from the table (already has grades/attendance)
     setSelectedStudentDetail(student);
-    setShowStudentDetailModal(true);
+    if (origin === 'attendance') setShowStudentAttendanceModal(true);
+    else setShowStudentGradeModal(true);
   };
 
   // Parse server-provided datetime strings into a local Date object.
@@ -826,20 +905,33 @@ function TeacherPage() {
                       sub.activity_percentage != null ? `${sub.activity_percentage}%` : ''
                     )}
                   </div>
+                  {/* Display teachers assigned to this subject */}
+                  {sub.subject_teachers && sub.subject_teachers.length > 0 && (
+                    <div className="subject-teachers" style={{ marginTop: '8px', fontSize: '0.85rem', color: '#555' }}>
+                      <strong>👨‍🏫 ครูผู้สอน:</strong> {sub.subject_teachers.map(t => t.teacher_name).join(', ')}
+                      {/* Show ended status if available from API */}
+                      {subjectTeachersMap[sub.id] && (
+                        <div style={{ marginTop: '4px', fontSize: '0.8rem' }}>
+                          {subjectTeachersMap[sub.id].map(t => (
+                            <div key={t.id}>
+                              {t.teacher_name}: {t.is_ended ? '✅ จบแล้ว' : '⏳ ยังไม่จบ'}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div className="subject-actions">
-                  {/* Student management is handled by admin; teachers cannot add students */}
-                  {sub.is_ended ? (
+                  {/* Check if ALL teachers have ended the course */}
+                  {sub.subject_teachers && Array.isArray(sub.subject_teachers) && sub.subject_teachers.length > 0 && sub.subject_teachers.every(t => t.is_ended) ? (
                     <>
                       <button className="btn-unend" onClick={() => handleUnendSubject(sub.id)}>ยกเลิกจบคอร์ส</button>
-                      {currentUser?.role === 'admin' && (
-                        <button className="btn-delete" onClick={() => openConfirmModal('ลบรายวิชา', 'ต้องการลบรายวิชานี้ใช่หรือไม่?', async () => { await handleDeleteSubject(sub.id); })}>ลบ</button>
-                      )}
                     </>
                   ) : (
                     <button className="btn-end" onClick={() => openConfirmModal('จบคอร์ส', 'ต้องการจบคอร์สนี้ใช่หรือไม่? หลังจากจบคอร์สแล้วจะไม่สามารถแก้ไขข้อมูลได้อีก', async () => { await handleEndSubject(sub.id); })}>จบคอร์ส</button>
                   )}
-                  {!sub.is_ended && (
+                  {!(sub.subject_teachers && Array.isArray(sub.subject_teachers) && sub.subject_teachers.every(t => t.is_ended)) && (
                     <>
                       <button className="btn-attendance" onClick={() => navigate(`/teacher/subject/${sub.id}/attendance`)}>เช็คชื่อ</button>
                       <button className="btn-grades" onClick={() => navigate(`/teacher/subject/${sub.id}/grades`)}>ให้คะแนน</button>
@@ -1017,7 +1109,7 @@ function TeacherPage() {
                                   </td>
                                 )}
                                 <td>
-                                  <button className="btn-view-detail" onClick={() => viewStudentDetail(student)}>
+                                  <button className="btn-view-detail" onClick={() => viewStudentDetail(student, homeroomSubTab)}>
                                     ดูรายละเอียด
                                   </button>
                                 </td>
@@ -1189,15 +1281,23 @@ function TeacherPage() {
         }}
       /> */}
 
-      <StudentDetailModal
-        isOpen={showStudentDetailModal}
-        selectedStudentDetail={selectedStudentDetail}
-        onClose={() => setShowStudentDetailModal(false)}
+      <StudentGradeModal
+        isOpen={showStudentGradeModal}
+        student={selectedStudentDetail}
+        onClose={() => setShowStudentGradeModal(false)}
         calculateMainSubjectsScore={calculateMainSubjectsScore}
         calculateGPA={calculateGPA}
         getLetterGrade={getLetterGrade}
         initials={getInitials}
-        initialTab={homeroomSubTab}
+        origin={homeroomSubTab}
+      />
+
+      <StudentAttendanceModal
+        isOpen={showStudentAttendanceModal}
+        student={selectedStudentDetail}
+        onClose={() => setShowStudentAttendanceModal(false)}
+        initials={getInitials}
+        origin={homeroomSubTab}
       />
 
       <ConfirmModal

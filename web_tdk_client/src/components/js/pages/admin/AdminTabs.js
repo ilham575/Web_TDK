@@ -5,17 +5,20 @@ function AdminTabs({ isMobile: propIsMobile, activeTab, setActiveTab, loadSubjec
   const { t } = useTranslation();
   const [open, setOpen] = useState(true);
   const [hoveredTab, setHoveredTab] = useState(null);
+  // track closing state so we can run closing animation before unmount
+  const [isClosing, setIsClosing] = useState(false);
 
   // prefer parent's detection but fallback to window
   const isMobile = typeof propIsMobile === 'boolean' ? propIsMobile : (typeof window !== 'undefined' ? window.innerWidth < 768 : false);
 
   const computeSidebarWidth = () => {
     if (isMobile) return '100%';
-    if (typeof window === 'undefined') return '280px';
+    if (typeof window === 'undefined') return '220px';
     const w = window.innerWidth;
-    if (w < 1000) return '220px';
-    if (w < 1300) return '250px';
-    return '280px';
+    // use smaller widths to keep sidebar compact on desktop
+    if (w < 1000) return '160px';
+    if (w < 1300) return '190px';
+    return '220px';
   };
 
   const sidebarWidth = computeSidebarWidth();
@@ -41,12 +44,12 @@ function AdminTabs({ isMobile: propIsMobile, activeTab, setActiveTab, loadSubjec
   } : {
     display: 'flex',
     flexDirection: 'column',
-    gap: '0.75rem',
+    gap: '0.6rem',
     width: sidebarWidth,
-    padding: '16px',
-    borderRadius: '14px',
+    padding: '12px',
+    borderRadius: '12px',
     background: 'linear-gradient(135deg, #ffffff 0%, #fafbfc 100%)',
-    boxShadow: '0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04)',
+    boxShadow: '0 4px 12px rgba(0,0,0,0.06), 0 2px 4px rgba(0,0,0,0.03)',
     borderTop: '1px solid #e8ecf1',
     borderRight: '1px solid #e8ecf1',
     borderLeft: '1px solid #e8ecf1',
@@ -272,7 +275,11 @@ function AdminTabs({ isMobile: propIsMobile, activeTab, setActiveTab, loadSubjec
                 e.target.style.background = '#f7f9fb';
                 e.target.style.borderColor = '#d1d9e0';
               }}
-              onClick={() => setOpen(false)}
+              onClick={() => {
+                // play closing animation then actually close
+                setIsClosing(true);
+                setTimeout(() => { setOpen(false); setIsClosing(false); }, 240);
+              }}
               style={closeButtonStyle}
               title={t('admin.menuCloseBtn')}
             >
@@ -280,7 +287,7 @@ function AdminTabs({ isMobile: propIsMobile, activeTab, setActiveTab, loadSubjec
             </button>
           </div>
 
-          <nav aria-label="Admin tabs" style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+          <nav aria-label="Admin tabs" className={`admin-tabs-nav ${isClosing ? 'closing' : 'opening'}`} style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
             <div style={{ ...sectionDividerStyle, marginTop: '0px' }} />
 
             <button
@@ -404,6 +411,7 @@ function AdminTabs({ isMobile: propIsMobile, activeTab, setActiveTab, loadSubjec
         // Desktop: Vertical sidebar collapsed
         <button
           onClick={() => setOpen(true)}
+          className="admin-open-btn"
           style={{
             padding: '0',
             border: 'none',
@@ -411,10 +419,10 @@ function AdminTabs({ isMobile: propIsMobile, activeTab, setActiveTab, loadSubjec
             cursor: 'pointer',
             fontSize: '1.5rem',
             color: '#fff',
-            transition: 'transform 120ms ease'
+            transition: 'transform 150ms ease'
           }}
           title={t('admin.menuOpenBtn')}
-          onMouseEnter={(e) => e.target.style.transform = 'scale(1.1)'}
+          onMouseEnter={(e) => e.target.style.transform = 'scale(1.06)'}
           onMouseLeave={(e) => e.target.style.transform = 'scale(1)'}
         >
           ☰

@@ -11,7 +11,7 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 
 def require_admin(current_user: UserModel = Depends(get_current_user)):
     if current_user.role != 'admin':
-        raise HTTPException(status_code=403, detail="Only admins can access this resource")
+        raise HTTPException(status_code=403, detail="เฉพาะแอดมินเท่านั้นที่สามารถเข้าถึงทรัพยากรนี้ได้")
     return current_user
 
 @router.post("/request_school_deletion", response_model=SchoolDeletionRequest, status_code=status.HTTP_201_CREATED)
@@ -24,12 +24,12 @@ def request_school_deletion(
 
     # Verify the admin belongs to the school they're requesting to delete
     if current_user.school_id != request.school_id:
-        raise HTTPException(status_code=403, detail="You can only request deletion for your own school")
+        raise HTTPException(status_code=403, detail="คุณสามารถขอลบโรงเรียนของตนเองเท่านั้น")
 
     # Check if school exists
     school = db.query(SchoolModel).filter(SchoolModel.id == request.school_id).first()
     if not school:
-        raise HTTPException(status_code=404, detail="School not found")
+        raise HTTPException(status_code=404, detail="ไม่พบโรงเรียน")
 
     # Check if there's already a pending request for this school
     existing_request = db.query(SchoolDeletionRequestModel).filter(
@@ -37,7 +37,7 @@ def request_school_deletion(
         SchoolDeletionRequestModel.status == "pending"
     ).first()
     if existing_request:
-        raise HTTPException(status_code=400, detail="There's already a pending deletion request for this school")
+        raise HTTPException(status_code=400, detail="มีคำขอลบโรงเรียนที่รอดำเนินการอยู่แล้ว")
 
     # Create the deletion request
     deletion_request = SchoolDeletionRequestModel(

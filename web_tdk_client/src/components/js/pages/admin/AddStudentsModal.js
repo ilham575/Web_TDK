@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { API_BASE_URL } from '../../../endpoints';
+import '../../../css/AdminModal.css';
 
 const AddStudentsModal = ({
   isOpen,
@@ -134,7 +135,7 @@ const AddStudentsModal = ({
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flex: 1 }}>
             <div>
               <h3 style={{ margin: 0 }}>
-                👨‍🎓 {isViewMode ? t('admin.viewStudents') : t('admin.addStudents')}
+                {isViewMode ? t('admin.viewStudents') : t('admin.addStudentsToClassroom')}
               </h3>
               <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>
                 {selectedClassroom && `${t('admin.classroom')}: ${selectedClassroom.name} (${selectedClassroom.grade_level})`}

@@ -342,6 +342,82 @@ def get_teacher_schedules(
     
     return result
 
+
+@router.get('/student', response_model=List[StudentScheduleResponse])
+def get_student_schedule_current(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Return schedule entries for the currently authenticated student."""
+    if current_user.role != 'student':
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Only students can access this endpoint')
+
+    student_id = current_user.id
+
+    # Student's active classroom
+    cs = db.query(SubjectStudent).filter(SubjectStudent.student_id == student_id).all()
+
+    from models.classroom_student import ClassroomStudent as ClassroomStudentModel
+    from models.classroom_subject import ClassroomSubject as ClassroomSubjectModel
+
+    classroom_student = db.query(ClassroomStudentModel).filter(
+        ClassroomStudentModel.student_id == student_id,
+        ClassroomStudentModel.is_active == True
+    ).first()
+    classroom_id = classroom_student.classroom_id if classroom_student else None
+
+    # Direct enrollments
+    enrolled_subject_ids = [r.subject_id for r in db.query(SubjectStudent).filter(SubjectStudent.student_id == student_id).all()]
+
+    # Subjects assigned to classroom
+    classroom_subject_ids = []
+    if classroom_id:
+        classroom_subject_ids = [r.subject_id for r in db.query(ClassroomSubjectModel).filter(ClassroomSubjectModel.classroom_id == classroom_id).all()]
+
+    subject_ids = set(enrolled_subject_ids) | set(classroom_subject_ids)
+
+    if not subject_ids:
+        return []
+
+    # Find schedules for these subjects that are global or target the student's classroom
+    schedules = db.query(SubjectSchedule).options(joinedload(SubjectSchedule.subject), joinedload(SubjectSchedule.teacher)).filter(
+        SubjectSchedule.subject_id.in_(list(subject_ids)),
+        ((SubjectSchedule.classroom_id == None) | (SubjectSchedule.classroom_id == classroom_id))
+    ).all()
+
+    result = []
+    for s in schedules:
+        teacher_name = s.teacher.full_name if s.teacher and getattr(s.teacher, 'full_name', None) else (s.teacher.username if s.teacher else 'Unknown')
+        # Prefer schedule_slot if present
+        if s.schedule_slot:
+            day_of_week = s.schedule_slot.day_of_week
+            start_time = s.schedule_slot.start_time
+            end_time = s.schedule_slot.end_time
+        else:
+            day_of_week = s.day_of_week
+            start_time = s.start_time
+            end_time = s.end_time
+
+        result.append(StudentScheduleResponse(
+            id=s.id,
+            subject_id=s.subject_id,
+            subject_name=s.subject.name if s.subject else None,
+            subject_code=s.subject.code if s.subject else None,
+            teacher_name=teacher_name,
+            day_of_week=day_of_week,
+            start_time=start_time,
+            end_time=end_time
+        ))
+
+    # Sort by day then starts
+    def sort_key(item):
+        dow = item.day_of_week if item.day_of_week is not None else ''
+        st = item.start_time if item.start_time is not None else ''
+        return (str(dow), str(st))
+
+    result.sort(key=sort_key)
+    return result
+
 @router.put("/assign/{assignment_id}", response_model=SubjectScheduleSchema)
 def update_subject_schedule(
     assignment_id: int,

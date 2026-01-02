@@ -21,7 +21,9 @@ import PromoteStudentModal from './PromoteStudentModal';
 import CreateClassroomModal from './CreateClassroomModal';
 import EditClassroomModal from './EditClassroomModal';
 import AddStudentsModal from './AddStudentsModal';
-import SubjectManagementModal from '../../SubjectManagementModal';
+import SubjectManagementModal from './SubjectManagementModal';
+import TeacherAssignmentModal from './TeacherAssignmentModal';
+import ClassroomSubjectManagementModal from './ClassroomSubjectManagementModal';
 import ScheduleManagementModal from '../../ScheduleManagementModal';
 import CreateUserModal from './CreateUserModal';
 import PasswordResetModal from './PasswordResetModal';
@@ -162,6 +164,10 @@ function AdminPage() {
   const [selectedStudentsForReset, setSelectedStudentsForReset] = useState(new Set());
   const [bulkResetLoading, setBulkResetLoading] = useState(false);
 
+  // Bulk password reset (teachers)
+  const [selectedTeachersForReset, setSelectedTeachersForReset] = useState(new Set());
+  const [bulkResetTeachersLoading, setBulkResetTeachersLoading] = useState(false);
+
   // Classroom management state
   const [classrooms, setClassrooms] = useState([]);
   const [classroomStudentCounts, setClassroomStudentCounts] = useState({});
@@ -181,6 +187,19 @@ function AdminPage() {
   const [classroomStudents, setClassroomStudents] = useState([]);
   const [promotingIndividualStudents, setPromotingIndividualStudents] = useState(false);
 
+  // Subject management state
+  const [subjects, setSubjects] = useState([]);
+  const [loadingSubjects, setLoadingSubjects] = useState(false);
+  const [showSubjectModal, setShowSubjectModal] = useState(false);
+  const [selectedSubject, setSelectedSubject] = useState(null);
+  const [showTeacherAssignmentModal, setShowTeacherAssignmentModal] = useState(false);
+  const [selectedSubjectForTeachers, setSelectedSubjectForTeachers] = useState(null);
+  const [showClassroomSubjectModal, setShowClassroomSubjectModal] = useState(false);
+  const [selectedSubjectForClassrooms, setSelectedSubjectForClassrooms] = useState(null);
+  const [subjectSearchTerm, setSubjectSearchTerm] = useState('');
+  const [subjectTypeFilter, setSubjectTypeFilter] = useState('all');
+  const [subjectCurrentPage, setSubjectCurrentPage] = useState(1);
+
   // User management search and filter state
   const [teacherSearchTerm, setTeacherSearchTerm] = useState('');
   const [studentSearchTermUsers, setStudentSearchTermUsers] = useState('');
@@ -197,20 +216,11 @@ function AdminPage() {
   const [selectedResetRequest, setSelectedResetRequest] = useState(null);
   const [showResetPasswordModal, setShowResetPasswordModal] = useState(false);
 
-  // Subject management state
-  const [subjects, setSubjects] = useState([]);
-  const [loadingSubjects, setLoadingSubjects] = useState(false);
-
   // School deletion request state
   const [schoolDeletionRequests, setSchoolDeletionRequests] = useState([]);
   const [loadingDeletionRequests, setLoadingDeletionRequests] = useState(false);
   const [deletionReason, setDeletionReason] = useState('');
   const [requestingDeletion, setRequestingDeletion] = useState(false);
-  const [showSubjectModal, setShowSubjectModal] = useState(false);
-  const [selectedSubject, setSelectedSubject] = useState(null);
-  const [subjectSearchTerm, setSubjectSearchTerm] = useState('');
-  const [subjectTypeFilter, setSubjectTypeFilter] = useState('all');
-  const [subjectCurrentPage, setSubjectCurrentPage] = useState(1);
 
   // Grade announcement date state (split date and time)
   const [gradeAnnouncementDate, setGradeAnnouncementDate] = useState(''); // YYYY-MM-DD
@@ -674,6 +684,44 @@ function AdminPage() {
       toast.error(t('admin.resetPasswordError'));
     } finally {
       setBulkResetLoading(false);
+    }
+  };
+
+  // Bulk reset selected teachers' passwords
+  const bulkResetSelectedTeachers = async () => {
+    if (!selectedTeachersForReset || selectedTeachersForReset.size === 0) { toast.error(t('admin.selectTeachersFirst')); return; }
+    const token = localStorage.getItem('token');
+    if (!token) { toast.error(t('admin.loginRequired')); return; }
+    setBulkResetTeachersLoading(true);
+    try {
+      const ids = Array.from(selectedTeachersForReset);
+      const results = await Promise.all(ids.map(async (id) => {
+        try {
+          const res = await fetch(`${API_BASE_URL}/users/${id}/admin_reset`, { method: 'POST', headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
+          const data = await res.json();
+          if (!res.ok) return { id, ok: false, error: data && data.detail ? data.detail : t('admin.resetFailed') };
+          return { id, ok: true, temp_password: data.temp_password };
+        } catch (err) {
+          return { id, ok: false, error: err.message || 'Network error' };
+        }
+      }));
+
+      let message = '';
+      results.forEach(r => {
+        const user = teachers.find(t => t.id === r.id);
+        const display = user ? (user.username || user.email || user.full_name) : r.id;
+        if (r.ok) message += `${display}: 🔑 ${r.temp_password}\n`;
+        else message += `${display}: ❌ ${r.error}\n`;
+      });
+
+      openAlertModal(t('admin.resetPasswordResult'), message);
+      toast.success(t('admin.resetPasswordDone'));
+      setSelectedTeachersForReset(new Set());
+    } catch (err) {
+      console.error(err);
+      toast.error(t('admin.resetPasswordError'));
+    } finally {
+      setBulkResetTeachersLoading(false);
     }
   };
 
@@ -2194,6 +2242,16 @@ function AdminPage() {
     setShowSubjectModal(true);
   };
 
+  const handleManageTeachers = (subject) => {
+    setSelectedSubjectForTeachers(subject);
+    setShowTeacherAssignmentModal(true);
+  };
+
+  const handleManageClassrooms = (subject) => {
+    setSelectedSubjectForClassrooms(subject);
+    setShowClassroomSubjectModal(true);
+  };
+
   const handleCreateSubject = () => {
     setSelectedSubject(null);
     setShowSubjectModal(true);
@@ -2427,6 +2485,17 @@ function AdminPage() {
                       <option value="active">✅ ใช้งาน</option>
                       <option value="inactive">🚫 ปิดใช้งาน</option>
                     </select>
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                      <button
+                        type="button"
+                        className="admin-btn-warning"
+                        onClick={() => openConfirmModal(t('admin.bulkResetTitle'), `${t('admin.bulkResetConfirm')} ${selectedTeachersForReset.size} ${t('admin.peopleSelected')}?`, async () => { await bulkResetSelectedTeachers(); })}
+                        disabled={selectedTeachersForReset.size === 0 || bulkResetTeachersLoading}
+                        title={t('admin.resetSelectedPasswords')}
+                      >
+                        {bulkResetTeachersLoading ? `⏳ ${t('admin.resetting')}` : `🔄 ${t('admin.resetSelectedPasswords')} (${selectedTeachersForReset.size})`}
+                      </button>
+                    </div>
                   </div>
 
                   {teachers.length === 0 ? (
@@ -2457,6 +2526,22 @@ function AdminPage() {
                           <table className="admin-table" style={{ minWidth: '100%', fontSize: '0.95rem' }}>
                             <thead>
                               <tr>
+                                <th style={{ width: '44px', textAlign: 'center' }}>
+                                  {/* header checkbox: select/deselect all on current page */}
+                                  <input
+                                    type="checkbox"
+                                    checked={paginatedTeachers && paginatedTeachers.length > 0 ? paginatedTeachers.every(t => selectedTeachersForReset.has(t.id)) : false}
+                                    onChange={(e) => {
+                                      const next = new Set(selectedTeachersForReset);
+                                      if (e.target.checked) {
+                                        paginatedTeachers.forEach(t => next.add(t.id));
+                                      } else {
+                                        paginatedTeachers.forEach(t => next.delete(t.id));
+                                      }
+                                      setSelectedTeachersForReset(next);
+                                    }}
+                                  />
+                                </th>
                                 <th>{t('admin.name')}</th>
                                 <th>{t('admin.email')}</th>
                                 <th>{t('admin.username')}</th>
@@ -2466,7 +2551,21 @@ function AdminPage() {
                             </thead>
                             <tbody>
                               {paginatedTeachers.map(teacher => (
-                                <tr key={teacher.id}>
+                                <tr key={teacher.id} className={selectedTeachersForReset.has(teacher.id) ? 'selected-row' : ''}>
+                                  <td style={{ textAlign: 'center' }}>
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedTeachersForReset.has(teacher.id)}
+                                      onChange={() => {
+                                        setSelectedTeachersForReset(prev => {
+                                          const next = new Set(prev);
+                                          if (next.has(teacher.id)) next.delete(teacher.id);
+                                          else next.add(teacher.id);
+                                          return next;
+                                        });
+                                      }}
+                                    />
+                                  </td>
                                   <td><strong>{teacher.full_name || teacher.username}</strong></td>
                                   <td>{teacher.email}</td>
                                   <td style={{ color: '#666' }}>{teacher.username}</td>
@@ -3612,7 +3711,6 @@ function AdminPage() {
                     onActionDelete={(id)=>{ openConfirmModal(t('admin.cancelScheduleTitle'), t('admin.confirmCancelSchedule'), async ()=>{ await deleteAssignment(id); }); }}
                     onActionEdit={(item)=>{ setEditingAssignment(item); setShowScheduleManagementModal(true); }}
                   />
-                  />
                 </div>
               )}
             </div>
@@ -3734,20 +3832,71 @@ function AdminPage() {
                               <td className="subject-credit" style={{ textAlign: 'center' }}>
                                 {subject.subject_type === 'main' ? (subject.credits != null ? `${subject.credits} ${t('admin.creditUnit')}` : '-') : (subject.activity_percentage != null ? `${subject.activity_percentage}%` : '-')}
                               </td>
-                              <td><div className="teacher-cell">{subject.teacher_name || t('admin.noTeacherYet')}</div></td>
+                              <td>
+                                <div className="teacher-cell">
+                                  {subject.teachers && subject.teachers.length > 0 ? (
+                                    (() => {
+                                      const unique = [...new Map(subject.teachers.map(t => [t.id, t])).values()];
+                                      return (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                          <div style={{ fontWeight: '500' }}>
+                                            {unique.length} ครู
+                                          </div>
+                                          <div style={{ fontSize: '0.8rem', color: '#666' }}>
+                                            {unique.slice(0, 2).map(t => t.name).join(', ')}
+                                            {unique.length > 2 && ` +${unique.length - 2} คน`}
+                                          </div>
+                                        </div>
+                                      );
+                                    })()
+                                  ) : (
+                                    t('admin.noTeacherYet')
+                                  )}
+                                </div>
+                              </td>
                               <td style={{ textAlign: 'center' }}>{subject.classroom_count}</td>
                               <td style={{ textAlign: 'center' }}>{subject.student_count}</td>
-                              <td>
-                                <button
-                                  onClick={() => handleEditSubject(subject)}
-                                >
-                                  ✏️ {t('common.edit')}
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteSubject(subject)}
-                                >
-                                  🗑️ {t('common.delete')}
-                                </button>
+                              <td style={{ minWidth: '240px' }}>
+                                <div className="action-buttons">
+                                  <button
+                                    className="admin-btn-small admin-btn-secondary"
+                                    onClick={() => handleEditSubject(subject)}
+                                    title={t('common.edit')}
+                                  >
+                                    ✏️ <span className="action-text">{t('common.edit')}</span>
+                                  </button>
+
+                                  <button
+                                    className="admin-btn-small admin-btn-secondary"
+                                    onClick={() => handleManageTeachers(subject)}
+                                    title="จัดการครู"
+                                  >
+                                    👨‍🏫 <span className="action-text">จัดการครู</span>
+                                  </button>
+
+                                  <button
+                                    className="admin-btn-small admin-btn-secondary"
+                                    onClick={() => handleManageClassrooms(subject)}
+                                    title="จัดการชั้นเรียน"
+                                  >
+                                    🏫 <span className="action-text">จัดการชั้นเรียน</span>
+                                  </button>
+
+                                  <button
+                                    className="admin-btn-small admin-btn-danger"
+                                    style={subject.subject_teachers && subject.subject_teachers.some(t => !t.is_ended) && !subject.is_ended ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
+                                    onClick={() => handleDeleteSubject(subject)}
+                                    disabled={subject.subject_teachers && subject.subject_teachers.some(t => !t.is_ended) && !subject.is_ended}
+                                    title={subject.subject_teachers && subject.subject_teachers.some(t => !t.is_ended) && !subject.is_ended ? 'ไม่สามารถลบได้ ต้องให้ครูทั้งหมดจบคอร์สก่อน' : t('common.delete')}
+                                  >
+                                    🗑️ <span className="action-text">{t('common.delete')}</span>
+                                  </button>
+                                </div>
+                                {subject.subject_teachers && subject.subject_teachers.some(t => !t.is_ended) && !subject.is_ended && (
+                                  <div style={{ marginTop: '6px', color: '#b00020', fontSize: '0.9rem' }}>
+                                    ไม่สามารถลบได้ เนื่องจากยังมีครูที่ยังไม่ได้จบคอร์ส ต้องให้ครูทั้งหมดกดจบคอร์สก่อน
+                                  </div>
+                                )}
                               </td>
                             </tr>
                           ))}
@@ -4180,6 +4329,7 @@ function AdminPage() {
       teachers={teachers}
       availableGradeLevels={availableGradeLevels}
       homeroomTeachers={homeroomTeachers}
+      classrooms={classrooms}
       onClose={cancelHomeroomModal}
       onSave={(teacherId, gradeLevel, academicYear) => {
         setNewHomeroomTeacherId(teacherId);
@@ -4199,9 +4349,26 @@ function AdminPage() {
       onClose={() => setShowSubjectModal(false)}
       onSave={loadSubjects}
       subject={selectedSubject}
+      currentSchoolId={currentUser?.school_id}
+    />
+
+    {/* Teacher Assignment Modal */}
+    <TeacherAssignmentModal
+      isOpen={showTeacherAssignmentModal}
+      onClose={() => setShowTeacherAssignmentModal(false)}
+      onSave={loadSubjects}
+      subject={selectedSubjectForTeachers}
       teachers={teachers}
       classrooms={classrooms}
-      currentSchoolId={currentUser?.school_id}
+    />
+
+    {/* Classroom Subject Management Modal */}
+    <ClassroomSubjectManagementModal
+      isOpen={showClassroomSubjectModal}
+      onClose={() => setShowClassroomSubjectModal(false)}
+      onSave={loadSubjects}
+      subject={selectedSubjectForClassrooms}
+      classrooms={classrooms}
     />
 
     {/* Schedule Management Modal */}

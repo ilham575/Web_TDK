@@ -333,6 +333,7 @@
     "backButton": "Kembali",
     "confirmPromotion": "Sahkan Kenaikan Pangkat",
     "noClassroomData": "Tiada data kelas - Sila tambah pelajar dan nyatakan kelas terlebih dahulu",
+    "noClassroomYearForGrade": "Tiada tahun akademik untuk tahap ini - Sila cipta bilik darjah yang mengandungi tahun akademik" ,
     "alreadyAssigned": "Sudah ditugaskan ke kelas",
     "homeroomChangeNote": "Boleh tukar guru atau tahun akademik",
     "schoolSystem": "Sistem Sekolah",
