@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import '../../../css/pages/admin/admin-home.css';
 import { ToastContainer, toast } from 'react-toastify';
@@ -80,9 +80,6 @@ function AdminPage() {
   // Logo upload modal state
   const [showLogoUploadModal, setShowLogoUploadModal] = useState(false);
   const [schoolData, setSchoolData] = useState(null);
-  const [showHeaderMenu, setShowHeaderMenu] = useState(false);
-  const headerMenuRef = React.useRef(null);
-  const location = useLocation();
 
   const handleDragOver = (e) => {
     e.preventDefault();
@@ -233,27 +230,7 @@ function AdminPage() {
   const [gradeAnnouncementYear, setGradeAnnouncementYear] = useState('');
   const [savingGradeAnnouncement, setSavingGradeAnnouncement] = useState(false);
 
-  useEffect(() => {
-    const onDocClick = (e) => {
-      if (!headerMenuRef.current) return;
-      if (headerMenuRef.current.contains(e.target)) return;
-      setShowHeaderMenu(false);
-    };
-    document.addEventListener('click', onDocClick);
-    const onKey = (e) => {
-      if (e.key === 'Escape') setShowHeaderMenu(false);
-    };
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('click', onDocClick);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, []);
 
-  // close header menu on route change
-  useEffect(() => {
-    setShowHeaderMenu(false);
-  }, [location]);
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) { navigate('/signin'); return; }
@@ -2351,52 +2328,27 @@ function AdminPage() {
           currentUser={currentUser}
           role="admin"
           displaySchool={displaySchool}
-          rightContent={
+          onLogout={handleSignout}
+          extraActions={
             <>
-              <button
-                className="header-menu-btn"
-                onClick={() => setShowHeaderMenu(s => !s)}
-                aria-expanded={showHeaderMenu}
-                aria-label="Open header menu"
+              <button 
+                className="admin-btn-primary" 
+                onClick={() => setShowLogoUploadModal(true)}
+                title="อัพโหลดโลโก้"
               >
-                ☰
+                📸 อัพโหลดโลโก้
               </button>
-              <div className="header-menu" style={{ display: showHeaderMenu ? 'block' : 'none' }}>
-                <button role="menuitem" className="admin-btn-primary" onClick={() => { setShowModal(true); setShowHeaderMenu(false); }}>➕ {t('admin.addNewUser')}</button>
-                <button role="menuitem" className="admin-btn-secondary" onClick={() => { navigate('/profile'); setShowHeaderMenu(false); }}>👤 {t('admin.profile')}</button>
-                <button role="menuitem" className="admin-btn-danger" onClick={() => { handleSignout(); setShowHeaderMenu(false); }}>🚪 {t('admin.logout')}</button>
-              </div>
-              <div className="header-actions">
-                <button 
-                  className="admin-btn-primary" 
-                  onClick={() => setShowLogoUploadModal(true)}
-                  title="อัพโหลดโลโก้"
-                >
-                  📸 อัพโหลดโลโก้
-                </button>
-                <button 
-                  className="admin-btn-primary" 
-                  onClick={() => setShowModal(true)}
-                  title="สร้างผู้ใช้ใหม่"
-                >
-                  ➕ เพิ่มผู้ใช้ใหม่
-                </button>
-                <button 
-                  className="admin-btn-secondary" 
-                  onClick={() => navigate('/profile')}
-                  title="ดูโปรไฟล์"
-                >
-                  👤 โปรไฟล์
-                </button>
-                <button 
-                  className="admin-btn-danger" 
-                  onClick={handleSignout}
-                  title="ออกจากระบบ"
-                >
-                  🚪 ออกจากระบบ
-                </button>
-              </div>
+              <button 
+                className="admin-btn-primary" 
+                onClick={() => setShowModal(true)}
+                title="สร้างผู้ใช้ใหม่"
+              >
+                ➕ เพิ่มผู้ใช้ใหม่
+              </button>
             </>
+          }
+          extraMenuActions={
+            <button role="menuitem" className="admin-btn-primary" onClick={() => setShowModal(true)}>➕ {t('admin.addNewUser')}</button>
           }
         />
       </div>

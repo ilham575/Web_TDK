@@ -9,6 +9,7 @@ import ForgotPage from './components/js/pages/default/forgot';
 import ResetPasswordPage from './components/js/pages/default/reset-password';
 import ChangePasswordPage from './components/js/pages/default/change-password';
 import StudentPage from './components/js/pages/student/home';
+import StudentSubjectDetails from './components/js/pages/student/studentSubjectDetails';
 import TeacherPage from './components/js/pages/teacher/home';
 import AdminPage from './components/js/pages/admin/home';
 import TeacherDetail from './components/js/pages/admin/teacherDetail';
@@ -157,7 +158,15 @@ function App() {
             </RequireAuth>
           }
         />
-        {/* Student subject details route removed (student detail view removed) */}
+        <Route
+          path="/student/subject/:subjectId"
+          element={
+            <RequireAuth>
+              <StudentSubjectDetails />
+            </RequireAuth>
+          }
+        />
+        {/* Student subject details route restored */}
         <Route path="/signin" element={<SigninPage />} />
         <Route path="/signup" element={<SignupPage />} />
         <Route path="/forgot" element={<ForgotPage />} />

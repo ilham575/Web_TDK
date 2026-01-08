@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import '../css/PageHeader.css';
-import LanguageSwitcher from './LanguageSwitcher';
+import { logout } from '../../utils/authUtils';
 
 /**
  * PageHeader Component - ส่วน Header ที่ใช้ร่วมกันสำหรับทุก role
@@ -10,7 +11,7 @@ import LanguageSwitcher from './LanguageSwitcher';
  * @param {Object} props.currentUser - ข้อมูลผู้ใช้ปัจจุบัน
  * @param {string} props.role - บทบาทของผู้ใช้ (admin, teacher, student, owner)
  * @param {string} props.displaySchool - ชื่อโรงเรียน
- * @param {React.ReactNode} props.rightContent - เนื้อหาด้านขวาของ header (สำหรับปุ่ม, menu, stats)
+ * @param {React.ReactNode} props.rightContent - เนื้อหาด้านขวาของ header (หากส่งมาจะแทนที่ default)
  * @param {string} props.subtitle - ข้อความรองใต้ชื่อ
  * @param {Object} props.stats - สถิติสำหรับแสดง (เฉพาะ teacher role)
  * @param {React.ReactNode} props.children - เนื้อหาเพิ่มเติม
@@ -27,9 +28,28 @@ function PageHeader({
   rightContent, 
   subtitle,
   stats,
-  children 
+  children,
+  onLogout,
+  extraActions,
+  extraMenuActions
 }) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const [showHeaderMenu, setShowHeaderMenu] = useState(false);
+  
+  const handleSignout = () => {
+    if (onLogout) {
+      onLogout();
+    } else {
+      logout();
+      navigate('/signin');
+    }
+  };
+
+  const handleProfile = () => {
+    navigate('/profile');
+    setShowHeaderMenu(false);
+  };
   
   // ฟังก์ชันสร้างตัวย่อจากชื่อ (initials)
   // local wrapper: create role-based fallback if none provided
@@ -70,6 +90,110 @@ function PageHeader({
     }
   };
 
+  // Default Right Content based on role
+  const getDefaultRightContent = () => {
+    if (rightContent) return rightContent;
+
+    if (role === 'student') {
+      return (
+        <>
+          <div className="account-info">
+            <div className="account-label">{t('common.accountInfo') || 'ข้อมูลบัญชี'}</div>
+            <div className="account-email">{currentUser?.email || ''}</div>
+            <div className="school-info">โรงเรียน: {displaySchool}</div>
+            <div className="grade-info">
+              <div className="grade-display">
+                <span>ชั้นปี: <strong>{currentUser?.grade_level || 'ไม่ระบุ'}</strong></span>
+              </div>
+            </div>
+          </div>
+          <div className="header-actions">
+            {extraActions}
+            <button className="student-btn-secondary" onClick={handleProfile}>
+              <span className="ph-btn-icon">👤</span> {t('common.manageProfile')}
+            </button>
+            <button onClick={handleSignout} className="student-signout-btn">
+              <span className="ph-btn-icon">🚪</span> {t('auth.logout')}
+            </button>
+          </div>
+        </>
+      );
+    }
+
+    if (role === 'teacher') {
+      return (
+        <div className="header-actions">
+          {extraActions}
+          <button className="teacher-btn-secondary" onClick={handleProfile}>
+            <span className="ph-btn-icon">👤</span> 
+            {t('common.manageProfile') || 'จัดการโปรไฟล์'}
+          </button>
+          <button onClick={handleSignout} className="teacher-signout-btn">
+            <span className="ph-btn-icon">🚪</span> 
+            {t('auth.logout') || 'ออกจากระบบ'}
+          </button>
+        </div>
+      );
+    }
+
+    if (role === 'owner') {
+      return (
+        <>
+          <div className="account-info">
+            <div className="account-label">{t('owner.account')}</div>
+            <div className="account-email">{currentUser?.email || ''}</div>
+          </div>
+          <div className="header-actions">
+            {extraActions}
+            <button className="owner-btn-secondary" onClick={handleProfile}>
+              <span className="ph-btn-icon">👤</span> {t('common.manageProfile')}
+            </button>
+            <button onClick={handleSignout} className="owner-btn-danger">
+              <span className="ph-btn-icon">🚪</span> {t('auth.logout')}
+            </button>
+          </div>
+        </>
+      );
+    }
+
+    if (role === 'admin') {
+      return (
+        <>
+          <button
+            className="header-menu-btn"
+            onClick={() => setShowHeaderMenu(s => !s)}
+            aria-expanded={showHeaderMenu}
+            aria-label="Open header menu"
+          >
+            ☰
+          </button>
+          <div className="header-menu" style={{ display: showHeaderMenu ? 'block' : 'none' }}>
+            {extraMenuActions}
+            <button role="menuitem" className="admin-btn-secondary" onClick={handleProfile}>
+              <span className="ph-btn-icon">👤</span> {t('common.manageProfile')}
+            </button>
+            <button role="menuitem" className="admin-btn-danger" onClick={handleSignout}>
+              <span className="ph-btn-icon">🚪</span> {t('auth.logout')}
+            </button>
+          </div>
+          <div className="header-actions">
+            {extraActions}
+            <button className="admin-btn-secondary" onClick={handleProfile}>
+              <span className="ph-btn-icon">👤</span> {t('common.manageProfile')}
+            </button>
+            <button className="admin-btn-danger" onClick={handleSignout}>
+              <span className="ph-btn-icon">🚪</span> {t('auth.logout')}
+            </button>
+          </div>
+        </>
+      );
+    }
+
+    return null;
+  };
+
+  const finalRightContent = getDefaultRightContent();
+
   // สำหรับ Student role (มี structure พิเศษ)
   if (role === 'student') {
     return (
@@ -84,8 +208,7 @@ function PageHeader({
           </div>
         </div>
         <div className="header-right">
-          {/* <LanguageSwitcher /> */}
-          {rightContent}
+          {finalRightContent}
           {children}
         </div>
       </header>
@@ -123,8 +246,7 @@ function PageHeader({
               )}
             </div>
           )}
-          {/* <LanguageSwitcher /> */}
-          {rightContent}
+          {finalRightContent}
           {children}
         </div>
       </div>
@@ -150,8 +272,7 @@ function PageHeader({
       </div>
 
       <div className="header-right">
-        {/* <LanguageSwitcher /> */}
-        {rightContent}
+        {finalRightContent}
         {children}
       </div>
     </div>

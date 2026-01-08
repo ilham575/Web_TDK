@@ -357,7 +357,7 @@ def get_student_schedule_current(
     # Student's active classroom
     cs = db.query(SubjectStudent).filter(SubjectStudent.student_id == student_id).all()
 
-    from models.classroom_student import ClassroomStudent as ClassroomStudentModel
+    from models.classroom import ClassroomStudent as ClassroomStudentModel
     from models.classroom_subject import ClassroomSubject as ClassroomSubjectModel
 
     classroom_student = db.query(ClassroomStudentModel).filter(

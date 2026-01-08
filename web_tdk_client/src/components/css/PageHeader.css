@@ -1,492 +1,302 @@
-/**
- * ═══════════════════════════════════════════════════════════════════════════════
- * PageHeader.css - Header Styles สำหรับทุก Role
- * ═══════════════════════════════════════════════════════════════════════════════
- * สีใหม่:
- *   - Admin: Blue (#2563EB)
- *   - Teacher: Purple (#9333EA)
- *   - Student: Teal (#0891B2)
- *   - Owner: Gold (#FBBF24)
- * ═══════════════════════════════════════════════════════════════════════════════
- */
+/* PageHeader Modern Emerald Theme - Unified System */
+:root {
+  --header-primary: #10b981;
+  --header-primary-hover: #059669;
+  --header-secondary: #3b82f6;
+  --header-text: #1e293b;
+  --header-text-light: #64748b;
+  --header-bg: #ffffff;
+  --header-radius: 24px;
+  --header-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+  --header-border: 1px solid rgba(226, 232, 240, 0.8);
+}
 
-/* ┌─────────────────────────────────────────────────────────────────────────────┐ */
-/* │ SECTION 1: COMMON/SHARED STYLES                                             │ */
-/* └─────────────────────────────────────────────────────────────────────────────┘ */
+/* Base Header Layout */
+.student-header, 
+.teacher-header, 
+.admin-header, 
+.owner-header {
+  background: var(--header-bg);
+  border-radius: var(--header-radius);
+  padding: 1.5rem 2rem;
+  box-shadow: var(--header-shadow);
+  border: var(--header-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+  transition: all 0.3s ease;
+  animation: headerFadeDown 0.6s ease-out;
+}
 
-.header-left {
+@keyframes headerFadeDown {
+  from { opacity: 0; transform: translateY(-20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.header-left, .teacher-welcome {
   display: flex;
   align-items: center;
-  gap: 1.25rem;
+  gap: 1.5rem;
 }
 
-.header-right {
+.header-right, .teacher-actions {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  flex-wrap: wrap;
+  gap: 1.5rem;
 }
 
-.user-info h1,
-.user-info h2,
-.user-info h3 {
-  margin: 0;
-  font-weight: 700;
-  letter-spacing: -0.5px;
-}
-
-.user-info-subtitle {
-  color: rgba(255, 255, 255, 0.85);
-  font-size: 0.95rem;
-  margin-top: 0.5rem;
-  font-weight: 500;
-}
-
-/* ┌─────────────────────────────────────────────────────────────────────────────┐ */
-/* │ SECTION 2: AVATAR STYLES                                                    │ */
-/* └─────────────────────────────────────────────────────────────────────────────┘ */
-
-.admin-avatar,
-.teacher-avatar,
-.student-avatar,
+/* Avatar Unified Style */
+.student-avatar, 
+.teacher-avatar, 
+.admin-avatar, 
 .avatar {
-  width: 4rem;
-  height: 4rem;
-  border-radius: 50%;
-  color: white;
+  width: 64px;
+  height: 64px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, var(--header-primary), var(--header-secondary));
   display: flex;
   align-items: center;
   justify-content: center;
+  color: white;
   font-weight: 800;
   font-size: 1.5rem;
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
-  border: 3px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 8px 16px rgba(16, 185, 129, 0.2);
   flex-shrink: 0;
-  position: relative;
-  overflow: hidden;
 }
 
-/* Avatar Animation */
-.admin-avatar::before,
-.teacher-avatar::before,
-.student-avatar::before,
-.avatar::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  opacity: 0;
-  animation: avatar-pulse 2s ease-in-out infinite;
-}
-
-@keyframes avatar-pulse {
-  0%, 100% { box-shadow: inset 0 0 0 0 rgba(255, 255, 255, 0.3); }
-  50% { box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.1); }
-}
-
-/* ┌─────────────────────────────────────────────────────────────────────────────┐ */
-/* │ SECTION 3: ADMIN HEADER                                                     │ */
-/* └─────────────────────────────────────────────────────────────────────────────┘ */
-
-.admin-header {
-  background: linear-gradient(135deg, #2563EB 0%, #1E40AF 100%);
-  color: white;
-  padding: 2rem;
-  border-radius: 16px;
-  margin-bottom: 2.5rem;
-  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.28),
-              inset 0 1px 0 rgba(255, 255, 255, 0.15);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  position: relative;
-  overflow: hidden;
-}
-
-.admin-header::before {
-  content: '';
-  position: absolute;
-  top: -50%;
-  right: -50%;
-  width: 200%;
-  height: 200%;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.05) 0%, transparent 70%);
-  pointer-events: none;
-}
-
-.admin-header .user-info h1 {
-  font-size: 2rem;
-  margin-bottom: 0.25rem;
-}
-
-.admin-header .user-info-subtitle {
-  font-size: 1.05rem;
-}
-
-.admin-avatar {
-  background: linear-gradient(135deg, #1E40AF 0%, #3B82F6 100%);
-  box-shadow: 0 8px 20px rgba(30, 64, 175, 0.35);
-}
-
-/* ┌─────────────────────────────────────────────────────────────────────────────┐ */
-/* │ SECTION 4: TEACHER HEADER                                                   │ */
-/* └─────────────────────────────────────────────────────────────────────────────┘ */
-
-.teacher-header {
-  background: linear-gradient(135deg, #9333EA 0%, #7E22CE 100%);
-  color: white;
-  padding: 2rem;
-  border-radius: 16px;
-  margin-bottom: 2.5rem;
-  box-shadow: 0 12px 28px rgba(147, 51, 234, 0.28),
-              inset 0 1px 0 rgba(255, 255, 255, 0.15);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 1.5rem;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  position: relative;
-  overflow: hidden;
-}
-
-.teacher-header::before {
-  content: '';
-  position: absolute;
-  top: -50%;
-  right: -50%;
-  width: 200%;
-  height: 200%;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.05) 0%, transparent 70%);
-  pointer-events: none;
-}
-
-.teacher-welcome {
-  display: flex;
-  align-items: center;
-  gap: 1.5rem;
-}
-
-.teacher-info .teacher-title {
-  font-size: 2rem;
+/* Typography Improvements */
+.user-info h1, 
+.user-info h2, 
+.user-info h3, 
+.teacher-title {
   margin: 0;
-  margin-bottom: 0.25rem;
-  color: #ffffff; /* ensure visible on dark header */
-  text-shadow: 0 2px 8px rgba(0,0,0,0.45); /* improve readability */
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--header-text);
+  letter-spacing: -0.025em;
+  line-height: 1.2;
 }
 
-.teacher-info .teacher-subtitle {
-  margin: 0;
-  font-size: 1.05rem;
-  font-weight: 500;
-  color: #0f172a; /* dark color for better contrast on light backgrounds */
-  text-shadow: none;
-}
-
-.teacher-avatar {
-  background: linear-gradient(135deg, #7E22CE 0%, #A855F7 100%);
-  box-shadow: 0 8px 20px rgba(126, 34, 206, 0.35);
-}
-
-.teacher-actions {
+.user-info-subtitle, 
+.teacher-subtitle, 
+.user-info p {
+  margin: 0.25rem 0 0;
+  font-size: 0.95rem;
+  color: var(--header-text-light);
+  font-weight: 600;
   display: flex;
   align-items: center;
-  gap: 1.5rem;
-  flex-wrap: wrap;
-  position: relative;
-  z-index: 1;
+  gap: 0.5rem;
 }
 
-/* Ensure any text/buttons placed in the actions area remain readable */
-.teacher-actions * {
-  color: inherit;
-}
-
-.teacher-header .teacher-actions,
-.teacher-header .teacher-actions .stats-card,
-.teacher-header .teacher-actions button,
-.teacher-header .teacher-actions a {
-  color: #ffffff;
-  text-shadow: 0 1px 6px rgba(0,0,0,0.35);
-}
-
-/* Teacher Stats Cards */
+/* Teacher Specific: Stats Grid */
 .teacher-stats {
   display: flex;
   gap: 1rem;
+  margin-right: 1.5rem;
 }
 
 .stats-card {
-  background: rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(12px);
-  border-radius: 12px;
-  padding: 1rem 1.5rem;
+  background: #f8fafc;
+  padding: 0.75rem 1.25rem;
+  border-radius: 16px;
   text-align: center;
-  min-width: 100px;
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  color: white;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border: 1px solid #f1f5f9;
+  transition: all 0.3s ease;
 }
 
-/* Stronger contrast fallback when parent background is light */
-.teacher-header.light-fallback .stats-card {
-  background: rgba(0,0,0,0.06);
-  border: 1px solid rgba(0,0,0,0.08);
-  color: #111827;
-}
-
-.stats-card.floating-effect:hover {
-  transform: translateY(-6px);
-  background: rgba(255, 255, 255, 0.2);
-  border-color: rgba(255, 255, 255, 0.4);
-  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.2);
+.stats-card:hover {
+  background: white;
+  border-color: var(--header-primary);
+  transform: translateY(-3px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.1);
 }
 
 .teacher-stats-value {
-  font-size: 2rem;
+  font-size: 1.25rem;
   font-weight: 800;
-  margin-bottom: 0.5rem;
-  display: block;
+  color: var(--header-primary);
 }
 
 .teacher-stats-label {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--header-text-light);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
-/* Ensure labels are readable on varied backgrounds */
-.teacher-header .teacher-stats-label {
-  text-shadow: 0 1px 4px rgba(0,0,0,0.35);
+/* Responsive Design */
+
+@media (max-width: 1024px) {
+  .teacher-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1.5rem;
+    padding: 2rem;
+  }
+  
+  .teacher-actions {
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .teacher-stats {
+    flex: 1;
+  }
 }
-
-/* ┌─────────────────────────────────────────────────────────────────────────────┐ */
-/* │ SECTION 5: STUDENT HEADER                                                   │ */
-/* └─────────────────────────────────────────────────────────────────────────────┘ */
-
-.student-header {
-  background: linear-gradient(135deg, #0891B2 0%, #0E7490 100%);
-  color: white;
-  padding: 2rem;
-  border-radius: 16px;
-  margin-bottom: 2.5rem;
-  box-shadow: 0 12px 28px rgba(8, 145, 178, 0.28),
-              inset 0 1px 0 rgba(255, 255, 255, 0.15);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  position: relative;
-  overflow: hidden;
-}
-
-.student-header::before {
-  content: '';
-  position: absolute;
-  top: -50%;
-  right: -50%;
-  width: 200%;
-  height: 200%;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.05) 0%, transparent 70%);
-  pointer-events: none;
-}
-
-.student-header .user-info h3 {
-  font-size: 1.75rem;
-  margin-bottom: 0.5rem;
-}
-
-.student-header .user-info p {
-  margin: 0;
-  color: rgba(255, 255, 255, 0.85);
-  font-size: 1rem;
-  font-weight: 500;
-}
-
-.student-avatar {
-  background: linear-gradient(135deg, #0E7490 0%, #06B6D4 100%);
-  box-shadow: 0 8px 20px rgba(14, 116, 144, 0.35);
-}
-
-/* ┌─────────────────────────────────────────────────────────────────────────────┐ */
-/* │ SECTION 6: OWNER HEADER                                                     │ */
-/* └─────────────────────────────────────────────────────────────────────────────┘ */
-
-.owner-header {
-  background: linear-gradient(135deg, #FBBF24 0%, #F59E0B 100%);
-  color: #1F2937;
-  padding: 2rem;
-  border-radius: 16px;
-  margin-bottom: 2.5rem;
-  box-shadow: 0 12px 28px rgba(251, 191, 36, 0.28),
-              inset 0 1px 0 rgba(255, 255, 255, 0.35);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  position: relative;
-  overflow: hidden;
-}
-
-.owner-header::before {
-  content: '';
-  position: absolute;
-  top: -50%;
-  right: -50%;
-  width: 200%;
-  height: 200%;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, transparent 70%);
-  pointer-events: none;
-}
-
-.owner-header .user-info h1 {
-  font-size: 2rem;
-  margin-bottom: 0.25rem;
-  color: #1F2937;
-}
-
-.owner-header .user-info-subtitle {
-  color: rgba(31, 41, 55, 0.75);
-  font-size: 1.05rem;
-}
-
-.avatar {
-  background: linear-gradient(135deg, #F59E0B 0%, #FCD34D 100%);
-  box-shadow: 0 8px 20px rgba(245, 158, 11, 0.35);
-  color: #1F2937;
-  font-weight: 800;
-}
-
-/* ┌─────────────────────────────────────────────────────────────────────────────┐ */
-/* │ SECTION 7: RESPONSIVE DESIGN (Tablet - 768px)                               │ */
-/* └─────────────────────────────────────────────────────────────────────────────┘ */
 
 @media (max-width: 768px) {
-  .admin-header,
-  .teacher-header,
-  .student-header,
+  .student-header, 
+  .admin-header, 
   .owner-header {
     flex-direction: column;
-    align-items: flex-start;
-    padding: 1.5rem;
+    align-items: stretch;
+    padding: 2rem 1.5rem;
     gap: 1.5rem;
+    text-align: center;
   }
 
   .header-left {
-    width: 100%;
+    flex-direction: column;
     gap: 1rem;
   }
 
   .header-right {
+    flex-direction: column;
     width: 100%;
-    justify-content: flex-start;
+    gap: 1rem;
+  }
+
+  /* Force child components to fill width on mobile if needed */
+  .header-right > *, .teacher-actions > * {
+    width: 100%;
   }
 
   .teacher-welcome {
-    gap: 1rem;
-    width: 100%;
+    flex-direction: column;
+    text-align: center;
   }
 
   .teacher-actions {
-    width: 100%;
+    flex-direction: column;
     gap: 1rem;
   }
 
   .teacher-stats {
-    flex-wrap: wrap;
+    margin-right: 0;
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
   }
 
   .stats-card {
-    flex: 1;
-    min-width: 120px;
-    padding: 0.85rem 1.25rem;
-  }
-
-  .teacher-stats-value {
-    font-size: 1.75rem;
-  }
-
-  .teacher-stats-label {
-    font-size: 0.85rem;
-  }
-
-  .admin-avatar,
-  .teacher-avatar,
-  .student-avatar,
-  .avatar {
-    width: 3.5rem;
-    height: 3.5rem;
-    font-size: 1.3rem;
-  }
-
-  .admin-header .user-info h1,
-  .teacher-info .teacher-title {
-    font-size: 1.6rem;
-  }
-
-  .student-header .user-info h3 {
-    font-size: 1.4rem;
-  }
-
-  .user-info-subtitle,
-  .teacher-info .teacher-subtitle {
-    font-size: 0.9rem;
+    padding: 1rem;
   }
 }
 
-/* ┌─────────────────────────────────────────────────────────────────────────────┐ */
-/* │ SECTION 8: RESPONSIVE DESIGN (Mobile - 480px)                               │ */
-/* └─────────────────────────────────────────────────────────────────────────────┘ */
-
 @media (max-width: 480px) {
-  .admin-header,
-  .teacher-header,
-  .student-header,
-  .owner-header {
-    padding: 1.25rem;
-    margin-bottom: 2rem;
-    border-radius: 12px;
-  }
-
-  .header-left {
-    gap: 0.875rem;
-  }
-
-  .admin-avatar,
-  .teacher-avatar,
-  .student-avatar,
+  .student-avatar, 
+  .teacher-avatar, 
+  .admin-avatar, 
   .avatar {
-    width: 3rem;
-    height: 3rem;
-    font-size: 1.1rem;
+    width: 56px;
+    height: 56px;
+    font-size: 1.25rem;
   }
 
-  .admin-header .user-info h1,
-  .teacher-info .teacher-title,
-  .student-header .user-info h3,
-  .owner-header .user-info h1 {
-    font-size: 1.35rem;
+  .user-info h1, 
+  .user-info h2, 
+  .user-info h3, 
+  .teacher-title {
+    font-size: 1.25rem;
   }
+}
 
-  .user-info-subtitle,
-  .teacher-info .teacher-subtitle,
-  .student-header .user-info p,
-  .owner-header .user-info-subtitle {
-    font-size: 0.85rem;
-  }
+/* Contrast Fixes for Subtitles */
+.user-info-subtitle, .teacher-subtitle {
+  color: var(--header-text-light) !important;
+  opacity: 1 !important;
+}
 
-  .stats-card {
-    padding: 0.75rem 1rem;
-    min-width: 90px;
-  }
+.ph-btn-icon {
+  font-size: 1.1rem;
+  line-height: 1;
+}
 
-  .teacher-stats-value {
-    font-size: 1.5rem;
-  }
+/* Floating Animation Utility */
+.floating-effect {
+  animation: float 3s ease-in-out infinite;
+}
 
-  .teacher-stats-label {
-    font-size: 0.8rem;
-  }
+@keyframes float {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-5px); }
+  100% { transform: translateY(0px); }
+}
+
+/* Header Actions & Tooltips */
+.header-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.teacher-btn-secondary {
+  background: white;
+  border: 1px solid #e2e8f0;
+  color: #1e293b;
+  padding: 0.6rem 1.25rem;
+  border-radius: 14px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+
+.teacher-btn-secondary:hover {
+  background: #f8fafc;
+  border-color: #10b981;
+  color: #10b981;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);
+}
+
+.teacher-signout-btn {
+  background: #fff1f2;
+  border: 1px solid #ffe4e6;
+  color: #e11d48;
+  padding: 0.6rem 1.25rem;
+  border-radius: 14px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.teacher-signout-btn:hover {
+  background: #ffe4e6;
+  border-color: #fecdd3;
+  color: #be123c;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(225, 29, 72, 0.15);
+}
+
+.teacher-signout-btn:hover, 
+.admin-btn-danger:hover, 
+.owner-btn-danger:hover,
+.student-signout-btn:hover {
+  background: #e11d48;
+  border-color: #e11d48;
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(225, 29, 72, 0.2);
 }

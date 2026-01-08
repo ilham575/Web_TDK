@@ -15,7 +15,9 @@
     "error": "เกิดข้อผิดพลาด",
     "warning": "คำเตือน",
     "info": "ข้อมูล",
+    "accountInfo": "ข้อมูลบัญชี",
     "greeting": "สวัสดี",
+    "manageProfile": "จัดการโปรไฟล์",
     "role": "บทบาท"
   },
   "auth": {

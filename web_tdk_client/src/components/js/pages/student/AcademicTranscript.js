@@ -12,6 +12,8 @@ export default function AcademicTranscript({ studentId, studentSubjects }) {
   const [showGradeModal, setShowGradeModal] = useState(false);
   const [showActivityModal, setShowActivityModal] = useState(false);
   const [showGPAModal, setShowGPAModal] = useState(false);
+  const [gradeModalFullscreen, setGradeModalFullscreen] = useState(false);
+  const [gpaModalFullscreen, setGpaModalFullscreen] = useState(false);
   const [selectedActivityData, setSelectedActivityData] = useState(null);
   const [gradesAnnounced, setGradesAnnounced] = useState(true);
   const [gradeAnnouncementDate, setGradeAnnouncementDate] = useState(null);
@@ -492,24 +494,24 @@ export default function AcademicTranscript({ studentId, studentSubjects }) {
                 
                 return (
                   <tr key={tableKey} className={`transcript-row ${subjectData.isActivity ? 'activity-row' : ''}`}>
-                    <td className="col-subject">
+                    <td data-label="รายวิชา" className="col-subject">
                       <div className="subject-cell-content">
                         <span className="subject-icon">{subjectData.isActivity ? '🎯' : '📖'}</span>
                         <span className="subject-cell-text">{subjectData.subject.name}</span>
                       </div>
                     </td>
-                    <td className="col-type">
+                    <td data-label="ประเภท" className="col-type">
                       <span className="type-badge">
                         {subjectData.isActivity ? 'กิจกรรม' : 'ปกติ'}
                       </span>
                     </td>
-                    <td className="col-score">
+                    <td data-label="คะแนนสอบ" className="col-score">
                       <div className="score-cell">
                         <span className="score-value">{subjectData.scorePercentage}</span>
                         <span className="score-unit">%</span>
                       </div>
                     </td>
-                    <td className="col-grade">
+                    <td data-label="เกรด" className="col-grade">
                       {subjectData.isActivity ? (
                         (() => {
                           const pass = Number(subjectData.scorePercentage) >= 50;
@@ -525,21 +527,21 @@ export default function AcademicTranscript({ studentId, studentSubjects }) {
                         </span>
                       )}
                     </td>
-                    <td className="col-credits">
+                    <td data-label="หน่วยกิต" className="col-credits">
                       {subjectData.isActivity ? (
                         <span className="credit-value">—</span>
                       ) : (
                         <span className="credit-value">{credit}</span>
                       )}
                     </td>
-                    <td className="col-gpa">
+                    <td data-label="GPA" className="col-gpa">
                       {subjectData.isActivity ? (
                         <span className="gpa-na">—</span>
                       ) : (
                         <span className="gpa-value-table">{letterGrade.gpaValue.toFixed(1)}</span>
                       )}
                     </td>
-                    <td className="col-action">
+                    <td data-label="รายละเอียด" className="col-action">
                       {subjectData.isActivity ? (
                         <button 
                           className="btn-details-icon"
@@ -591,16 +593,28 @@ export default function AcademicTranscript({ studentId, studentSubjects }) {
           aria-modal="true"
           onClick={() => setShowGradeModal(false)}
         >
-          <div className="grade-modal" onClick={(e) => e.stopPropagation()}>
+          <div className={`grade-modal ${gradeModalFullscreen ? 'fullscreen' : ''}`} onClick={(e) => e.stopPropagation()}>
             <div className="grade-modal-header">
               <h4>คำอธิบายเกรด</h4>
-              <button
-                className="grade-modal-close"
-                aria-label="ปิด"
-                onClick={() => setShowGradeModal(false)}
-              >
-                ✕
-              </button>
+              <div className="modal-actions">
+                <button
+                  className="grade-modal-fullscreen"
+                  aria-label={gradeModalFullscreen ? "ออกจากโหมดเต็มจอ" : "เข้าสู่โหมดเต็มจอ"}
+                  onClick={() => setGradeModalFullscreen(!gradeModalFullscreen)}
+                >
+                  {gradeModalFullscreen ? '🗗' : '🗖'}
+                </button>
+                <button
+                  className="grade-modal-close"
+                  aria-label="ปิด"
+                  onClick={() => {
+                    setShowGradeModal(false);
+                    setGradeModalFullscreen(false);
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
             </div>
             <div className="grade-modal-body">
               <table className="grade-legend-table" role="table">
@@ -697,16 +711,28 @@ export default function AcademicTranscript({ studentId, studentSubjects }) {
           aria-modal="true"
           onClick={() => setShowGPAModal(false)}
         >
-          <div className="grade-modal" onClick={(e) => e.stopPropagation()}>
+          <div className={`grade-modal ${gpaModalFullscreen ? 'fullscreen' : ''}`} onClick={(e) => e.stopPropagation()}>
             <div className="grade-modal-header">
               <h4>📊 ข้อมูลเกรดเฉลี่ย (GPA)</h4>
-              <button
-                className="grade-modal-close"
-                aria-label="ปิด"
-                onClick={() => setShowGPAModal(false)}
-              >
-                ✕
-              </button>
+              <div className="modal-actions">
+                <button
+                  className="grade-modal-fullscreen"
+                  aria-label={gpaModalFullscreen ? "ออกจากโหมดเต็มจอ" : "เข้าสู่โหมดเต็มจอ"}
+                  onClick={() => setGpaModalFullscreen(!gpaModalFullscreen)}
+                >
+                  {gpaModalFullscreen ? '🗗' : '🗖'}
+                </button>
+                <button
+                  className="grade-modal-close"
+                  aria-label="ปิด"
+                  onClick={() => {
+                    setShowGPAModal(false);
+                    setGpaModalFullscreen(false);
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
             </div>
             <div className="grade-modal-body">
               <div className="gpa-info-section">

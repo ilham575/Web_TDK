@@ -869,12 +869,7 @@ function TeacherPage() {
           subjects: teacherSubjects.length,
           announcements: Array.isArray(announcements) ? announcements.length : 0
         }}
-        rightContent={
-          <div className="header-actions">
-            <button className="teacher-btn-secondary" onClick={() => navigate('/profile')}>👤 โปรไฟล์</button>
-            <button onClick={handleSignout} className="teacher-signout-btn">🚪 ออกจากระบบ</button>
-          </div>
-        }
+        onLogout={handleSignout}
       />
 
       <div className="tabs-container">

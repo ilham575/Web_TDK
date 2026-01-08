@@ -494,73 +494,50 @@ function OwnerPage() {
         <Loading message={t('owner.checkingAuth')} />
       ) : (
         <>
-      <PageHeader 
-        currentUser={currentUser}
-        role="owner"
-        rightContent={
-          <>
-            <div className="account-info">
-              <div className="account-label">{t('owner.account')}</div>
-              <div className="account-email">{currentUser?.email || ''}</div>
+          <PageHeader 
+            currentUser={currentUser}
+            role="owner"
+            onLogout={handleSignout}
+          />
+
+          <div className="stats-section">
+            <div className="stats-card stats-schools">
+              <div className="stats-icon">🏫</div>
+              <div className="stats-content">
+                <div className="stats-value">{schools.length}</div>
+                <div className="stats-label">{t('owner.totalSchools')}</div>
+              </div>
             </div>
-            <div className="header-actions">
-              <button 
-                className="owner-btn-secondary" 
-                onClick={() => navigate('/profile')}
-                title={t('owner.viewProfile')}
-              >
-                👤 {t('owner.profile')}
-              </button>
-              <button 
-                className="owner-btn-danger" 
-                onClick={handleSignout}
-                title={t('owner.logout')}
-              >
-                🚪 {t('owner.logout')}
-              </button>
+            <div className="stats-card stats-admins">
+              <div className="stats-icon">👨‍💼</div>
+              <div className="stats-content">
+                <div className="stats-value">{schools.reduce((sum, s) => sum + s.admins, 0)}</div>
+                <div className="stats-label">{t('owner.totalAdmins')}</div>
+              </div>
             </div>
-          </>
-        }
-      />
+            <div className="stats-card stats-teachers">
+              <div className="stats-icon">👨‍🏫</div>
+              <div className="stats-content">
+                <div className="stats-value">{schools.reduce((sum, s) => sum + s.teachers, 0)}</div>
+                <div className="stats-label">{t('owner.totalTeachers')}</div>
+              </div>
+            </div>
+            <div className="stats-card stats-students">
+              <div className="stats-icon">👨‍🎓</div>
+              <div className="stats-content">
+                <div className="stats-value">{schools.reduce((sum, s) => sum + s.students, 0)}</div>
+                <div className="stats-label">{t('owner.totalStudents')}</div>
+              </div>
+            </div>
+          </div>
 
-      <div className="stats-section">
-        <div className="stats-card stats-schools">
-          <div className="stats-icon">🏫</div>
-          <div className="stats-content">
-            <div className="stats-value">{schools.length}</div>
-            <div className="stats-label">{t('owner.totalSchools')}</div>
-          </div>
-        </div>
-        <div className="stats-card stats-admins">
-          <div className="stats-icon">👨‍💼</div>
-          <div className="stats-content">
-            <div className="stats-value">{schools.reduce((sum, s) => sum + s.admins, 0)}</div>
-            <div className="stats-label">{t('owner.totalAdmins')}</div>
-          </div>
-        </div>
-        <div className="stats-card stats-teachers">
-          <div className="stats-icon">👨‍🏫</div>
-          <div className="stats-content">
-            <div className="stats-value">{schools.reduce((sum, s) => sum + s.teachers, 0)}</div>
-            <div className="stats-label">{t('owner.totalTeachers')}</div>
-          </div>
-        </div>
-        <div className="stats-card stats-students">
-          <div className="stats-icon">👨‍🎓</div>
-          <div className="stats-content">
-            <div className="stats-value">{schools.reduce((sum, s) => sum + s.students, 0)}</div>
-            <div className="stats-label">{t('owner.totalStudents')}</div>
-          </div>
-        </div>
-      </div>
+          <OwnerTabs 
+            activeTab={activeTab} 
+            setActiveTab={setActiveTab}
+            passwordResetCount={passwordResetRequests.length}
+          />
 
-      <OwnerTabs 
-        activeTab={activeTab} 
-        setActiveTab={setActiveTab}
-        passwordResetCount={passwordResetRequests.length}
-      />
-
-      <div className="tab-content">
+          <div className="tab-content">
         {activeTab === 'schools' && (
           <div className="content-card">
             <div className="card-header">

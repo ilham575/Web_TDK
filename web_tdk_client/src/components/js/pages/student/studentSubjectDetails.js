@@ -242,8 +242,8 @@ function StudentSubjectDetails() {
                     <tbody>
                       {attendanceDates.map(date => (
                         <tr key={date}>
-                          <td>{new Date(date).toLocaleDateString('th-TH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</td>
-                          <td className={`status ${attendanceMap[date] && attendanceMap[date][currentUser.id] ? 'present' : 'absent'}`}>
+                          <td data-label="วันที่">{new Date(date).toLocaleDateString('th-TH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</td>
+                          <td data-label="สถานะ" className={`status ${attendanceMap[date] && attendanceMap[date][currentUser.id] ? 'present' : 'absent'}`}>
                             {attendanceMap[date] && attendanceMap[date][currentUser.id] ? '✅ มาเรียน' : '❌ ขาดเรียน'}
                           </td>
                         </tr>
@@ -280,10 +280,10 @@ function StudentSubjectDetails() {
                         const percentage = g && g.max_score > 0 ? Math.round((g.grade / g.max_score) * 100) : 0;
                         return (
                           <tr key={ass.id}>
-                            <td><strong>{ass.title}</strong></td>
-                            <td><span className="score-value">{g ? g.grade || 0 : '-'}</span></td>
-                            <td>{ass.max_score}</td>
-                            <td>
+                            <td data-label="การบ้าน/งาน"><strong>{ass.title}</strong></td>
+                            <td data-label="คะแนนที่ได้"><span className="score-value">{g ? g.grade || 0 : '-'}</span></td>
+                            <td data-label="คะแนนเต็ม">{ass.max_score}</td>
+                            <td data-label="เปอร์เซ็นต์">
                               {g ? (
                                 <span className={`percentage-badge ${percentage >= 80 ? 'excellent' : percentage >= 60 ? 'good' : 'needs-improvement'}`}>
                                   {percentage}%

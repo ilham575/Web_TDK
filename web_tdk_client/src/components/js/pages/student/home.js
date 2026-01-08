@@ -269,24 +269,7 @@ function StudentPage() {
         currentUser={currentUser}
         role="student"
         displaySchool={displaySchool}
-        rightContent={
-          <>
-            <div className="account-info">
-              <div className="account-label">ข้อมูลบัญชี</div>
-              <div className="account-email">{currentUser?.email || ''}</div>
-              <div className="school-info">โรงเรียน: {displaySchool}</div>
-              <div className="grade-info">
-                <div className="grade-display">
-                  <span>ชั้นปี: <strong>{currentUser?.grade_level || 'ไม่ระบุ'}</strong></span>
-                </div>
-              </div>
-            </div>
-            <div className="header-actions">
-              <button className="student-btn-secondary" onClick={() => navigate('/profile')}>👤 โปรไฟล์</button>
-              <button onClick={handleSignout} className="student-signout-btn">Sign out</button>
-            </div>
-          </>
-        }
+        onLogout={handleSignout}
       />
 
       <div className="dashboard-grid">
@@ -329,24 +312,37 @@ function StudentPage() {
             {studentSubjects.length === 0 ? (
               <div className="empty-state">ยังไม่มีรายวิชาที่ลงทะเบียน</div>
             ) : (
-              <table className="student-subject-table">
-                <thead>
-                  <tr><th>ชื่อวิชา</th><th>รหัส</th><th>สถานะ</th></tr>
-                </thead>
-                <tbody>
-                  {studentSubjects.map(sub => (
-                    <tr key={sub.id}>
-                      <td className="subject-name">{sub.name}</td>
-                      <td className="subject-code">{sub.code || ''}</td>
-                      <td className="subject-status">
-                        <span className={`status-badge ${sub.is_ended ? 'ended' : 'active'}`}>
-                          {sub.is_ended ? '✅ จบแล้ว' : '📚 กำลังเรียน'}
-                        </span>
-                      </td>
+              <div className="student-table-wrapper">
+                <table className="student-subject-table">
+                  <thead>
+                    <tr>
+                      <th>ข้อมูลรายวิชา</th>
+                      <th className="text-center">สถานะการเรียน</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {studentSubjects.map(sub => (
+                      <tr key={sub.id} className={sub.is_ended ? 'status-ended-row' : 'status-active-row'}>
+                        <td data-label="รายวิชา" className="subject-name">
+                          <div className="subject-info-cell">
+                            <span className="subject-icon-small">📖</span>
+                            <div className="subject-text">
+                              <span className="subject-title-text">{sub.name}</span>
+                              <span className="subject-code-tag">{sub.code || 'ไม่มีรหัส'}</span>
+                            </div>
+                          </div>
+                        </td>
+                        <td data-label="สถานะ" className="subject-status text-center">
+                          <div className={`status-indicator ${sub.is_ended ? 'ended' : 'active'}`}>
+                            <span className="dot"></span>
+                            <span className="status-text">{sub.is_ended ? 'จบการเรียนแล้ว' : 'กำลังดำเนินการเรียน'}</span>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </section>
         )}

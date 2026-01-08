@@ -15,7 +15,9 @@
     "error": "Ralat",
     "warning": "Amaran",
     "info": "Maklumat",
+    "accountInfo": "Maklumat Akaun",
     "greeting": "Selamat",
+    "manageProfile": "Urus Profil",
     "role": "Peranan"
   },
   "auth": {
