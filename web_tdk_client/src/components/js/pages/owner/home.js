@@ -9,9 +9,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import Loading from '../../Loading';
 import PageHeader from '../../PageHeader';
 
-import ConfirmModal from '../../ConfirmModal';
-
-import AlertModal from '../../AlertModal';
+import swalMessenger from './swalmessenger';
 import { API_BASE_URL } from '../../../endpoints';
 import { setSchoolFavicon } from '../../../../utils/faviconUtils';
 import { logout } from '../../../../utils/authUtils';
@@ -42,14 +40,7 @@ function OwnerPage() {
   const [creatingSchool, setCreatingSchool] = useState(false);
   const [showCreateSchoolModal, setShowCreateSchoolModal] = useState(false);
 
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [confirmTitle, setConfirmTitle] = useState('');
-  const [confirmMessage, setConfirmMessage] = useState('');
-  const [onConfirmAction, setOnConfirmAction] = useState(() => {});
-
-  const [showAlertModal, setShowAlertModal] = useState(false);
-  const [alertTitle, setAlertTitle] = useState('');
-  const [alertMessage, setAlertMessage] = useState('');
+  // Using `swalMessenger` for confirmations and prompts (see ./swalmessenger.js)
 
   const [adminRequests, setAdminRequests] = useState([]);
   const [loadingRequests, setLoadingRequests] = useState(false);
@@ -453,18 +444,7 @@ function OwnerPage() {
     navigate('/signin', { state: { signedOut: true } });
   }
 
-  const openConfirmModal = (title, message, onConfirm) => {
-    setConfirmTitle(title);
-    setConfirmMessage(message);
-    setOnConfirmAction(() => onConfirm);
-    setShowConfirmModal(true);
-  };
-
-  const openAlertModal = (title, message) => {
-    setAlertTitle(title);
-    setAlertMessage(message);
-    setShowAlertModal(true);
-  };
+  // Confirmations are performed inline using `swalMessenger.confirm`.
 
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('th-TH', {
@@ -582,14 +562,16 @@ function OwnerPage() {
                                 : `${t('owner.approveAndDelete')} ${school.name}`
                               }
                               disabled={!hasDeletionRequest(school.id)}
-                              onClick={() => {
+                              onClick={async () => {
                                 const req = schoolDeletionRequests.find(r => r.school_id === school.id);
                                 if (!req) return;
-                                openConfirmModal(
-                                  t('owner.approveDeleteRequest'),
-                                  `${t('owner.confirmApproveDeleteRequest')} "${school.name}" ${t('owner.sure')} ${t('owner.permanentDeletion')}.`,
-                                  () => approveSchoolDeletionRequest(req.id)
-                                );
+                                const confirmed = await swalMessenger.confirm({
+                                  title: t('owner.approveDeleteRequest'),
+                                  text: `${t('owner.confirmApproveDeleteRequest')} "${school.name}" ${t('owner.sure')} ${t('owner.permanentDeletion')}.`,
+                                  confirmButtonText: t('owner.approve'),
+                                  cancelButtonText: t('owner.cancel')
+                                });
+                                if (confirmed) approveSchoolDeletionRequest(req.id);
                               }}
                             >
                               {!hasDeletionRequest(school.id) ? t('owner.deleteWithoutRequest') : '✅ ' + t('owner.approveAndDelete')}
@@ -627,8 +609,8 @@ function OwnerPage() {
                                     {/* Approve action kept on the main header button to avoid duplicate actions */}
                                     <button
                                       className="owner-btn-secondary"
-                                      onClick={() => {
-                                        const notes = prompt(t('owner.enterRejectionNotes'));
+                                      onClick={async () => {
+                                        const notes = await swalMessenger.prompt({ title: t('owner.enterRejectionNotes'), inputPlaceholder: t('owner.enterRejectionNotes') });
                                         if (notes !== null) {
                                           rejectSchoolDeletionRequest(req.id, notes);
                                         }
@@ -920,21 +902,29 @@ function OwnerPage() {
                         <div className="request-actions">
                           <button 
                             className="owner-btn-success" 
-                            onClick={() => openConfirmModal(
-                              t('owner.approveRequest'),
-                              `${t('owner.confirmApproveAdminRequest')} ${request.full_name} ${t('owner.sure')}`,
-                              () => approveRequest(request.id)
-                            )}
+                            onClick={async () => {
+                              const confirmed = await swalMessenger.confirm({
+                                title: t('owner.approveRequest'),
+                                text: `${t('owner.confirmApproveAdminRequest')} ${request.full_name} ${t('owner.sure')}`,
+                                confirmButtonText: t('owner.approve'),
+                                cancelButtonText: t('owner.cancel')
+                              });
+                              if (confirmed) approveRequest(request.id);
+                            }}
                           >
                             ✅ {t('owner.approve')}
                           </button>
                           <button 
                             className="owner-btn-danger" 
-                            onClick={() => openConfirmModal(
-                              t('owner.rejectPasswordReset'),
-                              `${t('owner.confirmApproveAdminRequest')} ${request.full_name} ${t('owner.sure')}`,
-                              () => rejectRequest(request.id)
-                            )}
+                            onClick={async () => {
+                              const confirmed = await swalMessenger.confirm({
+                                title: t('owner.rejectPasswordReset'),
+                                text: `${t('owner.confirmApproveAdminRequest')} ${request.full_name} ${t('owner.sure')}`,
+                                confirmButtonText: t('owner.reject'),
+                                cancelButtonText: t('owner.cancel')
+                              });
+                              if (confirmed) rejectRequest(request.id);
+                            }}
                           >
                             ❌ {t('owner.reject')}
                           </button>
@@ -1005,11 +995,15 @@ function OwnerPage() {
                         </button>
                         <button 
                           className="owner-btn-danger" 
-                          onClick={() => openConfirmModal(
-                            t('owner.rejectPasswordReset'),
-                            `${t('owner.confirmApproveAdminRequest')} ${request.full_name || request.username} ${t('owner.sure')}`,
-                            () => rejectPasswordReset(request.id)
-                          )}
+                          onClick={async () => {
+                            const confirmed = await swalMessenger.confirm({
+                              title: t('owner.rejectPasswordReset'),
+                              text: `${t('owner.confirmApproveAdminRequest')} ${request.full_name || request.username} ${t('owner.sure')}`,
+                              confirmButtonText: t('owner.reject'),
+                              cancelButtonText: t('owner.cancel')
+                            });
+                            if (confirmed) rejectPasswordReset(request.id);
+                          }}
                         >
                           ❌ {t('owner.reject')}
                         </button>
@@ -1025,20 +1019,7 @@ function OwnerPage() {
         {/* School deletion requests are shown inline in the Schools tab per-school cards */}
       </div>
 
-      <ConfirmModal
-        isOpen={showConfirmModal}
-        title={confirmTitle}
-        message={confirmMessage}
-        onCancel={() => setShowConfirmModal(false)}
-        onConfirm={async () => { setShowConfirmModal(false); try { await onConfirmAction(); } catch (e) { console.error(e); } }}
-      />
-
-      <AlertModal
-        isOpen={showAlertModal}
-        title={alertTitle}
-        message={alertMessage}
-        onClose={() => setShowAlertModal(false)}
-      />
+      {/* ConfirmModal replaced by swalMessenger.confirm */}
 
       {/* Password Reset Approval Modal */}
       {showResetPasswordModal && selectedResetRequest && (

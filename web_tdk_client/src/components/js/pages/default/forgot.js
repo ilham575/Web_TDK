@@ -2,26 +2,22 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import AlertModal from '../../AlertModal';
+import swalMessenger from '../owner/swalmessenger';
 import { API_BASE_URL } from '../../../endpoints';
 
 function ForgotPage() {
   const [username, setUsername] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
-  const [showAlertModal, setShowAlertModal] = useState(false);
-  const [alertTitle, setAlertTitle] = useState('');
-  const [alertMessage, setAlertMessage] = useState('');
 
   // Set page title
   useEffect(() => {
     document.title = 'ลืมรหัสผ่าน - ศูนย์การเรียนรู้อิสลามประจำมัสยิด';
   }, []);
 
-  const openAlertModal = (title, message) => {
-    setAlertTitle(title);
-    setAlertMessage(message);
-    setShowAlertModal(true);
+  const openAlertModal = async (title, message) => {
+    await swalMessenger.alert({ title, text: message });
+    navigate('/signin');
   };
 
   const handleSubmit = async (e) => {
@@ -84,15 +80,6 @@ function ForgotPage() {
           </div>
         </form>
       </div>
-      <AlertModal
-        isOpen={showAlertModal}
-        title={alertTitle}
-        message={alertMessage}
-        onClose={() => {
-          setShowAlertModal(false);
-          navigate('/signin');
-        }}
-      />
     </div>
   );
 }

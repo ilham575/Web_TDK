@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import '../../../css/pages/admin/admin-home.css';
 import { ToastContainer, toast } from 'react-toastify';
@@ -8,9 +8,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import Loading from '../../Loading';
 import PageHeader from '../../PageHeader';
 
-import ConfirmModal from '../../ConfirmModal';
-
-import AlertModal from '../../AlertModal';
+import swalMessenger from '../owner/swalmessenger';
 import ExpiryModal from '../../ExpiryModal';
 import AnnouncementModal from '../../AnnouncementModal';
 import LogoUploadModal from '../../LogoUploadModal';
@@ -58,18 +56,9 @@ function AdminPage() {
   const [uploading, setUploading] = useState(false);
   const [uploadFile, setUploadFile] = useState(null);
 
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  // Confirm dialogs use `swalMessenger` via `openConfirmModal` below.
 
-  const [confirmTitle, setConfirmTitle] = useState('');
-
-  const [confirmMessage, setConfirmMessage] = useState('');
-
-  const [onConfirmAction, setOnConfirmAction] = useState(() => {});
-
-  // Alert modal state (was missing — ESLint flagged these as undefined)
-  const [showAlertModal, setShowAlertModal] = useState(false);
-  const [alertTitle, setAlertTitle] = useState('');
-  const [alertMessage, setAlertMessage] = useState('');
+  // Alert handling will use `swalMessenger.alert`
 
   const [showExpiryModal, setShowExpiryModal] = useState(false);
   const [expiryModalValue, setExpiryModalValue] = useState('');
@@ -80,6 +69,9 @@ function AdminPage() {
   // Logo upload modal state
   const [showLogoUploadModal, setShowLogoUploadModal] = useState(false);
   const [schoolData, setSchoolData] = useState(null);
+  const [showHeaderMenu, setShowHeaderMenu] = useState(false);
+  const headerMenuRef = React.useRef(null);
+  const location = useLocation();
 
   const handleDragOver = (e) => {
     e.preventDefault();
@@ -230,7 +222,27 @@ function AdminPage() {
   const [gradeAnnouncementYear, setGradeAnnouncementYear] = useState('');
   const [savingGradeAnnouncement, setSavingGradeAnnouncement] = useState(false);
 
+  useEffect(() => {
+    const onDocClick = (e) => {
+      if (!headerMenuRef.current) return;
+      if (headerMenuRef.current.contains(e.target)) return;
+      setShowHeaderMenu(false);
+    };
+    document.addEventListener('click', onDocClick);
+    const onKey = (e) => {
+      if (e.key === 'Escape') setShowHeaderMenu(false);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('click', onDocClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, []);
 
+  // close header menu on route change
+  useEffect(() => {
+    setShowHeaderMenu(false);
+  }, [location]);
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) { navigate('/signin'); return; }
@@ -861,26 +873,23 @@ function AdminPage() {
     } catch (err) { console.error('save expiry error', err); toast.error(t('admin.setExpiryError')); }
   };
 
-  const openConfirmModal = (title, message, onConfirm) => {
-
-    setConfirmTitle(title);
-
-    setConfirmMessage(message);
-
-    setOnConfirmAction(() => onConfirm);
-
-    setShowConfirmModal(true);
-
+  const openConfirmModal = async (title, message, onConfirm) => {
+    try {
+      const confirmed = await swalMessenger.confirm({ title, text: message });
+      if (confirmed) {
+        await onConfirm();
+      }
+    } catch (err) {
+      console.error('confirm action error', err);
+    }
   };
 
-  const openAlertModal = (title, message) => {
-
-    setAlertTitle(title);
-
-    setAlertMessage(message);
-
-    setShowAlertModal(true);
-
+  const openAlertModal = async (title, message) => {
+    try {
+      await swalMessenger.alert({ title, text: message });
+    } catch (err) {
+      console.error('alert error', err);
+    }
   };
 
   // Schedule management functions
@@ -2328,27 +2337,52 @@ function AdminPage() {
           currentUser={currentUser}
           role="admin"
           displaySchool={displaySchool}
-          onLogout={handleSignout}
-          extraActions={
+          rightContent={
             <>
-              <button 
-                className="admin-btn-primary" 
-                onClick={() => setShowLogoUploadModal(true)}
-                title="อัพโหลดโลโก้"
+              <button
+                className="header-menu-btn"
+                onClick={() => setShowHeaderMenu(s => !s)}
+                aria-expanded={showHeaderMenu}
+                aria-label="Open header menu"
               >
-                📸 อัพโหลดโลโก้
+                ☰
               </button>
-              <button 
-                className="admin-btn-primary" 
-                onClick={() => setShowModal(true)}
-                title="สร้างผู้ใช้ใหม่"
-              >
-                ➕ เพิ่มผู้ใช้ใหม่
-              </button>
+              <div className="header-menu" style={{ display: showHeaderMenu ? 'block' : 'none' }}>
+                <button role="menuitem" className="admin-btn-primary" onClick={() => { setShowModal(true); setShowHeaderMenu(false); }}>➕ {t('admin.addNewUser')}</button>
+                <button role="menuitem" className="admin-btn-secondary" onClick={() => { navigate('/profile'); setShowHeaderMenu(false); }}>👤 {t('admin.profile')}</button>
+                <button role="menuitem" className="admin-btn-danger" onClick={() => { handleSignout(); setShowHeaderMenu(false); }}>🚪 {t('admin.logout')}</button>
+              </div>
+              <div className="header-actions">
+                <button 
+                  className="admin-btn-primary" 
+                  onClick={() => setShowLogoUploadModal(true)}
+                  title="อัพโหลดโลโก้"
+                >
+                  📸 อัพโหลดโลโก้
+                </button>
+                <button 
+                  className="admin-btn-primary" 
+                  onClick={() => setShowModal(true)}
+                  title="สร้างผู้ใช้ใหม่"
+                >
+                  ➕ เพิ่มผู้ใช้ใหม่
+                </button>
+                <button 
+                  className="admin-btn-secondary" 
+                  onClick={() => navigate('/profile')}
+                  title="ดูโปรไฟล์"
+                >
+                  👤 โปรไฟล์
+                </button>
+                <button 
+                  className="admin-btn-danger" 
+                  onClick={handleSignout}
+                  title="ออกจากระบบ"
+                >
+                  🚪 ออกจากระบบ
+                </button>
+              </div>
             </>
-          }
-          extraMenuActions={
-            <button role="menuitem" className="admin-btn-primary" onClick={() => setShowModal(true)}>➕ {t('admin.addNewUser')}</button>
           }
         />
       </div>
@@ -4156,20 +4190,9 @@ function AdminPage() {
   <ExpiryModal isOpen={showExpiryModal} initialValue={expiryModalValue} onClose={() => setShowExpiryModal(false)} onSave={saveExpiry} title="ตั้งวันหมดอายุ" />
   <AnnouncementModal isOpen={showAnnouncementModal} initialData={modalAnnouncement} onClose={closeAnnouncementModal} onSave={saveAnnouncementFromModal} />
 
-      <ConfirmModal
-        isOpen={showConfirmModal}
-        title={confirmTitle}
-        message={confirmMessage}
-        onCancel={() => setShowConfirmModal(false)}
-        onConfirm={async () => { setShowConfirmModal(false); try { await onConfirmAction(); } catch (e) { console.error(e); } }}
-      />
+      {/* ConfirmModal replaced by swalMessenger.confirm via `openConfirmModal` */}
 
-      <AlertModal
-        isOpen={showAlertModal}
-        title={alertTitle}
-        message={alertMessage}
-        onClose={() => setShowAlertModal(false)}
-      />
+      {/* Alerts are shown via swalMessenger.alert */}
 
       {/* Password Reset Approval Modal */}
       <PasswordResetModal

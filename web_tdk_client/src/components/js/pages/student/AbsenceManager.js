@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import ConfirmModal from '../../ConfirmModal';
+import swalMessenger from '../owner/swalmessenger';
 import ReactDOM from 'react-dom';
 import '../../../css/pages/student/AbsenceManager.css';
 import { API_BASE_URL } from '../../../endpoints';
@@ -10,6 +10,8 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [pendingDeleteAbsenceId, setPendingDeleteAbsenceId] = useState(null);
   const [formData, setFormData] = useState({
     absence_date_start: '',
     absence_date_end: '',
@@ -293,16 +295,22 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
   };
 
   // Delete absence
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [pendingDeleteAbsenceId, setPendingDeleteAbsenceId] = useState(null);
 
-  const confirmDeleteAbsence = (absence) => {
+  const openDeleteConfirm = async (absence) => {
     if (!canModify(absence)) {
       toast.error('ไม่สามารถลบคำขอนี้ได้ (ต้องเป็นสถานะรอการอนุมัติหรือไม่อนุมัติเท่านั้น)');
       return;
     }
-    setPendingDeleteAbsenceId(absence.id);
-    setShowDeleteConfirm(true);
+    const confirmed = await swalMessenger.confirm({
+      title: 'ยืนยันการลบคำขอการลา',
+      text: 'คุณต้องการลบคำขอนี้ใช่หรือไม่? การลบจะไม่สามารถกู้คืนได้',
+      confirmButtonText: 'ลบ',
+      cancelButtonText: 'ยกเลิก'
+    });
+    if (confirmed) {
+      setPendingDeleteAbsenceId(absence.id);
+      await handleDelete();
+    }
   };
 
   const openEditForm = (absence) => {
@@ -330,8 +338,6 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
 
   const handleDelete = async () => {
     const absenceId = pendingDeleteAbsenceId;
-    setShowDeleteConfirm(false);
-    setPendingDeleteAbsenceId(null);
     if (!absenceId) return;
 
     try {
@@ -344,8 +350,10 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
       if (res.ok) {
         setAbsences(absences.filter(a => a.id !== absenceId));
         toast.success('Absence deleted');
+        setPendingDeleteAbsenceId(null);
       } else {
         toast.error('Failed to delete absence');
+        setPendingDeleteAbsenceId(null);
       }
     } catch (err) {
       console.error('Error:', err);
@@ -486,7 +494,7 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
                     </button>
                     <button
                       className="absence-btn delete"
-                      onClick={() => confirmDeleteAbsence(absence)}
+                      onClick={() => openDeleteConfirm(absence)}
                     >
                       ลบ
                     </button>
@@ -629,14 +637,7 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
         document.body
       )}
 
-      {/* Global confirm modal for delete absence */}
-      <ConfirmModal
-        isOpen={showDeleteConfirm}
-        title="ยืนยันการลบคำขอการลา"
-        message="คุณต้องการลบคำขอนี้ใช่หรือไม่? การลบจะไม่สามารถกู้คืนได้"
-        onConfirm={handleDelete}
-        onCancel={() => setShowDeleteConfirm(false)}
-      />
+      {/* Delete confirm handled by swalMessenger.confirm in openDeleteConfirm */}
     </section>
   );
 }

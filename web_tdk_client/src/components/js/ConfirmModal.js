@@ -1,26 +1,27 @@
-import React from 'react';
+import { useEffect } from 'react';
 import '../css/ConfirmModal.css';
+import swalMessenger from './pages/owner/swalmessenger';
 
-function ConfirmModal({ isOpen, title, message, onConfirm, onCancel }) {
-  if (!isOpen) return null;
+function ConfirmModal({ isOpen, title, message, onConfirm, onCancel, confirmButtonText, cancelButtonText }) {
+  useEffect(() => {
+    let mounted = true;
+    const openSwal = async () => {
+      if (!isOpen) return;
+      const confirmed = await swalMessenger.confirm({
+        title: title || '',
+        text: message || '',
+        confirmButtonText: confirmButtonText || 'ยืนยัน',
+        cancelButtonText: cancelButtonText || 'ยกเลิก'
+      });
+      if (!mounted) return;
+      if (confirmed) onConfirm && onConfirm();
+      else onCancel && onCancel();
+    };
+    openSwal();
+    return () => { mounted = false; };
+  }, [isOpen, title, message, confirmButtonText, cancelButtonText, onConfirm, onCancel]);
 
-  return (
-    <div className="confirm-modal-overlay">
-      <div className="confirm-modal">
-        <div className="confirm-modal-header">
-          <h3>{title}</h3>
-          <button className="confirm-modal-close" onClick={onCancel}>×</button>
-        </div>
-        <div className="confirm-modal-body">
-          <p>{message}</p>
-        </div>
-        <div className="confirm-modal-footer">
-          <button className="confirm-modal-btn confirm-modal-btn-secondary" onClick={onCancel}>ยกเลิก</button>
-          <button className="confirm-modal-btn confirm-modal-btn-danger" onClick={onConfirm}>ยืนยัน</button>
-        </div>
-      </div>
-    </div>
-  );
+  return null;
 }
 
 export default ConfirmModal;

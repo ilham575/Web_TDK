@@ -8,7 +8,7 @@ import AbsenceApproval from '../admin/AbsenceApproval';
 import PageHeader, { getInitials } from '../../PageHeader';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import ConfirmModal from '../../ConfirmModal';
+import swalMessenger from '../owner/swalmessenger';
 import ExpiryModal from '../../ExpiryModal';
 import AnnouncementModal from '../../AnnouncementModal';
 import StudentGradeModal from '../../../modals/StudentGradeModal';
@@ -35,10 +35,7 @@ function TeacherPage() {
   const [announcements, setAnnouncements] = useState([]);
   const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
   const [modalAnnouncement, setModalAnnouncement] = useState(null);
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [confirmTitle, setConfirmTitle] = useState('');
-  const [confirmMessage, setConfirmMessage] = useState('');
-  const [onConfirmAction, setOnConfirmAction] = useState(() => {});
+  // Confirm dialogs use `swalMessenger` via `openConfirmModal` below.
   const [showExpiryModal, setShowExpiryModal] = useState(false);
   const [expiryModalValue, setExpiryModalValue] = useState('');
   const [expiryModalId, setExpiryModalId] = useState(null);
@@ -66,7 +63,14 @@ function TeacherPage() {
   const [selectedStudentDetail, setSelectedStudentDetail] = useState(null);
   const [teacherHomerooms, setTeacherHomerooms] = useState([]);
 
-  const openConfirmModal = (title, message, onConfirm) => { setConfirmTitle(title); setConfirmMessage(message); setOnConfirmAction(() => onConfirm); setShowConfirmModal(true); };
+  const openConfirmModal = async (title, message, onConfirm) => {
+    try {
+      const confirmed = await swalMessenger.confirm({ title, text: message });
+      if (confirmed) await onConfirm();
+    } catch (err) {
+      console.error('confirm action error', err);
+    }
+  };
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -1295,13 +1299,7 @@ function TeacherPage() {
         origin={homeroomSubTab}
       />
 
-      <ConfirmModal
-        isOpen={showConfirmModal}
-        title={confirmTitle}
-        message={confirmMessage}
-        onCancel={() => setShowConfirmModal(false)}
-        onConfirm={async () => { setShowConfirmModal(false); try { await onConfirmAction(); } catch (e) { console.error(e); } }}
-      />
+      {/* ConfirmModal replaced by swalMessenger.confirm via `openConfirmModal` */}
     </div>
   );
 }

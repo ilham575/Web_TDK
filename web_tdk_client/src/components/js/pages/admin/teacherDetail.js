@@ -5,7 +5,7 @@ import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
 import Loading from '../../Loading';
-import ConfirmModal from '../../ConfirmModal';
+import swalMessenger from '../owner/swalmessenger';
 import { API_BASE_URL } from '../../../endpoints';
 import { logout } from '../../../../utils/authUtils';
 
@@ -15,17 +15,16 @@ function TeacherDetail() {
   const [teacher, setTeacher] = useState(null);
   const [subjects, setSubjects] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [confirmTitle, setConfirmTitle] = useState('');
-  const [confirmMessage, setConfirmMessage] = useState('');
-  const [onConfirmAction, setOnConfirmAction] = useState(() => {});
+  // Confirm dialogs use `swalMessenger` via `openConfirmModal` below.
   const [currentUser, setCurrentUser] = useState(null);
 
-  const openConfirmModal = (title, message, onConfirm) => {
-    setConfirmTitle(title);
-    setConfirmMessage(message);
-    setOnConfirmAction(() => onConfirm);
-    setShowConfirmModal(true);
+  const openConfirmModal = async (title, message, onConfirm) => {
+    try {
+      const confirmed = await swalMessenger.confirm({ title, text: message });
+      if (confirmed) await onConfirm();
+    } catch (err) {
+      console.error('confirm action error', err);
+    }
   };
 
   useEffect(() => {
@@ -218,21 +217,7 @@ function TeacherDetail() {
         </button>
       </div>
       
-      <ConfirmModal
-        isOpen={showConfirmModal}
-        title={confirmTitle}
-        message={confirmMessage}
-        onCancel={() => setShowConfirmModal(false)}
-        onConfirm={async () => { 
-          setShowConfirmModal(false); 
-          try { 
-            await onConfirmAction(); 
-          } catch (e) { 
-            console.error(e);
-            toast.error('เกิดข้อผิดพลาดขณะดำเนินการ');
-          } 
-        }}
-      />
+      {/* ConfirmModal replaced by swalMessenger.confirm via `openConfirmModal` */}
     </div>
   );
 }
