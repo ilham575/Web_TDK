@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
+import { X, Users, UserPlus, GraduationCap, School, Trash2, Info, PlusCircle, CheckCircle } from 'lucide-react';
 import { API_BASE_URL } from '../../../endpoints';
 
 function TeacherAssignmentModal({ isOpen, onClose, onSave, subject, teachers, classrooms }) {
@@ -84,56 +85,6 @@ function TeacherAssignmentModal({ isOpen, onClose, onSave, subject, teachers, cl
     }
   };
 
-  const replaceAllTeachers = async (newTeacherId) => {
-    if (!subject?.id) {
-      toast.error('กรุณาบันทึกรายวิชาก่อนเพิ่มครู');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const token = localStorage.getItem('token');
-
-      // ลบครูทั้งหมดที่มีอยู่
-      const deletePromises = subjectTeachers.map(st =>
-        fetch(`${API_BASE_URL}/subjects/${subject.id}/teachers/${st.teacher_id}${st.classroom_id ? `?classroom_id=${st.classroom_id}` : ''}`, {
-          method: 'DELETE',
-          headers: { Authorization: `Bearer ${token}` }
-        })
-      );
-
-      await Promise.all(deletePromises);
-
-      // เพิ่มครูใหม่
-      const res = await fetch(`${API_BASE_URL}/subjects/${subject.id}/teachers`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          teacher_id: parseInt(newTeacherId),
-          classroom_id: null
-        })
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        toast.error(data.detail || 'เกิดข้อผิดพลาดในการเปลี่ยนครู');
-      } else {
-        toast.success('เปลี่ยนครูผู้สอนสำเร็จ');
-        loadSubjectTeachers();
-        onSave(); // Refresh parent data
-      }
-    } catch (err) {
-      console.error('Error replacing teachers:', err);
-      toast.error('เกิดข้อผิดพลาดในการเปลี่ยนครู');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const removeTeacher = async (teacherId, classroomId = null) => {
     if (!subject?.id) return;
 
@@ -194,55 +145,70 @@ function TeacherAssignmentModal({ isOpen, onClose, onSave, subject, teachers, cl
   if (!isOpen || !subject) return null; 
 
   return (
-    <div className="admin-modal-overlay">
-      <div className="admin-modal" style={{ maxWidth: '700px' }}>
-        <div className="admin-modal-header">
-          <h3>จัดการครูผู้สอน - {subject.name}</h3>
-          <button className="admin-modal-close" onClick={onClose}>×</button>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-6 backdrop-blur-sm bg-slate-900/40 animate-in fade-in duration-300">
+      <div className="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl shadow-slate-900/20 overflow-hidden flex flex-col animate-in zoom-in-95 duration-300 max-h-[90vh]">
+        {/* Header */}
+        <div className="px-8 py-6 border-b border-slate-50 flex items-center justify-between bg-white sticky top-0 z-10">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center shadow-sm">
+              <Users className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-xl font-black text-slate-800 tracking-tight leading-none">
+                จัดการครูผู้สอน
+              </h3>
+              <p className="text-[11px] font-bold text-slate-400 mt-1 uppercase tracking-widest flex items-center gap-1.5">
+                <School className="w-3.5 h-3.5" />
+                {subject.name}
+              </p>
+            </div>
+          </div>
+          <button 
+            onClick={onClose}
+            className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-50 text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-all active:scale-95"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
-        <div className="admin-modal-body">
-          {/* Current Teachers */}
-          <div style={{ marginBottom: '2rem' }}>
-            <h4 style={{ marginBottom: '1rem', color: '#333' }}>ครูผู้สอนปัจจุบัน:</h4>
+        {/* Body */}
+        <div className="p-8 space-y-8 overflow-y-auto">
+          {/* Current Teachers Section */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between px-1">
+              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-emerald-500" />
+                ครูผู้สอนปัจจุบัน
+              </h4>
+              <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest bg-slate-50 px-3 py-1 rounded-full border border-slate-100">
+                {subjectTeachers.length} คน
+              </span>
+            </div>
+
             {subjectTeachers.length === 0 ? (
-              <div style={{ padding: '1rem', backgroundColor: '#f8f9fa', borderRadius: '8px', textAlign: 'center', color: '#666' }}>
-                ยังไม่มีครูผู้สอน
+              <div className="py-10 bg-slate-50 rounded-[2rem] border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-300">
+                <Users className="w-10 h-10 mb-2 opacity-50" />
+                <p className="text-xs font-bold uppercase tracking-widest">ยังไม่มีครูผู้สอนที่ได้รับมอบหมาย</p>
               </div>
             ) : (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+              <div className="flex flex-wrap gap-3">
                 {subjectTeachers.map(st => (
-                  <div key={st.id} style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.5rem',
-                    padding: '0.5rem 0.75rem',
-                    backgroundColor: '#e3f2fd',
-                    borderRadius: '20px',
-                    fontSize: '0.85rem'
-                  }}>
-                    <span>{st.teacher_name}</span>
-                    {st.classroom_name && (
-                      <span style={{ color: '#666', fontSize: '0.8rem' }}>
-                        ({st.classroom_name})
-                      </span>
-                    )}
+                  <div key={st.id} className="group pl-4 pr-2 py-2 bg-blue-50 text-blue-700 rounded-2xl border border-blue-100 flex items-center gap-3 animate-in zoom-in-95 duration-200">
+                    <div className="flex flex-col">
+                      <span className="text-xs font-black leading-none">{st.teacher_name}</span>
+                      {st.classroom_name && (
+                        <span className="text-[9px] font-bold text-blue-400 mt-1 uppercase tracking-tighter">
+                          📍 {st.classroom_name}
+                        </span>
+                      )}
+                    </div>
                     <button
                       type="button"
                       onClick={() => removeTeacher(st.teacher_id, st.classroom_id)}
                       disabled={loading}
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        color: '#f44336',
-                        cursor: loading ? 'not-allowed' : 'pointer',
-                        fontSize: '1.2rem',
-                        lineHeight: 1,
-                        padding: 0,
-                        marginLeft: '0.25rem'
-                      }}
+                      className="w-8 h-8 rounded-xl bg-white text-blue-300 hover:text-rose-500 hover:bg-rose-50 transition-all flex items-center justify-center shadow-sm active:scale-90"
                     >
-                      ×
+                      <X className="w-4 h-4" />
                     </button>
                   </div>
                 ))}
@@ -250,102 +216,134 @@ function TeacherAssignmentModal({ isOpen, onClose, onSave, subject, teachers, cl
             )}
           </div>
 
-          {/* Add Teachers */}
-          <div>
-            <h4 style={{ marginBottom: '1rem', color: '#333' }}>เพิ่มครูผู้สอน:</h4>
+          {/* Add Teacher Section */}
+          <div className="space-y-6 pt-6 border-t border-slate-100">
+            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-1 flex items-center gap-2">
+              <UserPlus className="w-4 h-4 text-blue-500" />
+              เพิ่มครูผู้สอน
+            </h4>
 
-            {/* Section 1: Add teacher for all classrooms */}
-            <div style={{ marginBottom: '1.5rem' }}>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.85rem', color: '#666', fontWeight: '500' }}>
-                👨‍🏫 ครูผู้สอน (สอนทุกชั้นเรียน):
-              </label>
-              <select
-                className="admin-form-input"
-                onChange={(e) => {
-                  if (e.target.value) {
-                    addTeacher(e.target.value);
-                    e.target.value = '';
-                  }
-                }}
-                defaultValue=""
-                disabled={loading || hasSpecificTeachers}
-              >
-                <option value="">
-                  {loading ? 'กำลังเพิ่มครู...' : 'เลือกครู'}
-                </option>
-                {getAvailableTeachers().map(teacher => (
-                  <option key={teacher.id} value={teacher.id}>
-                    {teacher.full_name || teacher.username}
-                  </option>
-                ))}
-              </select>
-              <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: '#666' }}>
-                {hasSpecificTeachers ? '* มีครูที่สอนเฉพาะชั้นเรียนอยู่ ต้องลบก่อนเพิ่มครูผู้สอนทุกชั้นเรียน' : '* ครูจะสอนทุกชั้นเรียนในวิชานี้'}
-              </div>
-            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {/* Add Global Teacher */}
+              <div className={`p-6 rounded-[2rem] border-2 transition-all ${hasSpecificTeachers ? 'bg-slate-50 border-slate-100 opacity-60' : 'bg-white border-blue-50 shadow-sm shadow-blue-500/5'}`}>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-xl bg-blue-100/50 text-blue-600 flex items-center justify-center">
+                    <GraduationCap className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h5 className="text-sm font-black text-slate-700 leading-none">ทุกชั้นเรียน</h5>
+                    <p className="text-[10px] font-bold text-slate-400 mt-1">ครูผู้สอนหลักสำหรับวิชานี้</p>
+                  </div>
+                </div>
 
-            {/* Section 2: Add teacher for specific classroom */}
-            <div style={{ paddingTop: '1rem', borderTop: '1px solid #eee' }}>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.85rem', color: '#666', fontWeight: '500' }}>
-                👩‍🏫 ครูผู้สอนเฉพาะชั้นเรียน:
-              </label>
-              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.5rem' }}>
-                <select
-                  className="admin-form-input"
-                  value={selectedTeacherForClassroom}
-                  onChange={(e) => setSelectedTeacherForClassroom(e.target.value)}
-                  style={{ flex: 1 }}
-                  disabled={loading || hasGlobalTeacher}
-                >
-                  <option value="">เลือกครู</option>
-                  {teachers.map(teacher => (
-                    <option key={teacher.id} value={teacher.id}>
-                      {teacher.full_name || teacher.username}
-                    </option>
-                  ))}
-                </select>
-                <span style={{ color: '#666', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>สอนเฉพาะ</span>
-                <select
-                  className="admin-form-input"
-                  value={selectedClassroomForTeacher}
-                  onChange={(e) => setSelectedClassroomForTeacher(e.target.value)}
-                  style={{ flex: 1 }}
-                  disabled={loading || hasGlobalTeacher}
-                >
-                  <option value="">เลือกชั้นเรียน</option>
-                  {getAvailableClassrooms().map(classroom => (
-                    <option key={classroom.id} value={classroom.id}>
-                      {classroom.name}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  onClick={addTeacherWithClassroom}
-                  disabled={loading || hasGlobalTeacher || !selectedTeacherForClassroom || !selectedClassroomForTeacher}
-                  style={{
-                    padding: '0.5rem 1rem',
-                    backgroundColor: (hasGlobalTeacher || !selectedTeacherForClassroom || !selectedClassroomForTeacher || loading) ? '#ccc' : '#2196F3',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: (hasGlobalTeacher || !selectedTeacherForClassroom || !selectedClassroomForTeacher || loading) ? 'not-allowed' : 'pointer',
-                    fontSize: '0.9rem'
-                  }}
-                >
-                  {loading ? 'กำลังเพิ่ม...' : 'เพิ่ม'}
-                </button>
+                <div className="space-y-3">
+                  <div className="relative">
+                    <select
+                      className="w-full h-12 pl-5 pr-10 bg-slate-50 border-2 border-transparent focus:border-blue-500 focus:bg-white rounded-2xl text-slate-700 font-bold text-sm outline-none transition-all appearance-none cursor-pointer disabled:cursor-not-allowed"
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          addTeacher(e.target.value);
+                          e.target.value = '';
+                        }
+                      }}
+                      defaultValue=""
+                      disabled={loading || hasSpecificTeachers}
+                    >
+                      <option value="">{loading ? 'กำลังดำเนินการ...' : 'ระบุครูผู้สอน'}</option>
+                      {getAvailableTeachers().map(teacher => (
+                        <option key={teacher.id} value={teacher.id}>
+                          {teacher.full_name || teacher.username}
+                        </option>
+                      ))}
+                    </select>
+                    <PlusCircle className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-blue-400 pointer-events-none" />
+                  </div>
+                  {hasSpecificTeachers && (
+                    <div className="flex items-start gap-1.5 px-1 animate-in slide-in-from-top-1">
+                      <Info className="w-3 h-3 text-amber-500 mt-0.5" />
+                      <p className="text-[9px] font-bold text-amber-600 leading-relaxed italic">
+                        * ต้องลบครูผู้สอนเฉพาะชั้นเรียนก่อน เพื่อมอบหมายครูทุกชั้นเรียน
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
-              <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: '#666' }}>
-                {hasGlobalTeacher ? '* มีครูที่สอนทุกชั้นเรียนอยู่ ต้องลบก่อนเพิ่มครูที่สอนเฉพาะชั้นเรียน' : '* ครูจะสอนเฉพาะชั้นเรียนที่เลือก สามารถเพิ่มครูชั้นเรียนหลายคนได้'}
+
+              {/* Add Specific Teacher */}
+              <div className={`p-6 rounded-[2rem] border-2 transition-all ${hasGlobalTeacher ? 'bg-slate-50 border-slate-100 opacity-60' : 'bg-white border-emerald-50 shadow-sm shadow-emerald-500/5'}`}>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-100/50 text-emerald-600 flex items-center justify-center">
+                    <School className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h5 className="text-sm font-black text-slate-700 leading-none">เจาะจงชั้นเรียน</h5>
+                    <p className="text-[10px] font-bold text-slate-400 mt-1">แบ่งครูตามห้องที่สอน</p>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 gap-2">
+                    <select
+                      className="w-full h-11 px-4 bg-slate-50 border-2 border-transparent focus:border-emerald-500 focus:bg-white rounded-xl text-slate-700 font-bold text-[13px] outline-none transition-all appearance-none cursor-pointer disabled:cursor-not-allowed"
+                      value={selectedTeacherForClassroom}
+                      onChange={(e) => setSelectedTeacherForClassroom(e.target.value)}
+                      disabled={loading || hasGlobalTeacher}
+                    >
+                      <option value="">เลือกครู</option>
+                      {getAvailableTeachers().map(teacher => (
+                        <option key={teacher.id} value={teacher.id}>
+                          {teacher.full_name || teacher.username}
+                        </option>
+                      ))}
+                    </select>
+                    
+                    <select
+                      className="w-full h-11 px-4 bg-slate-50 border-2 border-transparent focus:border-emerald-500 focus:bg-white rounded-xl text-slate-700 font-bold text-[13px] outline-none transition-all appearance-none cursor-pointer disabled:cursor-not-allowed"
+                      value={selectedClassroomForTeacher}
+                      onChange={(e) => setSelectedClassroomForTeacher(e.target.value)}
+                      disabled={loading || hasGlobalTeacher}
+                    >
+                      <option value="">เลือกชั้นเรียน</option>
+                      {getAvailableClassrooms().map(classroom => (
+                        <option key={classroom.id} value={classroom.id}>
+                          {classroom.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={addTeacherWithClassroom}
+                    disabled={loading || hasGlobalTeacher || !selectedTeacherForClassroom || !selectedClassroomForTeacher}
+                    className="w-full h-11 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black text-xs transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-100 disabled:bg-slate-200 disabled:shadow-none"
+                  >
+                    <PlusCircle className="w-3.5 h-3.5" />
+                    เพิ่มข้อมูล
+                  </button>
+
+                  {hasGlobalTeacher && (
+                    <div className="flex items-start gap-1.5 px-1 animate-in slide-in-from-top-1">
+                      <Info className="w-3 h-3 text-amber-500 mt-0.5" />
+                      <p className="text-[9px] font-bold text-amber-600 leading-relaxed italic">
+                        * มอบหมายครูคนเดียวสอนทุกห้องอยู่ ลบออกก่อนเพื่อระบุตามรายห้อง
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="admin-modal-footer">
-          <button type="button" className="admin-btn-secondary" onClick={onClose}>
-            ปิด
+        {/* Footer */}
+        <div className="px-8 py-6 bg-slate-50 border-t border-slate-100">
+          <button 
+            type="button" 
+            className="w-full h-12 bg-white hover:bg-slate-100 text-slate-600 rounded-2xl font-black text-sm transition-all active:scale-95 border border-slate-200 shadow-sm"
+            onClick={onClose}
+          >
+            ปิดหน้าต่างนี้
           </button>
         </div>
       </div>

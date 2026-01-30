@@ -222,6 +222,9 @@ function AdminPage() {
   const [gradeAnnouncementYear, setGradeAnnouncementYear] = useState('');
   const [savingGradeAnnouncement, setSavingGradeAnnouncement] = useState(false);
 
+  // Sub-tabs for Users section
+  const [userSubTab, setUserSubTab] = useState('teachers'); // 'teachers', 'students', 'password_reset'
+
   useEffect(() => {
     const onDocClick = (e) => {
       if (!headerMenuRef.current) return;
@@ -405,12 +408,26 @@ function AdminPage() {
     e.preventDefault();
     const schoolId = localStorage.getItem('school_id');
     if (!schoolId) { toast.error(t('admin.noSchoolId')); return; }
-    if (!newUsername || !newEmail || !newFullName || !newPassword) { toast.error(t('admin.fillAllFields')); return; }
+    if (!newUsername || !newFullName || !newPassword) { toast.error(t('admin.fillAllFields')); return; }
     setCreatingUser(true);
     try {
       const token = localStorage.getItem('token');
-      const body = { username:newUsername, email:newEmail, full_name:newFullName, password:newPassword, role:newRole, school_id:Number(schoolId) };
-      const res = await fetch(`${API_BASE_URL}/users`, { method:'POST', headers:{ 'Content-Type':'application/json', ...(token?{Authorization:`Bearer ${token}`}:{}) }, body:JSON.stringify(body) });
+      const body = { 
+        username: newUsername, 
+        email: newEmail || null, 
+        full_name: newFullName, 
+        password: newPassword, 
+        role: newRole, 
+        school_id: Number(schoolId) 
+      };
+      const res = await fetch(`${API_BASE_URL}/users`, { 
+        method: 'POST', 
+        headers: { 
+          'Content-Type': 'application/json', 
+          ...(token ? { Authorization: `Bearer ${token}` } : {}) 
+        }, 
+        body: JSON.stringify(body) 
+      });
       const data = await res.json();
       if (!res.ok) toast.error(data.detail || t('admin.createUserFailed')); else { toast.success(t('admin.createUserSuccess')); if (data.role==='teacher') setTeachers(prev=>[data,...prev]); else if (data.role==='student') setStudents(prev=>[data,...prev]); setNewUsername(''); setNewEmail(''); setNewFullName(''); setNewPassword(''); setNewRole('teacher'); setShowModal(false); }
     } catch (err) { console.error('create user error', err); toast.error(t('admin.createUserError')); } finally { setCreatingUser(false); }
@@ -2330,7 +2347,7 @@ function AdminPage() {
 
   return (
     <>
-      <div className="admin-dashboard">
+      <div className="bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
         <ToastContainer />
 
         <PageHeader 
@@ -2339,47 +2356,58 @@ function AdminPage() {
           displaySchool={displaySchool}
           rightContent={
             <>
+              {/* Mobile Menu Button */}
               <button
-                className="header-menu-btn"
+                className="md:hidden p-2.5 rounded-xl bg-white/20 backdrop-blur-sm border border-white/30 text-slate-700 hover:bg-white/30 transition-all duration-300"
                 onClick={() => setShowHeaderMenu(s => !s)}
                 aria-expanded={showHeaderMenu}
                 aria-label="Open header menu"
               >
-                ☰
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
               </button>
-              <div className="header-menu" style={{ display: showHeaderMenu ? 'block' : 'none' }}>
-                <button role="menuitem" className="admin-btn-primary" onClick={() => { setShowModal(true); setShowHeaderMenu(false); }}>➕ {t('admin.addNewUser')}</button>
-                <button role="menuitem" className="admin-btn-secondary" onClick={() => { navigate('/profile'); setShowHeaderMenu(false); }}>👤 {t('admin.profile')}</button>
-                <button role="menuitem" className="admin-btn-danger" onClick={() => { handleSignout(); setShowHeaderMenu(false); }}>🚪 {t('admin.logout')}</button>
+              
+              {/* Mobile Dropdown Menu */}
+              <div className={`${showHeaderMenu ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 -translate-y-2 pointer-events-none'} md:hidden absolute right-4 top-16 bg-white/95 backdrop-blur-xl rounded-2xl border border-slate-200/60 shadow-xl shadow-slate-200/50 p-3 z-50 min-w-[200px] transition-all duration-300 ease-out`}>
+                <button role="menuitem" className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-gradient-to-r from-violet-500 to-purple-600 text-white font-semibold shadow-lg shadow-violet-500/30 hover:shadow-xl hover:shadow-violet-500/40 hover:-translate-y-0.5 transition-all duration-300 mb-2" onClick={() => { setShowModal(true); setShowHeaderMenu(false); }}>➕ {t('admin.addNewUser')}</button>
+                <button role="menuitem" className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-white/80 text-slate-700 font-medium border border-slate-200 hover:bg-slate-50 hover:border-slate-300 transition-all duration-300 mb-2" onClick={() => { navigate('/profile'); setShowHeaderMenu(false); }}>👤 {t('admin.profile')}</button>
+                <button role="menuitem" className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-gradient-to-r from-rose-500 to-pink-600 text-white font-semibold shadow-lg shadow-rose-500/30 hover:shadow-xl hover:shadow-rose-500/40 hover:-translate-y-0.5 transition-all duration-300" onClick={() => { handleSignout(); setShowHeaderMenu(false); }}>🚪 {t('admin.logout')}</button>
               </div>
-              <div className="header-actions">
+              
+              {/* Desktop Actions */}
+              <div className="hidden md:flex items-center gap-3">
                 <button 
-                  className="admin-btn-primary" 
+                  className="group flex items-center gap-2.5 px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 text-white font-semibold shadow-lg shadow-amber-500/30 hover:shadow-xl hover:shadow-amber-500/40 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-300"
                   onClick={() => setShowLogoUploadModal(true)}
                   title="อัพโหลดโลโก้"
                 >
-                  📸 อัพโหลดโลโก้
+                  <span className="text-lg">📸</span>
+                  <span className="hidden lg:inline">อัพโหลดโลโก้</span>
                 </button>
                 <button 
-                  className="admin-btn-primary" 
+                  className="group flex items-center gap-2.5 px-5 py-2.5 rounded-xl bg-gradient-to-r from-violet-500 to-purple-600 text-white font-semibold shadow-lg shadow-violet-500/30 hover:shadow-xl hover:shadow-violet-500/40 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-300"
                   onClick={() => setShowModal(true)}
                   title="สร้างผู้ใช้ใหม่"
                 >
-                  ➕ เพิ่มผู้ใช้ใหม่
+                  <span className="text-lg">➕</span>
+                  <span className="hidden lg:inline">เพิ่มผู้ใช้ใหม่</span>
                 </button>
                 <button 
-                  className="admin-btn-secondary" 
+                  className="group flex items-center gap-2.5 px-5 py-2.5 rounded-xl bg-white/80 backdrop-blur-sm text-slate-700 font-semibold border border-slate-200/80 shadow-lg shadow-slate-200/50 hover:bg-white hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 transition-all duration-300"
                   onClick={() => navigate('/profile')}
                   title="ดูโปรไฟล์"
                 >
-                  👤 โปรไฟล์
+                  <span className="text-lg">👤</span>
+                  <span className="hidden lg:inline">โปรไฟล์</span>
                 </button>
                 <button 
-                  className="admin-btn-danger" 
+                  className="group flex items-center gap-2.5 px-5 py-2.5 rounded-xl bg-gradient-to-r from-rose-500 to-pink-600 text-white font-semibold shadow-lg shadow-rose-500/30 hover:shadow-xl hover:shadow-rose-500/40 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-300"
                   onClick={handleSignout}
                   title="ออกจากระบบ"
                 >
-                  🚪 ออกจากระบบ
+                  <span className="text-lg">🚪</span>
+                  <span className="hidden lg:inline">ออกจากระบบ</span>
                 </button>
               </div>
             </>
@@ -2387,55 +2415,132 @@ function AdminPage() {
         />
       </div>
 
-      <div className="stats-section">
-        <div className="admin-stats-card stats-teachers" title={t('admin.teachers')}>
-          <div className="admin-stats-icon">👨‍🏫</div>
-          <div className="admin-stats-content">
-            <div className="admin-stats-value">{teachers.length}</div>
-            <div className="admin-stats-label">{t('admin.teachers')}</div>
+      {/* Stats Section - Modern Glass Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 px-4 sm:px-6 lg:px-8 py-6 -mt-4">
+        {/* Teachers Card */}
+        <div className="group relative overflow-hidden rounded-2xl bg-white/70 backdrop-blur-xl border border-white/50 shadow-xl shadow-blue-500/10 hover:shadow-2xl hover:shadow-blue-500/20 hover:-translate-y-1 transition-all duration-500" title={t('admin.teachers')}>
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-transparent to-cyan-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+          <div className="relative p-6 flex items-center gap-5">
+            <div className="flex-shrink-0 w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-3xl shadow-lg shadow-blue-500/40 group-hover:scale-110 group-hover:rotate-3 transition-transform duration-500">
+              👨‍🏫
+            </div>
+            <div>
+              <div className="text-4xl font-black bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">{teachers.length}</div>
+              <div className="text-slate-500 font-medium mt-1">{t('admin.teachers')}</div>
+            </div>
           </div>
         </div>
-        <div className="admin-stats-card stats-students" title={t('admin.students')}>
-          <div className="admin-stats-icon">👨‍🎓</div>
-          <div className="admin-stats-content">
-            <div className="admin-stats-value">{students.length}</div>
-            <div className="admin-stats-label">{t('admin.students')}</div>
+        
+        {/* Students Card */}
+        <div className="group relative overflow-hidden rounded-2xl bg-white/70 backdrop-blur-xl border border-white/50 shadow-xl shadow-emerald-500/10 hover:shadow-2xl hover:shadow-emerald-500/20 hover:-translate-y-1 transition-all duration-500" title={t('admin.students')}>
+          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 via-transparent to-teal-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+          <div className="relative p-6 flex items-center gap-5">
+            <div className="flex-shrink-0 w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center text-3xl shadow-lg shadow-emerald-500/40 group-hover:scale-110 group-hover:rotate-3 transition-transform duration-500">
+              👨‍🎓
+            </div>
+            <div>
+              <div className="text-4xl font-black bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">{students.length}</div>
+              <div className="text-slate-500 font-medium mt-1">{t('admin.students')}</div>
+            </div>
           </div>
         </div>
-        <div className="admin-stats-card stats-announcements" title={t('nav.announcements')}>
-          <div className="admin-stats-icon">📢</div>
-          <div className="admin-stats-content">
-            <div className="admin-stats-value">{(Array.isArray(announcements) ? announcements.filter(a => !isExpired(a)).length : 0)}</div>
-            <div className="admin-stats-label">{t('nav.announcements')}</div>
+        
+        {/* Announcements Card */}
+        <div className="group relative overflow-hidden rounded-2xl bg-white/70 backdrop-blur-xl border border-white/50 shadow-xl shadow-amber-500/10 hover:shadow-2xl hover:shadow-amber-500/20 hover:-translate-y-1 transition-all duration-500 sm:col-span-2 lg:col-span-1" title={t('nav.announcements')}>
+          <div className="absolute inset-0 bg-gradient-to-br from-amber-500/10 via-transparent to-orange-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+          <div className="relative p-6 flex items-center gap-5">
+            <div className="flex-shrink-0 w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center text-3xl shadow-lg shadow-amber-500/40 group-hover:scale-110 group-hover:rotate-3 transition-transform duration-500">
+              📢
+            </div>
+            <div>
+              <div className="text-4xl font-black bg-gradient-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent">{(Array.isArray(announcements) ? announcements.filter(a => !isExpired(a)).length : 0)}</div>
+              <div className="text-slate-500 font-medium mt-1">{t('nav.announcements')}</div>
+            </div>
           </div>
         </div>
       </div>
 
       {/* Responsive layout: Sidebar (tabs) + Main content — stacks on mobile */}
-      <div style={{ display: 'flex', gap: isMobile ? '1rem' : '2rem', marginTop: '2rem', flexDirection: isMobile ? 'column' : 'row' }}>
+      <div className={`flex ${isMobile ? 'flex-col gap-4' : 'flex-row gap-8'} mt-2 px-4 sm:px-6 lg:px-8 pb-12`}>
         {/* Left Sidebar - AdminTabs */}
-        <div style={{ flexShrink: 0, width: isMobile ? '100%' : 'auto', marginBottom: isMobile ? '0.75rem' : '0' }}>
+        <div className={`flex-shrink-0 ${isMobile ? 'w-full mb-3' : 'w-auto'}`}>
           <AdminTabs isMobile={isMobile} activeTab={activeTab} setActiveTab={setActiveTab} loadSubjects={loadSubjects} />
         </div>
 
-        {/* Right Content - Tab content (freeze minimum width on desktop to avoid squeeze) */}
-        <div className="tab-content" style={{ flex: 1, minWidth: isMobile ? 0 : 640 }}>
+        {/* Right Content - Tab content */}
+        <div className={`flex-1 ${isMobile ? 'min-w-0' : 'min-w-[640px]'}`}>
           {activeTab === 'users' && (
-            <div className="content-card">
-              <div className="card-header">
-                <h2><span className="card-icon">👥</span> {t('admin.userManagement')}</h2>
+            <div className="bg-white/80 backdrop-blur-xl rounded-3xl border border-white/60 shadow-xl shadow-slate-200/50 overflow-hidden">
+              {/* Card Header */}
+              <div className="px-8 py-6 bg-gradient-to-r from-slate-50 to-white border-b border-slate-100">
+                <h2 className="flex items-center gap-3 text-2xl font-bold text-slate-800">
+                  <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 text-white text-xl shadow-lg shadow-violet-500/30">👥</span>
+                  {t('admin.userManagement')}
+                </h2>
               </div>
-              <div className="card-content">
-                {loadingUsers && <Loading message={t('common.loading')} />}
-                {usersError && <div className="error-message">❌ {usersError}</div>}
 
-                <div className="user-management">
+              {/* Sub-tabs for Users Section */}
+              <div className="px-8 pt-6 border-b border-slate-100 flex gap-2 overflow-x-auto no-scrollbar">
+                <button
+                  onClick={() => setUserSubTab('teachers')}
+                  className={`flex items-center gap-2 px-5 py-3 rounded-t-2xl font-bold text-sm whitespace-nowrap transition-all border-b-2 ${
+                    userSubTab === 'teachers'
+                      ? 'border-b-violet-600 text-violet-600 bg-violet-50'
+                      : 'border-b-transparent text-slate-600 hover:text-violet-600 hover:bg-slate-50'
+                  }`}
+                >
+                  <span className="text-lg">👨‍🏫</span> {t('admin.teachers')}
+                </button>
+                <button
+                  onClick={() => setUserSubTab('students')}
+                  className={`flex items-center gap-2 px-5 py-3 rounded-t-2xl font-bold text-sm whitespace-nowrap transition-all border-b-2 ${
+                    userSubTab === 'students'
+                      ? 'border-b-emerald-600 text-emerald-600 bg-emerald-50'
+                      : 'border-b-transparent text-slate-600 hover:text-emerald-600 hover:bg-slate-50'
+                  }`}
+                >
+                  <span className="text-lg">👨‍🎓</span> {t('admin.students')}
+                </button>
+                <button
+                  onClick={() => setUserSubTab('bulk_upload')}
+                  className={`flex items-center gap-2 px-5 py-3 rounded-t-2xl font-bold text-sm whitespace-nowrap transition-all border-b-2 ${
+                    userSubTab === 'bulk_upload'
+                      ? 'border-b-blue-600 text-blue-600 bg-blue-50'
+                      : 'border-b-transparent text-slate-600 hover:text-blue-600 hover:bg-slate-50'
+                  }`}
+                >
+                  <span className="text-lg">📤</span> อัปโหลดผู้ใช้จำนวนมาก
+                </button>
+                <button
+                  onClick={() => setUserSubTab('password_reset')}
+                  className={`flex items-center gap-2 px-5 py-3 rounded-t-2xl font-bold text-sm whitespace-nowrap transition-all border-b-2 ${
+                    userSubTab === 'password_reset'
+                      ? 'border-b-orange-600 text-orange-600 bg-orange-50'
+                      : 'border-b-transparent text-slate-600 hover:text-orange-600 hover:bg-slate-50'
+                  }`}
+                >
+                  <span className="text-lg">🔑</span> คำขอรีเซ็ตรหัสผ่าน
+                </button>
+              </div>
+              
+              {/* Card Content */}
+              <div className="p-8">
+                {loadingUsers && <Loading message={t('common.loading')} />}
+                {usersError && <div className="flex items-center gap-3 p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 font-medium">❌ {usersError}</div>}
+
+                <>
+                  {/* Teachers Sub-tab */}
+                  {userSubTab === 'teachers' && (
+                <div className="space-y-6">
                   {/* ===== Render UserTableSection for Teachers ===== */}
-                  <div className="user-section">
-                    <h3><span className="card-icon">👨‍🏫</span> {t('admin.teachers')} ({teachers.length} {t('admin.people')})</h3>
+                  <div>
+                    <h3 className="flex items-center gap-3 text-xl font-bold text-slate-700 mb-6">
+                      <span className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white shadow-md">👨‍🏫</span>
+                      {t('admin.teachers')} ({teachers.length} {t('admin.people')})
+                    </h3>
                     
                     {/* Search, Filter, and Stats */}
-                    <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
+                    <div className="flex flex-wrap gap-4 items-center mb-6">
                       <input
                         type="text"
                         placeholder="🔍 ค้นหาชื่อ หรือ email"
@@ -2444,14 +2549,7 @@ function AdminPage() {
                           setTeacherSearchTerm(e.target.value);
                         setTeacherCurrentPage(1);
                       }}
-                      style={{
-                        flex: 1,
-                        minWidth: '200px',
-                        padding: '10px 12px',
-                        borderRadius: '8px',
-                        border: '1px solid #ddd',
-                        fontSize: '0.95rem'
-                      }}
+                      className="flex-1 min-w-[200px] px-4 py-3 rounded-xl border border-slate-200 bg-white/80 text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-400 transition-all duration-300"
                     />
                     <select
                       value={teacherStatusFilter}
@@ -2459,22 +2557,16 @@ function AdminPage() {
                         setTeacherStatusFilter(e.target.value);
                         setTeacherCurrentPage(1);
                       }}
-                      style={{
-                        padding: '10px 12px',
-                        borderRadius: '8px',
-                        border: '1px solid #ddd',
-                        fontSize: '0.95rem',
-                        cursor: 'pointer'
-                      }}
+                      className="px-4 py-3 rounded-xl border border-slate-200 bg-white/80 text-slate-700 cursor-pointer focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-400 transition-all duration-300"
                     >
                       <option value="all">📊 ทั้งหมด</option>
                       <option value="active">✅ ใช้งาน</option>
                       <option value="inactive">🚫 ปิดใช้งาน</option>
                     </select>
-                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                    <div className="flex gap-2 items-center">
                       <button
                         type="button"
-                        className="admin-btn-warning"
+                        className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-rose-400 via-pink-500 to-rose-500 text-white font-semibold shadow-lg shadow-rose-500/30 hover:shadow-xl hover:shadow-rose-500/40 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-60 disabled:cursor-not-allowed disabled:transform-none transition-all duration-300"
                         onClick={() => openConfirmModal(t('admin.bulkResetTitle'), `${t('admin.bulkResetConfirm')} ${selectedTeachersForReset.size} ${t('admin.peopleSelected')}?`, async () => { await bulkResetSelectedTeachers(); })}
                         disabled={selectedTeachersForReset.size === 0 || bulkResetTeachersLoading}
                         title={t('admin.resetSelectedPasswords')}
@@ -2485,10 +2577,10 @@ function AdminPage() {
                   </div>
 
                   {teachers.length === 0 ? (
-                    <div className="empty-state">
-                      <div className="empty-icon">👨‍🏫</div>
-                      <div className="empty-text">{t('admin.noTeachers')}</div>
-                      <div className="empty-subtitle">{t('admin.startByAddingTeacher')}</div>
+                    <div className="flex flex-col items-center justify-center py-16 px-8 rounded-2xl bg-gradient-to-br from-slate-50 to-blue-50 border-2 border-dashed border-slate-200">
+                      <div className="text-6xl mb-4 animate-bounce">👨‍🏫</div>
+                      <div className="text-xl font-bold text-slate-600 mb-2">{t('admin.noTeachers')}</div>
+                      <div className="text-slate-400">{t('admin.startByAddingTeacher')}</div>
                     </div>
                   ) : (() => {
                     const filteredTeachers = teachers.filter(t => {
@@ -2508,11 +2600,12 @@ function AdminPage() {
 
                     return (
                       <>
-                        <div style={{ overflowX: 'auto', marginBottom: '1.5rem' }}>
-                          <table className="admin-table" style={{ minWidth: '100%', fontSize: '0.95rem' }}>
+                        {/* Desktop View: Table */}
+                        <div className="hidden md:block overflow-x-auto mb-6 rounded-xl border border-slate-200 shadow-sm">
+                          <table className="w-full text-sm">
                             <thead>
-                              <tr>
-                                <th style={{ width: '44px', textAlign: 'center' }}>
+                              <tr className="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
+                                <th className="w-11 px-4 py-4 text-center">
                                   {/* header checkbox: select/deselect all on current page */}
                                   <input
                                     type="checkbox"
@@ -2526,19 +2619,20 @@ function AdminPage() {
                                       }
                                       setSelectedTeachersForReset(next);
                                     }}
+                                    className="w-5 h-5 rounded-md border-2 border-slate-300 text-violet-600 focus:ring-violet-500 focus:ring-offset-0 cursor-pointer transition-all duration-200"
                                   />
                                 </th>
-                                <th>{t('admin.name')}</th>
-                                <th>{t('admin.email')}</th>
-                                <th>{t('admin.username')}</th>
-                                <th style={{ textAlign: 'center' }}>{t('admin.status')}</th>
-                                <th style={{ width: '280px' }}>{t('admin.management')}</th>
+                                <th className="px-4 py-4 text-left font-semibold text-slate-600">{t('admin.name')}</th>
+                                <th className="px-4 py-4 text-left font-semibold text-slate-600">{t('admin.email')}</th>
+                                <th className="px-4 py-4 text-left font-semibold text-slate-600">{t('admin.username')}</th>
+                                <th className="px-4 py-4 text-center font-semibold text-slate-600">{t('admin.status')}</th>
+                                <th className="w-[280px] px-4 py-4 text-left font-semibold text-slate-600">{t('admin.management')}</th>
                               </tr>
                             </thead>
-                            <tbody>
+                            <tbody className="divide-y divide-slate-100">
                               {paginatedTeachers.map(teacher => (
-                                <tr key={teacher.id} className={selectedTeachersForReset.has(teacher.id) ? 'selected-row' : ''}>
-                                  <td style={{ textAlign: 'center' }}>
+                                <tr key={teacher.id} className={`hover:bg-violet-50/50 transition-colors duration-200 ${selectedTeachersForReset.has(teacher.id) ? 'bg-violet-50 border-l-4 border-l-violet-500' : ''}`}>
+                                  <td className="px-4 py-4 text-center">
                                     <input
                                       type="checkbox"
                                       checked={selectedTeachersForReset.has(teacher.id)}
@@ -2550,25 +2644,30 @@ function AdminPage() {
                                           return next;
                                         });
                                       }}
+                                      className="w-5 h-5 rounded-md border-2 border-slate-300 text-violet-600 focus:ring-violet-500 focus:ring-offset-0 cursor-pointer transition-all duration-200"
                                     />
                                   </td>
-                                  <td><strong>{teacher.full_name || teacher.username}</strong></td>
-                                  <td>{teacher.email}</td>
-                                  <td style={{ color: '#666' }}>{teacher.username}</td>
-                                  <td style={{ textAlign: 'center' }}>
-                                    {teacher.is_active ? <span style={{ color: 'green', fontWeight: 'bold' }}>✅ {t('admin.activeUsers')}</span> : <span style={{ color: 'red', fontWeight: 'bold' }}>🚫 {t('admin.inactiveUsers')}</span>}
+                                  <td className="px-4 py-4"><span className="font-semibold text-slate-800">{teacher.full_name || teacher.username}</span></td>
+                                  <td className="px-4 py-4 text-slate-600">{teacher.email}</td>
+                                  <td className="px-4 py-4 text-slate-500">{teacher.username}</td>
+                                  <td className="px-4 py-4 text-center">
+                                    {teacher.is_active ? (
+                                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold">✅ {t('admin.activeUsers')}</span>
+                                    ) : (
+                                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-red-100 text-red-700 text-xs font-bold">🚫 {t('admin.inactiveUsers')}</span>
+                                    )}
                                   </td>
-                                  <td>
-                                    <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                                  <td className="px-4 py-4">
+                                    <div className="flex flex-wrap gap-2">
                                       <button 
-                                        className="admin-btn-small" 
+                                        className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-800 transition-all duration-200" 
                                         onClick={() => navigate(`/admin/teacher/${teacher.id}`)}
                                         title="ดูรายละเอียด"
                                       >
                                         👁️
                                       </button>
                                       <button 
-                                        className="admin-btn-small admin-btn-warning" 
+                                        className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-amber-100 text-amber-600 hover:bg-amber-200 hover:text-amber-800 transition-all duration-200" 
                                         onClick={() => openConfirmModal(t('admin.resetTitle'), `${t('admin.resetPasswordOf')} "${teacher.full_name || teacher.username}"?`, async () => {
                                           const token = localStorage.getItem('token');
                                           try {
@@ -2583,7 +2682,7 @@ function AdminPage() {
                                       </button>
                                       {teacher.is_active ? (
                                         <button 
-                                          className="admin-btn-small admin-btn-secondary" 
+                                          className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-800 transition-all duration-200" 
                                           onClick={() => openConfirmModal(t('admin.deactivateTitle'), `${t('admin.deactivateTitle')} "${teacher.full_name || teacher.username}"?`, async () => { await deactivateUser(teacher.id, teacher.full_name || teacher.username); })}
                                           title={t('admin.deactivateTitle')}
                                         >
@@ -2591,7 +2690,7 @@ function AdminPage() {
                                         </button>
                                       ) : (
                                         <button 
-                                          className="admin-btn-small admin-btn-success" 
+                                          className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-emerald-100 text-emerald-600 hover:bg-emerald-200 hover:text-emerald-800 transition-all duration-200" 
                                           onClick={() => openConfirmModal(t('admin.activateTitle'), `${t('admin.activateTitle')} "${teacher.full_name || teacher.username}"?`, async () => { await activateUser(teacher.id, teacher.full_name || teacher.username); })}
                                           title={t('admin.activateTitle')}
                                         >
@@ -2600,7 +2699,7 @@ function AdminPage() {
                                       )}
                                       {!teacher.is_active && deletionStatuses[teacher.id]?.can_delete && (
                                         <button 
-                                          className="admin-btn-small admin-btn-danger" 
+                                          className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-red-100 text-red-600 hover:bg-red-200 hover:text-red-800 transition-all duration-200" 
                                           onClick={() => openConfirmModal(t('admin.deleteTitle'), `${t('admin.deleteTitle')} "${teacher.full_name || teacher.username}"?`, async () => { await deleteUser(teacher.id, teacher.full_name || teacher.username); })}
                                           title={t('admin.deleteUserTitle')}
                                         >
@@ -2615,22 +2714,129 @@ function AdminPage() {
                           </table>
                         </div>
 
+                        {/* Mobile View: Cards */}
+                        <div className="grid grid-cols-1 gap-4 md:hidden mb-6">
+                            <div className="flex items-center justify-between mb-2 px-1">
+                                <label className="flex items-center gap-2 text-sm font-bold text-slate-600">
+                                    <input
+                                      type="checkbox"
+                                      checked={paginatedTeachers && paginatedTeachers.length > 0 ? paginatedTeachers.every(t => selectedTeachersForReset.has(t.id)) : false}
+                                      onChange={(e) => {
+                                        const next = new Set(selectedTeachersForReset);
+                                        if (e.target.checked) {
+                                          paginatedTeachers.forEach(t => next.add(t.id));
+                                        } else {
+                                          paginatedTeachers.forEach(t => next.delete(t.id));
+                                        }
+                                        setSelectedTeachersForReset(next);
+                                      }}
+                                      className="w-5 h-5 rounded-md border-2 border-slate-300 text-violet-600 focus:ring-violet-500 focus:ring-offset-0 cursor-pointer"
+                                    />
+                                    เลือกทั้งหมดในหน้านี้
+                                </label>
+                            </div>
+                            {paginatedTeachers.map(teacher => (
+                                <div key={teacher.id} className={`bg-white rounded-2xl p-5 shadow-sm border border-slate-100 flex flex-col gap-4 ${selectedTeachersForReset.has(teacher.id) ? 'ring-2 ring-violet-500 bg-violet-50/10' : ''}`}>
+                                  <div className="flex justify-between items-start">
+                                    <div className="flex items-start gap-3">
+                                        <input
+                                          type="checkbox"
+                                          checked={selectedTeachersForReset.has(teacher.id)}
+                                          onChange={() => {
+                                            setSelectedTeachersForReset(prev => {
+                                              const next = new Set(prev);
+                                              if (next.has(teacher.id)) next.delete(teacher.id);
+                                              else next.add(teacher.id);
+                                              return next;
+                                            });
+                                          }}
+                                          className="w-5 h-5 mt-1 rounded-md border-2 border-slate-300 text-violet-600 focus:ring-violet-500 focus:ring-offset-0 cursor-pointer"
+                                        />
+                                        <div>
+                                            <div className="font-bold text-slate-800 text-lg">{teacher.full_name || teacher.username}</div>
+                                            <div className="text-sm text-slate-500 font-medium">@{teacher.username}</div>
+                                        </div>
+                                    </div>
+                                    {teacher.is_active ? (
+                                      <span className="inline-flex items-center px-2 py-1 rounded-lg bg-emerald-100 text-emerald-700 text-[10px] font-black uppercase tracking-wider">✅ Active</span>
+                                    ) : (
+                                      <span className="inline-flex items-center px-2 py-1 rounded-lg bg-red-100 text-red-700 text-[10px] font-black uppercase tracking-wider">🚫 Inactive</span>
+                                    )}
+                                  </div>
+                                  
+                                  <div className="text-sm text-slate-600 flex items-center gap-2 bg-slate-50 p-2.5 rounded-xl">
+                                    <span className="text-lg">✉️</span> 
+                                    <span className="font-medium truncate">{teacher.email}</span>
+                                  </div>
+
+                                  <div className="flex flex-wrap gap-2 pt-3 border-t border-slate-50">
+                                      <button 
+                                        className="flex-1 inline-flex items-center justify-center gap-2 h-10 px-4 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-800 font-bold text-sm transition-all" 
+                                        onClick={() => navigate(`/admin/teacher/${teacher.id}`)}
+                                      >
+                                        👁️ ดูข้อมูล
+                                      </button>
+                                      <button 
+                                        className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-amber-100 text-amber-600 hover:bg-amber-200 hover:text-amber-800 transition-all" 
+                                        onClick={() => openConfirmModal(t('admin.resetTitle'), `${t('admin.resetPasswordOf')} "${teacher.full_name || teacher.username}"?`, async () => {
+                                          const token = localStorage.getItem('token');
+                                          try {
+                                            const res = await fetch(`${API_BASE_URL}/users/${teacher.id}/admin_reset`, { method:'POST', headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
+                                            const data = await res.json();
+                                            if (!res.ok) { toast.error(data.detail || t('admin.resetFailed')); } else { openAlertModal(t('admin.tempPassword'), `${teacher.username || teacher.email || ''}\n\n🔑 ${data.temp_password}`); toast.success(t('admin.resetSuccess')); }
+                                          } catch (err) { console.error(err); toast.error(t('common.error')); }
+                                        })}
+                                        title={t('auth.resetPassword')}
+                                      >
+                                        🔄
+                                      </button>
+                                      {teacher.is_active ? (
+                                        <button 
+                                          className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-800 transition-all" 
+                                          onClick={() => openConfirmModal(t('admin.deactivateTitle'), `${t('admin.deactivateTitle')} "${teacher.full_name || teacher.username}"?`, async () => { await deactivateUser(teacher.id, teacher.full_name || teacher.username); })}
+                                          title={t('admin.deactivateTitle')}
+                                        >
+                                          🚫
+                                        </button>
+                                      ) : (
+                                        <button 
+                                          className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-emerald-100 text-emerald-600 hover:bg-emerald-200 hover:text-emerald-800 transition-all" 
+                                          onClick={() => openConfirmModal(t('admin.activateTitle'), `${t('admin.activateTitle')} "${teacher.full_name || teacher.username}"?`, async () => { await activateUser(teacher.id, teacher.full_name || teacher.username); })}
+                                          title={t('admin.activateTitle')}
+                                        >
+                                          ✅
+                                        </button>
+                                      )}
+                                      {!teacher.is_active && deletionStatuses[teacher.id]?.can_delete && (
+                                        <button 
+                                          className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-red-100 text-red-600 hover:bg-red-200 hover:text-red-800 transition-all" 
+                                          onClick={() => openConfirmModal(t('admin.deleteTitle'), `${t('admin.deleteTitle')} "${teacher.full_name || teacher.username}"?`, async () => { await deleteUser(teacher.id, teacher.full_name || teacher.username); })}
+                                          title={t('admin.deleteUserTitle')}
+                                        >
+                                          🗑️
+                                        </button>
+                                      )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
                         {/* Pagination */}
                         {totalPages > 1 && (
-                          <div className="admin-pagination">
+                          <div className="flex flex-wrap items-center justify-center gap-3 mt-6">
                             <button
-                              className={`pagination-btn prev ${teacherCurrentPage === 1 ? 'disabled' : ''}`}
+                              className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${teacherCurrentPage === 1 ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300'}`}
                               onClick={() => setTeacherCurrentPage(p => Math.max(1, p - 1))}
                               disabled={teacherCurrentPage === 1}
                               aria-label="ก่อนหน้า"
                             >
                               ← ก่อนหน้า
                             </button>
-                            <div className="pagination-pages" role="navigation" aria-label="pagination">
+                            <div className="flex gap-2" role="navigation" aria-label="pagination">
                               {Array.from({ length: totalPages }, (_, i) => (
                                 <button
                                   key={i + 1}
-                                  className={`pagination-page ${teacherCurrentPage === i + 1 ? 'active' : ''}`}
+                                  className={`w-10 h-10 rounded-lg font-semibold transition-all duration-200 ${teacherCurrentPage === i + 1 ? 'bg-gradient-to-r from-violet-500 to-purple-600 text-white shadow-lg shadow-violet-500/30' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300'}`}
                                   onClick={() => setTeacherCurrentPage(i + 1)}
                                   aria-current={teacherCurrentPage === i + 1 ? 'page' : undefined}
                                 >
@@ -2639,27 +2845,34 @@ function AdminPage() {
                               ))}
                             </div>
                             <button
-                              className={`pagination-btn next ${teacherCurrentPage === totalPages ? 'disabled' : ''}`}
+                              className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${teacherCurrentPage === totalPages ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300'}`}
                               onClick={() => setTeacherCurrentPage(p => Math.min(totalPages, p + 1))}
                               disabled={teacherCurrentPage === totalPages}
                               aria-label="ถัดไป"
                             >
                               ถัดไป →
                             </button>
-                            <span className="pagination-summary">{t('admin.page')} {teacherCurrentPage} / {totalPages} ({filteredTeachers.length} {t('admin.people')})</span>
+                            <span className="text-sm text-slate-500 ml-4">{t('admin.page')} {teacherCurrentPage} / {totalPages} ({filteredTeachers.length} {t('admin.people')})</span>
                           </div>
                         )}
                       </>
                     );
                   })()}
+                  </div>
                 </div>
+                )}
 
-                {/* ===== Students Section ===== */}
-                <div className="user-section">
-                  <h3><span className="card-icon">👨‍🎓</span> {t('admin.students')} ({students.length} {t('admin.people')})</h3>
+                {/* Students Sub-tab */}
+                {userSubTab === 'students' && (
+                <div className="space-y-6">
+                  {/* ===== Students Section ===== */}
+                  <h3 className="flex items-center gap-3 text-xl font-bold text-slate-700 mb-6">
+                    <span className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center text-white shadow-md">👨‍🎓</span>
+                    {t('admin.students')} ({students.length} {t('admin.people')})
+                  </h3>
 
                   {/* Search, Filter */}
-                  <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
+                  <div className="flex flex-wrap gap-4 items-center mb-6">
                     <input
                       type="text"
                       placeholder="🔍 ค้นหาชื่อ หรือ email"
@@ -2668,14 +2881,7 @@ function AdminPage() {
                         setStudentSearchTermUsers(e.target.value);
                         setStudentCurrentPage(1);
                       }}
-                      style={{
-                        flex: 1,
-                        minWidth: '200px',
-                        padding: '10px 12px',
-                        borderRadius: '8px',
-                        border: '1px solid #ddd',
-                        fontSize: '0.95rem'
-                      }}
+                      className="flex-1 min-w-[200px] px-4 py-3 rounded-xl border border-slate-200 bg-white/80 text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-400 transition-all duration-300"
                     />
                     <select
                       value={studentStatusFilter}
@@ -2683,22 +2889,16 @@ function AdminPage() {
                         setStudentStatusFilter(e.target.value);
                         setStudentCurrentPage(1);
                       }}
-                      style={{
-                        padding: '10px 12px',
-                        borderRadius: '8px',
-                        border: '1px solid #ddd',
-                        fontSize: '0.95rem',
-                        cursor: 'pointer'
-                      }}
+                      className="px-4 py-3 rounded-xl border border-slate-200 bg-white/80 text-slate-700 cursor-pointer focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-400 transition-all duration-300"
                     >
                       <option value="all">📊 ทั้งหมด</option>
                       <option value="active">✅ ใช้งาน</option>
                       <option value="inactive">🚫 ปิดใช้งาน</option>
                     </select>
-                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                    <div className="flex gap-2 items-center">
                       <button
                         type="button"
-                        className="admin-btn-warning"
+                        className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-rose-400 via-pink-500 to-rose-500 text-white font-semibold shadow-lg shadow-rose-500/30 hover:shadow-xl hover:shadow-rose-500/40 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-60 disabled:cursor-not-allowed disabled:transform-none transition-all duration-300"
                         onClick={() => openConfirmModal(t('admin.bulkResetTitle'), `${t('admin.bulkResetConfirm')} ${selectedStudentsForReset.size} ${t('admin.peopleSelected')}?`, async () => { await bulkResetSelectedStudents(); })}
                         disabled={selectedStudentsForReset.size === 0 || bulkResetLoading}
                         title={t('admin.resetSelectedPasswords')}
@@ -2709,10 +2909,10 @@ function AdminPage() {
                   </div>
 
                   {students.length === 0 ? (
-                    <div className="empty-state">
-                      <div className="empty-icon">👨‍🎓</div>
-                      <div className="empty-text">{t('admin.noStudents')}</div>
-                      <div className="empty-subtitle">{t('admin.startByAddingStudent')}</div>
+                    <div className="flex flex-col items-center justify-center py-16 px-8 rounded-2xl bg-gradient-to-br from-slate-50 to-emerald-50 border-2 border-dashed border-slate-200">
+                      <div className="text-6xl mb-4 animate-bounce">👨‍🎓</div>
+                      <div className="text-xl font-bold text-slate-600 mb-2">{t('admin.noStudents')}</div>
+                      <div className="text-slate-400">{t('admin.startByAddingStudent')}</div>
                     </div>
                   ) : (() => {
                     const filteredStudents = students.filter(s => {
@@ -2732,11 +2932,12 @@ function AdminPage() {
 
                     return (
                       <>
-                        <div style={{ overflowX: 'auto', marginBottom: '1.5rem' }}>
-                          <table className="admin-table" style={{ minWidth: '100%', fontSize: '0.95rem' }}>
+                        {/* Desktop View: Table */}
+                        <div className="hidden md:block overflow-x-auto mb-6 rounded-xl border border-slate-200 shadow-sm">
+                          <table className="w-full text-sm">
                             <thead>
-                              <tr>
-                                <th style={{ width: '44px', textAlign: 'center' }}>
+                              <tr className="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
+                                <th className="w-11 px-4 py-4 text-center">
                                   {/* header checkbox: select/deselect all on current page */}
                                   <input
                                     type="checkbox"
@@ -2750,19 +2951,20 @@ function AdminPage() {
                                       }
                                       setSelectedStudentsForReset(next);
                                     }}
+                                    className="w-5 h-5 rounded-md border-2 border-slate-300 text-emerald-600 focus:ring-emerald-500 focus:ring-offset-0 cursor-pointer transition-all duration-200"
                                   />
                                 </th>
-                                <th>{t('admin.name')}</th>
-                                <th>{t('admin.email')}</th>
-                                <th>{t('admin.username')}</th>
-                                <th style={{ textAlign: 'center' }}>{t('admin.status')}</th>
-                                <th style={{ width: '280px' }}>{t('admin.management')}</th>
+                                <th className="px-4 py-4 text-left font-semibold text-slate-600">{t('admin.name')}</th>
+                                <th className="px-4 py-4 text-left font-semibold text-slate-600">{t('admin.email')}</th>
+                                <th className="px-4 py-4 text-left font-semibold text-slate-600">{t('admin.username')}</th>
+                                <th className="px-4 py-4 text-center font-semibold text-slate-600">{t('admin.status')}</th>
+                                <th className="w-[280px] px-4 py-4 text-left font-semibold text-slate-600">{t('admin.management')}</th>
                               </tr>
                             </thead>
-                            <tbody>
+                            <tbody className="divide-y divide-slate-100">
                               {paginatedStudents.map(student => (
-                                <tr key={student.id} className={selectedStudentsForReset.has(student.id) ? 'selected-row' : ''}>
-                                  <td style={{ textAlign: 'center' }}>
+                                <tr key={student.id} className={`hover:bg-emerald-50/50 transition-colors duration-200 ${selectedStudentsForReset.has(student.id) ? 'bg-emerald-50 border-l-4 border-l-emerald-500' : ''}`}>
+                                  <td className="px-4 py-4 text-center">
                                     <input
                                       type="checkbox"
                                       checked={selectedStudentsForReset.has(student.id)}
@@ -2774,18 +2976,23 @@ function AdminPage() {
                                           return next;
                                         });
                                       }}
+                                      className="w-5 h-5 rounded-md border-2 border-slate-300 text-emerald-600 focus:ring-emerald-500 focus:ring-offset-0 cursor-pointer transition-all duration-200"
                                     />
                                   </td>
-                                  <td><strong>{student.full_name || student.username}</strong></td>
-                                  <td>{student.email}</td>
-                                  <td style={{ color: '#666' }}>{student.username}</td>
-                                  <td style={{ textAlign: 'center' }}>
-                                    {student.is_active ? <span style={{ color: 'green', fontWeight: 'bold' }}>✅ {t('admin.activeUsers')}</span> : <span style={{ color: 'red', fontWeight: 'bold' }}>🚫 {t('admin.inactiveUsers')}</span>}
+                                  <td className="px-4 py-4"><span className="font-semibold text-slate-800">{student.full_name || student.username}</span></td>
+                                  <td className="px-4 py-4 text-slate-600">{student.email}</td>
+                                  <td className="px-4 py-4 text-slate-500">{student.username}</td>
+                                  <td className="px-4 py-4 text-center">
+                                    {student.is_active ? (
+                                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold">✅ {t('admin.activeUsers')}</span>
+                                    ) : (
+                                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-red-100 text-red-700 text-xs font-bold">🚫 {t('admin.inactiveUsers')}</span>
+                                    )}
                                   </td>
-                                  <td>
-                                    <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                                  <td className="px-4 py-4">
+                                    <div className="flex flex-wrap gap-2">
                                       <button 
-                                        className="admin-btn-small admin-btn-warning" 
+                                        className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-amber-100 text-amber-600 hover:bg-amber-200 hover:text-amber-800 transition-all duration-200" 
                                         onClick={() => openConfirmModal(t('admin.resetTitle'), `${t('admin.resetPasswordOf')} "${student.full_name || student.username}"?`, async () => {
                                           const token = localStorage.getItem('token');
                                           try {
@@ -2800,7 +3007,7 @@ function AdminPage() {
                                       </button>
                                       {student.is_active ? (
                                         <button 
-                                          className="admin-btn-small admin-btn-secondary" 
+                                          className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-800 transition-all duration-200" 
                                           onClick={() => openConfirmModal(t('admin.deactivateTitle'), `${t('admin.deactivateTitle')} "${student.full_name || student.username}"?`, async () => { await deactivateUser(student.id, student.full_name || student.username); })}
                                           title={t('admin.deactivateTitle')}
                                         >
@@ -2808,7 +3015,7 @@ function AdminPage() {
                                         </button>
                                       ) : (
                                         <button 
-                                          className="admin-btn-small admin-btn-success" 
+                                          className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-emerald-100 text-emerald-600 hover:bg-emerald-200 hover:text-emerald-800 transition-all duration-200" 
                                           onClick={() => openConfirmModal(t('admin.activateTitle'), `${t('admin.activateTitle')} "${student.full_name || student.username}"?`, async () => { await activateUser(student.id, student.full_name || student.username); })}
                                           title={t('admin.activateTitle')}
                                         >
@@ -2817,7 +3024,7 @@ function AdminPage() {
                                       )}
                                       {!student.is_active && deletionStatuses[student.id]?.can_delete && (
                                         <button 
-                                          className="admin-btn-small admin-btn-danger" 
+                                          className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-red-100 text-red-600 hover:bg-red-200 hover:text-red-800 transition-all duration-200" 
                                           onClick={() => openConfirmModal(t('admin.deleteTitle'), `${t('admin.deleteTitle')} "${student.full_name || student.username}"?`, async () => { await deleteUser(student.id, student.full_name || student.username); })}
                                           title={t('admin.deleteUserTitle')}
                                         >
@@ -2832,22 +3039,123 @@ function AdminPage() {
                           </table>
                         </div>
 
+                        {/* Mobile View: Cards */}
+                        <div className="grid grid-cols-1 gap-4 md:hidden mb-6">
+                            <div className="flex items-center justify-between mb-2 px-1">
+                                <label className="flex items-center gap-2 text-sm font-bold text-slate-600">
+                                    <input
+                                      type="checkbox"
+                                      checked={paginatedStudents && paginatedStudents.length > 0 ? paginatedStudents.every(s => selectedStudentsForReset.has(s.id)) : false}
+                                      onChange={(e) => {
+                                        const next = new Set(selectedStudentsForReset);
+                                        if (e.target.checked) {
+                                          paginatedStudents.forEach(s => next.add(s.id));
+                                        } else {
+                                          paginatedStudents.forEach(s => next.delete(s.id));
+                                        }
+                                        setSelectedStudentsForReset(next);
+                                      }}
+                                      className="w-5 h-5 rounded-md border-2 border-slate-300 text-emerald-600 focus:ring-emerald-500 focus:ring-offset-0 cursor-pointer"
+                                    />
+                                    เลือกทั้งหมดในหน้านี้
+                                </label>
+                            </div>
+                            {paginatedStudents.map(student => (
+                                <div key={student.id} className={`bg-white rounded-2xl p-5 shadow-sm border border-slate-100 flex flex-col gap-4 ${selectedStudentsForReset.has(student.id) ? 'ring-2 ring-emerald-500 bg-emerald-50/10' : ''}`}>
+                                  <div className="flex justify-between items-start">
+                                    <div className="flex items-start gap-3">
+                                        <input
+                                          type="checkbox"
+                                          checked={selectedStudentsForReset.has(student.id)}
+                                          onChange={() => {
+                                            setSelectedStudentsForReset(prev => {
+                                              const next = new Set(prev);
+                                              if (next.has(student.id)) next.delete(student.id);
+                                              else next.add(student.id);
+                                              return next;
+                                            });
+                                          }}
+                                          className="w-5 h-5 mt-1 rounded-md border-2 border-slate-300 text-emerald-600 focus:ring-emerald-500 focus:ring-offset-0 cursor-pointer"
+                                        />
+                                        <div>
+                                            <div className="font-bold text-slate-800 text-lg">{student.full_name || student.username}</div>
+                                            <div className="text-sm text-slate-500 font-medium">@{student.username}</div>
+                                        </div>
+                                    </div>
+                                    {student.is_active ? (
+                                      <span className="inline-flex items-center px-2 py-1 rounded-lg bg-emerald-100 text-emerald-700 text-[10px] font-black uppercase tracking-wider">✅ Active</span>
+                                    ) : (
+                                      <span className="inline-flex items-center px-2 py-1 rounded-lg bg-red-100 text-red-700 text-[10px] font-black uppercase tracking-wider">🚫 Inactive</span>
+                                    )}
+                                  </div>
+                                  
+                                  <div className="text-sm text-slate-600 flex items-center gap-2 bg-slate-50 p-2.5 rounded-xl">
+                                    <span className="text-lg">✉️</span> 
+                                    <span className="font-medium truncate">{student.email}</span>
+                                  </div>
+
+                                  <div className="flex flex-wrap gap-2 pt-3 border-t border-slate-50">
+                                      <button 
+                                        className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-amber-100 text-amber-600 hover:bg-amber-200 hover:text-amber-800 transition-all" 
+                                        onClick={() => openConfirmModal(t('admin.resetTitle'), `${t('admin.resetPasswordOf')} "${student.full_name || student.username}"?`, async () => {
+                                          const token = localStorage.getItem('token');
+                                          try {
+                                            const res = await fetch(`${API_BASE_URL}/users/${student.id}/admin_reset`, { method:'POST', headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
+                                            const data = await res.json();
+                                            if (!res.ok) { toast.error(data.detail || t('admin.resetFailed')); } else { openAlertModal(t('admin.tempPassword'), `${student.username || student.email || ''}\n\n🔑 ${data.temp_password}`); toast.success(t('admin.resetSuccess')); }
+                                          } catch (err) { console.error(err); toast.error(t('common.error')); }
+                                        })}
+                                        title={t('auth.resetPassword')}
+                                      >
+                                        🔄
+                                      </button>
+                                      {student.is_active ? (
+                                        <button 
+                                          className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-800 transition-all" 
+                                          onClick={() => openConfirmModal(t('admin.deactivateTitle'), `${t('admin.deactivateTitle')} "${student.full_name || student.username}"?`, async () => { await deactivateUser(student.id, student.full_name || student.username); })}
+                                          title={t('admin.deactivateTitle')}
+                                        >
+                                          🚫
+                                        </button>
+                                      ) : (
+                                        <button 
+                                          className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-emerald-100 text-emerald-600 hover:bg-emerald-200 hover:text-emerald-800 transition-all" 
+                                          onClick={() => openConfirmModal(t('admin.activateTitle'), `${t('admin.activateTitle')} "${student.full_name || student.username}"?`, async () => { await activateUser(student.id, student.full_name || student.username); })}
+                                          title={t('admin.activateTitle')}
+                                        >
+                                          ✅
+                                        </button>
+                                      )}
+                                      {!student.is_active && deletionStatuses[student.id]?.can_delete && (
+                                        <button 
+                                          className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-red-100 text-red-600 hover:bg-red-200 hover:text-red-800 transition-all" 
+                                          onClick={() => openConfirmModal(t('admin.deleteTitle'), `${t('admin.deleteTitle')} "${student.full_name || student.username}"?`, async () => { await deleteUser(student.id, student.full_name || student.username); })}
+                                          title={t('admin.deleteUserTitle')}
+                                        >
+                                          🗑️
+                                        </button>
+                                      )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
                         {/* Pagination */}
                         {totalPages > 1 && (
-                          <div className="admin-pagination">
+                          <div className="flex flex-wrap items-center justify-center gap-3 mt-6">
                             <button
-                              className={`pagination-btn prev ${studentCurrentPage === 1 ? 'disabled' : ''}`}
+                              className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${studentCurrentPage === 1 ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300'}`}
                               onClick={() => setStudentCurrentPage(p => Math.max(1, p - 1))}
                               disabled={studentCurrentPage === 1}
                               aria-label="ก่อนหน้า"
                             >
                               ← ก่อนหน้า
                             </button>
-                            <div className="pagination-pages" role="navigation" aria-label="pagination">
+                            <div className="flex gap-2" role="navigation" aria-label="pagination">
                               {Array.from({ length: totalPages }, (_, i) => (
                                 <button
                                   key={i + 1}
-                                  className={`pagination-page ${studentCurrentPage === i + 1 ? 'active' : ''}`}
+                                  className={`w-10 h-10 rounded-lg font-semibold transition-all duration-200 ${studentCurrentPage === i + 1 ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/30' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300'}`}
                                   onClick={() => setStudentCurrentPage(i + 1)}
                                   aria-current={studentCurrentPage === i + 1 ? 'page' : undefined}
                                 >
@@ -2856,26 +3164,54 @@ function AdminPage() {
                               ))}
                             </div>
                             <button
-                              className={`pagination-btn next ${studentCurrentPage === totalPages ? 'disabled' : ''}`}
+                              className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${studentCurrentPage === totalPages ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300'}`}
                               onClick={() => setStudentCurrentPage(p => Math.min(totalPages, p + 1))}
                               disabled={studentCurrentPage === totalPages}
                               aria-label="ถัดไป"
                             >
                               ถัดไป →
                             </button>
-                            <span className="pagination-summary">{t('admin.page')} {studentCurrentPage} / {totalPages} ({filteredStudents.length} {t('admin.people')})</span>
+                            <span className="text-sm text-slate-500 ml-4">{t('admin.page')} {studentCurrentPage} / {totalPages} ({filteredStudents.length} {t('admin.people')})</span>
                           </div>
                         )}
                       </>
                     );
                   })()}
                 </div>
+                )}
 
-                <div className="bulk-upload-section" style={{ marginTop: '3rem', paddingTop: '2rem', borderTop: '2px solid #e5e7eb' }}>
-                  <h3 style={{ marginBottom: '1rem' }}>📤 หรืออัปโหลดผู้ใช้จำนวนมาก (.xlsx)</h3>
-                  <div className="upload-controls">
+                {/* Bulk Upload Sub-tab */}
+                {userSubTab === 'bulk_upload' && (
+                <div className="space-y-6">
+                  <h3 className="flex items-center gap-3 text-xl font-bold text-slate-700 mb-6">
+                    <span className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center text-white shadow-md">📤</span>
+                    อัปโหลดผู้ใช้จำนวนมาก (.xlsx)
+                  </h3>
+                  
+                  <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6 border border-blue-100">
+                    <div className="flex items-start gap-3 mb-4">
+                      <span className="text-2xl">💡</span>
+                      <div>
+                        <h4 className="font-semibold text-slate-800 mb-2">วิธีใช้งาน:</h4>
+                        <ol className="list-decimal list-inside space-y-1 text-sm text-slate-600">
+                          <li>ดาวน์โหลดเทมเพลต Excel ด้านล่าง</li>
+                          <li>กรอกข้อมูลผู้ใช้ตามฟอร์แมตที่กำหนด (ครู/นักเรียน)</li>
+                          <li>อัปโหลดไฟล์กลับเข้าระบบ</li>
+                          <li>ระบบจะสร้างบัญชีผู้ใช้อัตโนมัติ</li>
+                        </ol>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-4 items-stretch">
                     <div 
-                      className={`file-upload-area ${dragOver ? 'drag-over' : ''} ${uploadFile ? 'has-file' : ''}`}
+                      className={`group relative flex-1 min-w-[280px] p-8 rounded-2xl border-2 border-dashed cursor-pointer transition-all duration-300 ${
+                        dragOver 
+                          ? 'border-blue-500 bg-blue-50 scale-[1.02]' 
+                          : uploadFile 
+                            ? 'border-emerald-400 bg-emerald-50' 
+                            : 'border-slate-200 bg-slate-50/50 hover:border-blue-400 hover:bg-blue-50/50'
+                      }`}
                       onDragOver={handleDragOver}
                       onDragLeave={handleDragLeave}
                       onDrop={handleDrop}
@@ -2886,143 +3222,146 @@ function AdminPage() {
                         type="file" 
                         accept=".xlsx" 
                         onChange={handleFileChange}
-                        style={{ display: 'none' }}
+                        className="hidden"
                       />
-                      <div className="upload-icon">
-                        {uploading ? '⏳' : uploadFile ? '📄' : '📁'}
+                      <div className="flex flex-col items-center justify-center text-center">
+                        <div className={`text-5xl mb-3 transition-transform duration-300 ${dragOver ? 'scale-110 animate-bounce' : 'group-hover:scale-110'}`}>
+                          {uploading ? '⏳' : uploadFile ? '📄' : '📁'}
+                        </div>
+                        <div className="space-y-1">
+                          {uploading ? (
+                            <span className="text-blue-600 font-medium">{t('admin.uploadingFile')}</span>
+                          ) : uploadFile ? (
+                            <>
+                              <div className="font-semibold text-emerald-700">{uploadFile.name}</div>
+                              <div className="text-sm text-emerald-600">({(uploadFile.size / 1024).toFixed(1)} KB)</div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="font-semibold text-slate-600">{t('admin.dragDropExcel')}</div>
+                              <div className="text-sm text-slate-400">{t('admin.supportsXlsxOnly')}</div>
+                            </>
+                          )}
+                        </div>
+                        {uploadFile && !uploading && (
+                          <button 
+                            type="button" 
+                            className="absolute top-3 right-3 w-8 h-8 rounded-full bg-red-100 text-red-500 hover:bg-red-200 hover:text-red-700 flex items-center justify-center transition-all duration-200"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setUploadFile(null);
+                              const inp = document.getElementById('bulk-upload-input');
+                              if (inp) inp.value = '';
+                            }}
+                            title="ลบไฟล์"
+                          >
+                            ✕
+                          </button>
+                        )}
                       </div>
-                      <div className="upload-text">
+                    </div>
+                    <div className="flex flex-col gap-3">
+                      <button 
+                        type="button" 
+                        className="flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-semibold shadow-lg shadow-blue-500/30 hover:shadow-xl hover:shadow-blue-500/40 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-60 disabled:cursor-not-allowed disabled:transform-none transition-all duration-300"
+                        onClick={handleUpload} 
+                        disabled={uploading || !uploadFile}
+                      >
                         {uploading ? (
-                          <span>{t('admin.uploadingFile')}</span>
-                        ) : uploadFile ? (
                           <>
-                            <span className="file-name">{uploadFile.name}</span>
-                            <span className="file-size">({(uploadFile.size / 1024).toFixed(1)} KB)</span>
+                            <span className="animate-spin">⏳</span>
+                            กำลังอัปโหลด...
                           </>
                         ) : (
                           <>
-                            <span className="primary-text">{t('admin.dragDropExcel')}</span>
-                            <span className="secondary-text">{t('admin.supportsXlsxOnly')}</span>
+                            <span>⬆️</span>
+                            อัปโหลด Excel
                           </>
                         )}
-                      </div>
-                      {uploadFile && !uploading && (
-                        <button 
-                          type="button" 
-                          className="file-remove-btn"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setUploadFile(null);
-                            const inp = document.getElementById('bulk-upload-input');
-                            if (inp) inp.value = '';
-                          }}
-                          title="ลบไฟล์"
-                        >
-                          ✕
-                        </button>
-                      )}
+                      </button>
+                      <button 
+                        type="button" 
+                        className="flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-white border border-slate-200 text-slate-700 font-medium shadow-sm hover:bg-slate-50 hover:border-slate-300 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-300"
+                        onClick={async ()=>{
+                          const token = localStorage.getItem('token');
+                          try {
+                            const res = await fetch(`${API_BASE_URL}/users/bulk_template`, { headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
+                            if (!res.ok) { let err = null; try { err = await res.json(); } catch(e){}; toast.error((err && err.detail) ? err.detail : 'Failed to download template'); return; }
+                            const blob = await res.blob(); const url = window.URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'user_bulk_template.xlsx'; document.body.appendChild(a); a.click(); a.remove(); window.URL.revokeObjectURL(url);
+                          } catch (err) { console.error('download template error', err); toast.error('Download failed'); }
+                        }}
+                      >
+                        📋 ดาวน์โหลดเทมเพลต
+                      </button>
                     </div>
-                    <button 
-                      type="button" 
-                      className="admin-btn-primary" 
-                      onClick={handleUpload} 
-                      disabled={uploading || !uploadFile}
-                    >
-                      {uploading ? (
-                        <>
-                          <span className="btn-icon" aria-hidden>⏳</span>
-                          กำลังอัปโหลด...
-                        </>
-                      ) : (
-                        <>
-                          <span className="btn-icon" aria-hidden>⬆️</span>
-                          อัปโหลด Excel
-                        </>
-                      )}
-                    </button>
-                    <button 
-                      type="button" 
-                      className="admin-btn-secondary" 
-                      onClick={async ()=>{
-                        const token = localStorage.getItem('token');
-                        try {
-                          const res = await fetch(`${API_BASE_URL}/users/bulk_template`, { headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
-                          if (!res.ok) { let err = null; try { err = await res.json(); } catch(e){}; toast.error((err && err.detail) ? err.detail : 'Failed to download template'); return; }
-                          const blob = await res.blob(); const url = window.URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'user_bulk_template.xlsx'; document.body.appendChild(a); a.click(); a.remove(); window.URL.revokeObjectURL(url);
-                        } catch (err) { console.error('download template error', err); toast.error('Download failed'); }
-                      }}
-                    >
-                      📋 ดาวน์โหลดเทมเพลต
-                    </button>
                   </div>
                 </div>
+                )}
 
-                {/* Password Reset Requests Section */}
-                <div className="password-reset-section" style={{ marginTop: '3rem', paddingTop: '2rem', borderTop: '2px solid #e5e7eb' }}>
-                  <h3 style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <span>🔐</span> คำขอรีเซ็ตรหัสผ่าน
+                {/* Password Reset Requests Sub-tab */}
+                {userSubTab === 'password_reset' && (
+                <div className="space-y-6">
+                  {/* Password Reset Requests Section */}
+                  <div>
+                  <h3 className="flex items-center gap-3 text-lg font-bold text-slate-700 mb-4">
+                    <span className="text-2xl">🔐</span> 
+                    คำขอรีเซ็ตรหัสผ่าน
                     {passwordResetRequests.length > 0 && (
-                      <span style={{ 
-                        backgroundColor: '#ef4444', 
-                        color: 'white', 
-                        padding: '2px 8px', 
-                        borderRadius: '12px', 
-                        fontSize: '0.85rem' 
-                      }}>
+                      <span className="inline-flex items-center justify-center px-3 py-1 rounded-full bg-red-500 text-white text-sm font-bold animate-pulse">
                         {passwordResetRequests.length}
                       </span>
                     )}
                   </h3>
                   
                   {loadingResetRequests ? (
-                    <div style={{ padding: '1rem', textAlign: 'center', color: '#666' }}>
-                      ⏳ กำลังโหลด...
+                    <div className="flex items-center justify-center py-8 text-slate-500">
+                      <span className="animate-spin mr-2">⏳</span> กำลังโหลด...
                     </div>
                   ) : passwordResetRequests.length === 0 ? (
-                    <div style={{ padding: '1.5rem', textAlign: 'center', backgroundColor: '#f0fdf4', borderRadius: '12px', border: '1px solid #86efac' }}>
-                      <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>✅</div>
-                      <div style={{ color: '#166534' }}>{t('admin.noPasswordResetRequests')}</div>
+                    <div className="flex flex-col items-center justify-center py-10 px-8 rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-200">
+                      <div className="text-5xl mb-3">✅</div>
+                      <div className="text-emerald-700 font-medium">{t('admin.noPasswordResetRequests')}</div>
                     </div>
                   ) : (
-                    <div style={{ overflowX: 'auto' }}>
-                      <table className="admin-table" style={{ minWidth: '100%', fontSize: '0.95rem' }}>
+                    <>
+                    {/* Desktop View: Table */}
+                    <div className="hidden md:block overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
+                      <table className="w-full text-sm">
                         <thead>
-                          <tr>
-                            <th>{t('admin.username')}</th>
-                            <th>{t('admin.fullName')}</th>
-                            <th>{t('admin.email')}</th>
-                            <th>{t('admin.role')}</th>
-                            <th>{t('admin.requestDate')}</th>
-                            <th style={{ width: '200px' }}>{t('admin.management')}</th>
+                          <tr className="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
+                            <th className="px-4 py-4 text-left font-semibold text-slate-600">{t('admin.username')}</th>
+                            <th className="px-4 py-4 text-left font-semibold text-slate-600">{t('admin.fullName')}</th>
+                            <th className="px-4 py-4 text-left font-semibold text-slate-600">{t('admin.email')}</th>
+                            <th className="px-4 py-4 text-left font-semibold text-slate-600">{t('admin.role')}</th>
+                            <th className="px-4 py-4 text-left font-semibold text-slate-600">{t('admin.requestDate')}</th>
+                            <th className="w-[200px] px-4 py-4 text-left font-semibold text-slate-600">{t('admin.management')}</th>
                           </tr>
                         </thead>
-                        <tbody>
+                        <tbody className="divide-y divide-slate-100">
                           {passwordResetRequests.map(req => (
-                            <tr key={req.id}>
-                              <td><strong>{req.username}</strong></td>
-                              <td>{req.full_name || '-'}</td>
-                              <td>{req.email || '-'}</td>
-                              <td>
-                                <span style={{ 
-                                  padding: '2px 8px', 
-                                  borderRadius: '12px',
-                                  fontSize: '0.85rem',
-                                  backgroundColor: req.role === 'teacher' ? '#dbeafe' : '#fef3c7',
-                                  color: req.role === 'teacher' ? '#1e40af' : '#92400e'
-                                }}>
+                            <tr key={req.id} className="hover:bg-amber-50/50 transition-colors duration-200">
+                              <td className="px-4 py-4"><span className="font-semibold text-slate-800">{req.username}</span></td>
+                              <td className="px-4 py-4 text-slate-600">{req.full_name || '-'}</td>
+                              <td className="px-4 py-4 text-slate-500">{req.email || '-'}</td>
+                              <td className="px-4 py-4">
+                                <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold ${
+                                  req.role === 'teacher' 
+                                    ? 'bg-blue-100 text-blue-700' 
+                                    : 'bg-amber-100 text-amber-700'
+                                }`}>
                                   {req.role === 'teacher' ? '👨‍🏫 ครู' : '👨‍🎓 นักเรียน'}
                                 </span>
                               </td>
-                              <td style={{ color: '#666' }}>
+                              <td className="px-4 py-4 text-slate-500">
                                 {new Date(req.created_at).toLocaleDateString('th-TH', { 
                                   day: 'numeric', month: 'short', year: 'numeric', 
                                   hour: '2-digit', minute: '2-digit' 
                                 })}
                               </td>
-                              <td>
-                                <div style={{ display: 'flex', gap: '0.4rem' }}>
+                              <td className="px-4 py-4">
+                                <div className="flex gap-2">
                                   <button 
-                                    className="admin-btn-small admin-btn-success" 
+                                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-100 text-emerald-700 font-semibold hover:bg-emerald-200 hover:text-emerald-800 transition-all duration-200" 
                                     onClick={() => {
                                       setSelectedResetRequest(req);
                                       setShowResetPasswordModal(true);
@@ -3032,7 +3371,7 @@ function AdminPage() {
                                     ✅ {t('admin.approve')}
                                   </button>
                                   <button 
-                                    className="admin-btn-small admin-btn-danger" 
+                                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-red-100 text-red-700 font-semibold hover:bg-red-200 hover:text-red-800 transition-all duration-200" 
                                     onClick={() => openConfirmModal(t('admin.rejectTitle'), `${t('admin.rejectResetPasswordOf')} "${req.full_name || req.username}"?`, async () => {
                                       await rejectPasswordReset(req.id);
                                     })}
@@ -3047,96 +3386,144 @@ function AdminPage() {
                         </tbody>
                       </table>
                     </div>
+
+                    {/* Mobile View: Cards */}
+                    <div className="grid grid-cols-1 gap-4 md:hidden">
+                        {passwordResetRequests.map(req => (
+                            <div key={req.id} className="bg-white rounded-2xl p-5 shadow-lg shadow-slate-100 border border-slate-100 flex flex-col gap-3 relative overflow-hidden">
+                                <div className={`absolute top-0 right-0 w-24 h-24 -mr-8 -mt-8 rounded-full opacity-20 ${req.role === 'teacher' ? 'bg-blue-500' : 'bg-amber-500'}`}></div>
+                                
+                                <div className="flex justify-between items-start relative z-10">
+                                    <div className="flex flex-col">
+                                        <span className={`inline-flex items-center w-fit gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider mb-2 ${
+                                          req.role === 'teacher' 
+                                            ? 'bg-blue-100 text-blue-700' 
+                                            : 'bg-amber-100 text-amber-700'
+                                        }`}>
+                                          {req.role === 'teacher' ? '👨‍🏫 ครู' : '👨‍🎓 นักเรียน'}
+                                        </span>
+                                        <div className="font-bold text-slate-800 text-lg leading-tight">{req.full_name || req.username}</div>
+                                        <div className="text-sm text-slate-500 font-medium">@{req.username}</div>
+                                    </div>
+                                </div>
+                                
+                                <div className="space-y-2 mt-2 relative z-10">
+                                    <div className="text-sm text-slate-600 flex items-center gap-2 bg-slate-50 p-2 rounded-xl">
+                                        <span className="text-lg">✉️</span> 
+                                        <span className="font-medium truncate">{req.email || '-'}</span>
+                                    </div>
+                                    <div className="text-xs text-slate-400 flex items-center gap-2 px-2">
+                                        <span>📅</span> 
+                                        {new Date(req.created_at).toLocaleDateString('th-TH', { 
+                                          day: 'numeric', month: 'short', year: 'numeric', 
+                                          hour: '2-digit', minute: '2-digit' 
+                                        })}
+                                    </div>
+                                </div>
+
+                                <div className="flex gap-3 pt-3 mt-1 border-t border-slate-50 relative z-10">
+                                  <button 
+                                    className="flex-1 inline-flex items-center justify-center gap-2 h-10 px-3 rounded-xl bg-emerald-100 text-emerald-700 font-bold text-sm hover:bg-emerald-200 transition-all" 
+                                    onClick={() => {
+                                      setSelectedResetRequest(req);
+                                      setShowResetPasswordModal(true);
+                                    }}
+                                  >
+                                    ✅ {t('admin.approve')}
+                                  </button>
+                                  <button 
+                                    className="flex-1 inline-flex items-center justify-center gap-2 h-10 px-3 rounded-xl bg-red-100 text-red-700 font-bold text-sm hover:bg-red-200 transition-all" 
+                                    onClick={() => openConfirmModal(t('admin.rejectTitle'), `${t('admin.rejectResetPasswordOf')} "${req.full_name || req.username}"?`, async () => {
+                                      await rejectPasswordReset(req.id);
+                                    })}
+                                  >
+                                    ❌ {t('admin.reject')}
+                                  </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    </>
                   )}
+                  </div>
                 </div>
+                )}
+                </>
               </div>
             </div>
-          </div>
         )}
         {activeTab === 'classrooms' && (
-          <div className="content-card">
-            <div className="card-header">
-              <h2><span className="card-icon">🏫</span> จัดการชั้นเรียน</h2>
+          <div className="bg-white/80 backdrop-blur-xl rounded-3xl border border-white/60 shadow-xl shadow-slate-200/50 overflow-hidden">
+            {/* Card Header */}
+            <div className="px-8 py-6 bg-gradient-to-r from-slate-50 to-white border-b border-slate-100">
+              <h2 className="flex items-center gap-3 text-2xl font-bold text-slate-800">
+                <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-blue-600 text-white text-xl shadow-lg shadow-indigo-500/30">🏫</span>
+                จัดการชั้นเรียน
+              </h2>
             </div>
-            <div className="card-content">
+            <div className="p-8">
               {/* คำอธิบาย */}
-              <div style={{ marginBottom: '2rem', padding: '1.5rem', backgroundColor: '#e3f2fd', borderRadius: '12px', border: '1px solid #90caf9' }}>
-                <h4 style={{ marginTop: 0, marginBottom: '0.5rem', color: '#1565c0' }}>📋 ขั้นตอนการจัดการชั้นเรียน</h4>
-                <ol style={{ margin: 0, paddingLeft: '1.5rem', color: '#37474f' }}>
-                  <li><strong>สร้างชั้นเรียน</strong> - กำหนดชั้นปี เลือกว่าจะมีห้องเดียวหรือหลายห้อง</li>
-                  <li><strong>เพิ่มนักเรียน</strong> - เลือกนักเรียนเข้าชั้นเรียนที่สร้างไว้</li>
+              <div className="mb-8 p-6 rounded-2xl bg-gradient-to-br from-blue-50 to-sky-50 border border-blue-200">
+                <h4 className="flex items-center gap-2 text-lg font-bold text-blue-700 mb-3">
+                  <span>📋</span> ขั้นตอนการจัดการชั้นเรียน
+                </h4>
+                <ol className="list-decimal list-inside space-y-2 text-blue-600">
+                  <li><strong className="text-blue-700">สร้างชั้นเรียน</strong> - กำหนดชั้นปี เลือกว่าจะมีห้องเดียวหรือหลายห้อง</li>
+                  <li><strong className="text-blue-700">เพิ่มนักเรียน</strong> - เลือกนักเรียนเข้าชั้นเรียนที่สร้างไว้</li>
                 </ol>
               </div>
 
               {/* ปุ่มสร้างชั้นเรียน */}
-              <div style={{ marginBottom: '2rem' }}>
+              <div className="mb-8">
                 <button 
                   onClick={() => {
                     setShowClassroomModal(true);
                     setClassroomStep('select');
                   }}
-                  style={{
-                    padding: '14px 32px',
-                    fontSize: '1.05rem',
-                    fontWeight: '600',
-                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '10px',
-                    cursor: 'pointer',
-                    boxShadow: '0 4px 15px rgba(102, 126, 234, 0.4)',
-                    transition: 'all 0.3s ease',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '10px'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.target.style.transform = 'translateY(-2px)';
-                    e.target.style.boxShadow = '0 8px 25px rgba(102, 126, 234, 0.6)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.target.style.transform = 'translateY(0)';
-                    e.target.style.boxShadow = '0 4px 15px rgba(102, 126, 234, 0.4)';
-                  }}
+                  className="group inline-flex items-center gap-3 px-8 py-4 text-lg font-bold rounded-2xl bg-gradient-to-r from-violet-500 via-purple-500 to-indigo-600 text-white shadow-xl shadow-violet-500/30 hover:shadow-2xl hover:shadow-violet-500/40 hover:-translate-y-1 active:translate-y-0 transition-all duration-300"
                 >
-                  <span style={{ fontSize: '1.3rem' }}>➕</span>
+                  <span className="text-2xl group-hover:scale-125 transition-transform duration-300">➕</span>
                   สร้างชั้นเรียนใหม่
                 </button>
               </div>
 
               {/* รายการชั้นเรียน */}
-              <h3 style={{ marginBottom: '1rem', color: '#334155' }}>📚 รายการชั้นเรียนทั้งหมด</h3>
+              <h3 className="flex items-center gap-2 text-xl font-bold text-slate-700 mb-4">
+                <span>📚</span> รายการชั้นเรียนทั้งหมด
+              </h3>
               {classrooms.length === 0 ? (
-                <div className="empty-state">
-                  <div className="empty-icon">🏫</div>
-                  <div className="empty-text">{t('admin.noClassrooms')}</div>
-                  <div className="empty-subtitle">{t('admin.startByCreatingClassroom')}</div>
+                <div className="flex flex-col items-center justify-center py-16 px-8 rounded-2xl bg-gradient-to-br from-slate-50 to-indigo-50 border-2 border-dashed border-slate-200">
+                  <div className="text-6xl mb-4 animate-bounce">🏫</div>
+                  <div className="text-xl font-bold text-slate-600 mb-2">{t('admin.noClassrooms')}</div>
+                  <div className="text-slate-400">{t('admin.startByCreatingClassroom')}</div>
                 </div>
               ) : (
-                <div style={{ overflowX: 'auto' }}>
-                  <table className="admin-table">
+                <>
+                {/* Desktop View: Table */}
+                <div className="hidden md:block overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
+                  <table className="w-full text-sm">
                     <thead>
-                      <tr>
-                        <th>ชื่อชั้นเรียน</th>
-                        <th>ชั้นปี</th>
-                        <th>เทอม</th>
-                        <th>ปีการศึกษา</th>
-                        <th>จำนวนนักเรียน</th>
-                        <th>การจัดการ</th>
+                      <tr className="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
+                        <th className="px-4 py-4 text-left font-semibold text-slate-600">ชื่อชั้นเรียน</th>
+                        <th className="px-4 py-4 text-left font-semibold text-slate-600">ชั้นปี</th>
+                        <th className="px-4 py-4 text-left font-semibold text-slate-600">เทอม</th>
+                        <th className="px-4 py-4 text-left font-semibold text-slate-600">ปีการศึกษา</th>
+                        <th className="px-4 py-4 text-left font-semibold text-slate-600">จำนวนนักเรียน</th>
+                        <th className="px-4 py-4 text-left font-semibold text-slate-600">การจัดการ</th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="divide-y divide-slate-100">
                       {classrooms.map(classroom => (
-                        <tr key={classroom.id}>
-                          <td>{classroom.name}</td>
-                          <td>{classroom.grade_level}</td>
-                          <td>{classroom.semester ? `เทอม ${classroom.semester}` : '-'}</td>
-                          <td>{classroom.academic_year || '-'}</td>
-                          <td>{classroomStudentCounts[classroom.id] ?? classroom.student_count ?? 0} คน</td>
-                          <td>
-                            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        <tr key={classroom.id} className="hover:bg-indigo-50/50 transition-colors duration-200">
+                          <td className="px-4 py-4 font-semibold text-slate-800">{classroom.name}</td>
+                          <td className="px-4 py-4"><span className="inline-flex items-center px-3 py-1 rounded-full bg-indigo-100 text-indigo-700 text-sm font-medium">{classroom.grade_level}</span></td>
+                          <td className="px-4 py-4 text-slate-600">{classroom.semester ? `เทอม ${classroom.semester}` : '-'}</td>
+                          <td className="px-4 py-4 text-slate-600">{classroom.academic_year || '-'}</td>
+                          <td className="px-4 py-4"><span className="inline-flex items-center gap-1 text-slate-600">👨‍🎓 {classroomStudentCounts[classroom.id] ?? classroom.student_count ?? 0} คน</span></td>
+                          <td className="px-4 py-4">
+                            <div className="flex flex-wrap gap-2">
                               <button 
-                                className="admin-btn-small admin-btn-primary"
+                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-violet-100 text-violet-700 font-semibold hover:bg-violet-200 hover:text-violet-800 transition-all duration-200"
                                 onClick={() => {
                                   setSelectedClassroom(classroom);
                                   setShowClassroomModal(true);
@@ -3147,9 +3534,8 @@ function AdminPage() {
                                 👨‍🎓 เพิ่มนักเรียน
                               </button>
                               <button 
-                                className="admin-btn-small"
+                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-100 text-slate-700 font-semibold hover:bg-slate-200 hover:text-slate-800 transition-all duration-200"
                                 onClick={() => {
-                                  // ดูรายชื่อนักเรียน
                                   setSelectedClassroom(classroom);
                                   setShowClassroomModal(true);
                                   setClassroomStep('view_students');
@@ -3159,14 +3545,14 @@ function AdminPage() {
                                 👁️ ดูนักเรียน
                               </button>
                               <button 
-                                className="admin-btn-small admin-btn-warning"
+                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-amber-100 text-amber-700 font-semibold hover:bg-amber-200 hover:text-amber-800 transition-all duration-200"
                                 onClick={() => editClassroom(classroom)}
                                 title="แก้ไขชั้นเรียน"
                               >
                                 ✏️ แก้ไข
                               </button>
                               <button 
-                                className="admin-btn-small admin-btn-danger"
+                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-red-100 text-red-700 font-semibold hover:bg-red-200 hover:text-red-800 transition-all duration-200"
                                 onClick={() => deleteClassroom(classroom)}
                                 title="ลบชั้นเรียน"
                               >
@@ -3179,185 +3565,409 @@ function AdminPage() {
                     </tbody>
                   </table>
                 </div>
+
+                {/* Mobile View: Cards */}
+                <div className="grid grid-cols-1 gap-4 md:hidden">
+                    {classrooms.map(classroom => (
+                        <div key={classroom.id} className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 flex flex-col gap-4 relative overflow-hidden">
+                            <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-50 rounded-full -mr-8 -mt-8 opacity-50"></div>
+                            
+                            <div className="flex justify-between items-start relative z-10">
+                                <div>
+                                    <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold mb-2">
+                                        {classroom.grade_level}
+                                    </span>
+                                    <h3 className="text-xl font-black text-slate-800">{classroom.name}</h3>
+                                </div>
+                                <div className="text-right">
+                                    <div className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">นักเรียน</div>
+                                    <div className="text-lg font-black text-indigo-600">
+                                        {classroomStudentCounts[classroom.id] ?? classroom.student_count ?? 0}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3 relative z-10">
+                                <div className="bg-slate-50 rounded-xl p-3 text-center border border-slate-100">
+                                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">เทอม</div>
+                                    <div className="font-bold text-slate-700">{classroom.semester || '-'}</div>
+                                </div>
+                                <div className="bg-slate-50 rounded-xl p-3 text-center border border-slate-100">
+                                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">ปีการศึกษา</div>
+                                    <div className="font-bold text-slate-700">{classroom.academic_year || '-'}</div>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-50 relative z-10">
+                                <button 
+                                    className="col-span-2 inline-flex items-center justify-center gap-2 h-10 px-3 rounded-xl bg-violet-100 text-violet-700 font-bold text-sm hover:bg-violet-200 transition-all"
+                                    onClick={() => {
+                                      setSelectedClassroom(classroom);
+                                      setShowClassroomModal(true);
+                                      setClassroomStep('add_students');
+                                    }}
+                                >
+                                    👨‍🎓 เพิ่มนักเรียน
+                                </button>
+                                <button 
+                                    className="inline-flex items-center justify-center gap-2 h-10 px-3 rounded-xl bg-slate-100 text-slate-700 font-bold text-xs hover:bg-slate-200 transition-all"
+                                    onClick={() => {
+                                      setSelectedClassroom(classroom);
+                                      setShowClassroomModal(true);
+                                      setClassroomStep('view_students');
+                                    }}
+                                >
+                                    👁️ ดูนักเรียน
+                                </button>
+                                <button 
+                                    className="inline-flex items-center justify-center gap-2 h-10 px-3 rounded-xl bg-amber-100 text-amber-700 font-bold text-xs hover:bg-amber-200 transition-all"
+                                    onClick={() => editClassroom(classroom)}
+                                >
+                                    ✏️ แก้ไข
+                                </button>
+                                <button 
+                                    className="col-span-2 inline-flex items-center justify-center gap-2 h-10 px-3 rounded-xl bg-red-50 text-red-600 font-bold text-sm hover:bg-red-100 transition-all"
+                                    onClick={() => deleteClassroom(classroom)}
+                                >
+                                    🗑️ ลบชั้นเรียน
+                                </button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+                </>
               )}
             </div>
           </div>
         )}
         {activeTab === 'promotions' && (
-          <div className="content-card">
-            <div className="card-header">
-              <h2><span className="card-icon">⬆️</span> เลื่อนชั้นเรียน</h2>
+          <div className="bg-white/80 backdrop-blur-xl rounded-3xl border border-white/60 shadow-xl shadow-slate-200/50 overflow-hidden">
+            <div className="px-8 py-6 bg-gradient-to-r from-slate-50 to-white border-b border-slate-100">
+              <h2 className="flex items-center gap-3 text-2xl font-bold text-slate-800">
+                <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-600 text-white text-xl shadow-lg shadow-purple-500/30">⬆️</span>
+                เลื่อนชั้นเรียน
+              </h2>
             </div>
-            <div className="card-content">
+            <div className="p-8">
               {/* คำอธิบาย */}
-              <div style={{ marginBottom: '2rem', padding: '1.5rem', backgroundColor: '#f3e5f5', borderRadius: '12px', border: '1px solid #ce93d8' }}>
-                <h4 style={{ marginTop: 0, marginBottom: '0.5rem', color: '#7b1fa2' }}>📋 ประเภทการเลื่อนชั้น</h4>
-                <ul style={{ margin: 0, paddingLeft: '1.5rem', color: '#4a148c', lineHeight: '1.8' }}>
-                  <li><strong>📅 เลื่อนเทอมเท่านั้น</strong> - เลื่อนนักเรียนจากเทอม 1 ไปเทอม 2 (ไม่เปลี่ยนชั้นปีและปีการศึกษา)</li>
-                  <li><strong>🏫 เลื่อนทั้งชั้น (ปลายปี)</strong> - เลื่อนนักเรียนทั้งชั้นไปปีการศึกษาใหม่ + ชั้นปีใหม่</li>
-                  <li><strong>👥 เลื่อนรายบุคคล</strong> - เลือกนักเรียนเฉพาะคน มี 3 ตัวเลือก:
-                    <ul style={{ marginTop: '0.25rem', color: '#6a1b9a' }}>
-                      <li>เลื่อนเทอม (เทอม 1 → เทอม 2)</li>
-                      <li>เลื่อนเทอม + ชั้น (กลางปี ขึ้นชั้น)</li>
-                      <li>เลื่อนปลายปี (ปีใหม่ + ชั้นใหม่)</li>
-                    </ul>
+              <div className="mb-8 p-6 rounded-2xl bg-gradient-to-br from-fuchsia-50 to-pink-50 border border-fuchsia-200">
+                <h4 className="flex items-center gap-2 text-lg font-bold text-fuchsia-700 mb-3">
+                  <span>📋</span> ประเภทการเลื่อนชั้น
+                </h4>
+                <ul className="space-y-3 text-fuchsia-600">
+                  <li className="flex items-start gap-2">
+                    <span className="text-lg">📅</span>
+                    <div><strong className="text-fuchsia-700">เลื่อนเทอมเท่านั้น</strong> - เลื่อนนักเรียนจากเทอม 1 ไปเทอม 2 (ไม่เปลี่ยนชั้นปีและปีการศึกษา)</div>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-lg">🏫</span>
+                    <div><strong className="text-fuchsia-700">เลื่อนทั้งชั้น (ปลายปี)</strong> - เลื่อนนักเรียนทั้งชั้นไปปีการศึกษาใหม่ + ชั้นปีใหม่</div>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-lg">👥</span>
+                    <div>
+                      <strong className="text-fuchsia-700">เลื่อนรายบุคคล</strong> - เลือกนักเรียนเฉพาะคน มี 3 ตัวเลือก:
+                      <ul className="mt-2 ml-4 space-y-1 text-purple-600">
+                        <li>• เลื่อนเทอม (เทอม 1 → เทอม 2)</li>
+                        <li>• เลื่อนเทอม + ชั้น (กลางปี ขึ้นชั้น)</li>
+                        <li>• เลื่อนปลายปี (ปีใหม่ + ชั้นใหม่)</li>
+                      </ul>
+                    </div>
                   </li>
                 </ul>
               </div>
 
               {/* เลือกชั้นเรียนที่จะเลื่อน */}
-              <h3 style={{ marginBottom: '1rem', color: '#334155' }}>📚 เลือกชั้นเรียนที่ต้องการเลื่อน</h3>
+              <h3 className="flex items-center gap-2 text-xl font-bold text-slate-700 mb-4">
+                <span>📚</span> เลือกชั้นเรียนที่ต้องการเลื่อน
+              </h3>
               {classrooms.length === 0 ? (
-                <div className="empty-state">
-                  <div className="empty-icon">🏫</div>
-                  <div className="empty-text">ยังไม่มีชั้นเรียน</div>
+                <div className="flex flex-col items-center justify-center py-16 px-8 rounded-2xl bg-gradient-to-br from-slate-50 to-purple-50 border-2 border-dashed border-slate-200">
+                  <div className="text-6xl mb-4 animate-bounce">🏫</div>
+                  <div className="text-xl font-bold text-slate-600">ยังไม่มีชั้นเรียน</div>
                 </div>
               ) : (
-                <div style={{ overflowX: 'auto' }}>
-                  <table className="admin-table">
+                <>
+                {/* Desktop View: Table */}
+                <div className="hidden md:block overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
+                  <table className="w-full text-sm">
                     <thead>
-                      <tr>
-                        <th>ชื่อชั้นเรียน</th>
-                        <th>ชั้นปี</th>
-                        <th>เทอม</th>
-                        <th>ปีการศึกษา</th>
-                        <th>จำนวนนักเรียน</th>
-                        <th>การจัดการ</th>
+                      <tr className="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
+                        <th className="px-4 py-4 text-left font-semibold text-slate-600">ชื่อชั้นเรียน</th>
+                        <th className="px-4 py-4 text-left font-semibold text-slate-600">ชั้นปี</th>
+                        <th className="px-4 py-4 text-left font-semibold text-slate-600">เทอม</th>
+                        <th className="px-4 py-4 text-left font-semibold text-slate-600">ปีการศึกษา</th>
+                        <th className="px-4 py-4 text-left font-semibold text-slate-600">จำนวนนักเรียน</th>
+                        <th className="px-4 py-4 text-left font-semibold text-slate-600">การจัดการ</th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="divide-y divide-slate-100">
                       {classrooms.map(classroom => (
-                        <tr key={classroom.id}>
-                          <td>{classroom.name}</td>
-                          <td>{classroom.grade_level}</td>
-                          <td>{classroom.semester ? `เทอม ${classroom.semester}` : '-'}</td>
-                          <td>{classroom.academic_year || '-'}</td>
-                          <td>{classroomStudentCounts[classroom.id] ?? classroom.student_count ?? 0} คน</td>
-                          <td>
-                            <button 
-                              className="admin-btn-small admin-btn-success"
-                              onClick={() => {
-                                setSelectedClassroom(classroom);
-                                setShowClassroomModal(true);
-                                setClassroomStep('promote');
-                              }}
-                              title="เลื่อนนักเรียนทั้งชั้น (ปลายปี)"
-                            >
-                              🏫 เลื่อนทั้งชั้น
-                            </button>
-                            <button 
-                              className="admin-btn-small admin-btn-warning"
-                              onClick={() => {
-                                // Confirm before promoting semester-only
-                                openConfirmModal(
-                                  'ยืนยัน: เลื่อนเทอม',
-                                  `ต้องการเลื่อนเทอมของชั้นเรียน \"${classroom.name}\" (ชั้น ${classroom.grade_level}) จากเทอม ${classroom.semester} เป็นเทอม ${classroom.semester === 1 ? 2 : 1} หรือไม่?`,
-                                  async () => { await promoteClassroomSemesterOnly(classroom); }
-                                );
-                              }}
-                              title="เลื่อนเทอมเท่านั้น (เทอม 1 → เทอม 2)"
-                              disabled={promotingClassroom}
-                            >
-                              {promotingClassroom ? '⏳ กำลังเลื่อน...' : '📅 เลื่อนเทอม'}
-                            </button>
-                            <button
-                              className="admin-btn-small admin-btn-info"
-                              onClick={() => openPromoteStudentModal(classroom)}
-                              title="เลื่อนนักเรียนรายบุคคล (เลือก 3 ประเภท)"
-                            >
-                              👥 รายบุคคล
-                            </button>
+                        <tr key={classroom.id} className="hover:bg-purple-50/50 transition-colors duration-200">
+                          <td className="px-4 py-4 font-semibold text-slate-800">{classroom.name}</td>
+                          <td className="px-4 py-4"><span className="inline-flex items-center px-3 py-1 rounded-full bg-purple-100 text-purple-700 text-sm font-medium">{classroom.grade_level}</span></td>
+                          <td className="px-4 py-4 text-slate-600">{classroom.semester ? `เทอม ${classroom.semester}` : '-'}</td>
+                          <td className="px-4 py-4 text-slate-600">{classroom.academic_year || '-'}</td>
+                          <td className="px-4 py-4"><span className="inline-flex items-center gap-1 text-slate-600">👨‍🎓 {classroomStudentCounts[classroom.id] ?? classroom.student_count ?? 0} คน</span></td>
+                          <td className="px-4 py-4">
+                            <div className="flex flex-wrap gap-2">
+                              <button 
+                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-100 text-emerald-700 font-semibold hover:bg-emerald-200 hover:text-emerald-800 transition-all duration-200"
+                                onClick={() => {
+                                  setSelectedClassroom(classroom);
+                                  setShowClassroomModal(true);
+                                  setClassroomStep('promote');
+                                }}
+                                title="เลื่อนนักเรียนทั้งชั้น (ปลายปี)"
+                              >
+                                🏫 เลื่อนทั้งชั้น
+                              </button>
+                              <button 
+                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-amber-100 text-amber-700 font-semibold hover:bg-amber-200 hover:text-amber-800 disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-200"
+                                onClick={() => {
+                                  openConfirmModal(
+                                    'ยืนยัน: เลื่อนเทอม',
+                                    `ต้องการเลื่อนเทอมของชั้นเรียน "${classroom.name}" (ชั้น ${classroom.grade_level}) จากเทอม ${classroom.semester} เป็นเทอม ${classroom.semester === 1 ? 2 : 1} หรือไม่?`,
+                                    async () => { await promoteClassroomSemesterOnly(classroom); }
+                                  );
+                                }}
+                                title="เลื่อนเทอมเท่านั้น (เทอม 1 → เทอม 2)"
+                                disabled={promotingClassroom}
+                              >
+                                {promotingClassroom ? '⏳ กำลังเลื่อน...' : '📅 เลื่อนเทอม'}
+                              </button>
+                              <button
+                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-sky-100 text-sky-700 font-semibold hover:bg-sky-200 hover:text-sky-800 transition-all duration-200"
+                                onClick={() => openPromoteStudentModal(classroom)}
+                                title="เลื่อนนักเรียนรายบุคคล (เลือก 3 ประเภท)"
+                              >
+                                👥 รายบุคคล
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
+
+                {/* Mobile View: Cards */}
+                <div className="grid grid-cols-1 gap-4 md:hidden">
+                    {classrooms.map(classroom => (
+                        <div key={classroom.id} className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 flex flex-col gap-4 relative overflow-hidden">
+                            <div className="absolute top-0 right-0 w-24 h-24 bg-purple-50 rounded-full -mr-8 -mt-8 opacity-50"></div>
+                            
+                            <div className="flex justify-between items-start relative z-10">
+                                <div>
+                                    <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-purple-100 text-purple-700 text-xs font-bold mb-2">
+                                        {classroom.grade_level}
+                                    </span>
+                                    <h3 className="text-xl font-black text-slate-800">{classroom.name}</h3>
+                                </div>
+                                <div className="text-right">
+                                    <div className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">นักเรียน</div>
+                                    <div className="text-lg font-black text-purple-600">
+                                        {classroomStudentCounts[classroom.id] ?? classroom.student_count ?? 0}
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 gap-3 relative z-10">
+                                <div className="bg-slate-50 rounded-xl p-3 text-center border border-slate-100">
+                                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">เทอม</div>
+                                    <div className="font-bold text-slate-700">{classroom.semester || '-'}</div>
+                                </div>
+                                <div className="bg-slate-50 rounded-xl p-3 text-center border border-slate-100">
+                                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">ปีการศึกษา</div>
+                                    <div className="font-bold text-slate-700">{classroom.academic_year || '-'}</div>
+                                </div>
+                            </div>
+
+                            <div className="flex flex-col gap-2 pt-2 border-t border-slate-50 relative z-10">
+                              <button 
+                                className="w-full inline-flex items-center justify-center gap-2 h-10 px-3 rounded-xl bg-emerald-100 text-emerald-700 font-bold text-sm hover:bg-emerald-200 transition-all"
+                                onClick={() => {
+                                  setSelectedClassroom(classroom);
+                                  setShowClassroomModal(true);
+                                  setClassroomStep('promote');
+                                }}
+                              >
+                                🏫 เลื่อนทั้งชั้น (ปลายปี)
+                              </button>
+                              <div className="grid grid-cols-2 gap-2">
+                                  <button 
+                                    className="inline-flex items-center justify-center gap-2 h-10 px-3 rounded-xl bg-amber-100 text-amber-700 font-bold text-xs hover:bg-amber-200 disabled:opacity-60 transition-all"
+                                    onClick={() => {
+                                      openConfirmModal(
+                                        'ยืนยัน: เลื่อนเทอม',
+                                        `ต้องการเลื่อนเทอมของชั้นเรียน "${classroom.name}" (ชั้น ${classroom.grade_level}) จากเทอม ${classroom.semester} เป็นเทอม ${classroom.semester === 1 ? 2 : 1} หรือไม่?`,
+                                        async () => { await promoteClassroomSemesterOnly(classroom); }
+                                      );
+                                    }}
+                                    disabled={promotingClassroom}
+                                  >
+                                    {promotingClassroom ? '⏳...' : '📅 เลื่อนเทอม'}
+                                  </button>
+                                  <button
+                                    className="inline-flex items-center justify-center gap-2 h-10 px-3 rounded-xl bg-sky-100 text-sky-700 font-bold text-xs hover:bg-sky-200 transition-all"
+                                    onClick={() => openPromoteStudentModal(classroom)}
+                                  >
+                                    👥 รายบุคคล
+                                  </button>
+                              </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+                </>
               )}
             </div>
           </div>
         )}
         {activeTab === 'homeroom' && (
-          <div className="content-card">
-            <div className="card-header">
-              <h2><span className="card-icon">🏠</span> ครูประจำชั้น</h2>
+          <div className="bg-white/80 backdrop-blur-xl rounded-3xl border border-white/60 shadow-xl shadow-slate-200/50 overflow-hidden">
+            <div className="px-8 py-6 bg-gradient-to-r from-slate-50 to-white border-b border-slate-100">
+              <h2 className="flex items-center gap-3 text-2xl font-bold text-slate-800">
+                <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-teal-500 to-emerald-600 text-white text-xl shadow-lg shadow-teal-500/30">🏠</span>
+                ครูประจำชั้น
+              </h2>
             </div>
-            <div className="card-content">
-              <div className="homeroom-section">
-                <div className="homeroom-actions">
+            <div className="p-8">
+              <div className="space-y-6">
+                <div>
                   <button 
-                    className="btn-homeroom-add" 
+                    className="group inline-flex items-center gap-3 px-6 py-3 text-base font-bold rounded-xl bg-gradient-to-r from-teal-500 to-emerald-600 text-white shadow-lg shadow-teal-500/30 hover:shadow-xl hover:shadow-teal-500/40 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-300"
                     onClick={() => openHomeroomModal()}
                     title="กำหนดครูประจำชั้นใหม่"
                   >
-                    <span>➕</span>
+                    <span className="group-hover:scale-125 transition-transform duration-300">➕</span>
                     กำหนดครูประจำชั้น
                   </button>
                 </div>
                 
-                <div className="homeroom-list">
-                  <h3>{t('admin.homeroomTeacherList')} ({homeroomTeachers.length} {t('admin.class')})</h3>
+                <div>
+                  <h3 className="flex items-center gap-2 text-lg font-bold text-slate-700 mb-4">
+                    {t('admin.homeroomTeacherList')} ({homeroomTeachers.length} {t('admin.class')})
+                  </h3>
                   {homeroomTeachers.length === 0 ? (
-                    <div className="homeroom-empty-state">
-                      <div className="homeroom-empty-icon">🏠</div>
-                      <div className="homeroom-empty-text">{t('admin.noHomeroomTeachers')}</div>
-                      <div className="homeroom-empty-subtitle">{t('admin.startByAssigningHomeroom')}</div>
+                    <div className="flex flex-col items-center justify-center py-16 px-8 rounded-2xl bg-gradient-to-br from-slate-50 to-teal-50 border-2 border-dashed border-slate-200">
+                      <div className="text-6xl mb-4 animate-bounce">🏠</div>
+                      <div className="text-xl font-bold text-slate-600 mb-2">{t('admin.noHomeroomTeachers')}</div>
+                      <div className="text-slate-400">{t('admin.startByAssigningHomeroom')}</div>
                     </div>
                   ) : (
-                    <div className="homeroom-table">
-                      <div className="table-header">
-                        <div className="table-cell header-grade">{t('admin.classroom')}</div>
-                        <div className="table-cell header-teacher">{t('admin.homeroomTeacher')}</div>
-                        <div className="table-cell header-students">{t('admin.studentCount')}</div>
-                        <div className="table-cell header-year">{t('admin.academicYear')}</div>
-                        <div className="table-cell header-actions">{t('admin.management')}</div>
-                      </div>
-                      <div className="table-body">
-                        {homeroomTeachers.map((hr) => (
-                          <div key={hr.id} className="table-row">
-                            <div className="table-cell cell-grade">
-                              <span className="grade-badge">📚 {hr.grade_level}</span>
-                            </div>
-                            <div className="table-cell cell-teacher">
-                              <div className="teacher-info">
-                                <span className="teacher-name">👤 {hr.teacher_name || t('admin.notSpecified')}</span>
-                                {hr.teacher_email && (
-                                  <span className="teacher-email">📧 {hr.teacher_email}</span>
-                                )}
-                              </div>
-                            </div>
-                            <div className="table-cell cell-students">
-                              <span className="student-count">👨‍🎓 {classrooms.filter(c => c.grade_level === hr.grade_level).reduce((total, c) => total + (classroomStudentCounts[c.id] || 0), 0) || 0} คน</span>
-                            </div>
-                            <div className="table-cell cell-year">
-                              {hr.academic_year || '-'}
-                            </div>
-                            <div className="table-cell cell-actions">
-                              <button 
-                                className="admin-btn-small edit" 
-                                onClick={() => openHomeroomModal(hr)}
-                                title={t('admin.editHomeroom')}
-                              >
-                                <span>✏️</span>
-                                {t('common.edit')}
-                              </button>
-                              <button 
-                                className="admin-btn-small delete" 
-                                onClick={() => openConfirmModal(
-                                  t('admin.deleteHomeroomTitle'), 
-                                  `${t('admin.confirmDeleteHomeroom')} ${hr.grade_level} (${hr.teacher_name || t('admin.notSpecified')})?`, 
-                                  async () => { await deleteHomeroomTeacher(hr.id); }
-                                )}
-                                title={t('admin.deleteHomeroomTitle')}
-                              >
-                                <span>🗑️</span>
-                                {t('common.delete')}
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
+                    <>
+                    {/* Desktop View: Table */}
+                    <div className="hidden md:block overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
+                            <th className="px-4 py-4 text-left font-semibold text-slate-600">{t('admin.classroom')}</th>
+                            <th className="px-4 py-4 text-left font-semibold text-slate-600">{t('admin.homeroomTeacher')}</th>
+                            <th className="px-4 py-4 text-left font-semibold text-slate-600">{t('admin.studentCount')}</th>
+                            <th className="px-4 py-4 text-left font-semibold text-slate-600">{t('admin.academicYear')}</th>
+                            <th className="px-4 py-4 text-left font-semibold text-slate-600">{t('admin.management')}</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {homeroomTeachers.map((hr) => (
+                            <tr key={hr.id} className="hover:bg-teal-50/50 transition-colors duration-200">
+                              <td className="px-4 py-4">
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-teal-100 text-teal-700 text-sm font-semibold">📚 {hr.grade_level}</span>
+                              </td>
+                              <td className="px-4 py-4">
+                                <div className="space-y-1">
+                                  <div className="font-semibold text-slate-800">👤 {hr.teacher_name || t('admin.notSpecified')}</div>
+                                  {hr.teacher_email && (
+                                    <div className="text-sm text-slate-500">📧 {hr.teacher_email}</div>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-4 py-4">
+                                <span className="text-slate-600">👨‍🎓 {classrooms.filter(c => c.grade_level === hr.grade_level).reduce((total, c) => total + (classroomStudentCounts[c.id] || 0), 0) || 0} คน</span>
+                              </td>
+                              <td className="px-4 py-4 text-slate-600">{hr.academic_year || '-'}</td>
+                              <td className="px-4 py-4">
+                                <div className="flex gap-2">
+                                  <button 
+                                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-amber-100 text-amber-700 font-semibold hover:bg-amber-200 hover:text-amber-800 transition-all duration-200"
+                                    onClick={() => openHomeroomModal(hr)}
+                                    title={t('admin.editHomeroom')}
+                                  >
+                                    ✏️ {t('common.edit')}
+                                  </button>
+                                  <button 
+                                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-red-100 text-red-700 font-semibold hover:bg-red-200 hover:text-red-800 transition-all duration-200"
+                                    onClick={() => openConfirmModal(
+                                      t('admin.deleteHomeroomTitle'), 
+                                      `${t('admin.confirmDeleteHomeroom')} ${hr.grade_level} (${hr.teacher_name || t('admin.notSpecified')})?`, 
+                                      async () => { await deleteHomeroomTeacher(hr.id); }
+                                    )}
+                                    title={t('admin.deleteHomeroomTitle')}
+                                  >
+                                    🗑️ {t('common.delete')}
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
+
+                    {/* Mobile View: Cards */}
+                    <div className="grid grid-cols-1 gap-4 md:hidden">
+                        {homeroomTeachers.map((hr) => (
+                            <div key={hr.id} className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 flex flex-col gap-4 relative overflow-hidden">
+                                <div className="absolute top-0 right-0 w-24 h-24 bg-teal-50 rounded-full -mr-8 -mt-8 opacity-50"></div>
+                                
+                                <div className="flex justify-between items-start relative z-10">
+                                    <div>
+                                        <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-teal-100 text-teal-700 text-xs font-bold mb-2">
+                                            {hr.grade_level}
+                                        </span>
+                                        <h3 className="text-xl font-black text-slate-800">{hr.teacher_name || t('admin.notSpecified')}</h3>
+                                        {hr.teacher_email && (
+                                            <div className="text-sm text-slate-500 font-medium">{hr.teacher_email}</div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3 relative z-10">
+                                    <div className="bg-slate-50 rounded-xl p-3 text-center border border-slate-100">
+                                        <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">ปีการศึกษา</div>
+                                        <div className="font-bold text-slate-700">{hr.academic_year || '-'}</div>
+                                    </div>
+                                    <div className="bg-slate-50 rounded-xl p-3 text-center border border-slate-100">
+                                        <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">นักเรียนทั้งหมด</div>
+                                        <div className="font-bold text-slate-700">
+                                            {classrooms.filter(c => c.grade_level === hr.grade_level).reduce((total, c) => total + (classroomStudentCounts[c.id] || 0), 0)} คน
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex gap-2 pt-2 border-t border-slate-50 relative z-10">
+                                  <button 
+                                    className="flex-1 inline-flex items-center justify-center gap-2 h-10 px-3 rounded-xl bg-amber-100 text-amber-700 font-bold text-sm hover:bg-amber-200 transition-all"
+                                    onClick={() => openHomeroomModal(hr)}
+                                  >
+                                    ✏️ {t('common.edit')}
+                                  </button>
+                                  <button 
+                                    className="flex-1 inline-flex items-center justify-center gap-2 h-10 px-3 rounded-xl bg-red-50 text-red-600 font-bold text-sm hover:bg-red-100 transition-all"
+                                    onClick={() => openConfirmModal(
+                                      t('admin.deleteHomeroomTitle'), 
+                                      `${t('admin.confirmDeleteHomeroom')} ${hr.grade_level} (${hr.teacher_name || t('admin.notSpecified')})?`, 
+                                      async () => { await deleteHomeroomTeacher(hr.id); }
+                                    )}
+                                  >
+                                    🗑️ {t('common.delete')}
+                                  </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    </>
                   )}
                 </div>
               </div>
@@ -3368,75 +3978,97 @@ function AdminPage() {
           <AbsenceApproval />
         )}
         {activeTab === 'announcements' && (
-          <div className="content-card">
-            <div className="card-header">
-              <h2><span className="card-icon">📢</span> จัดการประกาศข่าว</h2>
+          <div className="bg-white/80 backdrop-blur-xl rounded-3xl border border-white/60 shadow-xl shadow-slate-200/50 overflow-hidden">
+            <div className="px-8 py-6 bg-gradient-to-r from-slate-50 to-white border-b border-slate-100">
+              <h2 className="flex items-center gap-3 text-2xl font-bold text-slate-800">
+                <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 text-white text-xl shadow-lg shadow-amber-500/30">📢</span>
+                จัดการประกาศข่าว
+              </h2>
             </div>
-            <div className="card-content">
-              <div className="announcement-form-section">
-                <div className="announcement-form">
-                  <form onSubmit={handleAnnouncement}>
-                    <div className="admin-form-row">
-                      <div className="admin-form-group full-width">
-                        <label className="admin-form-label">{t('admin.announcementTitle')}</label>
-                        <input className="admin-form-input" type="text" value={title} onChange={e=>setTitle(e.target.value)} required />
-                      </div>
-                    </div>
-                    <div className="admin-form-row">
-                      <div className="admin-form-group full-width">
-                        <label className="admin-form-label">{t('admin.announcementContent')}</label>
-                        <textarea className="admin-form-input admin-form-textarea" value={content} onChange={e=>setContent(e.target.value)} required />
-                      </div>
-                    </div>
-                    <div className="admin-form-row">
-                      <div className="admin-form-group full-width">
-                        <label className="admin-form-label">{t('admin.expiryOptional')}</label>
-                        <input className="admin-form-input" type="datetime-local" value={expiry} onChange={e=>setExpiry(e.target.value)} step="60" lang="en-GB" />
-                      </div>
-                    </div>
-                    <div className="admin-form-actions">
-                      <button type="submit" className="admin-btn-primary btn-announcement" aria-label="ประกาศข่าว">
-                        <span className="btn-icon" aria-hidden>📣</span>
-                        ประกาศข่าว
-                      </button>
-                    </div>
-                  </form>
-                </div>
+            <div className="p-8">
+              {/* Announcement Form */}
+              <div className="mb-8 p-6 rounded-2xl bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200">
+                <form onSubmit={handleAnnouncement} className="space-y-5">
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">{t('admin.announcementTitle')}</label>
+                    <input 
+                      type="text" 
+                      value={title} 
+                      onChange={e=>setTitle(e.target.value)} 
+                      required 
+                      className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-400 transition-all duration-300"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">{t('admin.announcementContent')}</label>
+                    <textarea 
+                      value={content} 
+                      onChange={e=>setContent(e.target.value)} 
+                      required
+                      rows={4} 
+                      className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-400 resize-y transition-all duration-300"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">{t('admin.expiryOptional')}</label>
+                    <input 
+                      type="datetime-local" 
+                      value={expiry} 
+                      onChange={e=>setExpiry(e.target.value)} 
+                      step="60" 
+                      lang="en-GB"
+                      className="px-4 py-3 rounded-xl border border-slate-200 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-400 transition-all duration-300"
+                    />
+                  </div>
+                  <div>
+                    <button 
+                      type="submit" 
+                      className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 text-white font-semibold shadow-lg shadow-amber-500/30 hover:shadow-xl hover:shadow-amber-500/40 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-300"
+                      aria-label="ประกาศข่าว"
+                    >
+                      <span className="text-xl">📣</span>
+                      ประกาศข่าว
+                    </button>
+                  </div>
+                </form>
               </div>
 
-              <div className="announcements-list">
+              {/* Announcements List */}
+              <div className="space-y-4">
                 {(Array.isArray(announcements) ? announcements : []).length === 0 ? (
-                  <div className="loading-message">{t('admin.noAnnouncements')}</div>
+                  <div className="flex flex-col items-center justify-center py-12 px-8 rounded-2xl bg-gradient-to-br from-slate-50 to-amber-50 border-2 border-dashed border-slate-200">
+                    <div className="text-5xl mb-3">📢</div>
+                    <div className="text-slate-500">{t('admin.noAnnouncements')}</div>
+                  </div>
                 ) : (
                   (Array.isArray(announcements) ? announcements : []).filter(item => !isExpired(item) || ownedBy(item)).map(item => (
-                    <li key={item.id} className="announcement-item">
-                      <div className="announcement-card">
-                        <div className="announcement-header">
-                          <div>
-                            <h3 className="announcement-title">{item.title}</h3>
-                            <div className="announcement-meta">
-                              <div className="announcement-date">{item.created_at ? new Date(item.created_at).toLocaleDateString('th-TH',{year:'numeric',month:'short',day:'numeric'}) : ''}</div>
-                              {(item.expires_at || item.expire_at || item.expiresAt) ? (
-                                <div className="announcement-expiry">หมดอายุ: {parseLocalDatetime(item.expires_at || item.expire_at || item.expiresAt).toLocaleString('th-TH')}</div>
-                              ) : null}
-                            </div>
-                          </div>
-                          <div className="announcement-actions">
-                            {/* show expire button when announcement is not already expired */}
-                            {ownedBy(item) && !(item.expires_at && parseLocalDatetime(item.expires_at) <= new Date()) && (
-                              <button className="admin-btn-secondary btn-small" onClick={() => openExpiryModal(item)}>{t('admin.setExpired')}</button>
+                    <div key={item.id} className="group p-6 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md hover:border-amber-200 transition-all duration-300">
+                      <div className="flex flex-wrap items-start justify-between gap-4 mb-3">
+                        <div>
+                          <h3 className="text-lg font-bold text-slate-800 mb-2">{item.title}</h3>
+                          <div className="flex flex-wrap gap-3 text-sm">
+                            <span className="text-slate-500">{item.created_at ? new Date(item.created_at).toLocaleDateString('th-TH',{year:'numeric',month:'short',day:'numeric'}) : ''}</span>
+                            {(item.expires_at || item.expire_at || item.expiresAt) && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 text-xs font-medium">
+                                ⏰ หมดอายุ: {parseLocalDatetime(item.expires_at || item.expire_at || item.expiresAt).toLocaleString('th-TH')}
+                              </span>
                             )}
-                            {ownedBy(item) ? (
-                              <>
-                                <button className="admin-btn-secondary btn-small" onClick={() => openAnnouncementModal(item)}>{t('common.edit')}</button>
-                                <button className="admin-btn-danger btn-small" onClick={() => openConfirmModal(t('admin.deleteNewsTitle'), t('admin.confirmDeleteNewsShort'), async () => { await deleteAnnouncement(item.id); })}>{t('common.delete')}</button>
-                              </>
-                            ) : null}
                           </div>
                         </div>
-                        <div className="announcement-content">{item.content}</div>
+                        <div className="flex flex-wrap gap-2">
+                          {ownedBy(item) && !(item.expires_at && parseLocalDatetime(item.expires_at) <= new Date()) && (
+                            <button className="px-3 py-1.5 rounded-lg text-sm font-medium bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all duration-200" onClick={() => openExpiryModal(item)}>{t('admin.setExpired')}</button>
+                          )}
+                          {ownedBy(item) && (
+                            <>
+                              <button className="px-3 py-1.5 rounded-lg text-sm font-medium bg-amber-100 text-amber-700 hover:bg-amber-200 transition-all duration-200" onClick={() => openAnnouncementModal(item)}>{t('common.edit')}</button>
+                              <button className="px-3 py-1.5 rounded-lg text-sm font-medium bg-red-100 text-red-700 hover:bg-red-200 transition-all duration-200" onClick={() => openConfirmModal(t('admin.deleteNewsTitle'), t('admin.confirmDeleteNewsShort'), async () => { await deleteAnnouncement(item.id); })}>{t('common.delete')}</button>
+                            </>
+                          )}
+                        </div>
                       </div>
-                    </li>
+                      <div className="text-slate-600 leading-relaxed">{item.content}</div>
+                    </div>
                   ))
                 )}
               </div>
@@ -3444,73 +4076,121 @@ function AdminPage() {
           </div>
         )}
         {activeTab === 'schedule' && (
-          <div className="content-card">
-            <div className="card-header">
-              <h2><span className="card-icon">🗓️</span> {t('admin.manageSchedule')}</h2>
+          <div className="bg-white/80 backdrop-blur-xl rounded-3xl border border-white/60 shadow-xl shadow-slate-200/50 overflow-hidden">
+            <div className="px-8 py-6 bg-gradient-to-r from-slate-50 to-white border-b border-slate-100">
+              <h2 className="flex items-center gap-3 text-2xl font-bold text-slate-800">
+                <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 text-white text-xl shadow-lg shadow-cyan-500/30">🗓️</span>
+                {t('admin.manageSchedule')}
+              </h2>
             </div>
-            <div className="card-content">
-              <div className="schedule-form-section">
-                <div className="schedule-actions">
-                  <button 
-                    className="admin-btn-primary" 
-                    onClick={() => setShowScheduleModal(true)}
-                    title={t('admin.addSchedulePeriodTitle')}
-                  >
-                    <span>➕</span>
-                    {t('admin.addSchedulePeriod')}
-                  </button>
-                </div>
+            <div className="p-8">
+              <div className="mb-6">
+                <button 
+                  className="group inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-semibold shadow-lg shadow-cyan-500/30 hover:shadow-xl hover:shadow-cyan-500/40 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-300"
+                  onClick={() => setShowScheduleModal(true)}
+                  title={t('admin.addSchedulePeriodTitle')}
+                >
+                  <span className="group-hover:scale-125 transition-transform duration-300">➕</span>
+                  {t('admin.addSchedulePeriod')}
+                </button>
               </div>
 
-              <div className="schedule-slots-list">
-                <h3>{t('admin.schedulePeriods')}</h3>
+              <div>
+                <h3 className="flex items-center gap-2 text-lg font-bold text-slate-700 mb-4">{t('admin.schedulePeriods')}</h3>
                 {scheduleSlots.length === 0 ? (
-                  <div className="schedule-empty-state">
-                    <div className="schedule-empty-icon">🗓️</div>
-                    <div className="schedule-empty-text">{t('admin.noSchedulePeriods')}</div>
-                    <div className="schedule-empty-subtitle">{t('admin.startByAddingPeriod')}</div>
+                  <div className="flex flex-col items-center justify-center py-16 px-8 rounded-2xl bg-gradient-to-br from-slate-50 to-cyan-50 border-2 border-dashed border-slate-200">
+                    <div className="text-6xl mb-4 animate-bounce">🗓️</div>
+                    <div className="text-xl font-bold text-slate-600 mb-2">{t('admin.noSchedulePeriods')}</div>
+                    <div className="text-slate-400">{t('admin.startByAddingPeriod')}</div>
                   </div>
                 ) : (
-                  <div>
-                    <div className="schedule-slots-table">
-                      <div className="table-header">
-                        <div className="table-cell header-day">{t('admin.day')}</div>
-                        <div className="table-cell header-time-start">{t('admin.startTime')}</div>
-                        <div className="table-cell header-time-end">{t('admin.endTime')}</div>
-                        <div className="table-cell header-actions">{t('admin.management')}</div>
-                      </div>
-
-                      <div className="table-body">
+                  <>
+                  {/* Desktop View: Table */}
+                  <div className="hidden md:block overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
+                          <th className="px-4 py-4 text-left font-semibold text-slate-600">{t('admin.day')}</th>
+                          <th className="px-4 py-4 text-left font-semibold text-slate-600">{t('admin.startTime')}</th>
+                          <th className="px-4 py-4 text-left font-semibold text-slate-600">{t('admin.endTime')}</th>
+                          <th className="px-4 py-4 text-left font-semibold text-slate-600">{t('admin.management')}</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
                         {scheduleSlots.map((slot) => (
-                          <div key={slot.id} className="table-row">
-                            <div className="table-cell cell-day">{getDayName(slot.day_of_week)}</div>
-                            <div className="table-cell cell-time-start">{slot.start_time}</div>
-                            <div className="table-cell cell-time-end">{slot.end_time}</div>
-                            <div className="table-cell cell-actions">
-                              <button 
-                                className="admin-btn-small edit" 
-                                onClick={() => editScheduleSlot(slot)}
-                                title={t('admin.editSchedulePeriod')}
-                              >
-                                <span>✏️</span>
-                                {t('common.edit')}
-                              </button>
-                              <button 
-                                className="admin-btn-small delete" 
-                                onClick={() => openConfirmModal(t('admin.deleteSchedulePeriodTitle'), `${t('admin.confirmDeleteSchedulePeriod')} ${getDayName(slot.day_of_week)} ${slot.start_time}-${slot.end_time}?`, async () => { await deleteScheduleSlot(slot.id); })}
-                                title={t('admin.deleteSchedulePeriod')}
-                              >
-                                <span>🗑️</span>
-                                {t('common.delete')}
-                              </button>
-                            </div>
-                          </div>
+                          <tr key={slot.id} className="hover:bg-cyan-50/50 transition-colors duration-200">
+                            <td className="px-4 py-4 font-semibold text-slate-800">{getDayName(slot.day_of_week)}</td>
+                            <td className="px-4 py-4"><span className="inline-flex items-center px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 text-sm font-medium">{slot.start_time}</span></td>
+                            <td className="px-4 py-4"><span className="inline-flex items-center px-3 py-1 rounded-full bg-rose-100 text-rose-700 text-sm font-medium">{slot.end_time}</span></td>
+                            <td className="px-4 py-4">
+                              <div className="flex gap-2">
+                                <button 
+                                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-amber-100 text-amber-700 font-semibold hover:bg-amber-200 hover:text-amber-800 transition-all duration-200"
+                                  onClick={() => editScheduleSlot(slot)}
+                                  title={t('admin.editSchedulePeriod')}
+                                >
+                                  ✏️ {t('common.edit')}
+                                </button>
+                                <button 
+                                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-red-100 text-red-700 font-semibold hover:bg-red-200 hover:text-red-800 transition-all duration-200"
+                                  onClick={() => openConfirmModal(t('admin.deleteSchedulePeriodTitle'), `${t('admin.confirmDeleteSchedulePeriod')} ${getDayName(slot.day_of_week)} ${slot.start_time}-${slot.end_time}?`, async () => { await deleteScheduleSlot(slot.id); })}
+                                  title={t('admin.deleteSchedulePeriod')}
+                                >
+                                  🗑️ {t('common.delete')}
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
                         ))}
-                      </div>
-                    </div>
-
-                    {/* schedule preview moved to Schedules tab */}
+                      </tbody>
+                    </table>
                   </div>
+
+                  {/* Mobile View: Cards */}
+                  <div className="grid grid-cols-1 gap-4 md:hidden">
+                      {scheduleSlots.map(slot => (
+                          <div key={slot.id} className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 flex flex-col gap-4 relative overflow-hidden">
+                              <div className="absolute top-0 right-0 w-24 h-24 bg-cyan-50 rounded-full -mr-8 -mt-8 opacity-50"></div>
+                              
+                              <div className="flex justify-between items-start relative z-10">
+                                  <div>
+                                      <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-cyan-100 text-cyan-700 text-xs font-bold mb-2">
+                                          {t('admin.day')}
+                                      </span>
+                                      <h3 className="text-xl font-black text-slate-800">{getDayName(slot.day_of_week)}</h3>
+                                  </div>
+                              </div>
+
+                              <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 relative z-10 flex items-center justify-between">
+                                  <div className="text-center flex-1">
+                                      <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">{t('admin.startTime')}</div>
+                                      <div className="text-lg font-mono font-bold text-emerald-600">{slot.start_time}</div>
+                                  </div>
+                                  <div className="text-slate-300 text-xl font-black">➜</div>
+                                  <div className="text-center flex-1">
+                                      <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">{t('admin.endTime')}</div>
+                                      <div className="text-lg font-mono font-bold text-rose-600">{slot.end_time}</div>
+                                  </div>
+                              </div>
+
+                              <div className="flex gap-2 pt-2 border-t border-slate-50 relative z-10">
+                                <button 
+                                  className="flex-1 inline-flex items-center justify-center gap-2 h-10 px-3 rounded-xl bg-amber-100 text-amber-700 font-bold text-sm hover:bg-amber-200 transition-all"
+                                  onClick={() => editScheduleSlot(slot)}
+                                >
+                                  ✏️ {t('common.edit')}
+                                </button>
+                                <button 
+                                  className="flex-1 inline-flex items-center justify-center gap-2 h-10 px-3 rounded-xl bg-red-50 text-red-600 font-bold text-sm hover:bg-red-100 transition-all"
+                                  onClick={() => openConfirmModal(t('admin.deleteSchedulePeriodTitle'), `${t('admin.confirmDeleteSchedulePeriod')} ${getDayName(slot.day_of_week)} ${slot.start_time}-${slot.end_time}?`, async () => { await deleteScheduleSlot(slot.id); })}
+                                >
+                                  🗑️ {t('common.delete')}
+                                </button>
+                              </div>
+                          </div>
+                      ))}
+                  </div>
+                  </>
                 )}
               </div>
             </div>
@@ -3518,129 +4198,83 @@ function AdminPage() {
         )}
 
         {activeTab === 'school_deletion' && (
-          <div className="content-card">
-            <div className="card-header">
-              <h2><span className="card-icon">🏫</span> ขอลบโรงเรียน</h2>
+          <div className="bg-white/80 backdrop-blur-xl rounded-3xl border border-white/60 shadow-xl shadow-slate-200/50 overflow-hidden">
+            <div className="px-8 py-6 bg-gradient-to-r from-slate-50 to-white border-b border-slate-100">
+              <h2 className="flex items-center gap-3 text-2xl font-bold text-slate-800">
+                <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-red-500 to-rose-600 text-white text-xl shadow-lg shadow-red-500/30">🏫</span>
+                ขอลบโรงเรียน
+              </h2>
             </div>
-            <div className="card-content">
-              <div style={{
-                padding: '2rem',
-                backgroundColor: '#fff3cd',
-                borderRadius: '12px',
-                border: '1px solid #ffc107',
-                marginBottom: '2rem'
-              }}>
-                <h3 style={{ marginTop: 0, color: '#856404' }}>⚠️ คำเตือนสำคัญ</h3>
-                <ul style={{ color: '#856404', lineHeight: '1.6', marginBottom: 0 }}>
-                  <li>การลบโรงเรียนจะลบข้อมูลทั้งหมดที่เกี่ยวข้อง รวมถึงผู้ใช้ วิชา คะแนน และประกาศ</li>
-                  <li>การดำเนินการนี้ไม่สามารถยกเลิกได้</li>
-                  <li>ต้องได้รับการอนุมัติจาก Owner ก่อนจึงจะดำเนินการลบได้</li>
+            <div className="p-8">
+              {/* Warning Box */}
+              <div className="mb-8 p-6 rounded-2xl bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-300">
+                <h3 className="flex items-center gap-2 text-lg font-bold text-amber-700 mb-3">⚠️ คำเตือนสำคัญ</h3>
+                <ul className="space-y-2 text-amber-700">
+                  <li className="flex items-start gap-2">• การลบโรงเรียนจะลบข้อมูลทั้งหมดที่เกี่ยวข้อง รวมถึงผู้ใช้ วิชา คะแนน และประกาศ</li>
+                  <li className="flex items-start gap-2">• การดำเนินการนี้ไม่สามารถยกเลิกได้</li>
+                  <li className="flex items-start gap-2">• ต้องได้รับการอนุมัติจาก Owner ก่อนจึงจะดำเนินการลบได้</li>
                 </ul>
               </div>
 
-              <div className="settings-section" style={{ maxWidth: '600px' }}>
-                <div className="settings-card" style={{
-                  padding: '2rem',
-                  backgroundColor: '#f8f9fa',
-                  borderRadius: '12px',
-                  border: '1px solid #ddd'
-                }}>
-                  <h3 style={{ marginTop: 0, marginBottom: '1.5rem', color: '#333' }}>📝 ส่งคำขอการลบโรงเรียน</h3>
-
-                  <div className="admin-form-group" style={{ marginBottom: '1.5rem' }}>
-                    <label className="admin-form-label" style={{ fontWeight: '600', marginBottom: '0.5rem' }}>
-                      เหตุผลในการลบโรงเรียน *
-                    </label>
+              <div className="max-w-2xl space-y-6">
+                {/* Request Form */}
+                <div className="p-6 rounded-2xl bg-gradient-to-br from-slate-50 to-slate-100 border border-slate-200">
+                  <h3 className="flex items-center gap-2 text-lg font-bold text-slate-700 mb-4">📝 ส่งคำขอการลบโรงเรียน</h3>
+                  <div className="mb-6">
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">เหตุผลในการลบโรงเรียน *</label>
                     <textarea
-                      className="admin-form-input"
                       value={deletionReason}
                       onChange={(e) => setDeletionReason(e.target.value)}
                       placeholder="กรุณาอธิบายเหตุผลในการลบโรงเรียน..."
-                      rows="4"
-                      style={{
-                        width: '100%',
-                        padding: '12px',
-                        borderRadius: '8px',
-                        border: '1px solid #ddd',
-                        fontSize: '1rem',
-                        resize: 'vertical'
-                      }}
+                      rows={4}
+                      className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:border-red-400 resize-y transition-all duration-300"
                     />
                   </div>
-
-                  <div className="admin-form-actions" style={{ marginTop: '2rem' }}>
-                    <button
-                      className="admin-btn-danger"
-                      onClick={() => openConfirmModal(
-                        t('admin.confirmSendRequestTitle'),
-                        t('admin.confirmSendRequestMessage'),
-                        requestSchoolDeletion
-                      )}
-                      disabled={requestingDeletion || !deletionReason.trim()}
-                      style={{
-                        padding: '12px 24px',
-                        fontSize: '1rem',
-                        fontWeight: '600',
-                        borderRadius: '8px'
-                      }}
-                    >
-                      {requestingDeletion ? t('admin.sendingRequest') : `📤 ${t('admin.sendDeleteSchoolRequest')}`}
-                    </button>
-                  </div>
+                  <button
+                    className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-red-500 to-rose-600 text-white font-semibold shadow-lg shadow-red-500/30 hover:shadow-xl hover:shadow-red-500/40 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-60 disabled:cursor-not-allowed disabled:transform-none transition-all duration-300"
+                    onClick={() => openConfirmModal(
+                      t('admin.confirmSendRequestTitle'),
+                      t('admin.confirmSendRequestMessage'),
+                      requestSchoolDeletion
+                    )}
+                    disabled={requestingDeletion || !deletionReason.trim()}
+                  >
+                    {requestingDeletion ? t('admin.sendingRequest') : `📤 ${t('admin.sendDeleteSchoolRequest')}`}
+                  </button>
                 </div>
 
-                <div className="settings-card" style={{
-                  padding: '2rem',
-                  backgroundColor: '#f8f9fa',
-                  borderRadius: '12px',
-                  border: '1px solid #ddd',
-                  marginTop: '2rem'
-                }}>
-                  <h3 style={{ marginTop: 0, marginBottom: '1.5rem', color: '#333' }}>📋 {t('admin.requestStatus')}</h3>
+                {/* Request Status */}
+                <div className="p-6 rounded-2xl bg-gradient-to-br from-slate-50 to-slate-100 border border-slate-200">
+                  <h3 className="flex items-center gap-2 text-lg font-bold text-slate-700 mb-4">📋 {t('admin.requestStatus')}</h3>
 
                   {loadingDeletionRequests ? (
-                    <Loading message={t('admin.loadingData')} />
+                    <div className="flex items-center justify-center py-8">
+                      <Loading message={t('admin.loadingData')} />
+                    </div>
                   ) : schoolDeletionRequests.length === 0 ? (
-                    <div style={{
-                      textAlign: 'center',
-                      padding: '2rem',
-                      color: '#666'
-                    }}>
-                      <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📝</div>
-                      <div>{t('admin.noDeleteRequests')}</div>
+                    <div className="flex flex-col items-center justify-center py-10 px-8 rounded-xl bg-white border border-slate-100">
+                      <div className="text-5xl mb-3">📝</div>
+                      <div className="text-slate-500">{t('admin.noDeleteRequests')}</div>
                     </div>
                   ) : (
-                    <div className="requests-list">
+                    <div className="space-y-4">
                       {schoolDeletionRequests.map(request => (
-                        <div key={request.id} className="request-item" style={{
-                          padding: '1rem',
-                          border: '1px solid #ddd',
-                          borderRadius: '8px',
-                          marginBottom: '1rem',
-                          backgroundColor: '#fff'
-                        }}>
-                          <div className="request-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                            <div className="request-info">
-                              <h4 style={{ margin: '0 0 0.5rem 0' }}>คำขอการลบโรงเรียน</h4>
-                              <div className="request-meta" style={{ fontSize: '0.9rem', color: '#666' }}>
-                                <div>ส่งเมื่อ: {new Date(request.created_at).toLocaleDateString('th-TH')}</div>
-                              </div>
+                        <div key={request.id} className="p-5 rounded-xl bg-white border border-slate-200 shadow-sm">
+                          <div className="flex flex-wrap justify-between items-start gap-4 mb-3">
+                            <div>
+                              <h4 className="font-bold text-slate-800 mb-1">คำขอการลบโรงเรียน</h4>
+                              <div className="text-sm text-slate-500">ส่งเมื่อ: {new Date(request.created_at).toLocaleDateString('th-TH')}</div>
                             </div>
-                            <div className={`request-status status-${request.status}`} style={{
-                              padding: '0.25rem 0.75rem',
-                              borderRadius: '20px',
-                              fontSize: '0.8rem',
-                              fontWeight: '600',
-                              textTransform: 'uppercase'
-                            }}>
+                            <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-bold ${
+                              request.status === 'pending' ? 'bg-amber-100 text-amber-700' :
+                              request.status === 'approved' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
+                            }`}>
                               {request.status === 'pending' ? '⏳ รอดำเนินการ' :
                                request.status === 'approved' ? '✅ อนุมัติแล้ว' : '❌ ปฏิเสธแล้ว'}
-                            </div>
+                            </span>
                           </div>
                           {request.reason && (
-                            <div style={{ marginTop: '1rem' }}>
-                              <strong>เหตุผล:</strong> {request.reason}
-                            </div>
+                            <div className="text-slate-600"><strong>เหตุผล:</strong> {request.reason}</div>
                           )}
                         </div>
                       ))}
@@ -3653,43 +4287,39 @@ function AdminPage() {
         )}
 
         {activeTab === 'schedules' && (
-          <div className="content-card">
-            <div className="card-header">
-              <h2><span className="card-icon">📅</span> เพิ่มตารางเรียนสำหรับครูและนักเรียน</h2>
+          <div className="bg-white/80 backdrop-blur-xl rounded-3xl border border-white/60 shadow-xl shadow-slate-200/50 overflow-hidden">
+            <div className="px-8 py-6 bg-gradient-to-r from-slate-50 to-white border-b border-slate-100">
+              <h2 className="flex items-center gap-3 text-2xl font-bold text-slate-800">
+                <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white text-xl shadow-lg shadow-indigo-500/30">📅</span>
+                เพิ่มตารางเรียนสำหรับครูและนักเรียน
+              </h2>
             </div>
-            <div className="card-content">
-              <div style={{ marginBottom: '1.5rem' }}>
+            <div className="p-8">
+              <div className="mb-6">
                 <button
-                  className="admin-btn-primary"
+                  className="group inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-indigo-500 to-violet-600 text-white font-semibold shadow-lg shadow-indigo-500/30 hover:shadow-xl hover:shadow-indigo-500/40 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-300"
                   onClick={() => { setEditingAssignment(null); setShowScheduleManagementModal(true); }}
-                  style={{
-                    padding: '12px 20px',
-                    fontSize: '1rem',
-                    fontWeight: '600',
-                    borderRadius: '8px'
-                  }}
                 >
-                  ➕ เพิ่มตารางเรียนใหม่
+                  <span className="group-hover:scale-125 transition-transform duration-300">➕</span>
+                  เพิ่มตารางเรียนใหม่
                 </button>
               </div>
-              <div style={{
-                padding: '1.5rem',
-                backgroundColor: '#e3f2fd',
-                borderRadius: '8px',
-                border: '1px solid #90caf9',
-                color: '#1565c0'
-              }}>
-                <h4 style={{ marginTop: 0 }}>📋 วิธีการใช้งาน</h4>
-                <ul style={{ marginBottom: 0, paddingLeft: '1.5rem', lineHeight: '1.8' }}>
-                  <li>คลิกปุ่ม "เพิ่มตารางเรียนใหม่" เพื่อสร้างตารางเรียน</li>
-                  <li>เลือกประเภท: ตารางครู หรือ ตารางนักเรียน</li>
-                  <li>เลือกครู/นักเรียน วิชา ชั้นเรียน วัน และเวลา</li>
-                  <li>ตารางเรียนจะมีผล อตรับจากทันที</li>
+              
+              {/* Instructions */}
+              <div className="mb-8 p-6 rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200">
+                <h4 className="flex items-center gap-2 text-lg font-bold text-blue-700 mb-3">📋 วิธีการใช้งาน</h4>
+                <ul className="space-y-2 text-blue-600">
+                  <li className="flex items-start gap-2">• คลิกปุ่ม "เพิ่มตารางเรียนใหม่" เพื่อสร้างตารางเรียน</li>
+                  <li className="flex items-start gap-2">• เลือกประเภท: ตารางครู หรือ ตารางนักเรียน</li>
+                  <li className="flex items-start gap-2">• เลือกครู/นักเรียน วิชา ชั้นเรียน วัน และเวลา</li>
+                  <li className="flex items-start gap-2">• ตารางเรียนจะมีผลทันที</li>
                 </ul>
               </div>
+              
+              {/* Schedule Preview */}
               {Array.isArray(scheduleSlots) && scheduleSlots.length > 0 && Array.isArray(adminSchedules) && adminSchedules.length > 0 && (
-                <div style={{ marginTop: '1.5rem' }}>
-                  <h4>{t('admin.schedulePreview')}</h4>
+                <div className="mt-6">
+                  <h4 className="flex items-center gap-2 text-lg font-bold text-slate-700 mb-4">{t('admin.schedulePreview')}</h4>
                   <ScheduleGrid
                     operatingHours={scheduleSlots}
                     schedules={adminSchedules}
@@ -3704,74 +4334,53 @@ function AdminPage() {
         )}
 
         {activeTab === 'subjects' && (
-          <div className="content-card">
-            <div className="card-header">
-              <h2><span className="card-icon">📚</span> {t('admin.manageSubjects')}</h2>
+          <div className="bg-white/80 backdrop-blur-xl rounded-3xl border border-white/60 shadow-xl shadow-slate-200/50 overflow-hidden">
+            <div className="px-8 py-6 bg-gradient-to-r from-slate-50 to-white border-b border-slate-100">
+              <h2 className="flex items-center gap-3 text-2xl font-bold text-slate-800">
+                <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-green-600 text-white text-xl shadow-lg shadow-emerald-500/30">📚</span>
+                {t('admin.manageSubjects')}
+              </h2>
             </div>
-            <div className="card-content">
+            <div className="p-8">
               {loadingSubjects && <Loading message={t('admin.loadingSubjects')} />}
 
-              <div className="list-header" style={{ marginBottom: '1.5rem' }}>
-                <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap', marginBottom: '1rem' }}>
-                  <button 
-                    className="btn-action btn-success"
-                    onClick={handleCreateSubject}
-                    style={{
-                      padding: '10px 16px',
-                      backgroundColor: '#4CAF50',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '8px',
-                      cursor: 'pointer',
-                      fontWeight: '600',
-                      fontSize: '0.95rem'
-                    }}
-                  >
-                    ➕ สร้างรายวิชาใหม่
-                  </button>
-                  <input
-                    type="text"
-                    placeholder="🔍 ค้นหารายวิชา"
-                    value={subjectSearchTerm}
-                    onChange={(e) => {
-                      setSubjectSearchTerm(e.target.value);
-                      setSubjectCurrentPage(1);
-                    }}
-                    style={{
-                      flex: 1,
-                      minWidth: '200px',
-                      padding: '10px 12px',
-                      borderRadius: '8px',
-                      border: '1px solid #ddd',
-                      fontSize: '0.95rem'
-                    }}
-                  />
-                  <select
-                    value={subjectTypeFilter}
-                    onChange={(e) => {
-                      setSubjectTypeFilter(e.target.value);
-                      setSubjectCurrentPage(1);
-                    }}
-                    style={{
-                      padding: '10px 12px',
-                      borderRadius: '8px',
-                      border: '1px solid #ddd',
-                      cursor: 'pointer',
-                      fontSize: '0.95rem'
-                    }}
-                  >
-                    <option value="all">{t('admin.all')}</option>
-                    <option value="main">📖 รายวิชาหลัก</option>
-                    <option value="activity">🎯 รายวิชากิจกรรม</option>
-                  </select>
-                </div>
+              {/* Search and Filter Bar */}
+              <div className="flex flex-wrap gap-4 items-center mb-6">
+                <button 
+                  className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-green-600 text-white font-semibold shadow-lg shadow-emerald-500/30 hover:shadow-xl hover:shadow-emerald-500/40 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-300"
+                  onClick={handleCreateSubject}
+                >
+                  ➕ สร้างรายวิชาใหม่
+                </button>
+                <input
+                  type="text"
+                  placeholder="🔍 ค้นหารายวิชา"
+                  value={subjectSearchTerm}
+                  onChange={(e) => {
+                    setSubjectSearchTerm(e.target.value);
+                    setSubjectCurrentPage(1);
+                  }}
+                  className="flex-1 min-w-[200px] px-4 py-3 rounded-xl border border-slate-200 bg-white/80 text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-400 transition-all duration-300"
+                />
+                <select
+                  value={subjectTypeFilter}
+                  onChange={(e) => {
+                    setSubjectTypeFilter(e.target.value);
+                    setSubjectCurrentPage(1);
+                  }}
+                  className="px-4 py-3 rounded-xl border border-slate-200 bg-white/80 text-slate-700 cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-400 transition-all duration-300"
+                >
+                  <option value="all">{t('admin.all')}</option>
+                  <option value="main">📖 รายวิชาหลัก</option>
+                  <option value="activity">🎯 รายวิชากิจกรรม</option>
+                </select>
               </div>
 
               {subjects.length === 0 ? (
-                <div className="empty-state">
-                  <div className="empty-icon">📚</div>
-                  <div className="empty-text">{t('admin.noSubjects')}</div>
-                  <div className="empty-subtitle">{t('admin.startByCreatingSubject')}</div>
+                <div className="flex flex-col items-center justify-center py-16 px-8 rounded-2xl bg-gradient-to-br from-slate-50 to-emerald-50 border-2 border-dashed border-slate-200">
+                  <div className="text-6xl mb-4 animate-bounce">📚</div>
+                  <div className="text-xl font-bold text-slate-600 mb-2">{t('admin.noSubjects')}</div>
+                  <div className="text-slate-400">{t('admin.startByCreatingSubject')}</div>
                 </div>
               ) : (() => {
                 const filtered = subjects.filter(s => {
@@ -3787,100 +4396,107 @@ function AdminPage() {
 
                 return (
                   <>
-                    <div style={{ overflowX: 'auto', marginBottom: '1rem' }}>
-                      <table className="admin-table subjects-table" style={{ minWidth: '100%' }}>
+                    <>
+                    {/* Desktop View: Table */}
+                    <div className="hidden md:block overflow-x-auto mb-6 rounded-xl border border-slate-200 shadow-sm">
+                      <table className="w-full text-sm">
                         <thead>
-                          <tr>
-                            <th>{t('admin.subjectName')}</th>
-                            <th>{t('admin.code')}</th>
-                            <th>{t('admin.type')}</th>
-                            <th className="subject-credit">{subjectTypeFilter === 'main' ? t('admin.credit') : subjectTypeFilter === 'activity' ? t('admin.percentage') : t('admin.creditOrPercentage')}</th>
-                            <th>{t('admin.teacherLabel')}</th>
-                            <th style={{ textAlign: 'center' }}>{t('admin.classroom')}</th>
-                            <th style={{ textAlign: 'center' }}>{t('admin.students')}</th>
-                            <th style={{ width: '200px' }}>{t('admin.management')}</th>
+                          <tr className="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
+                            <th className="px-4 py-4 text-left font-semibold text-slate-600">{t('admin.subjectName')}</th>
+                            <th className="px-4 py-4 text-left font-semibold text-slate-600">{t('admin.code')}</th>
+                            <th className="px-4 py-4 text-left font-semibold text-slate-600">{t('admin.type')}</th>
+                            <th className="px-4 py-4 text-center font-semibold text-slate-600">{subjectTypeFilter === 'main' ? t('admin.credit') : subjectTypeFilter === 'activity' ? t('admin.percentage') : t('admin.creditOrPercentage')}</th>
+                            <th className="px-4 py-4 text-left font-semibold text-slate-600">{t('admin.teacherLabel')}</th>
+                            <th className="px-4 py-4 text-center font-semibold text-slate-600">{t('admin.classroom')}</th>
+                            <th className="px-4 py-4 text-center font-semibold text-slate-600">{t('admin.students')}</th>
+                            <th className="w-[200px] px-4 py-4 text-left font-semibold text-slate-600">{t('admin.management')}</th>
                           </tr>
                         </thead>
-                        <tbody>
+                        <tbody className="divide-y divide-slate-100">
                           {paginated.map(subject => (
-                            <tr key={subject.id}>
-                              <td>
-                                <div className="subject-name"><strong>{subject.name}</strong></div>
-                                {/* Mobile small mention for credits/percentage */}
-                                <div className="subject-meta-mobile">
+                            <tr key={subject.id} className="hover:bg-emerald-50/50 transition-colors duration-200">
+                              <td className="px-4 py-4">
+                                <div className="font-semibold text-slate-800">{subject.name}</div>
+                                <div className="text-xs text-slate-500 md:hidden mt-1">
                                   {subject.subject_type === 'main' ? (subject.credits != null ? `${subject.credits} ${t('admin.creditUnit')}` : '-') : (subject.activity_percentage != null ? `${subject.activity_percentage}%` : '-')}
                                 </div>
-                                {/* Mobile only badge for type (visible on narrow screens) */}
-                                <div className="subject-type-badge">{subject.subject_type === 'main' ? `📖 ${t('admin.mainSubject')}` : `🎯 ${t('admin.activitySubject')}`}</div>
-                              </td>
-                              <td>{subject.code || '-'}</td>
-                              <td>{subject.subject_type === 'main' ? `📖 ${t('admin.mainSubject')}` : `🎯 ${t('admin.activitySubject')}`}</td>
-                              <td className="subject-credit" style={{ textAlign: 'center' }}>
-                                {subject.subject_type === 'main' ? (subject.credits != null ? `${subject.credits} ${t('admin.creditUnit')}` : '-') : (subject.activity_percentage != null ? `${subject.activity_percentage}%` : '-')}
-                              </td>
-                              <td>
-                                <div className="teacher-cell">
-                                  {subject.teachers && subject.teachers.length > 0 ? (
-                                    (() => {
-                                      const unique = [...new Map(subject.teachers.map(t => [t.id, t])).values()];
-                                      return (
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                          <div style={{ fontWeight: '500' }}>
-                                            {unique.length} ครู
-                                          </div>
-                                          <div style={{ fontSize: '0.8rem', color: '#666' }}>
-                                            {unique.slice(0, 2).map(t => t.name).join(', ')}
-                                            {unique.length > 2 && ` +${unique.length - 2} คน`}
-                                          </div>
-                                        </div>
-                                      );
-                                    })()
-                                  ) : (
-                                    t('admin.noTeacherYet')
-                                  )}
+                                <div className="md:hidden mt-1">
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${subject.subject_type === 'main' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>
+                                    {subject.subject_type === 'main' ? `📖 ${t('admin.mainSubject')}` : `🎯 ${t('admin.activitySubject')}`}
+                                  </span>
                                 </div>
                               </td>
-                              <td style={{ textAlign: 'center' }}>{subject.classroom_count}</td>
-                              <td style={{ textAlign: 'center' }}>{subject.student_count}</td>
-                              <td style={{ minWidth: '240px' }}>
-                                <div className="action-buttons">
+                              <td className="px-4 py-4 text-slate-600">{subject.code || '-'}</td>
+                              <td className="px-4 py-4 hidden md:table-cell">
+                                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${subject.subject_type === 'main' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>
+                                  {subject.subject_type === 'main' ? `📖 ${t('admin.mainSubject')}` : `🎯 ${t('admin.activitySubject')}`}
+                                </span>
+                              </td>
+                              <td className="px-4 py-4 text-center hidden md:table-cell">
+                                {subject.subject_type === 'main' ? (subject.credits != null ? `${subject.credits} ${t('admin.creditUnit')}` : '-') : (subject.activity_percentage != null ? `${subject.activity_percentage}%` : '-')}
+                              </td>
+                              <td className="px-4 py-4">
+                                {subject.teachers && subject.teachers.length > 0 ? (
+                                  (() => {
+                                    const unique = [...new Map(subject.teachers.map(t => [t.id, t])).values()];
+                                    return (
+                                      <div className="space-y-1">
+                                        <div className="font-medium text-slate-700">{unique.length} ครู</div>
+                                        <div className="text-xs text-slate-500">
+                                          {unique.slice(0, 2).map(t => t.name).join(', ')}
+                                          {unique.length > 2 && ` +${unique.length - 2} คน`}
+                                        </div>
+                                      </div>
+                                    );
+                                  })()
+                                ) : (
+                                  <span className="text-slate-400">{t('admin.noTeacherYet')}</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-4 text-center text-slate-600">{subject.classroom_count}</td>
+                              <td className="px-4 py-4 text-center text-slate-600">{subject.student_count}</td>
+                              <td className="px-4 py-4">
+                                <div className="flex flex-wrap gap-1.5">
                                   <button
-                                    className="admin-btn-small admin-btn-secondary"
+                                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-100 text-slate-700 hover:bg-slate-200 transition-all duration-200"
                                     onClick={() => handleEditSubject(subject)}
                                     title={t('common.edit')}
                                   >
-                                    ✏️ <span className="action-text">{t('common.edit')}</span>
+                                    ✏️ <span className="hidden lg:inline">{t('common.edit')}</span>
                                   </button>
 
                                   <button
-                                    className="admin-btn-small admin-btn-secondary"
+                                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-blue-100 text-blue-700 hover:bg-blue-200 transition-all duration-200"
                                     onClick={() => handleManageTeachers(subject)}
                                     title="จัดการครู"
                                   >
-                                    👨‍🏫 <span className="action-text">จัดการครู</span>
+                                    👨‍🏫 <span className="hidden lg:inline">จัดการครู</span>
                                   </button>
 
                                   <button
-                                    className="admin-btn-small admin-btn-secondary"
+                                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-indigo-100 text-indigo-700 hover:bg-indigo-200 transition-all duration-200"
                                     onClick={() => handleManageClassrooms(subject)}
                                     title="จัดการชั้นเรียน"
                                   >
-                                    🏫 <span className="action-text">จัดการชั้นเรียน</span>
+                                    🏫 <span className="hidden lg:inline">จัดการชั้นเรียน</span>
                                   </button>
 
                                   <button
-                                    className="admin-btn-small admin-btn-danger"
-                                    style={subject.subject_teachers && subject.subject_teachers.some(t => !t.is_ended) && !subject.is_ended ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
+                                    className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
+                                      subject.subject_teachers && subject.subject_teachers.some(t => !t.is_ended) && !subject.is_ended
+                                        ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                                        : 'bg-red-100 text-red-700 hover:bg-red-200'
+                                    }`}
                                     onClick={() => handleDeleteSubject(subject)}
                                     disabled={subject.subject_teachers && subject.subject_teachers.some(t => !t.is_ended) && !subject.is_ended}
                                     title={subject.subject_teachers && subject.subject_teachers.some(t => !t.is_ended) && !subject.is_ended ? 'ไม่สามารถลบได้ ต้องให้ครูทั้งหมดจบคอร์สก่อน' : t('common.delete')}
                                   >
-                                    🗑️ <span className="action-text">{t('common.delete')}</span>
+                                    🗑️ <span className="hidden lg:inline">{t('common.delete')}</span>
                                   </button>
                                 </div>
                                 {subject.subject_teachers && subject.subject_teachers.some(t => !t.is_ended) && !subject.is_ended && (
-                                  <div style={{ marginTop: '6px', color: '#b00020', fontSize: '0.9rem' }}>
-                                    ไม่สามารถลบได้ เนื่องจากยังมีครูที่ยังไม่ได้จบคอร์ส ต้องให้ครูทั้งหมดกดจบคอร์สก่อน
+                                  <div className="mt-2 text-xs text-red-600">
+                                    ไม่สามารถลบได้ เนื่องจากยังมีครูที่ยังไม่ได้จบคอร์ส
                                   </div>
                                 )}
                               </td>
@@ -3889,20 +4505,109 @@ function AdminPage() {
                         </tbody>
                       </table>
                     </div>
+
+                    {/* Mobile View: Cards */}
+                    <div className="grid grid-cols-1 gap-4 md:hidden mb-6">
+                        {paginated.map(subject => (
+                            <div key={subject.id} className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 flex flex-col gap-4 relative overflow-hidden group">
+                                <div className="absolute top-0 right-0 w-32 h-32 bg-slate-50 rounded-full -mr-10 -mt-10 transition-all group-hover:scale-110 group-hover:bg-slate-100"></div>
+                                <div className="flex justify-between items-start relative z-10">
+                                    <div>
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${subject.subject_type === 'main' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                {subject.subject_type === 'main' ? `📖 ${t('admin.mainSubject')}` : `🎯 ${t('admin.activitySubject')}`}
+                                            </span>
+                                            {subject.code && (
+                                              <span className="text-xs font-bold text-slate-400 bg-slate-50 px-2 py-0.5 rounded-lg border border-slate-100">
+                                                {subject.code}
+                                              </span>
+                                            )}
+                                        </div>
+                                        <div className="font-bold text-slate-800 text-lg leading-tight">{subject.name}</div>
+                                    </div>
+                                    <div className="text-right">
+                                        <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-0.5">
+                                            {subject.subject_type === 'main' ? t('admin.credit') : t('admin.percentage')}
+                                        </div>
+                                        <div className="font-black text-slate-700 text-lg">
+                                            {subject.subject_type === 'main' ? (subject.credits != null ? subject.credits : '-') : (subject.activity_percentage != null ? `${subject.activity_percentage}%` : '-')}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-3 gap-2 relative z-10">
+                                    <div className="bg-slate-50 rounded-xl p-2 text-center border border-slate-100">
+                                        <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">ครู</div>
+                                        <div className="font-bold text-slate-700">
+                                            {subject.teachers ? [...new Map(subject.teachers.map(t => [t.id, t])).values()].length : 0}
+                                        </div>
+                                    </div>
+                                    <div className="bg-slate-50 rounded-xl p-2 text-center border border-slate-100">
+                                        <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">ชั้นเรียน</div>
+                                        <div className="font-bold text-slate-700">{subject.classroom_count || 0}</div>
+                                    </div>
+                                    <div className="bg-slate-50 rounded-xl p-2 text-center border border-slate-100">
+                                        <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">นักเรียน</div>
+                                        <div className="font-bold text-slate-700">{subject.student_count || 0}</div>
+                                    </div>
+                                </div>
+
+                                <div className="flex flex-col gap-2 relative z-10 pt-2 border-t border-slate-50">
+                                    <div className="flex gap-2">
+                                        <button
+                                          className="flex-1 inline-flex items-center justify-center gap-1 h-10 px-3 rounded-xl text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all"
+                                          onClick={() => handleEditSubject(subject)}
+                                        >
+                                          ✏️ {t('common.edit')}
+                                        </button>
+                                        <button
+                                          className={`flex-1 inline-flex items-center justify-center gap-1 h-10 px-3 rounded-xl text-xs font-bold transition-all ${
+                                            subject.subject_teachers && subject.subject_teachers.some(t => !t.is_ended) && !subject.is_ended
+                                              ? 'bg-slate-50 text-slate-300 cursor-not-allowed'
+                                              : 'bg-red-50 text-red-600 hover:bg-red-100'
+                                          }`}
+                                          onClick={() => handleDeleteSubject(subject)}
+                                          disabled={subject.subject_teachers && subject.subject_teachers.some(t => !t.is_ended) && !subject.is_ended}
+                                        >
+                                          🗑️ {t('common.delete')}
+                                        </button>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <button
+                                          className="flex-1 inline-flex items-center justify-center gap-1 h-10 px-3 rounded-xl text-xs font-bold bg-blue-50 text-blue-600 hover:bg-blue-100 transition-all"
+                                          onClick={() => handleManageTeachers(subject)}
+                                        >
+                                          👨‍🏫 จัดการครู
+                                        </button>
+                                        <button
+                                          className="flex-1 inline-flex items-center justify-center gap-1 h-10 px-3 rounded-xl text-xs font-bold bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-all"
+                                          onClick={() => handleManageClassrooms(subject)}
+                                        >
+                                          🏫 จัดการชั้นเรียน
+                                        </button>
+                                    </div>
+                                    {subject.subject_teachers && subject.subject_teachers.some(t => !t.is_ended) && !subject.is_ended && (
+                                      <div className="text-[10px] font-bold text-red-500 text-center bg-red-50 py-1 rounded-lg">
+                                        ⚠️ ไม่สามารถลบได้ เนื่องจากยังมีครูที่ยังไม่ได้จบคอร์ส
+                                      </div>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    </>
+                    
+                    {/* Pagination */}
                     {totalPages > 1 && (
-                      <div className="pagination" style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+                      <div className="flex flex-wrap items-center justify-center gap-2 mt-6">
                         {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
                           <button
                             key={page}
-                            style={{
-                              padding: '8px 12px',
-                              border: subjectCurrentPage === page ? '2px solid #2196F3' : '1px solid #ddd',
-                              backgroundColor: subjectCurrentPage === page ? '#e3f2fd' : 'white',
-                              borderRadius: '4px',
-                              cursor: 'pointer',
-                              fontWeight: subjectCurrentPage === page ? '600' : '400',
-                              color: subjectCurrentPage === page ? '#2196F3' : '#666'
-                            }}
+                            className={`w-10 h-10 rounded-lg font-semibold transition-all duration-200 ${
+                              subjectCurrentPage === page 
+                                ? 'bg-gradient-to-r from-emerald-500 to-green-600 text-white shadow-lg shadow-emerald-500/30' 
+                                : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300'
+                            }`}
                             onClick={() => setSubjectCurrentPage(page)}
                           >
                             {page}
@@ -3918,38 +4623,32 @@ function AdminPage() {
         )}
 
         {activeTab === 'settings' && (
-          <div className="content-card">
-            <div className="card-header">
-              <h2><span className="card-icon">⚙️</span> ตั้งค่า</h2>
+          <div className="bg-white/80 backdrop-blur-xl rounded-3xl border border-white/60 shadow-xl shadow-slate-200/50 overflow-hidden">
+            <div className="px-8 py-6 bg-gradient-to-r from-slate-50 to-white border-b border-slate-100">
+              <h2 className="flex items-center gap-3 text-2xl font-bold text-slate-800">
+                <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-slate-500 to-slate-600 text-white text-xl shadow-lg shadow-slate-500/30">⚙️</span>
+                ตั้งค่า
+              </h2>
             </div>
-            <div className="card-content">
-              <div className="settings-section" style={{ maxWidth: '600px' }}>
-                <div className="settings-card" style={{
-                  padding: '2rem',
-                  backgroundColor: '#f8f9fa',
-                  borderRadius: '12px',
-                  border: '1px solid #ddd'
-                }}>
-                  <h3 style={{ marginTop: 0, marginBottom: '1.5rem', color: '#333' }}>📢 วันประกาศผลคะแนน</h3>
+            <div className="p-8">
+              <div className="max-w-2xl">
+                <div className="p-8 bg-gradient-to-br from-slate-50 to-white rounded-2xl border border-slate-200 shadow-sm">
+                  <h3 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2">
+                    <span className="text-2xl">📢</span> วันประกาศผลคะแนน
+                  </h3>
                   
-                  <div style={{
-                    padding: '1.5rem',
-                    backgroundColor: '#fff3cd',
-                    borderRadius: '8px',
-                    border: '1px solid #ffc107',
-                    marginBottom: '1.5rem'
-                  }}>
-                    <div style={{ color: '#856404', lineHeight: '1.6' }}>
-                      <strong>📋 คำอธิบาย:</strong><br/>
+                  <div className="p-5 bg-gradient-to-r from-amber-50 to-yellow-50 rounded-xl border border-amber-200 mb-6">
+                    <div className="text-amber-800 leading-relaxed">
+                      <strong className="flex items-center gap-2 mb-2">📋 คำอธิบาย:</strong>
                       กำหนดวันและเวลาที่นักเรียนและครูสามารถดูผลคะแนนได้ ก่อนถึงวันที่กำหนด นักเรียนจะไม่สามารถดูผลการเรียนได้ และครูประจำชั้นจะไม่สามารถดูสรุปคะแนนได้
                     </div>
                   </div>
 
-                  <div className="admin-form-group" style={{ marginBottom: '1.5rem' }}>
-                    <label className="admin-form-label" style={{ fontWeight: '600', marginBottom: '0.5rem' }}>
+                  <div className="mb-6">
+                    <label className="block text-sm font-semibold text-slate-700 mb-3">
                       เลือกวันและเวลาแยกกัน:
                     </label>
-                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <div className="flex flex-wrap gap-3 items-center">
                       {/* Day Input */}
                       <input
                         type="number"
@@ -3969,14 +4668,7 @@ function AdminPage() {
                           const yy = gradeAnnouncementYear && gradeAnnouncementYear.length ? gradeAnnouncementYear : String(new Date().getFullYear());
                           setGradeAnnouncementDate(`${yy}-${mm}-${dd}`);
                         }}
-                        style={{
-                          width: '70px',
-                          padding: '10px',
-                          borderRadius: '8px',
-                          border: '1px solid #ddd',
-                          fontSize: '1rem',
-                          boxSizing: 'border-box'
-                        }}
+                        className="w-[70px] px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 text-center focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400 transition-all duration-300"
                       />
 
                       {/* Month Input */}
@@ -3998,14 +4690,7 @@ function AdminPage() {
                           const yy = gradeAnnouncementYear && gradeAnnouncementYear.length ? gradeAnnouncementYear : String(new Date().getFullYear());
                           setGradeAnnouncementDate(`${yy}-${mm}-${dd}`);
                         }}
-                        style={{
-                          width: '80px',
-                          padding: '10px',
-                          borderRadius: '8px',
-                          border: '1px solid #ddd',
-                          fontSize: '1rem',
-                          boxSizing: 'border-box'
-                        }}
+                        className="w-[80px] px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 text-center focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400 transition-all duration-300"
                       />
 
                       {/* Year Input */}
@@ -4023,18 +4708,11 @@ function AdminPage() {
                           const dd = gradeAnnouncementDay && gradeAnnouncementDay.length ? gradeAnnouncementDay : '01';
                           setGradeAnnouncementDate(`${yy}-${mm}-${dd}`);
                         }}
-                        style={{
-                          width: '100px',
-                          padding: '10px',
-                          borderRadius: '8px',
-                          border: '1px solid #ddd',
-                          fontSize: '1rem',
-                          boxSizing: 'border-box'
-                        }}
+                        className="w-[100px] px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 text-center focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400 transition-all duration-300"
                       />
 
                       {/* Hour / Minute Inputs */}
-                      <div style={{ display: 'flex', gap: '0.5rem', marginLeft: 8 }}>
+                      <div className="flex gap-2 ml-2">
                         <input
                           type="number"
                           placeholder="ชั่วโมง"
@@ -4052,14 +4730,7 @@ function AdminPage() {
                             const m = gradeAnnouncementMinute && gradeAnnouncementMinute.length ? gradeAnnouncementMinute : '00';
                             setGradeAnnouncementTime(`${h}:${m}`);
                           }}
-                          style={{
-                            width: '70px',
-                            padding: '10px',
-                            borderRadius: '8px',
-                            border: '1px solid #ddd',
-                            fontSize: '1rem',
-                            boxSizing: 'border-box'
-                          }}
+                          className="w-[70px] px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 text-center focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400 transition-all duration-300"
                         />
 
                         <input
@@ -4079,26 +4750,12 @@ function AdminPage() {
                             const h = gradeAnnouncementHour && gradeAnnouncementHour.length ? gradeAnnouncementHour : '00';
                             setGradeAnnouncementTime(`${h}:${mm}`);
                           }}
-                          style={{
-                            width: '70px',
-                            padding: '10px',
-                            borderRadius: '8px',
-                            border: '1px solid #ddd',
-                            fontSize: '1rem',
-                            boxSizing: 'border-box'
-                          }}
+                          className="w-[70px] px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 text-center focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400 transition-all duration-300"
                         />
                       </div>
                     </div>
                     {(gradeAnnouncementDate || gradeAnnouncementTime) && (
-                      <div style={{
-                        marginTop: '0.75rem',
-                        padding: '0.75rem',
-                        backgroundColor: '#d4edda',
-                        borderRadius: '6px',
-                        color: '#155724',
-                        fontSize: '0.9rem'
-                      }}>
+                      <div className="mt-4 p-4 bg-gradient-to-r from-emerald-50 to-green-50 rounded-xl border border-emerald-200 text-emerald-700 text-sm font-medium">
                         ✅ วันประกาศ: {(() => {
                           if (!gradeAnnouncementDate) return '-';
                           // combine date and time (time may be empty)
@@ -4116,25 +4773,15 @@ function AdminPage() {
                     )}
                   </div>
 
-                  <div style={{ display: 'flex', gap: '1rem' }}>
+                  <div className="flex gap-4">
                     <button
                       onClick={saveGradeAnnouncementDate}
                       disabled={savingGradeAnnouncement}
-                      style={{
-                        flex: 1,
-                        padding: '12px 20px',
-                        backgroundColor: '#2196F3',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '8px',
-                        fontSize: '1rem',
-                        fontWeight: '600',
-                        cursor: savingGradeAnnouncement ? 'not-allowed' : 'pointer',
-                        opacity: savingGradeAnnouncement ? 0.6 : 1,
-                        transition: 'all 0.3s'
-                      }}
-                      onMouseEnter={(e) => !savingGradeAnnouncement && (e.target.style.backgroundColor = '#1976D2')}
-                      onMouseLeave={(e) => !savingGradeAnnouncement && (e.target.style.backgroundColor = '#2196F3')}
+                      className={`flex-1 inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-semibold shadow-lg transition-all duration-300 ${
+                        savingGradeAnnouncement 
+                          ? 'bg-slate-300 text-slate-500 cursor-not-allowed' 
+                          : 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-blue-500/30 hover:shadow-xl hover:shadow-blue-500/40 hover:-translate-y-0.5 active:translate-y-0'
+                      }`}
                     >
                       {savingGradeAnnouncement ? '⏳ กำลังบันทึก...' : '💾 บันทึก'}
                     </button>
@@ -4148,19 +4795,7 @@ function AdminPage() {
                         setGradeAnnouncementMonth('');
                         setGradeAnnouncementYear('');
                       }}
-                      style={{
-                        padding: '12px 20px',
-                        backgroundColor: '#f44336',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '8px',
-                        fontSize: '1rem',
-                        fontWeight: '600',
-                        cursor: 'pointer',
-                        transition: 'all 0.3s'
-                      }}
-                      onMouseEnter={(e) => (e.target.style.backgroundColor = '#da190b')}
-                      onMouseLeave={(e) => (e.target.style.backgroundColor = '#f44336')}
+                      className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-semibold bg-gradient-to-r from-red-500 to-rose-600 text-white shadow-lg shadow-red-500/30 hover:shadow-xl hover:shadow-red-500/40 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-300"
                     >
                       ❌ ล้าง
                     </button>

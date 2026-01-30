@@ -21,6 +21,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy project
 COPY . .
 
+COPY server-ca.pem /app/server-ca.pem
+COPY client-cert.pem /app/client-cert.pem
+COPY client-key.pem /app/client-key.pem
 # Expose port
 EXPOSE 8080
 

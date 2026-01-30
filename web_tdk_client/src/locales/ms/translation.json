@@ -692,6 +692,14 @@
     "allSchools": "Semua Sekolah",
     "fullName": "Nama Penuh",
     "password": "Kata Laluan",
-    "requestedAt": "Diminta pada"
+    "requestedAt": "Diminta pada",
+    "addAdminSubtitle": "Cipta akaun pentadbir baharu untuk sekolah",
+    "approveDelete": "Lulus & Padam",
+    "deletionRequested": "Permintaan pemadaman dibuat",
+    "noPendingRequests": "Tiada permintaan pemadaman menunggu",
+    "pendingDeletion": "Menunggu pemadaman",
+    "rejectedDeletion": "Pemadaman ditolak",
+    "total": "Jumlah",
+    "urgent": "Segera"
   }
 }

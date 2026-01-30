@@ -1,61 +1,73 @@
 steps:
-  # Build the Docker image
+  # 1. Build the Docker image
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'build'
       - '-t'
-      # เปลี่ยน $COMMIT_SHA เป็น latest
       - 'gcr.io/$PROJECT_ID/web-tdk-server:latest'
       - '.'
 
-  # Push the Docker image
+  # 2. Push the Docker image
   - name: 'gcr.io/cloud-builders/docker'
     id: 'push-image'
     args:
       - 'push'
-      # ต้องเปลี่ยนให้ตรงกับด้านบน
       - 'gcr.io/$PROJECT_ID/web-tdk-server:latest'
 
-  # Run database migrations (download and start Cloud SQL Proxy inside this step, then run migrations)
-  - name: 'python:3.11-slim'
-    id: 'run-migrations'
-    waitFor: ['-']
-    dir: '.'
-    entrypoint: 'bash'
-    args:
-      - '-c'
-      - |
-        # Small pause while proxy starts
-        # Install curl for downloading proxy
-        apt-get update -qq && apt-get install -y -qq curl ca-certificates > /dev/null 2>&1
-
-        # Download cloud_sql_proxy and make executable
-        curl -o /usr/local/bin/cloud_sql_proxy -sSL https://dl.google.com/cloudsql/cloud_sql_proxy.linux.amd64
-        chmod +x /usr/local/bin/cloud_sql_proxy
-
-        # Start Cloud SQL Proxy in background and wait for it
-        /usr/local/bin/cloud_sql_proxy -instances=${_CLOUDSQL_INSTANCE}=tcp:3306 &
-        sleep 5
-
-        # Use virtualenv to avoid system package issues
-        python3 -m venv /tmp/venv
-        . /tmp/venv/bin/activate
-        pip install --no-cache-dir -q -r requirements.txt
-
-        # Use TCP connection via proxy on 127.0.0.1:3306
-        export DATABASE_URL="mysql+pymysql://admin_tdk:${_DB_PASSWORD}@127.0.0.1:3306/tadika_db"
-        python3 run_migration.py
-
-  # Deploy to Cloud Run
+  # 3. Create/Update Migration Job
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-    waitFor: ['push-image','run-migrations']
+    id: 'deploy-migration-job'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'jobs'
+      - 'deploy'
+      - 'migrate-tdk-db'
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/web-tdk-server:latest'
+      - '--region'
+      - '${_REGION}'
+      # VPC Settings
+      - '--network'
+      - 'default'
+      - '--subnet'
+      - 'default'
+      - '--vpc-egress'
+      - 'private-ranges-only'
+      # -------------------------------------------------------------
+      # ✅ Connection String สำหรับ PyMySQL + SSL + Private IP
+      # -------------------------------------------------------------
+      - '--set-env-vars'
+      - 'DATABASE_URL=mysql+pymysql://admin_tdk:${_DB_PASSWORD}@${_DB_PRIVATE_IP}/tadika_db'
+      # -------------------------------------------------------------
+      - '--command'
+      - 'python'
+      - '--args'
+      - 'run_migration.py'
+
+  # 4. Execute Migration
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'run-migrations'
+    waitFor: ['push-image', 'deploy-migration-job']
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'jobs'
+      - 'execute'
+      - 'migrate-tdk-db'
+      - '--region'
+      - '${_REGION}'
+      - '--wait'
+
+  # 5. Deploy to Cloud Run Service
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    waitFor: ['run-migrations']
     entrypoint: gcloud
     args:
       - 'run'
       - 'deploy'
       - 'web-tdk-server'
       - '--image'
-      # ต้องเปลี่ยนให้ตรงกับด้านบน
       - 'gcr.io/$PROJECT_ID/web-tdk-server:latest'
       - '--region'
       - '${_REGION}'
@@ -70,9 +82,16 @@ steps:
       - '${_CPU}'
       - '--max-instances'
       - '${_MAX_INSTANCES}'
+      - '--network'
+      - 'default'
+      - '--subnet'
+      - 'default'
+      - '--vpc-egress'
+      - 'private-ranges-only'
       - '--add-cloudsql-instances'
       - '${_CLOUDSQL_INSTANCE}'
       - '--set-env-vars'
+      # Service ปกติใช้ Unix Socket (ปลอดภัยอยู่แล้ว ไม่ต้องแก้)
       - 'DATABASE_URL=mysql+pymysql://admin_tdk:${_DB_PASSWORD}@/tadika_db?unix_socket=/cloudsql/${_CLOUDSQL_INSTANCE},JWT_SECRET_KEY=${_JWT_SECRET_KEY},CORS_ORIGINS=${_CORS_ORIGINS}'
 
 options:
@@ -87,3 +106,4 @@ substitutions:
   _DB_PASSWORD: 'Ihsan53295Ilham'
   _JWT_SECRET_KEY: 'dYY4eEoeLVpHVGnZrzP6boTfBIRCerJ7e59qzh1GYN0='
   _CORS_ORIGINS: '*'
+  _DB_PRIVATE_IP: '10.124.176.3'

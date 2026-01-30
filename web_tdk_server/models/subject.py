@@ -14,6 +14,8 @@ class Subject(Base):
     school_id = Column(Integer, ForeignKey("schools.id"), nullable=True, index=True)
     credits = Column(Integer, nullable=True)
     activity_percentage = Column(Integer, nullable=True)
+    max_collected_score = Column(Integer, nullable=True, default=100)
+    max_exam_score = Column(Integer, nullable=True, default=100)
     is_ended = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

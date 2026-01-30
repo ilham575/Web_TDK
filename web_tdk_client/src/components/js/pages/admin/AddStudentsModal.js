@@ -1,7 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { API_BASE_URL } from '../../../endpoints';
-import '../../../css/AdminModal.css';
+import { 
+  Search, 
+  User, 
+  Mail, 
+  Check, 
+  X, 
+  Trash2, 
+  Plus, 
+  GraduationCap, 
+  School,
+  Loader2
+} from 'lucide-react';
 
 const AddStudentsModal = ({
   isOpen,
@@ -28,10 +39,7 @@ const AddStudentsModal = ({
 
   // ดึงข้อมูลนักเรียนที่สามารถเพิ่มได้เมื่อ modal เปิด
   useEffect(() => {
-    console.log('[AddStudentsModal] isOpen:', isOpen, 'classroomStep:', classroomStep, 'selectedClassroom:', selectedClassroom);
-    
     if (isOpen && selectedClassroom && classroomStep === 'add_students') {
-      console.log('[AddStudentsModal] Fetching available students for classroom:', selectedClassroom.id);
       setLoadingAvailable(true);
       const token = localStorage.getItem('token');
       fetch(`${API_BASE_URL}/classrooms/${selectedClassroom.id}/available-students`, {
@@ -41,22 +49,19 @@ const AddStudentsModal = ({
       })
         .then(res => res.json())
         .then(data => {
-          console.log('[AddStudentsModal] Available students:', data);
           if (Array.isArray(data)) {
             setAvailableStudents(data);
           }
         })
         .catch(err => {
           console.error('Error fetching available students:', err);
-          // Fallback: use all students from props
-          setAvailableStudents(students);
+          setAvailableStudents(students || []);
         })
         .finally(() => setLoadingAvailable(false));
     }
     
     // Fetch classroom students when in view mode
     if (isOpen && selectedClassroom && classroomStep === 'view_students') {
-      console.log('[AddStudentsModal] Fetching classroom students for classroom:', selectedClassroom.id);
       setLoadingClassroomStudents(true);
       const token = localStorage.getItem('token');
       fetch(`${API_BASE_URL}/classrooms/${selectedClassroom.id}/students`, {
@@ -64,37 +69,28 @@ const AddStudentsModal = ({
           'Authorization': `Bearer ${token}`,
         }
       })
-        .then(res => {
-          console.log('[AddStudentsModal] Response status:', res.status);
-          return res.json();
-        })
+        .then(res => res.json())
         .then(data => {
-          console.log('[AddStudentsModal] Classroom students response:', data);
           if (Array.isArray(data)) {
-            console.log('[AddStudentsModal] Setting classroomStudents to:', data);
             setClassroomStudents(data);
-            console.log('[AddStudentsModal] Classroom students set (final check)');
           }
         })
         .catch(err => {
           console.error('Error fetching classroom students:', err);
-          // Fallback: empty list
           setClassroomStudents([]);
         })
         .finally(() => setLoadingClassroomStudents(false));
     }
-  }, [isOpen, selectedClassroom, classroomStep, refreshKey]);
+  }, [isOpen, selectedClassroom, classroomStep, refreshKey, students]);
 
   useEffect(() => {
     const sourceStudents = classroomStep === 'add_students' ? availableStudents : classroomStudents;
-    console.log('[AddStudentsModal] useEffect filter: classroomStep:', classroomStep, 'sourceStudents:', sourceStudents, 'searchTerm:', searchTerm);
     
     // Filter out deleted students (is_active === false)
     const activeStudents = sourceStudents.filter(s => s.is_active !== false);
     
     if (searchTerm.trim() === '') {
       setFilteredStudents(activeStudents);
-      console.log('[AddStudentsModal] No search term, using all activeStudents:', activeStudents);
     } else {
       const filtered = activeStudents.filter(s =>
         (s.full_name && s.full_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
@@ -102,7 +98,6 @@ const AddStudentsModal = ({
         (s.email && s.email.toLowerCase().includes(searchTerm.toLowerCase()))
       );
       setFilteredStudents(filtered);
-      console.log('[AddStudentsModal] Filtered students:', filtered);
     }
   }, [searchTerm, availableStudents, classroomStudents, classroomStep]);
 
@@ -126,133 +121,133 @@ const AddStudentsModal = ({
   if (!isOpen || (classroomStep !== 'add_students' && classroomStep !== 'view_students')) return null;
 
   const isViewMode = classroomStep === 'view_students';
+  const isLoading = (classroomStep === 'add_students' && loadingAvailable) || (classroomStep === 'view_students' && loadingClassroomStudents);
 
   return (
-    <div className="admin-modal-overlay">
-      <div className="modal" style={{ maxWidth: '900px', maxHeight: '90vh', overflowY: 'auto' }}>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
+      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={onClose} />
+      
+      <div className="relative w-full max-w-4xl max-h-[90vh] bg-white rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-300">
         {/* Header */}
-        <div className="admin-modal-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flex: 1 }}>
+        <div className="px-8 py-6 border-b border-slate-50 flex items-center justify-between bg-gradient-to-r from-slate-50 to-white">
+          <div className="flex items-center gap-4">
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-lg ${isViewMode ? 'bg-blue-500 shadow-blue-200' : 'bg-emerald-500 shadow-emerald-200'}`}>
+              {isViewMode ? <User className="w-6 h-6" /> : <Plus className="w-6 h-6" />}
+            </div>
             <div>
-              <h3 style={{ margin: 0 }}>
+              <h3 className="text-xl font-black text-slate-800 tracking-tight leading-tight">
                 {isViewMode ? t('admin.viewStudents') : t('admin.addStudentsToClassroom')}
               </h3>
-              <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>
-                {selectedClassroom && `${t('admin.classroom')}: ${selectedClassroom.name} (${selectedClassroom.grade_level})`}
-              </div>
+              {selectedClassroom && (
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md uppercase tracking-wider">
+                    <School className="w-3 h-3" />
+                    {selectedClassroom.name}
+                  </span>
+                  <span className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md uppercase tracking-wider">
+                    <GraduationCap className="w-3 h-3" />
+                    {selectedClassroom.grade_level}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
-          <button className="admin-modal-close" onClick={onClose}>×</button>
+          <button 
+            className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-50 text-slate-400 hover:text-slate-600 transition-all" 
+            onClick={onClose}
+          >
+            <X className="w-6 h-6" />
+          </button>
         </div>
 
         {/* Body */}
-        <div className="admin-modal-body">
-          {/* Loading indicator */}
-          {((classroomStep === 'add_students' && loadingAvailable) || (classroomStep === 'view_students' && loadingClassroomStudents)) && (
-            <div style={{
-              padding: '2rem',
-              textAlign: 'center',
-              color: '#666'
-            }}>
-              ⏳ {t('admin.loading')}
+        <div className="flex-1 overflow-hidden flex flex-col p-8">
+          {isLoading ? (
+            <div className="flex-1 flex flex-col items-center justify-center gap-4 py-20">
+              <Loader2 className="w-12 h-12 text-emerald-500 animate-spin" />
+              <p className="text-slate-400 font-bold animate-pulse">{t('admin.loading')}</p>
             </div>
-          )}
-
-          {(!((classroomStep === 'add_students' && loadingAvailable) || (classroomStep === 'view_students' && loadingClassroomStudents))) && (
+          ) : (
             <>
               {/* Search box */}
-              <div style={{ marginBottom: '1.5rem' }}>
+              <div className="relative mb-6 group">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-emerald-500 transition-colors" />
                 <input 
                   type="text"
-                  placeholder="🔍 ค้นหาชื่อ, username, หรือ email"
-                  className="admin-form-input"
+                  placeholder="ค้นหาชื่อ, username, หรือ email"
+                  className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-slate-700 text-sm font-medium focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all placeholder:text-slate-300"
                   value={searchTerm}
                   onChange={e => setSearchTerm(e.target.value)}
-                  style={{ width: '95%' }}
                 />
               </div>
 
               {/* Students list */}
-              <div style={{ maxHeight: '400px', overflowY: 'auto', border: '1px solid #e0e0e0', borderRadius: '4px' }}>
+              <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar border border-slate-100 rounded-3xl bg-slate-50/30 p-2">
                 {filteredStudents.length === 0 ? (
-                  <div style={{ padding: '2rem', textAlign: 'center', color: '#999' }}>
-                    {(classroomStep === 'add_students' ? availableStudents.length === 0 : classroomStudents.length === 0)
-                      ? (classroomStep === 'add_students' ? '✓ นักเรียนทั้งหมดลงทะเบียนแล้ว' : 'ไม่มีนักเรียนในชั้นเรียนนี้')
-                      : t('admin.searchNameOrEmailShort')}
+                  <div className="py-20 flex flex-col items-center justify-center gap-4 text-slate-300">
+                    <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center shadow-sm">
+                      <User className="w-10 h-10" />
+                    </div>
+                    <p className="text-lg font-black tracking-tight text-slate-400">
+                      {(classroomStep === 'add_students' ? availableStudents.length === 0 : classroomStudents.length === 0)
+                        ? (classroomStep === 'add_students' ? '✓ นักเรียนทั้งหมดลงทะเบียนแล้ว' : 'ไม่มีนักเรียนในชั้นเรียนนี้')
+                        : 'ไม่พบนักเรียนที่คุณค้นหา'}
+                    </p>
                   </div>
                 ) : (
-                  <div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pb-4">
                     {filteredStudents.map(student => (
                       <div 
                         key={student.id}
-                        style={{
-                          padding: '1rem',
-                          borderBottom: '1px solid #f0f0f0',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '1rem',
-                          backgroundColor: selectedStudentIds.has(student.id) ? '#f0f7ff' : (student.is_active === false ? '#fff3cd' : 'white'),
-                          opacity: student.is_active === false ? 0.7 : 1
+                        onClick={() => {
+                          if (!isViewMode) {
+                            const newSet = new Set(selectedStudentIds);
+                            if (newSet.has(student.id)) newSet.delete(student.id);
+                            else newSet.add(student.id);
+                            setSelectedStudentIds(newSet);
+                          }
                         }}
+                        className={`group p-4 rounded-[1.75rem] border transition-all duration-200 cursor-pointer flex items-center gap-4 ${
+                          selectedStudentIds.has(student.id) 
+                            ? 'bg-emerald-50 border-emerald-200 shadow-md shadow-emerald-500/5' 
+                            : 'bg-white border-slate-50 hover:border-slate-200 hover:shadow-lg hover:shadow-slate-500/5'
+                        } ${student.is_active === false ? 'opacity-50 grayscale' : ''}`}
                       >
                         { !isViewMode && (
-                          <input 
-                            type="checkbox"
-                            checked={selectedStudentIds.has(student.id)}
-                            onChange={e => {
-                              if (e.target.checked) {
-                                setSelectedStudentIds(new Set([...selectedStudentIds, student.id]));
-                              } else {
-                                const newSet = new Set(selectedStudentIds);
-                                newSet.delete(student.id);
-                                setSelectedStudentIds(newSet);
-                              }
-                            }}
-                          />
-                        )}
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontWeight: '600', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            👤 {student.full_name || '(ไม่ระบุชื่อ)'}
-                            {student.full_name && <span style={{ fontSize: '12px', color: '#999' }}>({student.username})</span>}
+                          <div className={`w-6 h-6 rounded-lg flex items-center justify-center transition-all ${
+                            selectedStudentIds.has(student.id) ? 'bg-emerald-500 text-white' : 'bg-slate-100 border border-slate-200'
+                          }`}>
+                            {selectedStudentIds.has(student.id) && <Check className="w-4 h-4" />}
                           </div>
-                          <div style={{ fontSize: '12px', color: '#666', marginTop: '0.25rem' }}>
-                            📧 {student.email}
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="font-black text-slate-700 text-sm truncate group-hover:text-emerald-700 transition-colors">
+                            {student.full_name || '(ไม่ระบุชื่อ)'}
+                          </div>
+                          <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">
+                            <span className="truncate">{student.username}</span>
+                            <span className="w-1 h-1 rounded-full bg-slate-200 flex-shrink-0" />
+                            <Mail className="w-2.5 h-2.5" />
+                            <span className="truncate">{student.email}</span>
                           </div>
                         </div>
                         {isViewMode && (
                           <button
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.stopPropagation();
                               if (onRemoveStudent) {
                                 onRemoveStudent(selectedClassroom.id, student.student_id, student.full_name || student.username);
-                                // Call callback to update student count
-                                if (onStudentCountUpdate) {
-                                  onStudentCountUpdate(selectedClassroom.id);
-                                }
+                                if (onStudentCountUpdate) onStudentCountUpdate(selectedClassroom.id);
                               }
                             }}
-                            style={{
-                              padding: '0.5rem 1rem',
-                              backgroundColor: student.is_active === false ? '#4caf50' : '#ff6b6b',
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: '4px',
-                              cursor: 'pointer',
-                              fontSize: '12px',
-                              fontWeight: '600',
-                              transition: 'all 0.2s ease',
-                              whiteSpace: 'nowrap'
-                            }}
-                            onMouseEnter={(e) => {
-                              e.target.style.backgroundColor = student.is_active === false ? '#45a049' : '#ff5252';
-                              e.target.style.transform = 'scale(1.05)';
-                            }}
-                            onMouseLeave={(e) => {
-                              e.target.style.backgroundColor = student.is_active === false ? '#4caf50' : '#ff6b6b';
-                              e.target.style.transform = 'scale(1)';
-                            }}
+                            className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all shadow-sm active:scale-95 ${
+                              student.is_active === false 
+                                ? 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-emerald-100' 
+                                : 'bg-rose-50 text-rose-500 hover:bg-rose-500 hover:text-white shadow-rose-100'
+                            }`}
                             title={student.is_active === false ? "เพิ่มนักเรียนกลับเข้า" : "ลบนักเรียนออกจากชั้นเรียน"}
                           >
-                            {student.is_active === false ? '✓ เพิ่มกลับ' : '🗑️ ลบ'}
+                            {student.is_active === false ? <Plus className="w-5 h-5" /> : <Trash2 className="w-5 h-5" />}
                           </button>
                         )}
                       </div>
@@ -260,51 +255,53 @@ const AddStudentsModal = ({
                   </div>
                 )}
               </div>
-
-              {/* Selection summary */}
-              {selectedStudentIds.size > 0 && (
-                <div style={{
-                  marginTop: '1rem',
-                  padding: '1rem',
-                  backgroundColor: '#e8f5e9',
-                  borderRadius: '4px',
-                  color: '#2e7d32'
-                }}>
-                  ✓ {t('admin.selectStudents')} {selectedStudentIds.size}
-                </div>
-              )}
             </>
           )}
         </div>
 
         {/* Footer */}
-        <div className="admin-modal-footer">
+        <div className="px-8 py-6 border-t border-slate-50 bg-slate-50/30 flex items-center justify-between">
           <button 
             type="button" 
-            className="admin-btn-secondary"
+            className="flex items-center gap-2 px-6 py-3 bg-white border border-slate-200 text-slate-600 rounded-xl font-black text-sm transition-all hover:bg-slate-50 active:scale-95"
             onClick={onClose}
           >
-            ✕ {t('common.close')}
+            <X className="w-4 h-4" />
+            {t('common.close')}
           </button>
+          
           { !isViewMode && (
-            <button 
-              type="button" 
-              className="admin-btn-primary add-students-btn"
-              onClick={handleAddStudents}
-              disabled={addingStudentsToClassroom || selectedStudentIds.size === 0}
-              aria-label={`เพิ่ม ${selectedStudentIds.size} นักเรียน`}
-            >
-              {addingStudentsToClassroom ? (
-                <span className="btn-loading">⏳ {t('admin.loading')}</span>
-              ) : (
-                <>
-                  <span className="btn-icon">✓</span>
-                  <span className="btn-text">{t('common.add')}</span>
-                  <span className="btn-count">{selectedStudentIds.size}</span>
-                  <span className="btn-label">{t('admin.student')}</span>
-                </>
+            <div className="flex items-center gap-4">
+              {selectedStudentIds.size > 0 && (
+                <div className="hidden sm:block text-right">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">เลือกสำเภา</p>
+                  <p className="text-sm font-black text-emerald-600">{selectedStudentIds.size} รายการ</p>
+                </div>
               )}
-            </button>
+              <button 
+                type="button" 
+                className="flex items-center gap-2 px-8 py-3 bg-emerald-600 text-white rounded-xl font-black text-sm shadow-xl shadow-emerald-200 transition-all hover:bg-emerald-700 active:scale-95 disabled:opacity-50 disabled:grayscale disabled:scale-100"
+                onClick={handleAddStudents}
+                disabled={addingStudentsToClassroom || selectedStudentIds.size === 0}
+              >
+                {addingStudentsToClassroom ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>{t('admin.loading')}</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4" />
+                    <span>{t('common.add')}</span>
+                    {selectedStudentIds.size > 0 && (
+                      <span className="ml-1 px-1.5 py-0.5 bg-white/20 rounded text-[10px]">
+                        {selectedStudentIds.size}
+                      </span>
+                    )}
+                  </>
+                )}
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -313,3 +310,4 @@ const AddStudentsModal = ({
 };
 
 export default AddStudentsModal;
+

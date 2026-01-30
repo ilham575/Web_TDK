@@ -706,6 +706,44 @@ async def get_grades_from_previous_term(
     }
 
 
+@router.get("/my-classrooms", response_model=List[ClassroomResponse])
+async def get_my_classrooms(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """ดึงชั้นเรียนที่นักเรียนคนนี้สังกัดอยู่ (สำหรับนักเรียน)"""
+    classrooms = db.query(Classroom).join(
+        ClassroomStudent, Classroom.id == ClassroomStudent.classroom_id
+    ).filter(
+        ClassroomStudent.student_id == current_user.id,
+        ClassroomStudent.is_active == True
+    ).all()
+
+    results = []
+    for classroom in classrooms:
+        student_count = db.query(ClassroomStudent).filter(
+            ClassroomStudent.classroom_id == classroom.id,
+            ClassroomStudent.is_active == True
+        ).count()
+        
+        results.append(ClassroomResponse(
+            id=classroom.id,
+            name=classroom.name,
+            grade_level=classroom.grade_level,
+            room_number=classroom.room_number,
+            semester=classroom.semester,
+            academic_year=classroom.academic_year,
+            school_id=classroom.school_id,
+            is_active=classroom.is_active,
+            parent_classroom_id=classroom.parent_classroom_id,
+            student_count=student_count,
+            created_at=classroom.created_at,
+            updated_at=classroom.updated_at
+        ))
+    
+    return results
+
+
 # ===== Generic Routes (ต้องอยู่ที่ท้ายสุด เพื่อไม่ให้ match ก่อน specific routes) =====
 
 @router.get("/{classroom_id}", response_model=ClassroomResponse)

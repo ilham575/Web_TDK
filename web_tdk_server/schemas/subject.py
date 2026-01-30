@@ -11,6 +11,8 @@ class SubjectBase(BaseModel):
     is_ended: Optional[bool] = False
     credits: Optional[int] = None
     activity_percentage: Optional[int] = None
+    max_collected_score: Optional[int] = 100
+    max_exam_score: Optional[int] = 100
 
 class SubjectCreate(SubjectBase):
     pass

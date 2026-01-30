@@ -17,6 +17,7 @@ import AdminSubjectDetails from './components/js/pages/admin/adminSubjectDetails
 import DefaultHome from './components/js/pages/default/home';
 import AttendancePage from './components/js/pages/teacher/attendance';
 import GradesPage from './components/js/pages/teacher/grades';
+import GradeSummary from './components/js/pages/teacher/GradeSummary';
 import ProfilePage from './components/js/pages/profile';
 import OwnerPage from './components/js/pages/owner/home';
 import Footer from './components/js/Footer';
@@ -123,6 +124,14 @@ function App() {
           element={
             <RequireAuth>
               <GradesPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/teacher/subject/:id/summary"
+          element={
+            <RequireAuth>
+              <GradeSummary />
             </RequireAuth>
           }
         />

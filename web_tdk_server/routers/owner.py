@@ -102,15 +102,16 @@ def create_admin_for_school(
         raise HTTPException(status_code=400, detail="Username already exists")
     
     # Check if email already exists
-    db_email = db.query(UserModel).filter(UserModel.email == email).first()
-    if db_email:
-        raise HTTPException(status_code=400, detail="Email already exists")
+    if email:
+        db_email = db.query(UserModel).filter(UserModel.email == email).first()
+        if db_email:
+            raise HTTPException(status_code=400, detail="Email already exists")
     
     # Create admin user
     hashed_password = hash_password(password)
     db_user = UserModel(
         username=username,
-        email=email,
+        email=email if email else None,
         full_name=full_name,
         hashed_password=hashed_password,
         role="admin",
@@ -203,17 +204,19 @@ def request_admin(request: AdminRequestCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Request already exists for this username")
     
     # Check email
-    existing_email = db.query(UserModel).filter(UserModel.email == request.email).first()
-    if existing_email:
-        raise HTTPException(status_code=400, detail="Email already exists")
-    
-    existing_email_request = db.query(AdminRequestModel).filter(AdminRequestModel.email == request.email, AdminRequestModel.status == "pending").first()
-    if existing_email_request:
-        raise HTTPException(status_code=400, detail="Request already exists for this email")
+    if request.email:
+        existing_email = db.query(UserModel).filter(UserModel.email == request.email).first()
+        if existing_email:
+            raise HTTPException(status_code=400, detail="Email already exists")
+        
+        existing_email_request = db.query(AdminRequestModel).filter(AdminRequestModel.email == request.email, AdminRequestModel.status == "pending").first()
+        if existing_email_request:
+            raise HTTPException(status_code=400, detail="Request already exists for this email")
     
     # Delete any non-pending requests for this username and email to allow re-requesting
     db.query(AdminRequestModel).filter(AdminRequestModel.username == request.username, AdminRequestModel.status != "pending").delete()
-    db.query(AdminRequestModel).filter(AdminRequestModel.email == request.email, AdminRequestModel.status != "pending").delete()
+    if request.email:
+        db.query(AdminRequestModel).filter(AdminRequestModel.email == request.email, AdminRequestModel.status != "pending").delete()
     
     # Hash password
     hashed = hash_password(request.password)
@@ -221,7 +224,7 @@ def request_admin(request: AdminRequestCreate, db: Session = Depends(get_db)):
     # Create request
     request_obj = AdminRequestModel(
         username=request.username,
-        email=request.email,
+        email=request.email if request.email else None,
         full_name=request.full_name,
         password_hash=hashed,
         school_name=request.school_name,

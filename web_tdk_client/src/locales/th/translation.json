@@ -692,6 +692,14 @@
     "allSchools": "ทุกโรงเรียน",
     "fullName": "ชื่อเต็ม",
     "password": "รหัสผ่าน",
-    "requestedAt": "ขอเมื่อ"
+    "requestedAt": "ขอเมื่อ",
+    "addAdminSubtitle": "สร้างบัญชีผู้ดูแลระบบใหม่สำหรับโรงเรียน",
+    "approveDelete": "อนุมัติและลบ",
+    "deletionRequested": "มีการขอลบโรงเรียน",
+    "noPendingRequests": "ไม่มีคำขอลบที่รอดำเนินการ",
+    "pendingDeletion": "รอดำเนินการลบ",
+    "rejectedDeletion": "ปฏิเสธการลบ",
+    "total": "ทั้งหมด",
+    "urgent": "ด่วน"
   }
 }

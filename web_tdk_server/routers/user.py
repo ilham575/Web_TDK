@@ -104,9 +104,10 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="ชื่อผู้ใช้นี้มีการใช้งานแล้ว")
     
     # Check if email already exists
-    db_email = db.query(UserModel).filter(UserModel.email == user.email).first()
-    if db_email:
-        raise HTTPException(status_code=400, detail="อีเมลนี้มีการใช้งานแล้ว")
+    if user.email:
+        db_email = db.query(UserModel).filter(UserModel.email == user.email).first()
+        if db_email:
+            raise HTTPException(status_code=400, detail="อีเมลนี้มีการใช้งานแล้ว")
     
     # Hash password and create user
     hashed_password = hash_password(user.password)
@@ -472,20 +473,36 @@ def bulk_upload_users(file: UploadFile = File(...), db: Session = Depends(get_db
             if 'grade_level' in idx and row[idx['grade_level']] is not None:
                 grade_level = str(row[idx['grade_level']]).strip()
 
-            if not username or not email or not password or role not in ('teacher', 'student'):
-                raise ValueError('ข้อมูลไม่ถูกต้อง - ฟิลด์จำเป็นหายไปหรือบทบาทไม่ถูกต้อง')
+            if not username or not password or role not in ('teacher', 'student'):
+                raise ValueError('ข้อมูลไม่ถูกต้อง - ชื่อผู้ใช้, รหัสผ่าน หายไป หรือบทบาทไม่ถูกต้อง')
 
             # default school_id to admin's school if not provided
             if school_id is None:
                 school_id = getattr(current_user, 'school_id', None)
 
             # uniqueness checks
-            existing_user = db.query(UserModel).filter((UserModel.username == username) | (UserModel.email == email)).first()
-            if existing_user:
-                raise ValueError('ชื่อผู้ใช้หรืออีเมลนี้มีการใช้งานแล้ว')
+            # Username check
+            existing_username = db.query(UserModel).filter(UserModel.username == username).first()
+            if existing_username:
+                raise ValueError(f'ชื่อผู้ใช้ "{username}" นี้มีการใช้งานแล้ว')
+            
+            # Email check (only if provided)
+            db_email = email if email else None
+            if db_email:
+                existing_email = db.query(UserModel).filter(UserModel.email == db_email).first()
+                if existing_email:
+                    raise ValueError(f'อีเมล "{db_email}" นี้มีการใช้งานแล้ว')
 
             hashed = hash_password(password)
-            new_user = UserModel(username=username, email=email, full_name=full_name, hashed_password=hashed, role=role, school_id=school_id, grade_level=grade_level)
+            new_user = UserModel(
+                username=username, 
+                email=db_email, 
+                full_name=full_name, 
+                hashed_password=hashed, 
+                role=role, 
+                school_id=school_id, 
+                grade_level=grade_level
+            )
             db.add(new_user)
             db.flush()
             created.append({'row': r_i, 'username': username, 'id': new_user.id})

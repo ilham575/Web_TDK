@@ -74,7 +74,9 @@ def create_subject(subject: SubjectCreate, db: Session = Depends(get_db), curren
         teacher_id=subject.teacher_id,
         school_id=school_id,
         credits=getattr(subject, 'credits', None),
-        activity_percentage=getattr(subject, 'activity_percentage', None)
+        activity_percentage=getattr(subject, 'activity_percentage', None),
+        max_collected_score=getattr(subject, 'max_collected_score', 100),
+        max_exam_score=getattr(subject, 'max_exam_score', 100)
     )
     db.add(new_sub)
     db.commit()
@@ -118,6 +120,10 @@ def update_subject(subject_id: int, subject: SubjectCreate, db: Session = Depend
         subj.credits = subject.credits
     if getattr(subject, 'activity_percentage', None) is not None:
         subj.activity_percentage = subject.activity_percentage
+    if getattr(subject, 'max_collected_score', None) is not None:
+        subj.max_collected_score = subject.max_collected_score
+    if getattr(subject, 'max_exam_score', None) is not None:
+        subj.max_exam_score = subject.max_exam_score
     
     db.commit()
     db.refresh(subj)
@@ -221,14 +227,64 @@ def subjects_by_teacher(teacher_id: int, db: Session = Depends(get_db)):
     return result
 
 
-@router.get('/student/{student_id}', response_model=List[Subject])
+@router.get('/student/{student_id}', response_model=List[dict])
 def subjects_by_student(student_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     # allow student to fetch their own subjects, or admin to fetch any
     if getattr(current_user, 'role', None) != 'admin' and getattr(current_user, 'id', None) != int(student_id):
         raise HTTPException(status_code=403, detail='Not authorized to view subjects for this student')
+    
     # join SubjectStudent -> Subject
-    subs = db.query(SubjectModel).join(SubjectStudentModel, SubjectStudentModel.subject_id == SubjectModel.id).filter(SubjectStudentModel.student_id == student_id).all()
-    return subs
+    subs = db.query(SubjectModel).join(
+        SubjectStudentModel, SubjectStudentModel.subject_id == SubjectModel.id
+    ).filter(
+        SubjectStudentModel.student_id == student_id
+    ).all()
+    
+    result = []
+    for subject in subs:
+        # Get all teachers assigned to this subject (with is_ended status)
+        all_schedules = db.query(SubjectScheduleModel).filter(
+            SubjectScheduleModel.subject_id == subject.id
+        ).all()
+        
+        teachers_list = []
+        for sched in all_schedules:
+            teacher = db.query(UserModel).filter(UserModel.id == sched.teacher_id).first()
+            teacher_name = teacher.full_name or teacher.username if teacher else "Unknown"
+            
+            classroom_name = None
+            if sched.classroom_id:
+                classroom = db.query(ClassroomModel).filter(ClassroomModel.id == sched.classroom_id).first()
+                classroom_name = classroom.name if classroom else None
+            
+            teachers_list.append({
+                'id': sched.id,
+                'schedule_id': sched.id,
+                'teacher_id': sched.teacher_id,
+                'teacher_name': teacher_name,
+                'name': teacher_name,
+                'classroom_id': sched.classroom_id,
+                'classroom_name': classroom_name,
+                'is_ended': sched.is_ended
+            })
+            
+        result.append({
+            'id': subject.id,
+            'name': subject.name,
+            'code': subject.code,
+            'subject_type': subject.subject_type,
+            'teacher_id': subject.teacher_id,
+            'school_id': subject.school_id,
+            'credits': subject.credits,
+            'activity_percentage': subject.activity_percentage,
+            'is_ended': subject.is_ended,
+            'created_at': subject.created_at,
+            'updated_at': subject.updated_at,
+            'teachers': teachers_list,
+            'teacher_count': len(teachers_list)
+        })
+        
+    return result
 
 
 @router.get("/{subject_id}/students")

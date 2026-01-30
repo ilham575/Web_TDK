@@ -42,10 +42,20 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 # เพิ่ม CORS middleware
-cors_origins = os.getenv("CORS_ORIGINS", "*").split(",")
+cors_origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:5173", # Vite default
+]
+# If CORS_ORIGINS environment variable is set, add those too
+env_origins = os.getenv("CORS_ORIGINS")
+if env_origins:
+    cors_origins.extend(env_origins.split(","))
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
+    allow_origin_regex="http://localhost:.*", # Allow any port on localhost
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

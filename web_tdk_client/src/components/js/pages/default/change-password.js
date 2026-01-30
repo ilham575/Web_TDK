@@ -2,9 +2,19 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import '../../../css/pages/default/change-password.css'; // CSS สำหรับหน้าเปลี่ยนรหัสผ่าน
 import { API_BASE_URL } from '../../../endpoints';
 import { logout } from '../../../../utils/authUtils';
+
+// Custom close button for toast
+const CustomCloseButton = ({ closeToast }) => (
+  <button
+    onClick={closeToast}
+    className="ml-4 bg-transparent border-none text-xl font-bold text-white self-center cursor-pointer"
+    aria-label="close"
+  >
+    ✖
+  </button>
+);
 
 function ChangePasswordPage() {
   const navigate = useNavigate();
@@ -16,28 +26,25 @@ function ChangePasswordPage() {
   const [isStudentFirstLogin, setIsStudentFirstLogin] = useState(false);
 
   useEffect(() => {
-    // ตรวจสอบว่ามี token หรือไม่
+    // Check for token
     const token = localStorage.getItem('token');
     if (!token) {
       navigate('/signin');
       return;
     }
 
-    // ดึงข้อมูลผู้ใช้ปัจจุบัน
+    // Fetch user info
     fetch(`${API_BASE_URL}/users/me`, {
       headers: { Authorization: `Bearer ${token}` }
     })
       .then(res => res.json())
       .then(data => {
         if (data.detail) {
-          // Token ไม่ถูกต้อง
           logout();
           navigate('/signin');
         } else {
           setCurrentUser(data);
-          // Check if this is a student's first login (must_change_password = true)
           setIsStudentFirstLogin(data.role === 'student' && data.must_change_password === true);
-          // ถ้าไม่จำเป็นต้องเปลี่ยนรหัสผ่าน ให้ redirect ไปหน้าหลัก
           if (!data.must_change_password) {
             redirectToHomePage(data.role);
           }
@@ -51,20 +58,11 @@ function ChangePasswordPage() {
 
   const redirectToHomePage = (role) => {
     switch (role) {
-      case 'admin':
-        navigate('/admin/home');
-        break;
-      case 'teacher':
-        navigate('/teacher/home');
-        break;
-      case 'student':
-        navigate('/student/home');
-        break;
-      case 'owner':
-        navigate('/owner/home');
-        break;
-      default:
-        navigate('/');
+      case 'admin': navigate('/admin/home'); break;
+      case 'teacher': navigate('/teacher/home'); break;
+      case 'student': navigate('/student/home'); break;
+      case 'owner': navigate('/owner/home'); break;
+      default: navigate('/');
     }
   };
 
@@ -72,41 +70,33 @@ function ChangePasswordPage() {
     e.preventDefault();
     setIsLoading(true);
 
-    // ตรวจสอบข้อมูล
     if (!newPassword || !confirmPassword) {
-      toast.error('กรุณากรอกรหัสผ่านใหม่และยืนยันรหัสผ่าน');
+      toast.error('กรุณากรอกรหัสผ่านใหม่และยืนยันรหัสผ่าน', { theme: "colored" });
       setIsLoading(false);
       return;
     }
     
-    // For non-student first login, still require current password
     if (!isStudentFirstLogin && !currentPassword) {
-      toast.error('กรุณากรอกรหัสผ่านปัจจุบัน');
+      toast.error('กรุณากรอกรหัสผ่านปัจจุบัน', { theme: "colored" });
       setIsLoading(false);
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      toast.error('รหัสผ่านใหม่และยืนยันรหัสผ่านไม่ตรงกัน');
+      toast.error('รหัสผ่านไม่ตรงกัน', { theme: "colored" });
       setIsLoading(false);
       return;
     }
 
     if (newPassword.length < 6) {
-      toast.error('รหัสผ่านใหม่ต้องมีความยาวอย่างน้อย 6 ตัวอักษร');
+      toast.error('รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร', { theme: "colored" });
       setIsLoading(false);
       return;
     }
 
     try {
       const token = localStorage.getItem('token');
-      
-      // For student first login, we send empty current_password or the backend should allow skipping it
-      const bodyData = {
-        new_password: newPassword
-      };
-      
-      // Include current_password only if not student first login OR if user filled it
+      const bodyData = { new_password: newPassword };
       if (!isStudentFirstLogin || currentPassword) {
         bodyData.current_password = currentPassword || '';
       }
@@ -123,16 +113,15 @@ function ChangePasswordPage() {
       const data = await response.json();
 
       if (response.ok) {
-        toast.success(data.message || 'เปลี่ยนรหัสผ่านสำเร็จ');
+        toast.success(data.message || 'เปลี่ยนรหัสผ่านสำเร็จ', { theme: "colored" });
         setTimeout(() => {
           redirectToHomePage(currentUser?.role);
         }, 1500);
       } else {
-        toast.error(data.detail || 'เกิดข้อผิดพลาดในการเปลี่ยนรหัสผ่าน');
+        toast.error(data.detail || 'เกิดข้อผิดพลาดในการเปลี่ยนรหัสผ่าน', { theme: "colored" });
       }
     } catch (error) {
-      console.error('Error:', error);
-      toast.error('เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์');
+      toast.error('เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์', { theme: "colored" });
     } finally {
       setIsLoading(false);
     }
@@ -144,103 +133,123 @@ function ChangePasswordPage() {
   };
 
   return (
-    <div className="change-password-container">
-      <ToastContainer />
-      <div className="change-password-card">
-        <div className="change-password-header">
-          <h2>🔒 เปลี่ยนรหัสผ่าน</h2>
-          <p className="change-password-subtitle">
-            {isStudentFirstLogin ? (
-              <>
-                ยินดีต้อนรับ! 🎉<br/>
-                กรุณาตั้งรหัสผ่านใหม่ของคุณเพื่อความปลอดภัย
-              </>
-            ) : (
-              <>
-                เนื่องจากรหัสผ่านของคุณถูกรีเซ็ตโดยผู้ดูแลระบบ<br/>
-                กรุณาตั้งรหัสผ่านใหม่เพื่อความปลอดภัย
-              </>
-            )}
-          </p>
+    <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
+      {/* Decorative Ornaments */}
+      <div className="absolute top-0 left-0 w-full h-2 bg-emerald-600"></div>
+      <div className="absolute -top-24 -left-24 w-96 h-96 bg-emerald-100 rounded-full opacity-50 blur-3xl"></div>
+      <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-indigo-100 rounded-full opacity-50 blur-3xl"></div>
+
+      <ToastContainer position="top-center" closeButton={CustomCloseButton} />
+
+      <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10">
+        <div className="flex justify-center mb-6">
+          <div className="w-20 h-20 bg-emerald-600 rounded-2xl flex items-center justify-center text-4xl shadow-xl shadow-emerald-200 text-white border-4 border-white">
+            🔒
+          </div>
         </div>
+        <h2 className="text-center text-3xl font-extrabold text-slate-900">
+          เปลี่ยนรหัสผ่าน
+        </h2>
+        <p className="mt-2 text-center text-sm text-slate-600 italic">
+          {isStudentFirstLogin ? 'การเข้าใช้ครั้งแรก กรุณาตั้งรหัสผ่านใหม่' : 'กรุณาตั้งรหัสผ่านใหม่เพื่อความปลอดภัย'}
+        </p>
+      </div>
 
-        <form onSubmit={handleSubmit} className="change-password-form">
-          {!isStudentFirstLogin && (
-            <div className="change-password-form-group">
-              <label className="change-password-form-label">รหัสผ่านปัจจุบัน (รหัสชั่วคราว)</label>
-              <input
-                type="password"
-                className="change-password-form-input"
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                placeholder="รหัสผ่านชั่วคราวที่แอดมินให้ไว้"
-                required
-              />
-            </div>
-          )}
-
-          <div className="change-password-form-group">
-            <label className="change-password-form-label">รหัสผ่านใหม่</label>
-            <input
-              type="password"
-              className="change-password-form-input"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              placeholder="รหัสผ่านใหม่ (อย่างน้อย 6 ตัวอักษร)"
-              required
-              minLength="6"
-            />
-          </div>
-
-          <div className="change-password-form-group">
-            <label className="change-password-form-label">ยืนยันรหัสผ่านใหม่</label>
-            <input
-              type="password"
-              className="change-password-form-input"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              placeholder="กรอกรหัสผ่านใหม่อีกครั้ง"
-              required
-            />
-          </div>
-
+      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md relative z-10 px-4 sm:px-0">
+        <div className="bg-white py-8 px-4 shadow-2xl shadow-slate-200 sm:rounded-3xl sm:px-10 border border-slate-100">
+          
           {isStudentFirstLogin && (
-            <div style={{ 
-              marginBottom: '1rem', 
-              padding: '0.75rem', 
-              background: '#FEF3C7', 
-              border: '1px solid #FCD34D', 
-              borderRadius: '6px',
-              fontSize: '0.875rem',
-              color: '#92400E'
-            }}>
-              💡 <strong>หมายเหตุ:</strong> นี่เป็นการตั้งรหัสผ่านครั้งแรก คุณไม่จำเป็นต้องกรอกรหัสผ่านเดิม
+            <div className="mb-6 bg-emerald-50 border border-emerald-100 rounded-2xl p-4 flex items-start gap-3">
+              <span className="text-xl">🎉</span>
+              <div>
+                <p className="text-sm font-bold text-emerald-900">ยินดีต้อนรับ!</p>
+                <p className="text-xs text-emerald-700 mt-1 leading-relaxed">
+                  เนื่องจากนี่เป็นการเข้าสู่ระบบครั้งแรกของคุณ กรุณาเปลี่ยนรหัสผ่านเพื่อความปลอดภัยของบัญชี
+                </p>
+              </div>
             </div>
           )}
 
-          <button 
-            type="submit" 
-            className="change-password-button"
-            disabled={isLoading}
-          >
-            {isLoading ? 'กำลังเปลี่ยน...' : 'เปลี่ยนรหัสผ่าน'}
-          </button>
-        </form>
+          <form className="space-y-6" onSubmit={handleSubmit}>
+            {!isStudentFirstLogin && (
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5 ml-1">
+                  รหัสผ่านปัจจุบัน
+                </label>
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">🔑</span>
+                  <input
+                    type="password"
+                    className="block w-full pl-10 pr-3 py-3 border border-slate-200 rounded-2xl bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all text-sm"
+                    placeholder="รหัสผ่านชั่วคราว"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+            )}
 
-        <div className="change-password-links">
-          <button 
-            className="change-password-link-button"
-            onClick={handleSignout}
-            type="button"
-          >
-            ออกจากระบบ
-          </button>
-        </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1.5 ml-1">
+                รหัสผ่านใหม่
+              </label>
+              <div className="relative">
+                <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">🔒</span>
+                <input
+                  type="password"
+                  className="block w-full pl-10 pr-3 py-3 border border-slate-200 rounded-2xl bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all text-sm"
+                  placeholder="อย่างน้อย 6 ตัวอักษร"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  required
+                  minLength="6"
+                />
+              </div>
+            </div>
 
-        <div className="change-password-footer">
-          <p>หากคุณมีปัญหาในการเปลี่ยนรหัสผ่าน กรุณาติดต่อผู้ดูแลระบบ</p>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1.5 ml-1">
+                ยืนยันรหัสผ่านใหม่
+              </label>
+              <div className="relative">
+                <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">🛡️</span>
+                <input
+                  type="password"
+                  className="block w-full pl-10 pr-3 py-3 border border-slate-200 rounded-2xl bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all text-sm"
+                  placeholder="กรอกรหัสผ่านใหม่อีกครั้ง"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full flex justify-center py-4 px-4 border border-transparent rounded-2xl shadow-lg text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 transition-all transform active:scale-[0.98] disabled:opacity-50 shadow-emerald-200"
+              >
+                {isLoading ? 'กำลังประมวลผล...' : 'เปลี่ยนรหัสผ่าน'}
+              </button>
+              
+              <button
+                type="button"
+                onClick={handleSignout}
+                className="w-full flex justify-center py-3 px-4 border border-slate-200 rounded-2xl text-sm font-medium text-slate-500 hover:bg-slate-50 hover:text-rose-600 transition-all hover:border-rose-100"
+              >
+                ออกจากระบบ
+              </button>
+            </div>
+          </form>
         </div>
       </div>
+
+      <footer className="mt-8 text-center text-xs text-slate-400">
+        <p>หากคุณมีปัญหาในการเปลี่ยนรหัสผ่าน กรุณาติดต่อผู้ดูแลระบบ</p>
+        <p className="mt-2 text-slate-300 italic">© {new Date().getFullYear()} TDK Mosque Learning Center.</p>
+      </footer>
     </div>
   );
 }

@@ -164,16 +164,26 @@ def assign_subject_to_schedule(
             detail="Subject ID is required"
         )
     
-    # Verify the subject belongs to the teacher
-    subject = db.query(Subject).filter(
-        Subject.id == assignment.subject_id,
-        Subject.teacher_id == current_user.id
-    ).first()
-    
+    # Verify the subject belongs to the teacher (legacy teacher_id OR subject_teachers)
+    subject = db.query(Subject).filter(Subject.id == assignment.subject_id).first()
     if not subject:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Subject not found or not assigned to you"
+            detail="Subject not found"
+        )
+    
+    is_authorized = False
+    if subject.teacher_id == current_user.id:
+        is_authorized = True
+    else:
+        from models.schedule import SubjectSchedule
+        if db.query(SubjectSchedule).filter_by(subject_id=subject.id, teacher_id=current_user.id).first():
+            is_authorized = True
+            
+    if not is_authorized:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Subject not assigned to you"
         )
     
     # Validate time slot is within school operating hours
@@ -304,6 +314,7 @@ def assign_subject_to_schedule(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create schedule assignment: {str(e)}"
         )
+
 
 @router.get("/teacher", response_model=List[SubjectScheduleSchema])
 def get_teacher_schedules(
