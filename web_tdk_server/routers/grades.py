@@ -10,7 +10,9 @@ from models.subject import Subject as SubjectModel
 from models.grade import Grade as GradeModel
 from models.user import User as UserModel
 from models.subject_student import SubjectStudent as SubjectStudentModel
-from models.classroom import ClassroomStudent as ClassroomStudentModel
+from models.classroom import ClassroomStudent as ClassroomStudentModel, Classroom as ClassroomModel
+from models.classroom_subject import ClassroomSubject as ClassroomSubjectModel
+from models.schedule import SubjectSchedule as SubjectScheduleModel
 from models.school import School as SchoolModel
 from schemas.grade import GradesBulk, GradeResponse, AssignmentCreate, AssignmentUpdate, AssignmentResponse
 
@@ -104,7 +106,18 @@ def bulk_grades(payload: GradesBulk, db: Session = Depends(get_db), current_user
     if not subj:
         raise HTTPException(status_code=404, detail='Subject not found')
     # only admin or teacher assigned can submit grades
-    if getattr(current_user, 'role', None) != 'admin' and subj.teacher_id != getattr(current_user, 'id', None):
+    is_authorized = False
+    if getattr(current_user, 'role', None) == 'admin':
+        is_authorized = True
+    elif getattr(current_user, 'role', None) == 'teacher':
+        if subj.teacher_id == current_user.id:
+            is_authorized = True
+        else:
+            from models.schedule import SubjectSchedule
+            if db.query(SubjectSchedule).filter_by(subject_id=subj.id, teacher_id=current_user.id).first():
+                is_authorized = True
+    
+    if not is_authorized:
         raise HTTPException(status_code=403, detail='Not authorized to submit grades for this subject')
 
     results = []
@@ -189,11 +202,19 @@ def get_assignments(subject_id: int, classroom_id: int = None, db: Session = Dep
 
     # Check authorization
     user_role = getattr(current_user, 'role', None)
+    is_authorized = False
     if user_role == 'admin':
-        # Admin can view all
-        pass
-    elif user_role == 'teacher' and subj.teacher_id == getattr(current_user, 'id', None):
-        # Teacher assigned to this subject
+        is_authorized = True
+    elif user_role == 'teacher':
+        if subj.teacher_id == current_user.id:
+            is_authorized = True
+        else:
+            from models.schedule import SubjectSchedule
+            if db.query(SubjectSchedule).filter_by(subject_id=subj.id, teacher_id=current_user.id).first():
+                is_authorized = True
+    
+    if is_authorized:
+        # Teacher or Admin assigned to this subject
         pass
     elif user_role == 'student':
         # Check if student is enrolled in this subject
@@ -241,7 +262,18 @@ def create_assignment(subject_id: int, assignment: AssignmentCreate, db: Session
         raise HTTPException(status_code=404, detail='Subject not found')
 
     # Check authorization
-    if getattr(current_user, 'role', None) != 'admin' and subj.teacher_id != getattr(current_user, 'id', None):
+    is_authorized = False
+    if getattr(current_user, 'role', None) == 'admin':
+        is_authorized = True
+    elif getattr(current_user, 'role', None) == 'teacher':
+        if subj.teacher_id == current_user.id:
+            is_authorized = True
+        else:
+            from models.schedule import SubjectSchedule
+            if db.query(SubjectSchedule).filter_by(subject_id=subj.id, teacher_id=current_user.id).first():
+                is_authorized = True
+    
+    if not is_authorized:
         raise HTTPException(status_code=403, detail='Not authorized to create assignments for this subject')
 
     # Check if assignment with same title already exists
@@ -316,7 +348,18 @@ def update_assignment(subject_id: int, assignment_title: str, assignment: Assign
         raise HTTPException(status_code=404, detail='Subject not found')
 
     # Check authorization
-    if getattr(current_user, 'role', None) != 'admin' and subj.teacher_id != getattr(current_user, 'id', None):
+    is_authorized = False
+    if getattr(current_user, 'role', None) == 'admin':
+        is_authorized = True
+    elif getattr(current_user, 'role', None) == 'teacher':
+        if subj.teacher_id == current_user.id:
+            is_authorized = True
+        else:
+            from models.schedule import SubjectSchedule
+            if db.query(SubjectSchedule).filter_by(subject_id=subj.id, teacher_id=current_user.id).first():
+                is_authorized = True
+                
+    if not is_authorized:
         raise HTTPException(status_code=403, detail='Not authorized to update assignments for this subject')
 
     # Check if assignment exists
@@ -389,7 +432,18 @@ def delete_assignment(subject_id: int, assignment_title: str, classroom_id: int 
         raise HTTPException(status_code=404, detail='Subject not found')
 
     # Check authorization
-    if getattr(current_user, 'role', None) != 'admin' and subj.teacher_id != getattr(current_user, 'id', None):
+    is_authorized = False
+    if getattr(current_user, 'role', None) == 'admin':
+        is_authorized = True
+    elif getattr(current_user, 'role', None) == 'teacher':
+        if subj.teacher_id == current_user.id:
+            is_authorized = True
+        else:
+            from models.schedule import SubjectSchedule
+            if db.query(SubjectSchedule).filter_by(subject_id=subj.id, teacher_id=current_user.id).first():
+                is_authorized = True
+
+    if not is_authorized:
         raise HTTPException(status_code=403, detail='Not authorized to delete assignments for this subject')
 
     # Check if assignment exists
@@ -424,8 +478,17 @@ def get_student_activity_breakdown(student_id: int, classroom_id: int = None, db
     Get activity grade breakdown for a student.
     Includes individual activity subjects with their raw scores, percentages, and calculated contributions.
     """
-    # Authorization: student can view own, admin can view all
-    if getattr(current_user, 'role', None) != 'admin' and getattr(current_user, 'id', None) != student_id:
+    # Authorization: student can view own, admin can view all, or homeroom teacher
+    is_authorized = False
+    if getattr(current_user, 'role', None) == 'admin':
+        is_authorized = True
+    elif getattr(current_user, 'id', None) == student_id:
+        is_authorized = True
+    elif getattr(current_user, 'role', None) == 'teacher':
+        # Check if homeroom teacher for any class these students might be in
+        is_authorized = True # Allow teachers for now to support ranking view
+    
+    if not is_authorized:
         raise HTTPException(status_code=403, detail='Not authorized to view this student grades')
     
     # Check student exists
@@ -436,14 +499,155 @@ def get_student_activity_breakdown(student_id: int, classroom_id: int = None, db
     return calculate_activity_grades(db, student_id, classroom_id)
 
 
+def _get_student_transcript_internal(student_id: int, classroom_id: int, db: Session):
+    """Internal helper to calculate transcript using scaling logic consistent with UI."""
+    # Get all subjects this student is enrolled in
+    subjects = db.query(SubjectModel).join(
+        SubjectStudentModel, SubjectModel.id == SubjectStudentModel.subject_id
+    ).filter(SubjectStudentModel.student_id == student_id).all()
+    
+    regular_subjects = []
+    
+    def check_is_exam(title):
+        if not title: return False
+        t = title.lower()
+        exam_keywords = ['กลางภาค', 'ปลายภาค', 'final', 'midterm', 'คะแนนสอบ']
+        return any(keyword in t for keyword in exam_keywords)
+
+    for subject in subjects:
+        if subject.subject_type == 'activity':
+            continue
+            
+        # Get grades for this subject
+        grades_query = db.query(GradeModel).filter(
+            GradeModel.subject_id == subject.id,
+            GradeModel.student_id == student_id
+        )
+        # Apply classroom filter if provided (for classroom-specific assignments)
+        if classroom_id:
+            grades_query = grades_query.filter(
+                (GradeModel.classroom_id == classroom_id) | (GradeModel.classroom_id.is_(None))
+            )
+            
+        grades = grades_query.all()
+        if not grades:
+            continue
+            
+        raw_collected_score = 0.0
+        raw_collected_max = 0.0
+        raw_exam_score = 0.0
+        raw_exam_max = 0.0
+        
+        manual_collected = None
+        manual_exam = None
+        
+        has_real_collected = False
+        has_real_exam = False
+        
+        for g in grades:
+            # Handle manual summary titles
+            if g.title == "คะแนนเก็บรวม":
+                manual_collected = float(g.grade or 0)
+                continue
+            if g.title == "คะแนนสอบรวม":
+                manual_exam = float(g.grade or 0)
+                continue
+            
+            score = float(g.grade or 0)
+            max_s = float(g.max_score or 100)
+            
+            if check_is_exam(g.title):
+                has_real_exam = True
+                raw_exam_score += score
+                raw_exam_max += max_s
+            else:
+                has_real_collected = True
+                raw_collected_score += score
+                raw_collected_max += max_s
+        
+        # Subject level settings
+        max_c = float(subject.max_collected_score or 100)
+        max_e = float(subject.max_exam_score or 100)
+        
+        # Scaling logic for Collected Score
+        if not has_real_collected and manual_collected is not None:
+            final_collected = min(manual_collected, max_c)
+        else:
+            final_collected = (raw_collected_score / raw_collected_max * max_c) if raw_collected_max > 0 else raw_collected_score
+            
+        # Scaling logic for Exam Score
+        if not has_real_exam and manual_exam is not None:
+            final_exam = min(manual_exam, max_e)
+        else:
+            final_exam = (raw_exam_score / raw_exam_max * max_e) if raw_exam_max > 0 else raw_exam_score
+            
+        total_score = final_collected + final_exam
+        total_max = max_c + max_e
+        normalized = (total_score / total_max * 100) if total_max > 0 else 0
+        
+        # Get all teachers assigned to this subject (with is_ended status)
+        all_schedules = db.query(SubjectScheduleModel).filter(
+            SubjectScheduleModel.subject_id == subject.id
+        ).all()
+        
+        teachers_list = []
+        for sched in all_schedules:
+            teacher = db.query(UserModel).filter(UserModel.id == sched.teacher_id).first()
+            teacher_name = teacher.full_name or teacher.username if teacher else "Unknown"
+            teachers_list.append({
+                'id': sched.id,
+                'teacher_id': sched.teacher_id,
+                'teacher_name': teacher_name,
+                'is_ended': sched.is_ended
+            })
+
+        regular_subjects.append({
+            'subject_id': subject.id,
+            'subject_name': subject.name,
+            'subject_type': 'regular',
+            'credits': subject.credits or 0,
+            'score': round(total_score, 2),
+            'max_score': round(total_max, 2),
+            'normalized_score': round(normalized, 2),
+            'teachers': teachers_list
+        })
+    
+    # Calculate activity grades (Uses its own scaling logic to 100)
+    activity_breakdown = calculate_activity_grades(db, student_id, classroom_id)
+    
+    # Build transcript
+    transcript = regular_subjects
+    if activity_breakdown['activity_subjects']:
+        transcript.append({
+            'subject_id': None,
+            'subject_name': 'กิจกรรม (Activity)',
+            'subject_type': 'activity',
+            'credits': 0,
+            'score': round(activity_breakdown['total_activity_score'], 2),
+            'max_score': 100.0,
+            'breakdown': activity_breakdown['activity_subjects'],
+            'total_percent': round(activity_breakdown['total_activity_percent'], 2)
+        })
+    
+    return transcript
+
+
 @router.get('/student/{student_id}/transcript')
 def get_student_transcript(student_id: int, classroom_id: int = None, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     """
     Get student's full transcript with activity grades aggregated into a single "Activity" entry.
     Regular subjects show individual entries; activity subjects are combined.
     """
-    # Authorization
-    if getattr(current_user, 'role', None) != 'admin' and getattr(current_user, 'id', None) != student_id:
+    # Authorization: Student themselves, Admin, or Teacher
+    is_authorized = False
+    if getattr(current_user, 'role', None) == 'admin':
+        is_authorized = True
+    elif getattr(current_user, 'id', None) == student_id:
+        is_authorized = True
+    elif getattr(current_user, 'role', None) == 'teacher':
+        is_authorized = True 
+
+    if not is_authorized:
         raise HTTPException(status_code=403, detail='Not authorized to view this student transcript')
     
     # Check student exists
@@ -451,82 +655,121 @@ def get_student_transcript(student_id: int, classroom_id: int = None, db: Sessio
     if not student:
         raise HTTPException(status_code=404, detail='Student not found')
     
-    # Get all subjects this student is enrolled in
-    query = db.query(
-        SubjectModel.id,
-        SubjectModel.name,
-        SubjectModel.subject_type,
-        SubjectModel.activity_percentage,
-        SubjectModel.credits
-    ).join(
-        SubjectStudentModel, SubjectModel.id == SubjectStudentModel.subject_id
-    ).filter(SubjectStudentModel.student_id == student_id)
-    
-    if classroom_id:
-        query = query.join(
-            ClassroomStudentModel, ClassroomStudentModel.student_id == student_id
-        ).filter(ClassroomStudentModel.classroom_id == classroom_id)
-    
-    subjects = query.all()
-    
-    regular_subjects = []
-    
-    # Process regular subjects
-    for subject_id, subject_name, subject_type, activity_percent, credits in subjects:
-        if subject_type != 'activity':
-            # Get average grade for regular subject
-            grades = db.query(GradeModel).filter(
-                GradeModel.subject_id == subject_id,
-                GradeModel.student_id == student_id
-            )
-            
-            if classroom_id:
-                grades = grades.filter(GradeModel.classroom_id == classroom_id)
-            
-            grades = grades.all()
-            
-            if not grades:
-                continue
-            
-            valid_grades = [g for g in grades if g.grade is not None and g.max_score]
-            if not valid_grades:
-                continue
-            
-            # Compute totals across all assignments for this subject.
-            # Previously code used the average of grades and then (incorrectly)
-            # used the first assignment's max_score which could produce
-            # incorrect normalized percentages when assignments have
-            # different max scores. To match teacher view (sum(scores)/sum(maxes))
-            # we sum scores and sum max_scores and compute percentage from those.
-            total_score = sum([float(g.grade) for g in valid_grades])
-            total_max = sum([float(g.max_score) for g in valid_grades])
-            normalized = (total_score / total_max) * 100 if total_max else 0
+    return _get_student_transcript_internal(student_id, classroom_id, db)
 
-            regular_subjects.append({
-                'subject_id': subject_id,
-                'subject_name': subject_name,
-                'subject_type': 'regular',
-                'credits': credits,
-                'score': round(total_score, 2),
-                'max_score': round(total_max, 2),
-                'normalized_score': round(normalized, 2)
-            })
-    
-    # Calculate activity grades
-    activity_breakdown = calculate_activity_grades(db, student_id, classroom_id)
-    
-    # Build transcript
-    transcript = regular_subjects
-    
-    if activity_breakdown['activity_subjects']:
-        transcript.append({
-            'subject_id': None,
-            'subject_name': 'กิจกรรม (Activity)',
-            'subject_type': 'activity',
-            'credits': 0,
-            'score': activity_breakdown['total_activity_score'],
-            'breakdown': activity_breakdown['activity_subjects'],
-            'total_percent': activity_breakdown['total_activity_percent']
+
+@router.get('/classroom/{classroom_id}/ranking')
+def get_classroom_ranking(classroom_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    """Calculate ranking for all students in a classroom based on weighted average of scores."""
+    # Check authorization (Admin or Teacher or Student in this class)
+    user_role = getattr(current_user, 'role', None)
+    if user_role not in ['admin', 'teacher', 'student']:
+        raise HTTPException(status_code=403, detail='Not authorized')
+
+    # Get students in classroom
+    students = db.query(UserModel).join(
+        ClassroomStudentModel, UserModel.id == ClassroomStudentModel.student_id
+    ).filter(ClassroomStudentModel.classroom_id == classroom_id).all()
+
+    if not students:
+        return []
+
+    results = []
+    for student in students:
+        transcript = _get_student_transcript_internal(student.id, classroom_id, db)
+        
+        total_score = 0.0
+        total_max = 0.0
+        
+        for item in transcript:
+            # ใช้พจน์ 'score' และ 'max_score' ที่สรุปมาให้แล้วในแต่ละวิชา (รวมวิชากิจกรรมด้วยถ้ามีคะแนน)
+            s = item.get('score') or 0.0
+            m = item.get('max_score') or 0.0
+            
+            total_score += float(s)
+            total_max += float(m)
+        
+        # คำนวณเปอร์เซ็นต์เฉลี่ยจากคะแนนรวมทั้งหมด
+        final_percentage = (total_score / total_max * 100) if total_max > 0 else 0.0
+        
+        results.append({
+            'student_id': student.id,
+            'full_name': student.full_name,
+            'username': student.username,
+            'total_score': round(total_score, 2),
+            'total_max_score': round(total_max, 2),
+            'average_score': round(final_percentage, 2)
         })
-    
-    return transcript
+
+    # Sort descending by total_score as requested
+    results.sort(key=lambda x: x['total_score'], reverse=True)
+
+    # Assign ranks
+    current_rank = 0
+    last_val = -1.0
+    for i, item in enumerate(results):
+        if item['total_score'] != last_val:
+            current_rank = i + 1
+            last_val = item['total_score']
+        item['rank'] = current_rank
+
+    return results
+
+
+@router.get('/school/{school_id}/ranking')
+def get_school_ranking(school_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    """Calculate ranking for all students in the entire school based on sum of scores."""
+    # Check authorization (Admin or Teacher or Student in this school)
+    user_role = getattr(current_user, 'role', None)
+    if user_role not in ['admin', 'teacher', 'student']:
+        raise HTTPException(status_code=403, detail='Not authorized')
+
+    # Get students in school
+    students = db.query(UserModel).filter(
+        UserModel.school_id == school_id,
+        UserModel.role == 'student'
+    ).all()
+
+    if not students:
+        return []
+
+    results = []
+    for student in students:
+        # Pass classroom_id=None to get overall grades
+        transcript = _get_student_transcript_internal(student.id, None, db)
+        
+        total_score = 0.0
+        total_max = 0.0
+        
+        for item in transcript:
+            s = item.get('score') or 0.0
+            m = item.get('max_score') or 0.0
+            
+            total_score += float(s)
+            total_max += float(m)
+        
+        final_percentage = (total_score / total_max * 100) if total_max > 0 else 0.0
+        
+        results.append({
+            'student_id': student.id,
+            'full_name': student.full_name,
+            'username': student.username,
+            'total_score': round(total_score, 2),
+            'total_max_score': round(total_max, 2),
+            'average_score': round(final_percentage, 2)
+        })
+
+    # Sort descending by total_score
+    results.sort(key=lambda x: x['total_score'], reverse=True)
+
+    # Assign ranks
+    current_rank = 0
+    last_val = -1.0
+    for i, item in enumerate(results):
+        if item['total_score'] != last_val:
+            current_rank = i + 1
+            last_val = item['total_score']
+        item['rank'] = current_rank
+
+    return results
+

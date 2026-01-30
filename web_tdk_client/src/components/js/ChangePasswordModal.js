@@ -84,286 +84,156 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="modal-overlay">
-      <div className="modal" style={{ maxWidth: '500px' }}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+      <div 
+        className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" 
+        onClick={handleClose}
+      ></div>
+      
+      <div className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden transform transition-all">
         {/* Header */}
-        <div className="modal-header" style={{
-          padding: '1.5rem',
-          borderBottom: '1px solid #e0e0e0',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center'
-        }}>
+        <div className="bg-gradient-to-r from-emerald-600 to-teal-600 p-6 text-white text-center sm:text-left flex justify-between items-center">
           <div>
-            <h3 style={{ margin: 0, fontSize: '1.3rem' }}>🔐 เปลี่ยนรหัสผ่าน</h3>
-            <p style={{ margin: '0.5rem 0 0 0', color: '#999', fontSize: '0.9rem' }}>
-              อัปเดตรหัสผ่านของคุณให้ปลอดภัย
-            </p>
+            <h3 className="text-xl font-bold flex items-center gap-2">
+              <span className="text-2xl">🔐</span> เปลี่ยนรหัสผ่าน
+            </h3>
+            <p className="text-emerald-50 text-xs opacity-80 mt-1">อัปเดตรหัสผ่านของคุณให้ปลอดภัย</p>
           </div>
           <button 
             onClick={handleClose}
-            style={{
-              background: 'none',
-              border: 'none',
-              fontSize: '1.5rem',
-              cursor: 'pointer',
-              color: '#999'
-            }}
+            className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/20 transition-colors"
           >
-            ×
+            ✕
           </button>
         </div>
 
-        {/* Body */}
-        <form onSubmit={handleSubmit} style={{ padding: '1.5rem' }}>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {/* Current Password */}
-          <div style={{ marginBottom: '1.5rem' }}>
-            <label style={{
-              display: 'block',
-              marginBottom: '0.5rem',
-              fontWeight: '600',
-              color: '#333'
-            }}>
-              รหัสผ่านปัจจุบัน <span style={{ color: 'red' }}>*</span>
+          <div>
+            <label className="block text-sm font-bold text-slate-700 mb-1 ml-1">
+              รหัสผ่านปัจจุบัน <span className="text-red-500">*</span>
             </label>
-            <div style={{ position: 'relative' }}>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 text-lg">
+                🔑
+              </div>
               <input
-                type={showCurrentPassword ? 'text' : 'password'}
+                type={showCurrentPassword ? "text" : "password"}
+                className={`w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all placeholder:text-slate-400`}
+                placeholder="ป้อนรหัสผ่านปัจจุบัน"
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
-                placeholder="กรอกรหัสผ่านปัจจุบัน"
-                style={{
-                  width: '100%',
-                  padding: '0.75rem 2.5rem 0.75rem 0.75rem',
-                  border: '1px solid #ddd',
-                  borderRadius: '4px',
-                  fontSize: '1rem',
-                  fontFamily: 'inherit',
-                  boxSizing: 'border-box'
-                }}
+                autoComplete="current-password"
               />
               <button
                 type="button"
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-emerald-600"
                 onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                style={{
-                  position: 'absolute',
-                  right: '0.75rem',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontSize: '1.2rem'
-                }}
               >
-                {showCurrentPassword ? '👁️' : '👁️‍🗨️'}
+                {showCurrentPassword ? '👁️' : '🙈'}
               </button>
             </div>
           </div>
 
           {/* New Password */}
-          <div style={{ marginBottom: '1.5rem' }}>
-            <label style={{
-              display: 'block',
-              marginBottom: '0.5rem',
-              fontWeight: '600',
-              color: '#333'
-            }}>
-              รหัสผ่านใหม่ <span style={{ color: 'red' }}>*</span>
+          <div>
+            <label className="block text-sm font-bold text-slate-700 mb-1 ml-1">
+              รหัสผ่านใหม่ <span className="text-red-500">*</span>
             </label>
-            <div style={{ position: 'relative' }}>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 text-lg">
+                ✨
+              </div>
               <input
-                type={showNewPassword ? 'text' : 'password'}
+                type={showNewPassword ? "text" : "password"}
+                className={`w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all placeholder:text-slate-400 ${
+                  newPassword && newPassword.length < 6 ? 'border-red-300' : ''
+                }`}
+                placeholder="รหัสผ่านใหม่ (อย่างน้อย 6 ตัวอักษร)"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="กรอกรหัสผ่านใหม่ (อย่างน้อย 6 ตัวอักษร)"
-                style={{
-                  width: '100%',
-                  padding: '0.75rem 2.5rem 0.75rem 0.75rem',
-                  border: '1px solid #ddd',
-                  borderRadius: '4px',
-                  fontSize: '1rem',
-                  fontFamily: 'inherit',
-                  boxSizing: 'border-box'
-                }}
+                autoComplete="new-password"
               />
               <button
                 type="button"
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-emerald-600"
                 onClick={() => setShowNewPassword(!showNewPassword)}
-                style={{
-                  position: 'absolute',
-                  right: '0.75rem',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontSize: '1.2rem'
-                }}
               >
-                {showNewPassword ? '👁️' : '👁️‍🗨️'}
+                {showNewPassword ? '👁️' : '🙈'}
               </button>
             </div>
             {newPassword && (
-              <div style={{
-                marginTop: '0.5rem',
-                fontSize: '0.85rem',
-                color: newPassword.length >= 6 ? '#4caf50' : '#f44336'
-              }}>
-                {newPassword.length >= 6 ? '✓ ความยาวพอ' : `✗ ต้องมี 6 ตัวอักษร (ขณะนี้ ${newPassword.length})`}
-              </div>
+              <p className={`mt-1 ml-1 text-xs font-medium ${newPassword.length >= 6 ? 'text-emerald-600' : 'text-red-500'}`}>
+                {newPassword.length >= 6 ? '✓ ความยาวพอเหมาะ' : `✗ ต้องมีความยาวอย่างน้อย 6 ตัวอักษร (ขณะนี้ ${newPassword.length})`}
+              </p>
             )}
           </div>
 
           {/* Confirm Password */}
-          <div style={{ marginBottom: '2rem' }}>
-            <label style={{
-              display: 'block',
-              marginBottom: '0.5rem',
-              fontWeight: '600',
-              color: '#333'
-            }}>
-              ยืนยันรหัสผ่านใหม่ <span style={{ color: 'red' }}>*</span>
+          <div>
+            <label className="block text-sm font-bold text-slate-700 mb-1 ml-1">
+              ยืนยันรหัสผ่านใหม่ <span className="text-red-500">*</span>
             </label>
-            <div style={{ position: 'relative' }}>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 text-lg">
+                🛡️
+              </div>
               <input
-                type={showConfirmPassword ? 'text' : 'password'}
+                type={showConfirmPassword ? "text" : "password"}
+                className={`w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all placeholder:text-slate-400 ${
+                  confirmPassword && newPassword !== confirmPassword ? 'border-red-300 bg-red-50' : ''
+                }`}
+                placeholder="ยืนยันรหัสผ่านใหม่อีกครั้ง"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="กรอกรหัสผ่านใหม่อีกครั้ง"
-                style={{
-                  width: '100%',
-                  padding: '0.75rem 2.5rem 0.75rem 0.75rem',
-                  border: confirmPassword && newPassword !== confirmPassword ? '1px solid #f44336' : '1px solid #ddd',
-                  borderRadius: '4px',
-                  fontSize: '1rem',
-                  fontFamily: 'inherit',
-                  boxSizing: 'border-box',
-                  backgroundColor: confirmPassword && newPassword !== confirmPassword ? '#ffebee' : 'white'
-                }}
+                autoComplete="new-password"
               />
               <button
                 type="button"
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-emerald-600"
                 onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                style={{
-                  position: 'absolute',
-                  right: '0.75rem',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontSize: '1.2rem'
-                }}
               >
-                {showConfirmPassword ? '👁️' : '👁️‍🗨️'}
+                {showConfirmPassword ? '👁️' : '🙈'}
               </button>
             </div>
-            {confirmPassword && newPassword !== confirmPassword && (
-              <div style={{
-                marginTop: '0.5rem',
-                fontSize: '0.85rem',
-                color: '#f44336'
-              }}>
-                ✗ รหัสผ่านไม่ตรงกัน
-              </div>
-            )}
-            {confirmPassword && newPassword === confirmPassword && (
-              <div style={{
-                marginTop: '0.5rem',
-                fontSize: '0.85rem',
-                color: '#4caf50'
-              }}>
-                ✓ รหัสผ่านตรงกัน
-              </div>
+            {confirmPassword && (
+              <p className={`mt-1 ml-1 text-xs font-medium ${newPassword === confirmPassword ? 'text-emerald-600' : 'text-red-500'}`}>
+                {newPassword === confirmPassword ? '✓ รหัสผ่านตรงกัน' : '✗ รหัสผ่านไม่ตรงกัน'}
+              </p>
             )}
           </div>
 
-          {/* Footer */}
-          <div style={{
-            display: 'flex',
-            gap: '1rem',
-            justifyContent: 'flex-end',
-            borderTop: '1px solid #e0e0e0',
-            paddingTop: '1.5rem',
-            marginTop: '1.5rem'
-          }}>
-            <button
-              type="button"
-              onClick={handleClose}
-              disabled={isLoading}
-              style={{
-                padding: '0.75rem 1.5rem',
-                border: '1px solid #ddd',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                backgroundColor: 'white',
-                color: '#333',
-                fontSize: '1rem',
-                fontWeight: '500',
-                transition: 'all 0.3s',
-                opacity: isLoading ? 0.6 : 1
-              }}
-            >
-              ยกเลิก
-            </button>
+          <div className="pt-6 border-t border-slate-100 flex flex-col gap-3">
             <button
               type="submit"
               disabled={isLoading || !currentPassword || !newPassword || !confirmPassword || newPassword !== confirmPassword}
-              style={{
-                padding: '0.75rem 1.5rem',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: isLoading ? 'not-allowed' : 'pointer',
-                backgroundColor: isLoading || !currentPassword || !newPassword || !confirmPassword || newPassword !== confirmPassword ? '#ccc' : '#4caf50',
-                color: 'white',
-                fontSize: '1rem',
-                fontWeight: '600',
-                transition: 'all 0.3s'
-              }}
+              className="w-full py-3 bg-emerald-600 text-white rounded-xl font-bold text-lg hover:bg-emerald-700 shadow-lg shadow-emerald-200 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 disabled:bg-slate-300 disabled:shadow-none"
             >
-              {isLoading ? '⏳ กำลังเปลี่ยน...' : '✓ เปลี่ยนรหัสผ่าน'}
+              {isLoading ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                  <span>กำลังบันทึก...</span>
+                </>
+              ) : (
+                <>
+                  <span>💾 บันทึกการเปลี่ยนแปลง</span>
+                </>
+              )}
+            </button>
+            
+            <button
+              type="button"
+              onClick={handleClose}
+              className="w-full py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-all active:scale-95"
+            >
+              ยกเลิก
             </button>
           </div>
         </form>
       </div>
-
-      <style>{`
-        .modal-overlay {
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          backgroundColor: rgba(0, 0, 0, 0.5);
-          display: flex;
-          justifyContent: center;
-          alignItems: center;
-          zIndex: 1000;
-        }
-
-        .modal {
-          backgroundColor: white;
-          borderRadius: '8px',
-          boxShadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-          maxHeight: '90vh';
-          overflowY: 'auto';
-          animation: slideIn 0.3s ease-out;
-        }
-
-        @keyframes slideIn {
-          from {
-            transform: translateY(-50px);
-            opacity: 0;
-          }
-          to {
-            transform: translateY(0);
-            opacity: 1;
-          }
-        }
-      `}</style>
     </div>
   );
 };
+
 
 export default ChangePasswordModal;

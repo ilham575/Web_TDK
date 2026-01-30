@@ -4,6 +4,17 @@ import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { API_BASE_URL } from '../../../endpoints';
 
+// Custom close button for toast
+const CustomCloseButton = ({ closeToast }) => (
+  <button
+    onClick={closeToast}
+    className="ml-4 bg-transparent border-none text-xl font-bold text-white self-center cursor-pointer"
+    aria-label="close"
+  >
+    ✖
+  </button>
+);
+
 function useQuery() {
   return new URLSearchParams(useLocation().search);
 }
@@ -18,24 +29,24 @@ function ResetPasswordPage() {
 
   // Set page title
   useEffect(() => {
-    document.title = 'ตั้งรหัสผ่านใหม่ - ศูนย์การเรียนรู้อิสลามประจำมัสยิด';
+    document.title = 'ตั้งรหัสผ่านใหม่ - TDK Learning System';
   }, []);
 
   useEffect(() => {
     if (!token) {
-      toast.error('Missing reset token');
-      navigate('/signin');
+      toast.error('Token ไม่ถูกต้องกรุณาทำรายการใหม่จากลิงก์ในอีเมล', { theme: "colored" });
+      setTimeout(() => navigate('/signin'), 3000);
     }
   }, [token, navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (password.length < 6) {
-      toast.error('Password must be at least 6 characters');
+      toast.error('รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร', { theme: "colored" });
       return;
     }
     if (password !== confirm) {
-      toast.error('Passwords do not match');
+      toast.error('รหัสผ่านไม่ตรงกัน', { theme: "colored" });
       return;
     }
     setIsLoading(true);
@@ -47,38 +58,102 @@ function ResetPasswordPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        toast.error(data.detail || 'Failed to reset password');
+        toast.error(data.detail || 'ไม่สามารถรีเซ็ตรหัสผ่านได้', { theme: "colored" });
       } else {
-        toast.success('Password reset successful. Please sign in.');
-        navigate('/signin');
+        toast.success('รีเซ็ตรหัสผ่านสำเร็จ กรุณาลงชื่อเข้าใช้งานด้วยรหัสผ่านใหม่', { theme: "colored" });
+        setTimeout(() => navigate('/signin'), 2000);
       }
     } catch (err) {
-      toast.error('Request failed. Try again later.');
+      toast.error('เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่ภายหลัง', { theme: "colored" });
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', marginTop: '3rem' }}>
-      <ToastContainer position="top-center" />
-      <div style={{ width: 420, padding: 20, border: '1px solid #ddd', borderRadius: 6 }}>
-        <h3>Reset Password</h3>
-        <form onSubmit={handleSubmit}>
-          <div style={{ marginBottom: 12 }}>
-            <label>New Password</label>
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} required style={{ width: '100%', padding: 8, marginTop: 6 }} />
+    <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
+      {/* Decorative Ornaments */}
+      <div className="absolute top-0 left-0 w-full h-2 bg-emerald-600"></div>
+      <div className="absolute -top-24 -left-24 w-96 h-96 bg-emerald-100 rounded-full opacity-50 blur-3xl"></div>
+      <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-indigo-100 rounded-full opacity-50 blur-3xl"></div>
+
+      <ToastContainer position="top-center" closeButton={CustomCloseButton} />
+
+      <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10">
+        <div className="flex justify-center mb-6">
+          <div className="w-20 h-20 bg-emerald-600 rounded-2xl flex items-center justify-center text-4xl shadow-xl shadow-emerald-200 text-white border-4 border-white">
+            🔄
           </div>
-          <div style={{ marginBottom: 12 }}>
-            <label>Confirm Password</label>
-            <input type="password" value={confirm} onChange={e => setConfirm(e.target.value)} required style={{ width: '100%', padding: 8, marginTop: 6 }} />
-          </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button type="submit" disabled={isLoading} className="button-signin">{isLoading ? 'Resetting...' : 'Reset Password'}</button>
-            <button type="button" onClick={() => navigate('/signin')} style={{ background: '#6c757d', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: 4 }}>Cancel</button>
-          </div>
-        </form>
+        </div>
+        <h2 className="text-center text-3xl font-extrabold text-slate-900">
+          Reset Password
+        </h2>
+        <p className="mt-2 text-center text-sm text-slate-600 italic">
+          ตั้งรหัสผ่านใหม่สำหรับการเข้าใช้งาน
+        </p>
       </div>
+
+      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md relative z-10 px-4 sm:px-0">
+        <div className="bg-white py-8 px-4 shadow-2xl shadow-slate-200 sm:rounded-3xl sm:px-10 border border-slate-100">
+          <form className="space-y-6" onSubmit={handleSubmit}>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1.5 ml-1">
+                รหัสผ่านใหม่
+              </label>
+              <div className="relative">
+                <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">🔒</span>
+                <input
+                  type="password"
+                  className="block w-full pl-10 pr-3 py-3 border border-slate-200 rounded-2xl bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all text-sm"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1.5 ml-1">
+                ยืนยันรหัสผ่านใหม่
+              </label>
+              <div className="relative">
+                <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">🛡️</span>
+                <input
+                  type="password"
+                  className="block w-full pl-10 pr-3 py-3 border border-slate-200 rounded-2xl bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all text-sm"
+                  placeholder="••••••••"
+                  value={confirm}
+                  onChange={e => setConfirm(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full flex justify-center py-4 px-4 border border-transparent rounded-2xl shadow-lg text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 transition-all transform active:scale-[0.98] disabled:opacity-50 shadow-emerald-200"
+              >
+                {isLoading ? 'กำลังรีเซ็ต...' : 'เปลี่ยนรหัสผ่าน'}
+              </button>
+              
+              <button
+                type="button"
+                onClick={() => navigate('/signin')}
+                className="w-full flex justify-center py-3 px-4 border border-slate-200 rounded-2xl text-sm font-medium text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-all"
+              >
+                ย้อนกลับไปเข้าสู่ระบบ
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <footer className="mt-8 text-center text-xs text-slate-400 italic">
+        © {new Date().getFullYear()} TDK Mosque Learning Center.
+      </footer>
     </div>
   );
 }

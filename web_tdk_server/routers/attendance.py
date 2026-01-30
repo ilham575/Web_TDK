@@ -19,7 +19,21 @@ def mark_attendance(payload: AttendanceMark, db: Session = Depends(get_db), curr
     subj = db.query(SubjectModel).filter(SubjectModel.id == payload.subject_id).first()
     if not subj:
         raise HTTPException(status_code=404, detail='Subject not found')
-    if getattr(current_user, 'role', None) != 'admin' and subj.teacher_id != getattr(current_user, 'id', None):
+    # เช็คสิทธิ์: admin หรือคุณครูที่ดูแลวิชานี้ (เช็คทั้ง teacher_id และ subject_teachers)
+    is_authorized = False
+    if getattr(current_user, 'role', None) == 'admin':
+        is_authorized = True
+    elif getattr(current_user, 'role', None) == 'teacher':
+        if subj.teacher_id == current_user.id:
+            is_authorized = True
+        else:
+            # Check multi-teacher assignment via SubjectSchedule
+            from models.schedule import SubjectSchedule
+            is_assigned = db.query(SubjectSchedule).filter_by(subject_id=subj.id, teacher_id=current_user.id).first()
+            if is_assigned:
+                is_authorized = True
+    
+    if not is_authorized:
         raise HTTPException(status_code=403, detail='Not authorized to mark attendance for this subject')
 
     # Parse date

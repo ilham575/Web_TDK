@@ -46,6 +46,22 @@
   margin-top: 0.25rem;
 }
 
+/* Homeroom sub-tabs (grades / attendance) */
+.homeroom-subtabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.teacher-btn-secondary.active {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  box-shadow: 0 12px 35px rgba(16,185,129,0.18), inset 0 1px 0 rgba(255,255,255,0.12);
+}
+
+.teacher-btn-secondary.active + .teacher-btn-secondary {
+  opacity: 0.95;
+}
+
 /* Summary Stats */
 .homeroom-stats-grid {
   display: grid;
@@ -346,6 +362,35 @@
 .student-detail-content {
   padding: 1.5rem;
   overflow-y: auto;
+}
+
+.student-detail-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.student-detail-tab {
+  padding: 0.75rem 1rem;
+  border: none;
+  background: none;
+  color: #64748b;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 8px 8px 0 0;
+  transition: all 0.2s ease;
+}
+
+.student-detail-tab:hover {
+  background: #f1f5f9;
+  color: #334155;
+}
+
+.student-detail-tab.active {
+  background: #3b82f6;
+  color: white;
 }
 
 .student-detail-section {

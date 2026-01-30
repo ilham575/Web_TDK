@@ -1,23 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import '../../../css/shared-dashboard.css';
-import '../../../css/pages/owner/owner-home.css';
+import { useTranslation } from 'react-i18next';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
 import Loading from '../../Loading';
 import PageHeader from '../../PageHeader';
 
-import ConfirmModal from '../../ConfirmModal';
-
-import AlertModal from '../../AlertModal';
+import swalMessenger from './swalmessenger';
 import { API_BASE_URL } from '../../../endpoints';
 import { setSchoolFavicon } from '../../../../utils/faviconUtils';
 import { logout } from '../../../../utils/authUtils';
 
+import OwnerTabs from './OwnerTabs';
+
 
 function OwnerPage() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [schools, setSchools] = useState([]);
   const [activities, setActivities] = useState([]);
   const [loadingSchools, setLoadingSchools] = useState(false);
@@ -38,14 +38,7 @@ function OwnerPage() {
   const [creatingSchool, setCreatingSchool] = useState(false);
   const [showCreateSchoolModal, setShowCreateSchoolModal] = useState(false);
 
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [confirmTitle, setConfirmTitle] = useState('');
-  const [confirmMessage, setConfirmMessage] = useState('');
-  const [onConfirmAction, setOnConfirmAction] = useState(() => {});
-
-  const [showAlertModal, setShowAlertModal] = useState(false);
-  const [alertTitle, setAlertTitle] = useState('');
-  const [alertMessage, setAlertMessage] = useState('');
+  // Using `swalMessenger` for confirmations and prompts (see ./swalmessenger.js)
 
   const [adminRequests, setAdminRequests] = useState([]);
   const [loadingRequests, setLoadingRequests] = useState(false);
@@ -62,6 +55,10 @@ function OwnerPage() {
   const [selectedResetRequest, setSelectedResetRequest] = useState(null);
   const [showResetPasswordModal, setShowResetPasswordModal] = useState(false);
 
+  // School deletion requests state
+  const [schoolDeletionRequests, setSchoolDeletionRequests] = useState([]);
+  const [loadingDeletionRequests, setLoadingDeletionRequests] = useState(false);
+
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) { navigate('/signin'); return; }
@@ -74,7 +71,7 @@ function OwnerPage() {
           setTimeout(() => navigate('/signin'), 1500);
           return;
         } else if (data.must_change_password) {
-          toast.info('กรุณาเปลี่ยนรหัสผ่านเพื่อความปลอดภัย');
+          toast.info(t('owner.changePasswordRequired'));
           setIsAuthChecking(false);
           navigate('/change-password');
           return;
@@ -94,6 +91,8 @@ function OwnerPage() {
     if (!currentUser) return;
     if (activeTab === 'schools') {
       loadSchools();
+      // load school deletion requests so Owner can see per-school requests inside the school cards
+      loadSchoolDeletionRequests();
     } else if (activeTab === 'activities') {
       loadActivities();
     } else if (activeTab === 'admin_requests') {
@@ -105,8 +104,8 @@ function OwnerPage() {
 
   // Update document title
   useEffect(() => {
-    document.title = 'ระบบจัดการโรงเรียน - Owner Dashboard';
-  }, []);
+    document.title = t('owner.pageTitle');
+  }, [t]);
 
   const loadSchools = async () => {
     setLoadingSchools(true);
@@ -187,7 +186,7 @@ function OwnerPage() {
 
   const approvePasswordReset = async (requestId, userId, newPassword) => {
     const token = localStorage.getItem('token');
-    if (!token) { toast.error('กรุณาเข้าสู่ระบบ'); return; }
+    if (!token) { toast.error(t('owner.loginRequired')); return; }
     try {
       const res = await fetch(`${API_BASE_URL}/users/password_reset_requests/${requestId}/approve`, {
         method: 'POST',
@@ -199,9 +198,9 @@ function OwnerPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        toast.error(data.detail || 'อนุมัติไม่สำเร็จ');
+        toast.error(data.detail || t('owner.approveFailed'));
       } else {
-        toast.success(data.detail || 'อนุมัติเรียบร้อยแล้ว');
+        toast.success(data.detail || t('owner.approveSuccess'));
         setShowResetPasswordModal(false);
         setNewPasswordForReset('');
         setSelectedResetRequest(null);
@@ -209,13 +208,13 @@ function OwnerPage() {
       }
     } catch (err) {
       console.error(err);
-      toast.error('เกิดข้อผิดพลาด');
+      toast.error(t('owner.error'));
     }
   };
 
   const rejectPasswordReset = async (requestId) => {
     const token = localStorage.getItem('token');
-    if (!token) { toast.error('กรุณาเข้าสู่ระบบ'); return; }
+    if (!token) { toast.error(t('owner.loginRequired')); return; }
     try {
       const res = await fetch(`${API_BASE_URL}/users/password_reset_requests/${requestId}/reject`, {
         method: 'POST',
@@ -223,15 +222,86 @@ function OwnerPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        toast.error(data.detail || 'ปฏิเสธไม่สำเร็จ');
+        toast.error(data.detail || t('owner.rejectFailed'));
       } else {
-        toast.success(data.detail || 'ปฏิเสธเรียบร้อยแล้ว');
+        toast.success(data.detail || t('owner.rejectSuccess'));
         fetchPasswordResetRequests();
       }
     } catch (err) {
       console.error(err);
-      toast.error('เกิดข้อผิดพลาด');
+      toast.error(t('owner.error'));
     }
+  };
+
+  // School deletion request functions
+  const loadSchoolDeletionRequests = async () => {
+    setLoadingDeletionRequests(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE_URL}/owner/school_deletion_requests`, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) {
+        const data = await res.json();
+        setSchoolDeletionRequests(data);
+      } else {
+        toast.error('Failed to load school deletion requests');
+      }
+    } catch (err) {
+      console.error('Failed to load school deletion requests:', err);
+      toast.error('Failed to load school deletion requests');
+    } finally {
+      setLoadingDeletionRequests(false);
+    }
+  };
+
+  const approveSchoolDeletionRequest = async (requestId) => {
+    const token = localStorage.getItem('token');
+    if (!token) { toast.error(t('owner.loginRequired')); return; }
+    try {
+      const res = await fetch(`${API_BASE_URL}/owner/school_deletion_requests/${requestId}/approve`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.detail || t('owner.approveDeletionError'));
+      } else {
+        toast.success(data.detail || t('owner.approveDeleteSuccess'));
+        loadSchoolDeletionRequests();
+        loadSchools(); // Refresh school list
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error(t('owner.error'));
+    }
+  };
+
+  const rejectSchoolDeletionRequest = async (requestId, reviewNotes) => {
+    const token = localStorage.getItem('token');
+    if (!token) { toast.error(t('owner.loginRequired')); return; }
+    try {
+      const res = await fetch(`${API_BASE_URL}/owner/school_deletion_requests/${requestId}/reject`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ review_notes: reviewNotes })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.detail || t('owner.rejectDeletionError'));
+      } else {
+        toast.success(data.detail || t('owner.rejectSuccess'));
+        loadSchoolDeletionRequests();
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error(t('owner.error'));
+    }
+  };
+
+  const hasDeletionRequest = (schoolId) => {
+    return schoolDeletionRequests.some(request => request.school_id === schoolId);
   };
 
   const approveRequest = async (requestId) => {
@@ -242,16 +312,37 @@ function OwnerPage() {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
-        toast.success('อนุมัติคำขอเรียบร้อย');
+        toast.success(t('owner.requestApproveSuccess'));
         loadAdminRequests();
         loadSchools(); // Refresh school stats
       } else {
         const data = await res.json();
-        toast.error(data.detail || 'Failed to approve request');
+        toast.error(data.detail || t('owner.requestApproveFailed'));
       }
     } catch (err) {
       console.error('Failed to approve request:', err);
-      toast.error('เกิดข้อผิดพลาดขณะอนุมัติคำขอ');
+      toast.error(t('owner.requestApproveError'));
+    }
+  };
+
+  const deleteSchool = async (schoolId) => {
+    const token = localStorage.getItem('token');
+    if (!token) { toast.error(t('owner.loginRequired')); return; }
+    try {
+      const res = await fetch(`${API_BASE_URL}/owner/schools/${schoolId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.status === 204 || res.ok) {
+        toast.success(t('owner.deleteSchoolSuccess'));
+        loadSchools();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.detail || t('owner.deleteSchoolFailed'));
+      }
+    } catch (err) {
+      console.error('Failed to delete school', err);
+      toast.error(t('owner.deleteSchoolError'));
     }
   };
 
@@ -263,22 +354,22 @@ function OwnerPage() {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
-        toast.success('ปฏิเสธคำขอเรียบร้อย');
+        toast.success(t('owner.rejectRequestSuccess'));
         loadAdminRequests();
       } else {
         const data = await res.json();
-        toast.error(data.detail || 'Failed to reject request');
+        toast.error(data.detail || t('owner.rejectRequestFailed'));
       }
     } catch (err) {
       console.error('Failed to reject request:', err);
-      toast.error('เกิดข้อผิดพลาดขณะปฏิเสธคำขอ');
+      toast.error(t('owner.rejectRequestError'));
     }
   };
 
   const handleCreateSchool = async (e) => {
     e.preventDefault();
     if (!newSchoolName.trim()) {
-      toast.error('กรุณากรอกชื่อโรงเรียน');
+      toast.error(t('owner.schoolNameRequired'));
       return;
     }
     setCreatingSchool(true);
@@ -291,16 +382,16 @@ function OwnerPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        toast.error(data.detail || 'สร้างโรงเรียนไม่สำเร็จ');
+        toast.error(data.detail || t('owner.createSchoolFailed'));
       } else {
-        toast.success('สร้างโรงเรียนเรียบร้อย');
+        toast.success(t('owner.createSchoolSuccess'));
         setNewSchoolName('');
         setShowCreateSchoolModal(false);
         loadSchools();
       }
     } catch (err) {
       console.error('create school error', err);
-      toast.error('เกิดข้อผิดพลาดขณะสร้างโรงเรียน');
+      toast.error(t('owner.createSchoolError'));
     } finally {
       setCreatingSchool(false);
     }
@@ -309,7 +400,7 @@ function OwnerPage() {
   const handleCreateAdmin = async (e) => {
     e.preventDefault();
     if (!newUsername || !newEmail || !newFullName || !newPassword || !selectedSchoolId) {
-      toast.error('กรุณากรอกข้อมูลให้ครบทุกช่อง');
+      toast.error(t('owner.fillAllFields'));
       return;
     }
     setCreatingAdmin(true);
@@ -328,9 +419,9 @@ function OwnerPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        toast.error(data.detail || 'สร้างแอดมินไม่สำเร็จ');
+        toast.error(data.detail || t('owner.createAdminFailed'));
       } else {
-        toast.success('สร้างแอดมินเรียบร้อย');
+        toast.success(t('owner.createAdminSuccess'));
         setNewUsername('');
         setNewEmail('');
         setNewFullName('');
@@ -340,7 +431,7 @@ function OwnerPage() {
       }
     } catch (err) {
       console.error('create admin error', err);
-      toast.error('เกิดข้อผิดพลาดขณะสร้างแอดมิน');
+      toast.error(t('owner.createAdminError'));
     } finally {
       setCreatingAdmin(false);
     }
@@ -351,18 +442,7 @@ function OwnerPage() {
     navigate('/signin', { state: { signedOut: true } });
   }
 
-  const openConfirmModal = (title, message, onConfirm) => {
-    setConfirmTitle(title);
-    setConfirmMessage(message);
-    setOnConfirmAction(() => onConfirm);
-    setShowConfirmModal(true);
-  };
-
-  const openAlertModal = (title, message) => {
-    setAlertTitle(title);
-    setAlertMessage(message);
-    setShowAlertModal(true);
-  };
+  // Confirmations are performed inline using `swalMessenger.confirm`.
 
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('th-TH', {
@@ -385,176 +465,217 @@ function OwnerPage() {
   };
 
   return (
-    <div className="owner-dashboard">
-      <ToastContainer />
+    <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
+      <ToastContainer position="top-right" autoClose={3000} />
 
       {isAuthChecking ? (
-        <Loading message="กำลังตรวจสอบสิทธิ์..." />
+        <Loading message={t('owner.checkingAuth')} />
       ) : (
-        <>
-      <PageHeader 
-        currentUser={currentUser}
-        role="owner"
-        rightContent={
-          <>
-            <div className="account-info">
-              <div className="account-label">บัญชี</div>
-              <div className="account-email">{currentUser?.email || ''}</div>
-            </div>
-            <div className="header-actions">
-              <button 
-                className="owner-btn-secondary" 
-                onClick={() => navigate('/profile')}
-                title="ดูโปรไฟล์"
-              >
-                👤 โปรไฟล์
-              </button>
-              <button 
-                className="owner-btn-danger" 
-                onClick={handleSignout}
-                title="ออกจากระบบ"
-              >
-                🚪 ออกจากระบบ
-              </button>
-            </div>
-          </>
-        }
-      />
+        <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
+          <PageHeader 
+            currentUser={currentUser}
+            role="owner"
+            onLogout={handleSignout}
+          />
 
-      <div className="stats-section">
-        <div className="stats-card stats-schools">
-          <div className="stats-icon">🏫</div>
-          <div className="stats-content">
-            <div className="stats-value">{schools.length}</div>
-            <div className="stats-label">โรงเรียนทั้งหมด</div>
-          </div>
-        </div>
-        <div className="stats-card stats-admins">
-          <div className="stats-icon">👨‍💼</div>
-          <div className="stats-content">
-            <div className="stats-value">{schools.reduce((sum, s) => sum + s.admins, 0)}</div>
-            <div className="stats-label">แอดมินทั้งหมด</div>
-          </div>
-        </div>
-        <div className="stats-card stats-teachers">
-          <div className="stats-icon">👨‍🏫</div>
-          <div className="stats-content">
-            <div className="stats-value">{schools.reduce((sum, s) => sum + s.teachers, 0)}</div>
-            <div className="stats-label">ครูผู้สอนทั้งหมด</div>
-          </div>
-        </div>
-        <div className="stats-card stats-students">
-          <div className="stats-icon">👨‍🎓</div>
-          <div className="stats-content">
-            <div className="stats-value">{schools.reduce((sum, s) => sum + s.students, 0)}</div>
-            <div className="stats-label">นักเรียนทั้งหมด</div>
-          </div>
-        </div>
-      </div>
-
-      <div className="tabs-header">
-        <button className={`tab-button ${activeTab === 'schools' ? 'active' : ''}`} onClick={() => setActiveTab('schools')}>จัดการโรงเรียน</button>
-        <button className={`tab-button ${activeTab === 'activities' ? 'active' : ''}`} onClick={() => setActiveTab('activities')}>กิจกรรมล่าสุด</button>
-        <button className={`tab-button ${activeTab === 'create_admin' ? 'active' : ''}`} onClick={() => setActiveTab('create_admin')}>เพิ่มแอดมิน</button>
-        <button className={`tab-button ${activeTab === 'admin_requests' ? 'active' : ''}`} onClick={() => setActiveTab('admin_requests')}>คำขอสร้างแอดมิน</button>
-        <button className={`tab-button ${activeTab === 'password_reset_requests' ? 'active' : ''}`} onClick={() => setActiveTab('password_reset_requests')}>
-          🔐 รีเซ็ตรหัสผ่าน
-          {passwordResetRequests.length > 0 && (
-            <span style={{ 
-              backgroundColor: '#ef4444', 
-              color: 'white', 
-              padding: '2px 6px', 
-              borderRadius: '10px', 
-              fontSize: '0.75rem',
-              marginLeft: '0.5rem'
-            }}>
-              {passwordResetRequests.length}
-            </span>
-          )}
-        </button>
-      </div>
-
-      <div className="tab-content">
-        {activeTab === 'schools' && (
-          <div className="content-card">
-            <div className="card-header">
-              <h2><span className="card-icon">🏫</span> จัดการโรงเรียน</h2>
-              <button 
-                className="owner-btn-create-school" 
-                onClick={() => setShowCreateSchoolModal(true)}
-              >
-                ➕ สร้างโรงเรียนใหม่
-              </button>
-            </div>
-            <div className="card-content">
-              <div className="schools-list">
-                {loadingSchools ? (
-                  <Loading message="กำลังโหลดข้อมูลโรงเรียน..." />
-                ) : schools.length === 0 ? (
-                  <div className="empty-state">
-                    <div className="empty-icon">🏫</div>
-                    <div className="empty-text">ยังไม่มีโรงเรียน</div>
-                    <div className="empty-subtitle">เริ่มต้นโดยการสร้างโรงเรียนใหม่</div>
-                  </div>
-                ) : (
-                  <div className="schools-grid">
-                    {schools.map(school => (
-                      <div key={school.id} className="school-card">
-                        <div className="school-header">
-                          <h3>{school.name}</h3>
-                        </div>
-                        <div className="school-stats">
-                          <div className="stat-item">
-                            <span className="stat-icon">👨‍💼</span>
-                            <span className="stat-value">{school.admins}</span>
-                            <span className="stat-label">แอดมิน</span>
-                          </div>
-                          <div className="stat-item">
-                            <span className="stat-icon">👨‍🏫</span>
-                            <span className="stat-value">{school.teachers}</span>
-                            <span className="stat-label">ครู</span>
-                          </div>
-                          <div className="stat-item">
-                            <span className="stat-icon">👨‍🎓</span>
-                            <span className="stat-value">{school.students}</span>
-                            <span className="stat-label">นักเรียน</span>
-                          </div>
-                          <div className="stat-item">
-                            <span className="stat-icon">📚</span>
-                            <span className="stat-value">{school.active_subjects}</span>
-                            <span className="stat-label">วิชากำลังเรียน</span>
-                          </div>
-                          <div className="stat-item">
-                            <span className="stat-icon">📢</span>
-                            <span className="stat-value">{school.recent_announcements}</span>
-                            <span className="stat-label">ประกาศล่าสุด</span>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+          {/* Stats Section */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8 mt-6">
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center space-x-4 transition-all hover:shadow-md">
+              <div className="p-3 bg-indigo-50 rounded-xl text-2xl">🏫</div>
+              <div>
+                <div className="text-2xl font-bold text-slate-800">{schools.length}</div>
+                <div className="text-sm font-medium text-slate-500 uppercase tracking-wider">{t('owner.totalSchools')}</div>
               </div>
             </div>
+            
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center space-x-4 transition-all hover:shadow-md">
+              <div className="p-3 bg-emerald-50 rounded-xl text-2xl">👨‍💼</div>
+              <div>
+                <div className="text-2xl font-bold text-slate-800">{schools.reduce((sum, s) => sum + s.admins, 0)}</div>
+                <div className="text-sm font-medium text-slate-500 uppercase tracking-wider">{t('owner.totalAdmins')}</div>
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center space-x-4 transition-all hover:shadow-md">
+              <div className="p-3 bg-amber-50 rounded-xl text-2xl">👨‍🏫</div>
+              <div>
+                <div className="text-2xl font-bold text-slate-800">{schools.reduce((sum, s) => sum + s.teachers, 0)}</div>
+                <div className="text-sm font-medium text-slate-500 uppercase tracking-wider">{t('owner.totalTeachers')}</div>
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center space-x-4 transition-all hover:shadow-md">
+              <div className="p-3 bg-blue-50 rounded-xl text-2xl">👨‍🎓</div>
+              <div>
+                <div className="text-2xl font-bold text-slate-800">{schools.reduce((sum, s) => sum + s.students, 0)}</div>
+                <div className="text-sm font-medium text-slate-500 uppercase tracking-wider">{t('owner.totalStudents')}</div>
+              </div>
+            </div>
+          </div>
+
+          <OwnerTabs 
+            activeTab={activeTab} 
+            setActiveTab={setActiveTab}
+            passwordResetCount={passwordResetRequests.length}
+          />
+
+          <div className="mt-6">
+        {activeTab === 'schools' && (
+          <div className="space-y-6 transition-all duration-300">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+              <h2 className="text-xl font-bold flex items-center gap-2">
+                <span className="p-2 bg-indigo-50 rounded-lg">🏫</span>
+                {t('owner.manageSchools')}
+              </h2>
+              <div className="flex gap-2 w-full sm:w-auto">
+                <button 
+                  className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 transition-colors shadow-sm"
+                  onClick={() => setShowCreateSchoolModal(true)}
+                >
+                  <span className="text-lg">＋</span> {t('owner.createNewSchool')}
+                </button>
+                <button 
+                  className="p-2 px-4 text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors"
+                  onClick={() => { loadSchools(); loadSchoolDeletionRequests(); }}
+                  title={t('owner.refreshSchools')}
+                >
+                  🔄 {t('owner.refresh')}
+                </button>
+              </div>
+            </div>
+
+            {loadingSchools ? (
+              <Loading message={t('owner.loadingSchools')} />
+            ) : schools.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 bg-white rounded-2xl border-2 border-dashed border-slate-200 text-center">
+                <div className="text-6xl mb-4 grayscale opacity-50">🏫</div>
+                <div className="text-xl font-bold text-slate-800">{t('owner.noSchools')}</div>
+                <div className="text-slate-500 mt-2 max-w-xs mx-auto">{t('owner.startByCreating')}</div>
+                <button 
+                  className="mt-6 px-6 py-2 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 transition-all"
+                  onClick={() => setShowCreateSchoolModal(true)}
+                >
+                  {t('owner.createNewSchool')}
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                {schools.map(school => (
+                  <div key={school.id} className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden flex flex-col hover:shadow-md transition-shadow">
+                    <div className="p-6 pb-4">
+                      <div className="flex justify-between items-start gap-4 mb-4">
+                        <h3 className="text-lg font-bold text-slate-800 line-clamp-1">{school.name}</h3>
+                        {hasDeletionRequest(school.id) && (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 animate-pulse">
+                            ⚠️ {t('owner.deletionRequested')}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-3 mb-4">
+                        <div className="bg-slate-50 p-3 rounded-xl text-center">
+                          <div className="text-xl">👨‍💼</div>
+                          <div className="font-bold text-slate-800">{school.admins}</div>
+                          <div className="text-xs text-slate-500">{t('owner.admins')}</div>
+                        </div>
+                        <div className="bg-slate-50 p-3 rounded-xl text-center">
+                          <div className="text-xl">👨‍🏫</div>
+                          <div className="font-bold text-slate-800">{school.teachers}</div>
+                          <div className="text-xs text-slate-500">{t('owner.teachers')}</div>
+                        </div>
+                        <div className="bg-slate-50 p-3 rounded-xl text-center">
+                          <div className="text-xl">👨‍🎓</div>
+                          <div className="font-bold text-slate-800">{school.students}</div>
+                          <div className="text-xs text-slate-500">{t('owner.students')}</div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2 text-sm text-slate-600">
+                        <div className="flex justify-between items-center">
+                          <span>📚 {t('owner.activeSubjects')}</span>
+                          <span className="font-semibold text-slate-800">{school.active_subjects}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span>📢 {t('owner.latestAnnouncements')}</span>
+                          <span className="font-semibold text-slate-800">{school.recent_announcements}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-auto p-4 bg-slate-50/50 border-t border-slate-100">
+                      {(() => {
+                        const req = schoolDeletionRequests.find(r => r.school_id === school.id);
+                        if (!req) {
+                          return (
+                            <div className="text-xs text-slate-400 italic text-center py-2">
+                              {t('owner.noPendingRequests')}
+                            </div>
+                          );
+                        }
+                        return (
+                          <div className="bg-red-50 p-3 rounded-xl border border-red-100 text-sm space-y-2">
+                            <div className="font-bold text-red-800 flex items-center justify-between">
+                              <span>{req.status === 'pending' ? '⏳ ' + t('owner.pendingDeletion') : '❌ ' + t('owner.rejectedDeletion')}</span>
+                              <span className="text-[10px] bg-red-200 px-1.5 py-0.5 rounded uppercase">{req.requester_name}</span>
+                            </div>
+                            <p className="text-red-700 italic text-xs leading-relaxed line-clamp-2">"{req.reason}"</p>
+                            
+                            {req.status === 'pending' && (
+                              <div className="flex gap-2 pt-2">
+                                <button
+                                  className="flex-1 py-1.5 bg-red-600 text-white rounded-lg text-xs font-bold hover:bg-red-700 transition-colors shadow-sm"
+                                  onClick={async () => {
+                                    const confirmed = await swalMessenger.confirm({
+                                      title: t('owner.approveDeleteRequest'),
+                                      text: `${t('owner.confirmApproveDeleteRequest')} "${school.name}" ${t('owner.sure')} ${t('owner.permanentDeletion')}.`,
+                                      confirmButtonText: t('owner.approve'),
+                                      cancelButtonText: t('owner.cancel')
+                                    });
+                                    if (confirmed) approveSchoolDeletionRequest(req.id);
+                                  }}
+                                >
+                                  ✅ {t('owner.approveDelete')}
+                                </button>
+                                <button
+                                  className="flex-1 py-1.5 bg-white text-slate-700 border border-slate-200 rounded-lg text-xs font-bold hover:bg-slate-50 transition-colors"
+                                  onClick={async () => {
+                                    const notes = await swalMessenger.prompt({ title: t('owner.enterRejectionNotes'), inputPlaceholder: t('owner.enterRejectionNotes') });
+                                    if (notes !== null) {
+                                      rejectSchoolDeletionRequest(req.id, notes);
+                                    }
+                                  }}
+                                >
+                                  ❌ {t('owner.reject')}
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
         {activeTab === 'activities' && (
-          <div className="content-card">
-            <div className="card-header">
-              <h2><span className="card-icon">📋</span> กิจกรรมล่าสุด</h2>
-            </div>
-            <div className="card-content">
-              {/* School Filter */}
-              <div className="activities-filter">
-                <div className="filter-group">
-                  <label className="filter-label">เลือกโรงเรียน</label>
+          <div className="space-y-6 transition-all duration-300">
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                <h2 className="text-xl font-bold flex items-center gap-2">
+                  <span className="p-2 bg-indigo-50 rounded-lg">📋</span>
+                  {t('owner.recentActivities')}
+                </h2>
+                <div className="flex items-center gap-2 w-full md:w-auto">
+                  <label className="text-sm font-semibold text-slate-500 whitespace-nowrap">{t('owner.selectSchool')}:</label>
                   <select
-                    className="filter-select"
+                    className="flex-1 md:w-64 bg-slate-50 border border-slate-200 text-slate-700 py-2 px-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-medium"
                     value={selectedSchoolForActivities}
                     onChange={e => setSelectedSchoolForActivities(e.target.value)}
                   >
-                    <option value="all">📊 ทุกโรงเรียน</option>
+                    <option value="all">📊 {t('owner.allSchools')}</option>
                     {schools.map(school => (
                       <option key={school.id} value={school.id}>
                         🏫 {school.name}
@@ -565,17 +686,15 @@ function OwnerPage() {
               </div>
 
               {loadingActivities ? (
-                <Loading message="กำลังโหลดกิจกรรม..." />
+                <Loading message={t('owner.loadingActivities')} />
               ) : (
                 (() => {
-                  // Filter activities based on selected school
                   const filteredActivities = selectedSchoolForActivities === 'all'
                     ? activities
                     : activities.filter(activity => {
                         return activity.school_id && activity.school_id.toString() === selectedSchoolForActivities.toString();
                       });
 
-                  // Group activities by school if showing all schools
                   const groupedActivities = selectedSchoolForActivities === 'all'
                     ? activities.reduce((groups, activity) => {
                         const schoolId = activity.school_id ? activity.school_id.toString() : 'unknown';
@@ -591,37 +710,35 @@ function OwnerPage() {
                     : null;
 
                   if (selectedSchoolForActivities === 'all' && groupedActivities) {
-                    // Show activities grouped by school
                     const schoolIds = Object.keys(groupedActivities);
                     return schoolIds.length === 0 ? (
-                      <div className="empty-state">
-                        <div className="empty-icon">📋</div>
-                        <div className="empty-text">ไม่มีกิจกรรมล่าสุด</div>
+                      <div className="text-center py-20">
+                        <div className="text-4xl mb-4">📋</div>
+                        <div className="text-slate-500 font-medium">{t('owner.noActivities')}</div>
                       </div>
                     ) : (
-                      <div className="activities-by-school">
+                      <div className="space-y-8">
                         {schoolIds.map(schoolId => {
                           const schoolData = groupedActivities[schoolId];
                           return (
-                            <div key={schoolId} className="school-activities-group">
-                              <div className="school-activities-header">
-                                <h3 className="school-activities-title">
-                                  🏫 {schoolData.school_name}
-                                </h3>
-                                <span className="activities-count">
-                                  {schoolData.activities.length} กิจกรรม
+                            <div key={schoolId} className="relative pl-6 before:content-[''] before:absolute before:left-0 before:top-4 before:bottom-0 before:w-0.5 before:bg-slate-100">
+                              <div className="flex items-center gap-2 mb-4 -ml-6">
+                                <span className="p-1 px-2 bg-indigo-600 text-white rounded-lg text-xs font-bold ring-4 ring-white">🏫</span>
+                                <h3 className="font-bold text-slate-800">{schoolData.school_name}</h3>
+                                <span className="text-xs font-medium text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
+                                  {schoolData.activities.length} {t('owner.activities')}
                                 </span>
                               </div>
-                              <div className="activities-list">
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 {schoolData.activities.map((activity, index) => (
-                                  <div key={index} className="activity-item">
-                                    <div className="activity-icon">{getActivityIcon(activity.type)}</div>
-                                    <div className="activity-content">
-                                      <div className="activity-title">{activity.title}</div>
-                                      <div className="activity-meta">
-                                        <span className="activity-date">{formatDate(activity.created_at)}</span>
+                                  <div key={index} className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm hover:border-indigo-200 transition-colors">
+                                    <div className="flex items-start gap-3">
+                                      <div className="text-xl mt-1">{getActivityIcon(activity.type)}</div>
+                                      <div className="flex-1 min-w-0">
+                                        <div className="font-bold text-slate-800 truncate">{activity.title}</div>
+                                        <div className="text-[10px] text-slate-400 font-medium mb-1 uppercase tracking-tight">{formatDate(activity.created_at)}</div>
+                                        <div className="text-sm text-slate-600 leading-relaxed line-clamp-2">{activity.content}</div>
                                       </div>
-                                      <div className="activity-description">{activity.content}</div>
                                     </div>
                                   </div>
                                 ))}
@@ -632,26 +749,27 @@ function OwnerPage() {
                       </div>
                     );
                   } else {
-                    // Show activities for selected school
                     return filteredActivities.length === 0 ? (
-                      <div className="empty-state">
-                        <div className="empty-icon">📋</div>
-                        <div className="empty-text">
-                          {selectedSchoolForActivities === 'all' ? 'ไม่มีกิจกรรมล่าสุด' : 'ไม่มีกิจกรรมล่าสุดในโรงเรียนนี้'}
+                      <div className="text-center py-20">
+                        <div className="text-4xl mb-4">📋</div>
+                        <div className="text-slate-500 font-medium">
+                          {selectedSchoolForActivities === 'all' ? t('owner.noActivities') : t('owner.noActivitiesThisSchool')}
                         </div>
                       </div>
                     ) : (
-                      <div className="activities-list">
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {filteredActivities.map((activity, index) => (
-                          <div key={index} className="activity-item">
-                            <div className="activity-icon">{getActivityIcon(activity.type)}</div>
-                            <div className="activity-content">
-                              <div className="activity-title">{activity.title}</div>
-                              <div className="activity-meta">
-                                <span className="activity-school">{activity.school_name}</span>
-                                <span className="activity-date">{formatDate(activity.created_at)}</span>
+                          <div key={index} className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm hover:border-indigo-200 transition-colors">
+                            <div className="flex items-start gap-3">
+                              <div className="text-xl mt-1">{getActivityIcon(activity.type)}</div>
+                              <div className="flex-1 min-w-0">
+                                <div className="font-bold text-slate-800 truncate">{activity.title}</div>
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="text-[10px] text-indigo-600 font-bold bg-indigo-50 px-1 rounded uppercase tracking-tighter truncate">{activity.school_name}</span>
+                                  <span className="text-[10px] text-slate-400 font-medium tracking-tight whitespace-nowrap">{formatDate(activity.created_at)}</span>
+                                </div>
+                                <div className="text-sm text-slate-600 leading-relaxed line-clamp-2">{activity.content}</div>
                               </div>
-                              <div className="activity-description">{activity.content}</div>
                             </div>
                           </div>
                         ))}
@@ -665,75 +783,96 @@ function OwnerPage() {
         )}
 
         {activeTab === 'create_admin' && (
-          <div className="content-card">
-            <div className="card-header">
-              <h2><span className="card-icon">👨‍💼</span> เพิ่มแอดมินใหม่</h2>
-            </div>
-            <div className="card-content">
-              <form onSubmit={handleCreateAdmin}>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label className="form-label">โรงเรียน</label>
-                    <select
-                      className="form-input"
-                      value={selectedSchoolId}
-                      onChange={e => setSelectedSchoolId(e.target.value)}
-                      required
-                    >
-                      <option value="">เลือกโรงเรียน</option>
-                      {schools.map(school => (
-                        <option key={school.id} value={school.id}>{school.name}</option>
-                      ))}
-                    </select>
-                  </div>
+          <div className="max-w-2xl mx-auto space-y-6 transition-all duration-500">
+            <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-100">
+              <div className="flex items-center gap-3 mb-8">
+                <span className="p-3 bg-indigo-50 rounded-xl text-xl">👨‍💼</span>
+                <div>
+                  <h2 className="text-xl font-bold text-slate-800">{t('owner.addNewAdmin')}</h2>
+                  <p className="text-sm text-slate-500">{t('owner.addAdminSubtitle') || 'Create a new administrator account for a school.'}</p>
                 </div>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label className="form-label">Username</label>
+              </div>
+
+              <form onSubmit={handleCreateAdmin} className="space-y-6">
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">{t('owner.school')}</label>
+                  <select
+                    className="w-full bg-slate-50 border border-slate-200 text-slate-700 py-3 px-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-medium"
+                    value={selectedSchoolId}
+                    onChange={e => setSelectedSchoolId(e.target.value)}
+                    required
+                  >
+                    <option value="">{t('owner.selectSchool')}</option>
+                    {schools.map(school => (
+                      <option key={school.id} value={school.id}>{school.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-2">Username</label>
                     <input
-                      className="form-input"
+                      className="w-full bg-slate-50 border border-slate-200 text-slate-700 py-3 px-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-medium"
                       type="text"
                       value={newUsername}
                       onChange={e => setNewUsername(e.target.value)}
+                      placeholder="john_doe"
                       required
                     />
                   </div>
-                  <div className="form-group">
-                    <label className="form-label">Email</label>
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-2">Email</label>
                     <input
-                      className="form-input"
+                      className="w-full bg-slate-50 border border-slate-200 text-slate-700 py-3 px-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-medium"
                       type="email"
                       value={newEmail}
                       onChange={e => setNewEmail(e.target.value)}
+                      placeholder="john@example.com"
                       required
                     />
                   </div>
                 </div>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label className="form-label">ชื่อเต็ม</label>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-2">{t('owner.fullName')}</label>
                     <input
-                      className="form-input"
+                      className="w-full bg-slate-50 border border-slate-200 text-slate-700 py-3 px-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-medium"
                       type="text"
                       value={newFullName}
                       onChange={e => setNewFullName(e.target.value)}
+                      placeholder="John Doe"
                       required
                     />
                   </div>
-                  <div className="form-group">
-                    <label className="form-label">รหัสผ่าน</label>
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-2">{t('owner.password')}</label>
                     <input
-                      className="form-input"
+                      className="w-full bg-slate-50 border border-slate-200 text-slate-700 py-3 px-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-medium"
                       type="password"
                       value={newPassword}
                       onChange={e => setNewPassword(e.target.value)}
+                      placeholder="••••••••"
                       required
                     />
                   </div>
                 </div>
-                <div className="form-actions">
-                  <button type="submit" className="owner-btn-create-admin" disabled={creatingAdmin}>
-                    {creatingAdmin ? 'กำลังสร้าง...' : '👨‍💼 สร้างแอดมิน'}
+
+                <div className="pt-4">
+                  <button 
+                    type="submit" 
+                    className="w-full py-4 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:shadow-none"
+                    disabled={creatingAdmin}
+                  >
+                    {creatingAdmin ? (
+                      <span className="flex items-center gap-2">
+                        <svg className="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                        {t('owner.creating')}
+                      </span>
+                    ) : (
+                      <><span>👨‍💼</span> {t('owner.createAdmin')}</>
+                    )}
                   </button>
                 </div>
               </form>
@@ -742,231 +881,256 @@ function OwnerPage() {
         )}
 
         {activeTab === 'admin_requests' && (
-          <div className="content-card">
-            <div className="card-header">
-              <h2><span className="card-icon">📋</span> คำขอสร้างแอดมิน</h2>
+          <div className="space-y-6 transition-all duration-300">
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between">
+              <h2 className="text-xl font-bold flex items-center gap-2">
+                <span className="p-2 bg-indigo-50 rounded-lg">📨</span>
+                {t('owner.adminRequests')}
+              </h2>
+              <span className="text-xs font-bold bg-slate-100 text-slate-500 px-3 py-1 rounded-full uppercase tracking-wider">
+                {adminRequests.length} {t('owner.total')}
+              </span>
             </div>
-            <div className="card-content">
-              {loadingRequests ? (
-                <Loading message="กำลังโหลดคำขอ..." />
-              ) : adminRequests.length === 0 ? (
-                <div className="empty-state">
-                  <div className="empty-icon">📋</div>
-                  <div className="empty-text">ไม่มีคำขอสร้างแอดมิน</div>
-                  <div className="empty-subtitle">คำขอใหม่จะปรากฏที่นี่</div>
-                </div>
-              ) : (
-                <div className="requests-list">
-                  {adminRequests.map(request => (
-                    <div key={request.id} className="request-item">
-                      <div className="request-header">
-                        <div className="request-info">
-                          <h4>{request.full_name}</h4>
-                          <div className="request-meta">
-                            <span className="request-username">@{request.username}</span>
-                            <span className="request-email">{request.email}</span>
-                            <span className="request-school">{request.school_name}</span>
-                          </div>
+
+            {loadingRequests ? (
+              <Loading message={t('owner.loadingRequests')} />
+            ) : adminRequests.length === 0 ? (
+              <div className="text-center py-20 bg-white rounded-2xl border-2 border-dashed border-slate-200">
+                <div className="text-6xl mb-4 grayscale opacity-50">📩</div>
+                <div className="text-xl font-bold text-slate-800">{t('owner.noAdminRequests')}</div>
+                <div className="text-slate-500 mt-2">{t('owner.newRequestsWillAppear')}</div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {adminRequests.map(request => (
+                  <div key={request.id} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center font-bold text-xl uppercase">
+                          {request.full_name.charAt(0)}
                         </div>
-                        <div className={`request-status status-${request.status}`}>
-                          {request.status === 'pending' ? '⏳ รอดำเนินการ' : 
-                           request.status === 'approved' ? '✅ อนุมัติแล้ว' : '❌ ปฏิเสธแล้ว'}
+                        <div>
+                          <h4 className="font-bold text-slate-800">{request.full_name}</h4>
+                          <span className="text-xs text-slate-400 font-medium">@{request.username}</span>
                         </div>
                       </div>
-                      <div className="request-date">
-                        ขอเมื่อ: {formatDate(request.created_at)}
+                      <div className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-widest ${
+                        request.status === 'pending' ? 'bg-amber-100 text-amber-700' : 
+                        request.status === 'approved' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
+                      }`}>
+                        {request.status === 'pending' ? '⏳ ' + t('owner.pending') : 
+                         request.status === 'approved' ? '✅ ' + t('owner.approved') : '❌ ' + t('owner.rejected')}
                       </div>
-                      {request.status === 'pending' && (
-                        <div className="request-actions">
-                          <button 
-                            className="owner-btn-success" 
-                            onClick={() => openConfirmModal(
-                              'อนุมัติคำขอ',
-                              `คุณต้องการอนุมัติคำขอสร้างแอดมินสำหรับ ${request.full_name} ใช่หรือไม่?`,
-                              () => approveRequest(request.id)
-                            )}
-                          >
-                            ✅ อนุมัติ
-                          </button>
-                          <button 
-                            className="owner-btn-danger" 
-                            onClick={() => openConfirmModal(
-                              'ปฏิเสธคำขอ',
-                              `คุณต้องการปฏิเสธคำขอสร้างแอดมินสำหรับ ${request.full_name} ใช่หรือไม่?`,
-                              () => rejectRequest(request.id)
-                            )}
-                          >
-                            ❌ ปฏิเสธ
-                          </button>
-                        </div>
-                      )}
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
+
+                    <div className="space-y-3 mb-6 p-4 bg-slate-50 rounded-xl">
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="text-slate-400 w-5">📧</span>
+                        <span className="text-slate-700 font-medium truncate">{request.email}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="text-slate-400 w-5">🏫</span>
+                        <span className="text-slate-700 font-semibold">{request.school_name}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-[11px] text-slate-400">
+                        <span className="w-5">🕒</span>
+                        <span>{t('owner.requestedAt')}: {formatDate(request.created_at)}</span>
+                      </div>
+                    </div>
+
+                    {request.status === 'pending' && (
+                      <div className="flex gap-3">
+                        <button 
+                          className="flex-1 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all shadow-sm"
+                          onClick={async () => {
+                            const confirmed = await swalMessenger.confirm({
+                              title: t('owner.approveRequest'),
+                              text: `${t('owner.confirmApproveAdminRequest')} ${request.full_name} ${t('owner.sure')}`,
+                              confirmButtonText: t('owner.approve'),
+                              cancelButtonText: t('owner.cancel')
+                            });
+                            if (confirmed) approveRequest(request.id);
+                          }}
+                        >
+                          ✅ {t('owner.approve')}
+                        </button>
+                        <button 
+                          className="flex-1 py-2.5 bg-white text-slate-700 border border-slate-200 rounded-xl text-sm font-bold hover:bg-slate-50 transition-all"
+                          onClick={async () => {
+                            const confirmed = await swalMessenger.confirm({
+                              title: t('owner.rejectPasswordReset'),
+                              text: `${t('owner.confirmApproveAdminRequest')} ${request.full_name} ${t('owner.sure')}`,
+                              confirmButtonText: t('owner.reject'),
+                              cancelButtonText: t('owner.cancel')
+                            });
+                            if (confirmed) rejectRequest(request.id);
+                          }}
+                        >
+                          ❌ {t('owner.reject')}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
         {activeTab === 'password_reset_requests' && (
-          <div className="content-card">
-            <div className="card-header">
-              <h2><span className="card-icon">🔐</span> คำขอรีเซ็ตรหัสผ่านจากแอดมิน</h2>
+          <div className="space-y-6 transition-all duration-300">
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between">
+              <h2 className="text-xl font-bold flex items-center gap-2">
+                <span className="p-2 bg-red-50 rounded-lg">🔐</span>
+                {t('owner.passwordResetRequests')}
+              </h2>
+              <span className="text-xs font-bold bg-red-100 text-red-600 px-3 py-1 rounded-full uppercase tracking-wider animate-pulse">
+                {passwordResetRequests.length} {t('owner.urgent')}
+              </span>
             </div>
-            <div className="card-content">
-              {loadingResetRequests ? (
-                <Loading message="กำลังโหลดคำขอ..." />
-              ) : passwordResetRequests.length === 0 ? (
-                <div className="empty-state">
-                  <div className="empty-icon">✅</div>
-                  <div className="empty-text">ไม่มีคำขอรีเซ็ตรหัสผ่าน</div>
-                  <div className="empty-subtitle">คำขอใหม่จะปรากฏที่นี่เมื่อแอดมินลืมรหัสผ่าน</div>
-                </div>
-              ) : (
-                <div className="requests-list">
-                  {passwordResetRequests.map(request => (
-                    <div key={request.id} className="request-item">
-                      <div className="request-header">
-                        <div className="request-info">
-                          <h4>{request.full_name || request.username}</h4>
-                          <div className="request-meta">
-                            <span className="request-username">@{request.username}</span>
-                            <span className="request-email">{request.email || '-'}</span>
-                            <span className="request-role" style={{ 
-                              backgroundColor: '#dbeafe', 
-                              color: '#1e40af',
-                              padding: '2px 8px',
-                              borderRadius: '10px',
-                              fontSize: '0.8rem'
-                            }}>
-                              👨‍💼 แอดมิน
-                            </span>
-                          </div>
+
+            {loadingResetRequests ? (
+              <Loading message={t('owner.loadingRequests')} />
+            ) : passwordResetRequests.length === 0 ? (
+              <div className="text-center py-20 bg-white rounded-2xl border-2 border-dashed border-slate-200">
+                <div className="text-6xl mb-4 grayscale opacity-50">✅</div>
+                <div className="text-xl font-bold text-slate-800">{t('owner.noPasswordResetRequests')}</div>
+                <div className="text-slate-500 mt-2 font-medium">{t('owner.newPasswordResetWillAppear')}</div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {passwordResetRequests.map(request => (
+                  <div key={request.id} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 w-16 h-16 -mr-8 -mt-8 bg-red-50 rounded-full group-hover:scale-150 transition-transform duration-500 opacity-50"></div>
+                    
+                    <div className="flex justify-between items-start mb-4 relative">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 bg-red-100 text-red-700 rounded-full flex items-center justify-center font-bold text-xl">
+                          {request.full_name ? request.full_name.charAt(0) : request.username.charAt(0)}
                         </div>
-                        <div className="request-status status-pending">
-                          ⏳ รอดำเนินการ
+                        <div>
+                          <h4 className="font-bold text-slate-800">{request.full_name || request.username}</h4>
+                          <span className="text-xs text-slate-400 font-medium">@{request.username}</span>
                         </div>
                       </div>
-                      <div className="request-date">
-                        ขอเมื่อ: {new Date(request.created_at).toLocaleDateString('th-TH', { 
-                          day: 'numeric', month: 'short', year: 'numeric', 
-                          hour: '2-digit', minute: '2-digit' 
-                        })}
-                      </div>
-                      <div className="request-actions">
-                        <button 
-                          className="owner-btn-success" 
-                          onClick={() => {
-                            setSelectedResetRequest(request);
-                            setShowResetPasswordModal(true);
-                          }}
-                        >
-                          ✅ อนุมัติ
-                        </button>
-                        <button 
-                          className="owner-btn-danger" 
-                          onClick={() => openConfirmModal(
-                            'ปฏิเสธคำขอ',
-                            `คุณต้องการปฏิเสธคำขอรีเซ็ตรหัสผ่านของ ${request.full_name || request.username} ใช่หรือไม่?`,
-                            () => rejectPasswordReset(request.id)
-                          )}
-                        >
-                          ❌ ปฏิเสธ
-                        </button>
+                      <div className="text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-widest bg-amber-100 text-amber-700 ring-2 ring-white">
+                        ⏳ {t('owner.pending')}
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
+
+                    <div className="space-y-3 mb-6 p-4 bg-slate-50 rounded-xl relative">
+                      <div className="flex items-center gap-2 text-sm italic text-slate-500">
+                        {request.email || '-'}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-lg flex items-center gap-1">
+                          👨‍💼 {t('owner.admin')}
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-slate-400 border-t border-slate-200 pt-2 mt-2">
+                        {t('owner.requestedAt')}: {new Date(request.created_at).toLocaleDateString('th-TH', {
+                          day: 'numeric', month: 'short', year: 'numeric',
+                          hour: '2-digit', minute: '2-digit'
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="flex gap-3 relative">
+                      <button 
+                        className="flex-1 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition-all shadow-sm"
+                        onClick={() => {
+                          setSelectedResetRequest(request);
+                          setShowResetPasswordModal(true);
+                        }}
+                      >
+                        ✅ {t('owner.approve')}
+                      </button>
+                      <button 
+                        className="flex-1 py-2.5 bg-white text-slate-700 border border-slate-200 rounded-xl text-sm font-bold hover:bg-slate-50 transition-all"
+                        onClick={async () => {
+                          const confirmed = await swalMessenger.confirm({
+                            title: t('owner.rejectPasswordReset'),
+                            text: `${t('owner.confirmApproveAdminRequest')} ${request.full_name || request.username} ${t('owner.sure')}`,
+                            confirmButtonText: t('owner.reject'),
+                            cancelButtonText: t('owner.cancel')
+                          });
+                          if (confirmed) rejectPasswordReset(request.id);
+                        }}
+                      >
+                        ❌ {t('owner.reject')}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
 
-      <ConfirmModal
-        isOpen={showConfirmModal}
-        title={confirmTitle}
-        message={confirmMessage}
-        onCancel={() => setShowConfirmModal(false)}
-        onConfirm={async () => { setShowConfirmModal(false); try { await onConfirmAction(); } catch (e) { console.error(e); } }}
-      />
-
-      <AlertModal
-        isOpen={showAlertModal}
-        title={alertTitle}
-        message={alertMessage}
-        onClose={() => setShowAlertModal(false)}
-      />
-
       {/* Password Reset Approval Modal */}
       {showResetPasswordModal && selectedResetRequest && (
-        <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
-          <div className="modal-content" style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '12px', maxWidth: '450px', width: '90%', boxShadow: '0 10px 40px rgba(0,0,0,0.3)' }}>
-            <h3 style={{ marginTop: 0, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span>🔐</span> อนุมัติรีเซ็ตรหัสผ่าน
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowResetPasswordModal(false)}></div>
+          <div className="relative bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full">
+            <h3 className="text-xl font-bold flex items-center gap-2 mb-6">
+              <span className="p-2 bg-red-50 rounded-lg text-lg">🔐</span>
+              {t('owner.approvePasswordReset')}
             </h3>
-            <div style={{ marginBottom: '1.5rem', padding: '1rem', backgroundColor: '#f3f4f6', borderRadius: '8px' }}>
-              <div><strong>ชื่อผู้ใช้:</strong> {selectedResetRequest.username}</div>
-              <div><strong>ชื่อ:</strong> {selectedResetRequest.full_name || '-'}</div>
-              <div><strong>บทบาท:</strong> แอดมิน</div>
+            
+            <div className="mb-6 p-4 bg-slate-50 rounded-2xl space-y-2 border border-slate-100">
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-500 font-medium">{t('owner.username')}:</span>
+                <span className="font-bold text-slate-800">{selectedResetRequest.username}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-500 font-medium">{t('owner.fullName')}:</span>
+                <span className="font-bold text-slate-800">{selectedResetRequest.full_name || '-'}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-500 font-medium">{t('owner.role')}:</span>
+                <span className="text-indigo-600 font-bold">{t('owner.admin')}</span>
+              </div>
             </div>
-            <div style={{ marginBottom: '1.5rem' }}>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600' }}>รหัสผ่านใหม่</label>
+
+            <div className="mb-8">
+              <label className="block text-sm font-bold text-slate-700 mb-2">{t('owner.newPassword')}</label>
               <input
                 type="text"
                 value={newPasswordForReset}
                 onChange={(e) => setNewPasswordForReset(e.target.value)}
-                placeholder="กรอกรหัสผ่านใหม่"
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  borderRadius: '8px',
-                  border: '1px solid #ddd',
-                  fontSize: '1rem'
-                }}
+                placeholder={t('owner.enterNewPassword')}
+                className="w-full bg-slate-50 border border-slate-200 text-slate-700 py-3 px-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-mono"
+                autoFocus
               />
-              <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: '#666' }}>
-                💡 แนะนำ: ใช้รหัสผ่านที่ง่ายต่อการจำ และแจ้งให้แอดมินเปลี่ยนรหัสผ่านหลังเข้าสู่ระบบ
-              </div>
+              <p className="mt-2 text-xs text-slate-400 flex items-center gap-1">
+                💡 {t('owner.passwordHint')}
+              </p>
             </div>
-            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+
+            <div className="flex gap-3">
               <button
                 onClick={() => {
                   setShowResetPasswordModal(false);
                   setSelectedResetRequest(null);
                   setNewPasswordForReset('');
                 }}
-                style={{
-                  padding: '10px 20px',
-                  borderRadius: '8px',
-                  border: '1px solid #ddd',
-                  backgroundColor: '#f3f4f6',
-                  cursor: 'pointer',
-                  fontWeight: '500'
-                }}
+                className="flex-1 py-3 px-4 bg-white text-slate-600 border border-slate-200 rounded-xl font-bold hover:bg-slate-50 transition-all"
               >
-                ยกเลิก
+                {t('owner.cancel')}
               </button>
               <button
                 onClick={() => {
                   if (!newPasswordForReset.trim()) {
-                    toast.error('กรุณากรอกรหัสผ่านใหม่');
+                    toast.error(t('owner.passwordRequired'));
                     return;
                   }
                   approvePasswordReset(selectedResetRequest.id, selectedResetRequest.user_id, newPasswordForReset);
                 }}
                 disabled={!newPasswordForReset.trim()}
-                style={{
-                  padding: '10px 20px',
-                  borderRadius: '8px',
-                  border: 'none',
-                  backgroundColor: newPasswordForReset.trim() ? '#22c55e' : '#9ca3af',
-                  color: 'white',
-                  cursor: newPasswordForReset.trim() ? 'pointer' : 'not-allowed',
-                  fontWeight: '500'
-                }}
+                className="flex-1 py-3 px-4 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-200 disabled:opacity-50 disabled:shadow-none"
               >
-                ✅ อนุมัติ
+                ✅ {t('owner.approve')}
               </button>
             </div>
           </div>
@@ -975,38 +1139,59 @@ function OwnerPage() {
 
       {/* Create School Modal */}
       {showCreateSchoolModal && (
-        <div className="modal-overlay">
-          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="create-school-modal-title">
-            <div className="modal-header">
-              <h3 id="create-school-modal-title">🏫 สร้างโรงเรียนใหม่</h3>
-              <button className="modal-close" onClick={() => { setShowCreateSchoolModal(false); setNewSchoolName(''); }} aria-label="ปิด">×</button>
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowCreateSchoolModal(false)}></div>
+          <div className="relative bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold flex items-center gap-2">
+                <span className="p-2 bg-indigo-50 rounded-lg text-lg">🏫</span>
+                {t('owner.createNewSchool')}
+              </h3>
+              <button className="text-slate-400 hover:text-slate-600 text-2xl transition-colors" onClick={() => { setShowCreateSchoolModal(false); setNewSchoolName(''); }}>×</button>
             </div>
-            <form onSubmit={handleCreateSchool}>
-              <div className="modal-body">
-                <div className="form-group full-width">
-                  <label className="form-label">ชื่อโรงเรียน</label>
-                  <input
-                    className="form-input"
-                    type="text"
-                    value={newSchoolName}
-                    onChange={e => setNewSchoolName(e.target.value)}
-                    placeholder="เช่น โรงเรียนดาวเรือง"
-                    autoFocus
-                    required
-                  />
-                </div>
+
+            <form onSubmit={handleCreateSchool} className="space-y-6">
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">{t('owner.schoolName')}</label>
+                <input
+                  className="w-full bg-slate-50 border border-slate-200 text-slate-800 py-3 px-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-semibold"
+                  type="text"
+                  value={newSchoolName}
+                  onChange={e => setNewSchoolName(e.target.value)}
+                  placeholder={t('owner.schoolNamePlaceholder')}
+                  autoFocus
+                  required
+                />
               </div>
-              <div className="modal-footer">
-                <button type="button" className="btn-cancel" onClick={() => { setShowCreateSchoolModal(false); setNewSchoolName(''); }}>ยกเลิก</button>
-                <button type="submit" className="btn-add" disabled={creatingSchool || !newSchoolName.trim()}>
-                  {creatingSchool ? 'กำลังสร้าง...' : '➕ สร้างโรงเรียน'}
+
+              <div className="flex gap-3">
+                <button 
+                  type="button" 
+                  className="flex-1 py-3 px-4 bg-white text-slate-600 border border-slate-200 rounded-xl font-bold hover:bg-slate-50 transition-all"
+                  onClick={() => { setShowCreateSchoolModal(false); setNewSchoolName(''); }}
+                >
+                  {t('owner.cancel')}
+                </button>
+                <button 
+                  type="submit" 
+                  className="flex-1 py-3 px-4 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 disabled:opacity-50 disabled:shadow-none"
+                  disabled={creatingSchool || !newSchoolName.trim()}
+                >
+                  {creatingSchool ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <svg className="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                      {t('owner.creating')}
+                    </span>
+                  ) : (
+                    <>➕ {t('owner.createSchool')}</>
+                  )}
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
-        </>
+        </div>
       )}
     </div>
   );

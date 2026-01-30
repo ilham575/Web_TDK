@@ -14,6 +14,7 @@ from routers.owner import router as owner_router
 from routers.absence import router as absence_router
 from routers.homeroom import router as homeroom_router
 from routers.classroom import router as classroom_router
+from routers.admin import router as admin_router
 import os
 
 # import ฟังก์ชันสร้างตาราง
@@ -41,10 +42,20 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 # เพิ่ม CORS middleware
-cors_origins = os.getenv("CORS_ORIGINS", "*").split(",")
+cors_origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:5173", # Vite default
+]
+# If CORS_ORIGINS environment variable is set, add those too
+env_origins = os.getenv("CORS_ORIGINS")
+if env_origins:
+    cors_origins.extend(env_origins.split(","))
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
+    allow_origin_regex="http://localhost:.*", # Allow any port on localhost
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -68,6 +79,7 @@ app.include_router(owner_router)
 app.include_router(absence_router)
 app.include_router(homeroom_router)
 app.include_router(classroom_router)
+app.include_router(admin_router)
 
 @app.get("/", tags=["root"])
 def read_root():

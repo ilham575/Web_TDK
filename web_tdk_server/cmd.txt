@@ -1,0 +1,1 @@
+mysql -uroot -p -h 34.143.141.231 --ssl-ca=server-ca.pem --ssl-cert=client-cert.pem --ssl-key=client-key.pem

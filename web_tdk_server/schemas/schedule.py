@@ -40,6 +40,11 @@ class SubjectSchedule(SubjectScheduleBase):
     subject_code: Optional[str] = None
     teacher_name: Optional[str] = None
     classroom_name: Optional[str] = None  # Display classroom name if assigned
+
+    # Make day/time optional in responses to support legacy rows without explicit times
+    day_of_week: Optional[Union[int, str]] = None
+    start_time: Optional[time] = None
+    end_time: Optional[time] = None
     
     class Config:
         from_attributes = True
@@ -47,12 +52,13 @@ class SubjectSchedule(SubjectScheduleBase):
 class StudentScheduleResponse(BaseModel):
     id: int
     subject_id: int
-    subject_name: str
+    subject_name: Optional[str] = None
     subject_code: Optional[str] = None
-    teacher_name: str
-    day_of_week: str
-    start_time: time
-    end_time: time
+    teacher_name: Optional[str] = None
+    # Make day/time optional for robust responses when schedules lack explicit times
+    day_of_week: Optional[str] = None
+    start_time: Optional[time] = None
+    end_time: Optional[time] = None
     
     class Config:
         from_attributes = True

@@ -1,51 +1,46 @@
 import React, { useState, useEffect } from 'react';
-import '../css/ScheduleGrid.css';
 import ScheduleDetailModal from './ScheduleDetailModal';
 
 // schedules: array of { day_of_week, start_time, end_time, subject_name, subject_code?, teacher_name?, id }
 // operatingHours: array of { day_of_week, start_time, end_time }
-// role: 'teacher'|'student' (if teacher, we can show action buttons when onActionDelete provided)
+// role: 'teacher'|'student'
 export default function ScheduleGrid({ operatingHours = [], schedules = [], role = 'student', onActionDelete, onActionEdit }) {
   const dayNames = ['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์','เสาร์'];
   
-  // Color palette สำหรับแต่ละชั้นเรียน (classroom)
-  const classroomColors = [
-    { bg: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)', border: '#1e40af', text: '#ffffff' }, // Blue
-    { bg: 'linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)', border: '#7f1d1d', text: '#ffffff' }, // Red
-    { bg: 'linear-gradient(135deg, #10b981 0%, #047857 100%)', border: '#065f46', text: '#ffffff' }, // Green
-    { bg: 'linear-gradient(135deg, #f59e0b 0%, #b45309 100%)', border: '#78350f', text: '#ffffff' }, // Amber
-    { bg: 'linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)', border: '#4c1d95', text: '#ffffff' }, // Purple
-    { bg: 'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)', border: '#164e63', text: '#ffffff' }, // Cyan
-    { bg: 'linear-gradient(135deg, #ec4899 0%, #be185d 100%)', border: '#831843', text: '#ffffff' }, // Pink
-    { bg: 'linear-gradient(135deg, #f97316 0%, #c2410c 100%)', border: '#7c2d12', text: '#ffffff' }, // Orange
+  // Tailwind-friendly color palette using Emerald as primary
+  const subjectColors = [
+    { bg: 'bg-emerald-500', hover: 'hover:bg-emerald-600', text: 'text-white', border: 'border-emerald-700' },
+    { bg: 'bg-blue-500', hover: 'hover:bg-blue-600', text: 'text-white', border: 'border-blue-700' },
+    { bg: 'bg-indigo-500', hover: 'hover:bg-indigo-600', text: 'text-white', border: 'border-indigo-700' },
+    { bg: 'bg-purple-500', hover: 'hover:bg-purple-600', text: 'text-white', border: 'border-purple-700' },
+    { bg: 'bg-rose-500', hover: 'hover:bg-rose-600', text: 'text-white', border: 'border-rose-700' },
+    { bg: 'bg-amber-500', hover: 'hover:bg-amber-600', text: 'text-white', border: 'border-amber-700' },
+    { bg: 'bg-teal-500', hover: 'hover:bg-teal-600', text: 'text-white', border: 'border-teal-700' },
+    { bg: 'bg-cyan-500', hover: 'hover:bg-cyan-600', text: 'text-white', border: 'border-cyan-700' },
   ];
   
-  // Function เพื่อหาสี ตามชั้นเรียน (สร้าง hash ของชื่อชั้น)
-  const getClassroomColor = (classroomName) => {
-    if (!classroomName) return classroomColors[0]; // default blue
+  const getSubjectColor = (name) => {
+    if (!name) return subjectColors[0];
     let hash = 0;
-    for (let i = 0; i < classroomName.length; i++) {
-      hash = ((hash << 5) - hash) + classroomName.charCodeAt(i);
-      hash = hash & hash; // Convert to 32bit integer
+    for (let i = 0; i < name.length; i++) {
+      hash = ((hash << 5) - hash) + name.charCodeAt(i);
+      hash |= 0;
     }
-    const index = Math.abs(hash) % classroomColors.length;
-    return classroomColors[index];
+    const index = Math.abs(hash) % subjectColors.length;
+    return subjectColors[index];
   };
 
-  // local state for modal + selection
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
   const [isMobile, setIsMobile] = useState(false);
   const [selectedMobileDay, setSelectedMobileDay] = useState(null);
 
-  // Mobile detection hook (must be called before any early returns)
   useEffect(() => {
-    const mql = window.matchMedia('(max-width: 480px)');
+    const mql = window.matchMedia('(max-width: 768px)');
     const handler = (e) => setIsMobile(e.matches);
-    // Set initial
     setIsMobile(mql.matches);
-    try { mql.addEventListener('change', handler); } catch (e) { mql.addListener(handler); }
-    return () => { try { mql.removeEventListener('change', handler); } catch (e) { mql.removeListener(handler); } };
+    mql.addEventListener('change', handler);
+    return () => mql.removeEventListener('change', handler);
   }, []);
 
   // compute visible days in order
@@ -56,32 +51,37 @@ export default function ScheduleGrid({ operatingHours = [], schedules = [], role
     operatingEnd: slot.end_time
   })).sort((a,b)=>a.key-b.key);
 
+  useEffect(() => {
+    if (isMobile && days.length > 0 && selectedMobileDay === null) {
+      const today = new Date().getDay();
+      const hasToday = days.find(d => d.key === today);
+      setSelectedMobileDay(hasToday ? today : days[0].key);
+    }
+  }, [isMobile, days, selectedMobileDay]);
+
   if (!days.length) return (
-    <div className="schedule-no-data">
-      <div className="empty-icon">📅</div>
-      <div className="empty-text">ยังไม่ได้กำหนดเวลาเปิดเรียน</div>
-      <div className="empty-subtitle">กรุณาติดต่อผู้ดูแลระบบ</div>
+    <div className="flex flex-col items-center justify-center py-20 bg-white rounded-3xl border border-dashed border-slate-200">
+      <div className="text-6xl mb-6 opacity-20">📅</div>
+      <div className="text-xl font-bold text-slate-800">ยังไม่ได้กำหนดเวลาเปิดเรียน</div>
+      <div className="text-slate-400 mt-2">กรุณาติดต่อผู้ดูแลระบบเพื่อตั้งค่าเวลาทำการ</div>
     </div>
   );
 
-  // determine hour range from operating hours (fallback to 8..18)
+  // determine hour range (fallback to 8..18)
   let minH = 24, maxH = 0;
-  const considerTime = (t) => {
-    if (!t) return null;
-    const m = t.match(/^(\d{2}):(\d{2})/);
+  const toFloat = (t) => {
+    const m = String(t).match(/^(\d{2}):(\d{2})/);
     if (!m) return null;
-    return Number(m[1]) + Number(m[2])/60;
+    return Number(m[1]) + Number(m[2]) / 60;
   };
+  
   operatingHours.forEach(s => {
-    const st = considerTime(s.start_time);
-    const et = considerTime(s.end_time);
+    const st = toFloat(s.start_time);
+    const et = toFloat(s.end_time);
     if (st !== null) minH = Math.min(minH, Math.floor(st));
     if (et !== null) maxH = Math.max(maxH, Math.ceil(et));
   });
   if (minH === 24 || maxH === 0) { minH = 8; maxH = 18; }
-  // build hour labels
-  const hours = [];
-  for (let h = minH; h <= maxH; h++) hours.push(h);
 
   // group schedules by day
   const schedulesByDay = {};
@@ -91,110 +91,136 @@ export default function ScheduleGrid({ operatingHours = [], schedules = [], role
     schedulesByDay[d].push(s);
   });
 
-  // merge adjacent schedules for the same subject AND same classroom so blocks appear linked
   const mergeAdjacentSchedules = (items) => {
     if (!Array.isArray(items) || items.length === 0) return [];
-    // sort by start time
-    const sorted = items.slice().sort((a,b) => {
-      const ta = toFloat(a.start_time) || 0;
-      const tb = toFloat(b.start_time) || 0;
-      return ta - tb;
-    });
-
+    const sorted = items.slice().sort((a,b) => (toFloat(a.start_time) || 0) - (toFloat(b.start_time) || 0));
     const merged = [];
     for (let i = 0; i < sorted.length; i++) {
-      const cur = Object.assign({}, sorted[i]);
-      if (merged.length === 0) {
-        merged.push(cur);
-        continue;
-      }
-      const last = merged[merged.length - 1];
-      const lastEnd = toFloat(last.end_time) || 0;
-      const curStart = toFloat(cur.start_time) || 0;
-      // consider adjacent if end === start (exact) or within 1 minute tolerance
-      const adjacent = Math.abs(lastEnd - curStart) < (1/60 + 1e-9);
-      // merge only when it's the same subject AND same classroom
-      const sameSubject = (last.subject_code && cur.subject_code && last.subject_code === cur.subject_code) || (last.subject_name && cur.subject_name && last.subject_name === cur.subject_name) || (last.subject_id && cur.subject_id && last.subject_id === cur.subject_id) || (last.subject && cur.subject && last.subject === cur.subject);
-      const lastClassroom = last.classroom_name || last.classroom || '';
-      const curClassroom = cur.classroom_name || cur.classroom || '';
-      const sameClassroom = lastClassroom === curClassroom;
-      
-      if (adjacent && sameSubject && sameClassroom) {
-        // extend last.end_time to cur.end_time
-        last.end_time = cur.end_time;
-        // optionally, merge other fields if missing
-        if (!last.room && cur.room) last.room = cur.room;
-        if (!last.subject_code && cur.subject_code) last.subject_code = cur.subject_code;
-      } else {
-        merged.push(cur);
-      }
+        const cur = { ...sorted[i] };
+        if (merged.length === 0) { merged.push(cur); continue; }
+        const last = merged[merged.length - 1];
+        const lastEnd = toFloat(last.end_time) || 0;
+        const curStart = toFloat(cur.start_time) || 0;
+        const adjacent = Math.abs(lastEnd - curStart) < (1/60 + 0.001);
+        const sameSubject = (last.subject_code === cur.subject_code && last.subject_code) || 
+                          (last.subject_name === cur.subject_name && last.subject_name) || 
+                          (last.subject_id === cur.subject_id && last.subject_id);
+        const lastClass = last.classroom_name || last.classroom || '';
+        const curClass = cur.classroom_name || cur.classroom || '';
+        if (adjacent && sameSubject && (lastClass === curClass)) {
+            last.end_time = cur.end_time;
+        } else {
+            merged.push(cur);
+        }
     }
     return merged;
   };
 
-  const toFloat = (t) => {
-    const m = String(t).match(/^(\d{2}):(\d{2})/);
-    if (!m) return null;
-    return Number(m[1]) + Number(m[2]) / 60;
+  const getDayColorClass = (dayKey) => {
+    const colors = [
+      'bg-red-50 text-red-600 border-red-100', // Sun
+      'bg-yellow-50 text-yellow-600 border-yellow-101', // Mon
+      'bg-pink-50 text-pink-600 border-pink-101', // Tue
+      'bg-green-50 text-green-600 border-green-101', // Wed
+      'bg-orange-50 text-orange-600 border-orange-101', // Thu
+      'bg-blue-50 text-blue-600 border-blue-101', // Fri
+      'bg-purple-50 text-purple-600 border-purple-101', // Sat
+    ];
+    return colors[dayKey % 7] || 'bg-slate-50 text-slate-600 border-slate-100';
   };
 
   const openDetail = (item) => { setSelectedItem(item); setShowDetailModal(true); };
   const closeDetail = () => { setSelectedItem(null); setShowDetailModal(false); };
-
-  const toggleMobileDay = (dayKey) => {
-    setSelectedMobileDay(prev => (prev === dayKey ? null : dayKey));
-  };
-
   const handleEdit = (item) => { if (onActionEdit) onActionEdit(item); };
   const handleDelete = (id) => { if (onActionDelete) onActionDelete(id); };
 
   return (
-    <div className="schedule-grid-wrap">
-      <div className="schedule-list-view">
-        {days.map(day => {
-          const dayKey = String(day.key);
-          const items = mergeAdjacentSchedules(schedulesByDay[dayKey] || []);
-          return (
-            <div key={day.key} className="schedule-day-section">
-              <div className="day-section-header">{day.label}</div>
-              <div className="day-items-list">
-                {items.length > 0 ? (
-                  items.map(item => {
-                    const subjectDisplay = item.subject_name || item.subject || item.subject_code || '';
-                    const classroomDisplay = item.classroom_name || item.classroom || null;
-                    const classroomColor = getClassroomColor(classroomDisplay);
-                    
-                    return (
-                      <div
-                        key={item.id || `${item.subject_name}-${item.start_time}`}
-                        className="schedule-list-item"
-                        style={{
-                          borderLeftColor: classroomColor.border,
-                          background: classroomColor.bg
-                        }}
-                        onClick={() => openDetail(item)}
-                        role="button"
-                        tabIndex={0}
-                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDetail(item); } }}
-                      >
-                        <div className="list-item-subject">📚 {subjectDisplay}</div>
-                        <div className="list-item-time">⏰ {item.start_time}-{item.end_time}</div>
-                        {(role === 'teacher' || role === 'admin') && classroomDisplay && (
-                          <div className="list-item-classroom">🏫 {classroomDisplay}</div>
-                        )}
-                        {/* Inline edit/delete removed for admin; use modal actions instead */}
-                      </div>
-                    );
-                  })
-                ) : (
-                  <div className="no-items-message">ไม่มีรายวิชาในวันนี้</div>
-                )}
+    <div className="space-y-6">
+      {/* Mobile Day Selector Tabs */}
+      {isMobile && days.length > 0 && (
+        <div className="flex overflow-x-auto gap-2 pb-4 -mx-4 px-4 no-scrollbar scroll-smooth">
+          {days.map(day => (
+            <button
+              key={day.key}
+              onClick={() => setSelectedMobileDay(day.key)}
+              className={`shrink-0 px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-all border-2 ${
+                selectedMobileDay === day.key
+                ? `${getDayColorClass(day.key)} border-current shadow-md shadow-slate-200`
+                : 'bg-white text-slate-400 border-slate-100 hover:border-slate-200'
+              }`}
+            >
+              {day.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        {days
+          .filter(day => !isMobile || selectedMobileDay === null || selectedMobileDay === day.key)
+          .map(day => {
+            const items = mergeAdjacentSchedules(schedulesByDay[String(day.key)] || []);
+            return (
+              <div key={day.key} className="bg-white rounded-3xl shadow-lg shadow-slate-100 border border-slate-100 overflow-hidden flex flex-col">
+                <div className={`px-5 py-3 border-b-2 flex justify-between items-center ${getDayColorClass(day.key)}`}>
+                  <span className="font-black uppercase tracking-widest text-sm">{day.label}</span>
+                  <span className="bg-white/50 px-2 py-0.5 rounded-full text-[10px] font-bold">{items.length} คาบ</span>
+                </div>
+                
+                <div className="p-4 flex-1 space-y-3 bg-slate-50/30">
+                  {items.length > 0 ? (
+                    items.map((item, idx) => {
+                      const subjectDisplay = item.subject_name || item.subject || 'วิชาเลือก';
+                      const classroomDisplay = item.classroom_name || item.classroom;
+                      const color = getSubjectColor(subjectDisplay);
+                      
+                      return (
+                        <div
+                          key={item.id || `${idx}-${item.start_time}`}
+                          onClick={() => openDetail(item)}
+                          className="group bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md hover:border-emerald-200 transition-all cursor-pointer active:scale-[0.98]"
+                        >
+                          <div className="flex items-start gap-3">
+                            <div className={`w-10 h-10 rounded-xl shrink-0 flex items-center justify-center text-white font-bold shadow-inner ${color.bg}`}>
+                              {subjectDisplay.charAt(0)}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h4 className="font-bold text-slate-800 text-sm truncate group-hover:text-emerald-700 transition-colors">
+                                {subjectDisplay}
+                              </h4>
+                              <div className="flex items-center gap-1.5 mt-1">
+                                <span className="text-[10px] font-bold text-slate-400">⏰ {item.start_time} - {item.end_time}</span>
+                              </div>
+                              {classroomDisplay && (
+                                <div className="mt-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-50 text-slate-500 text-[9px] font-bold border border-slate-100">
+                                  🏫 ห้อง {classroomDisplay}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="py-10 text-center flex flex-col items-center justify-center opacity-40">
+                      <div className="text-3xl mb-1">😴</div>
+                      <p className="text-[11px] font-bold text-slate-400 uppercase tracking-tighter">ไม่มีตารางเรียน</p>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
       </div>
-      <ScheduleDetailModal isOpen={showDetailModal} item={selectedItem} onClose={closeDetail} role={role} onEdit={handleEdit} onDelete={handleDelete} />
+      
+      <ScheduleDetailModal 
+        isOpen={showDetailModal} 
+        item={selectedItem} 
+        onClose={closeDetail} 
+        role={role} 
+        onEdit={handleEdit} 
+        onDelete={handleDelete} 
+      />
     </div>
   );
 }

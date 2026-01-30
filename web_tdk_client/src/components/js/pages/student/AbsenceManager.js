@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import ConfirmModal from '../../ConfirmModal';
+import swalMessenger from '../owner/swalmessenger';
 import ReactDOM from 'react-dom';
-import '../../../css/pages/student/AbsenceManager.css';
 import { API_BASE_URL } from '../../../endpoints';
 import { toast } from 'react-toastify';
 
@@ -10,6 +9,8 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [pendingDeleteAbsenceId, setPendingDeleteAbsenceId] = useState(null);
   const [formData, setFormData] = useState({
     absence_date_start: '',
     absence_date_end: '',
@@ -19,12 +20,10 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
     is_multi_day: false
   });
 
-  // Check if student can edit/delete this absence (pending or rejected only)
   const canModify = (absence) => {
     return absence.status === 'pending' || absence.status === 'rejected';
   };
 
-  // Load absences
   const loadAbsences = async () => {
     if (!studentId) return;
     setLoading(true);
@@ -59,9 +58,7 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
     }
   }, [operatingHours]);
 
-  // Get available dates from operating hours (filter by day_of_week)
   const getAvailableDates = () => {
-    // Get today's date using local timezone (not UTC)
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
@@ -70,7 +67,6 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
     
     const dates = [];
     
-    // Map day names to JavaScript's getDay() values (0=Sunday, 1=Monday, ..., 6=Saturday)
     const dayNameToNumber = {
       'sunday': 0,
       'monday': 1,
@@ -81,122 +77,61 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
       'saturday': 6
     };
     
-    // Get allowed days from operating hours, handling both string names and numbers
     let allowedDays = Array.isArray(operatingHours) 
       ? operatingHours.map(s => {
           const day = s.day_of_week;
           if (typeof day === 'string') {
-            // Try parsing as number first (e.g., '0', '6')
             const asNum = Number(day);
             if (!isNaN(asNum) && asNum >= 0 && asNum <= 6) {
               return asNum;
             }
-            // Otherwise try as day name (e.g., 'monday', 'sunday')
             return dayNameToNumber[day.toLowerCase()] !== undefined ? dayNameToNumber[day.toLowerCase()] : null;
           }
           return Number(day) <= 6 ? Number(day) : (Number(day) % 7);
         }).filter(d => d !== null)
       : [];
-    
-    // Remove duplicates (in case multiple slots on same day)
-    allowedDays = [...new Set(allowedDays)];
-    
-    console.log('DEBUG allowedDays:', allowedDays);
 
-    for (let d = new Date(today); d <= futureDate; d.setDate(d.getDate() + 1)) {
-      // Create a date string in local timezone (not UTC)
-      const year = d.getFullYear();
-      const month = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      const dateStr = `${year}-${month}-${day}`;
-      
-      const dow = d.getDay();
-      // Only include days that are in operating hours (if operatingHours is set)
-      if (allowedDays.length > 0 && allowedDays.includes(dow)) {
-        console.log(`  Date: ${dateStr}, dow: ${dow}`);
-        dates.push(dateStr);
+    if (allowedDays.length === 0) return [];
+
+    for (let current = new Date(today); current <= futureDate; current.setDate(current.getDate() + 1)) {
+      const dayNum = current.getDay();
+      if (allowedDays.includes(dayNum)) {
+        const isoStr = current.toISOString().split('T')[0];
+        dates.push(isoStr);
       }
     }
 
     return dates;
   };
 
-  // Submit absence (single or multi-day) or update if editing
+  const availableDates = getAvailableDates();
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    const availableDates = getAvailableDates();
-    const method = editingId ? 'PUT' : 'POST';
-    const endpoint = editingId ? `${API_BASE_URL}/absences/${editingId}` : `${API_BASE_URL}/absences/`;
-
     if (formData.is_multi_day) {
-      // Multi-day mode
       if (!formData.absence_date_start || !formData.absence_date_end) {
-        toast.error('กรุณาเลือกวันเริ่มต้นและวันสิ้นสุด');
+        toast.error('กรุณาเลือกวันที่เริ่มต้นและสิ้นสุด');
         return;
       }
 
-      if (formData.absence_date_start > formData.absence_date_end) {
-        toast.error('วันเริ่มต้นต้องน้อยกว่าวันสิ้นสุด');
+      const startDate = new Date(formData.absence_date_start);
+      const endDate = new Date(formData.absence_date_end);
+      if (startDate > endDate) {
+        toast.error('วันที่สิ้นสุดต้องอยู่หลังวันที่เริ่มต้น');
         return;
       }
 
-      // Validate all dates in range are available (only include opening days)
-      const start = new Date(formData.absence_date_start);
-      const end = new Date(formData.absence_date_end);
       const dates = [];
-      
-      // Map day names to JavaScript's getDay() values (0=Sunday, 1=Monday, ..., 6=Saturday)
-      const dayNameToNumber = {
-        'sunday': 0,
-        'monday': 1,
-        'tuesday': 2,
-        'wednesday': 3,
-        'thursday': 4,
-        'friday': 5,
-        'saturday': 6
-      };
-      
-      // Get allowed days from operating hours, handling both string names and numbers
-      let allowedDays = Array.isArray(operatingHours) 
-        ? operatingHours.map(s => {
-            const day = s.day_of_week;
-            if (typeof day === 'string') {
-              // Try parsing as number first (e.g., '0', '6')
-              const asNum = Number(day);
-              if (!isNaN(asNum) && asNum >= 0 && asNum <= 6) {
-                return asNum;
-              }
-              // Otherwise try as day name (e.g., 'monday', 'sunday')
-              return dayNameToNumber[day.toLowerCase()] !== undefined ? dayNameToNumber[day.toLowerCase()] : null;
-            }
-            return Number(day) <= 6 ? Number(day) : (Number(day) % 7);
-          }).filter(d => d !== null)
-        : [];
-      
-      // Remove duplicates
-      allowedDays = [...new Set(allowedDays)];
-      
-      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-        // Create a date string in local timezone (not UTC)
-        const year = d.getFullYear();
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        const day = String(d.getDate()).padStart(2, '0');
-        const dateStr = `${year}-${month}-${day}`;
-        
-        const dow = d.getDay();
-        // Only include days that are in operating hours
-        if (allowedDays.length > 0 && allowedDays.includes(dow)) {
-          dates.push(dateStr);
+      for (let current = new Date(startDate); current <= endDate; current.setDate(current.getDate() + 1)) {
+        const isoStr = current.toISOString().split('T')[0];
+        if (!availableDates.includes(isoStr)) {
+          toast.error(`วันที่ ${isoStr} ไม่ตรงกับวันที่เปิดเรียน`);
+          return;
         }
-      }
-      
-      if (dates.length === 0) {
-        toast.error('ไม่มีวันที่เปิดเรียนในช่วงวันที่เลือก');
-        return;
+        dates.push(isoStr);
       }
 
-      // Submit as single absence record with date range (and status 'pending' if editing)
       try {
         const token = localStorage.getItem('token');
         const payload = {
@@ -207,8 +142,10 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
           absence_type: formData.absence_type,
           reason: formData.reason
         };
-        // Note: Backend will automatically reset status to pending if this is an edit of rejected absence
         
+        const endpoint = editingId ? `${API_BASE_URL}/absences/${editingId}` : `${API_BASE_URL}/absences/`;
+        const method = editingId ? 'PUT' : 'POST';
+
         const res = await fetch(endpoint, {
           method: method,
           headers: {
@@ -222,7 +159,7 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
           const updated = await res.json();
           if (editingId) {
             setAbsences(absences.map(a => a.id === editingId ? updated : a));
-            toast.success('แก้ไขคำขออนุญาตการลาเรียบร้อย (รีเซ็ตสถานะเป็นรอการอนุมัติ)');
+            toast.success('แก้ไขคำขออนุญาตการลาเรียบร้อย');
           } else {
             setAbsences([updated, ...absences]);
             toast.success(`ยื่นคำขออนุญาตการลา ${dates.length} วันเรียบร้อย`);
@@ -232,14 +169,13 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
           setShowForm(false);
         } else {
           const error = await res.json();
-          toast.error(error.detail || 'เกิดข้อผิดพลาดในการจัดการคำขออนุญาตการลา');
+          toast.error(error.detail || 'เกิดข้อผิดพลาด');
         }
       } catch (err) {
         console.error('Error:', err);
-        toast.error('เกิดข้อผิดพลาดในการจัดการคำขออนุญาตการลา');
+        toast.error('เกิดข้อผิดพลาด');
       }
     } else {
-      // Single day mode
       if (!formData.absence_date_start) {
         toast.error('กรุณาเลือกวันที่ลา');
         return;
@@ -258,8 +194,10 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
           absence_type: formData.absence_type,
           reason: formData.reason
         };
-        // Note: Backend will automatically reset status to pending if this is an edit of rejected absence
         
+        const endpoint = editingId ? `${API_BASE_URL}/absences/${editingId}` : `${API_BASE_URL}/absences/`;
+        const method = editingId ? 'PUT' : 'POST';
+
         const res = await fetch(endpoint, {
           method: method,
           headers: {
@@ -273,7 +211,7 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
           const updated = await res.json();
           if (editingId) {
             setAbsences(absences.map(a => a.id === editingId ? updated : a));
-            toast.success('แก้ไขคำขออนุญาตการลาเรียบร้อย (รีเซ็ตสถานะเป็นรอการอนุมัติ)');
+            toast.success('แก้ไขคำขออนุญาตการลาเรียบร้อย');
           } else {
             setAbsences([updated, ...absences]);
             toast.success('ยื่นคำขออนุญาตการลาเรียบร้อย');
@@ -283,31 +221,35 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
           setShowForm(false);
         } else {
           const error = await res.json();
-          toast.error(error.detail || 'เกิดข้อผิดพลาดในการจัดการคำขออนุญาตการลา');
+          toast.error(error.detail || 'เกิดข้อผิดพลาด');
         }
       } catch (err) {
         console.error('Error:', err);
-        toast.error('เกิดข้อผิดพลาดในการจัดการคำขออนุญาตการลา');
+        toast.error('เกิดข้อผิดพลาด');
       }
     }
   };
 
-  // Delete absence
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [pendingDeleteAbsenceId, setPendingDeleteAbsenceId] = useState(null);
-
-  const confirmDeleteAbsence = (absence) => {
+  const openDeleteConfirm = async (absence) => {
     if (!canModify(absence)) {
-      toast.error('ไม่สามารถลบคำขอนี้ได้ (ต้องเป็นสถานะรอการอนุมัติหรือไม่อนุมัติเท่านั้น)');
+      toast.error('ไม่สามารถลบได้');
       return;
     }
-    setPendingDeleteAbsenceId(absence.id);
-    setShowDeleteConfirm(true);
+    const confirmed = await swalMessenger.confirm({
+      title: 'ยืนยันการลบ',
+      text: 'คุณต้องการลบคำขอนี้ใช่หรือไม่?',
+      confirmButtonText: 'ลบ',
+      cancelButtonText: 'ยกเลิก'
+    });
+    if (confirmed) {
+      setPendingDeleteAbsenceId(absence.id);
+      await handleDelete();
+    }
   };
 
   const openEditForm = (absence) => {
     if (!canModify(absence)) {
-      toast.error('ไม่สามารถแก้ไขคำขอนี้ได้ (ต้องเป็นสถานะรอการอนุมัติหรือไม่อนุมัติเท่านั้น)');
+      toast.error('ไม่สามารถแก้ไขได้');
       return;
     }
     setEditingId(absence.id);
@@ -330,8 +272,6 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
 
   const handleDelete = async () => {
     const absenceId = pendingDeleteAbsenceId;
-    setShowDeleteConfirm(false);
-    setPendingDeleteAbsenceId(null);
     if (!absenceId) return;
 
     try {
@@ -343,13 +283,15 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
 
       if (res.ok) {
         setAbsences(absences.filter(a => a.id !== absenceId));
-        toast.success('Absence deleted');
+        toast.success('ลบเรียบร้อย');
+        setPendingDeleteAbsenceId(null);
       } else {
-        toast.error('Failed to delete absence');
+        toast.error('ลบไม่สำเร็จ');
+        setPendingDeleteAbsenceId(null);
       }
     } catch (err) {
       console.error('Error:', err);
-      toast.error('Failed to delete absence');
+      toast.error('เกิดข้อผิดพลาด');
     }
   };
 
@@ -408,219 +350,236 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
     return found ? `${found.name}${found.code ? ' (' + found.code + ')' : ''}` : `ID ${subjectId}`;
   };
 
+  const getStatusColor = (status) => {
+    switch(status) {
+      case 'pending': return 'bg-yellow-100 text-yellow-800';
+      case 'approved': return 'bg-emerald-100 text-emerald-800';
+      case 'rejected': return 'bg-red-100 text-red-800';
+      default: return 'bg-slate-100 text-slate-800';
+    }
+  };
+
   return (
-    <section className="absences-section">
-      <div className="absence-header">
-        <h4><span className="absence-icon">📋</span> ประวัติการลาเรียน</h4>
-        <button className="add-absence-btn" onClick={() => setShowForm(true)}>
-          + ยื่นคำขออนุญาตการลา
+    <section className="bg-white rounded-2xl shadow-lg shadow-slate-100/50 border border-slate-100 overflow-hidden">
+      <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+        <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+          <span>📋</span> ประวัติการลาเรียน
+        </h3>
+        <button 
+          onClick={() => setShowForm(true)}
+          className="px-4 py-2 bg-emerald-600 text-white rounded-lg font-semibold text-sm hover:bg-emerald-700 transition-all active:scale-95"
+        >
+          + ยื่นคำขอ
         </button>
       </div>
 
       {absences.length === 0 ? (
-        <div className="empty-state">
-          <span className="empty-icon">📭</span>
-          <p className="empty-text">ยังไม่มีการลาเรียน</p>
+        <div className="p-12 text-center">
+          <div className="text-5xl mb-4 opacity-50">📭</div>
+          <p className="text-slate-500 font-medium">ยังไม่มีการลาเรียน</p>
         </div>
       ) : (
-        <ul className="absence-list">
+        <div className="divide-y divide-slate-100">
           {absences.map(absence => (
-            <li key={absence.id} className="absence-card">
-              <div className="absence-info">
-                <div className="absence-date">
-                  📅 {formatDate(absence.absence_date)}
-                  {absence.absence_date_end && absence.absence_date_end !== absence.absence_date && (
-                    <span> - {formatDate(absence.absence_date_end)}</span>
-                  )}
-                  {absence.days_count && absence.days_count > 1 && (
-                    <span style={{ marginLeft: '8px', color: '#666', fontSize: '12px' }}>
-                      ({absence.days_count} วัน)
-                    </span>
-                  )}
-                </div>
-                <div>
-                  <span className={`absence-type ${absence.absence_type}`}>
-                    {getAbsenceTypeLabel(absence.absence_type)}
-                  </span>
-                </div>
-                {absence.subject_id && (
-                  <div className="absence-subject"><strong>วิชา:</strong> {getSubjectName(absence.subject_id)}</div>
-                )}
-                {absence.reason && (
-                  <div className="absence-reason">
-                    <strong>เหตุผล:</strong> {absence.reason}
-                  </div>
-                )}
-                
-                {/* Show approver info */}
-                {absence.status !== 'pending' && absence.approver_name && (
-                  <div className="absence-approver" style={{ marginTop: '8px', fontSize: '12px', color: '#666', borderTop: '1px solid #eee', paddingTop: '8px' }}>
-                    <strong>{absence.status === 'approved' ? '✅ อนุมัติโดย:' : '❌ ปฏิเสธโดย:'}</strong>{' '}
-                    {absence.approver_name} {getApproverRoleLabel(absence.approver_role)}
-                    {absence.approved_at && (
-                      <span style={{ marginLeft: '8px', color: '#999' }}>
-                        เมื่อ {formatDateTime(absence.approved_at)}
-                      </span>
+            <div key={absence.id} className="p-6 hover:bg-slate-50 transition-colors">
+              <div className="flex items-start justify-between gap-4 mb-4">
+                <div className="flex-1">
+                  <p className="font-bold text-slate-800">
+                    📅 {formatDate(absence.absence_date)}
+                    {absence.absence_date_end && absence.absence_date_end !== absence.absence_date && (
+                      <span> - {formatDate(absence.absence_date_end)}</span>
                     )}
+                    {absence.days_count && absence.days_count > 1 && (
+                      <span className="text-xs text-slate-500 ml-2">({absence.days_count} วัน)</span>
+                    )}
+                  </p>
+                  
+                  <div className="flex items-center gap-2 mt-2">
+                    <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold
+                      ${absence.absence_type === 'sick' ? 'bg-red-100 text-red-700' :
+                        absence.absence_type === 'personal' ? 'bg-blue-100 text-blue-700' :
+                        'bg-slate-100 text-slate-700'
+                      }`}>
+                      {getAbsenceTypeLabel(absence.absence_type)}
+                    </span>
+                    <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${getStatusColor(absence.status)}`}>
+                      {getStatusLabel(absence.status)}
+                    </span>
                   </div>
-                )}
+                  
+                  {absence.subject_id && (
+                    <p className="text-sm text-slate-600 mt-2">📚 <strong>วิชา:</strong> {getSubjectName(absence.subject_id)}</p>
+                  )}
+                  {absence.reason && (
+                    <p className="text-sm text-slate-600 mt-1">💬 <strong>เหตุผล:</strong> {absence.reason}</p>
+                  )}
+                  
+                  {absence.status !== 'pending' && absence.approver_name && (
+                    <div className="text-xs text-slate-500 mt-3 pt-3 border-t border-slate-200">
+                      <p><strong>{absence.status === 'approved' ? '✅ อนุมัติโดย:' : '❌ ปฏิเสธโดย:'}</strong> {absence.approver_name} {getApproverRoleLabel(absence.approver_role)}</p>
+                      {absence.approved_at && <p>เมื่อ {formatDateTime(absence.approved_at)}</p>}
+                    </div>
+                  )}
+                  
+                  {absence.status === 'rejected' && absence.reject_reason && (
+                    <div className="text-xs bg-red-50 text-red-700 p-3 rounded-lg mt-3 border border-red-200">
+                      <p><strong>⚠️ เหตุผลที่ปฏิเสธ:</strong> {absence.reject_reason}</p>
+                    </div>
+                  )}
+                </div>
                 
-                {/* Show rejection reason */}
-                {absence.status === 'rejected' && absence.reject_reason && (
-                  <div className="rejection-reason" style={{ marginTop: '4px', fontSize: '12px', color: '#d32f2f', backgroundColor: '#ffebee', padding: '8px', borderRadius: '4px' }}>
-                    <strong>เหตุผลที่ปฏิเสธ:</strong> {absence.reject_reason}
-                  </div>
-                )}
-              </div>
-              <div className="absence-actions">
-                <span className={`absence-status ${absence.status}`}>
-                  {getStatusLabel(absence.status)}
-                </span>
                 {canModify(absence) && (
-                  <>
+                  <div className="flex gap-2 flex-shrink-0">
                     <button
-                      className="absence-btn edit"
                       onClick={() => openEditForm(absence)}
+                      className="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg text-sm font-semibold hover:bg-blue-200 transition-all"
                     >
                       แก้ไข
                     </button>
                     <button
-                      className="absence-btn delete"
-                      onClick={() => confirmDeleteAbsence(absence)}
+                      onClick={() => openDeleteConfirm(absence)}
+                      className="px-3 py-1 bg-red-100 text-red-700 rounded-lg text-sm font-semibold hover:bg-red-200 transition-all"
                     >
                       ลบ
                     </button>
-                  </>
+                  </div>
                 )}
               </div>
-            </li>
+            </div>
           ))}
-        </ul>
+        </div>
       )}
 
       {showForm && ReactDOM.createPortal(
-        <div className="absence-form-overlay" onClick={() => cancelForm()}>
-          <div className="absence-form-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="absence-form-header">
-              <h3>{editingId ? '📝 แก้ไขคำขออนุญาตการลา' : '📝 ยื่นคำขออนุญาตการลา'}</h3>
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => cancelForm()}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="sticky top-0 bg-white border-b border-slate-200 p-6 flex items-center justify-between">
+              <h3 className="text-xl font-bold text-slate-800">
+                {editingId ? '📝 แก้ไขคำขออนุญาตการลา' : '📝 ยื่นคำขออนุญาตการลา'}
+              </h3>
               <button
-                className="form-close-btn"
                 onClick={() => cancelForm()}
+                className="text-slate-400 hover:text-slate-600 text-2xl leading-none"
               >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleSubmit}>
-              <div className="absence-form-group">
-                <label className="absence-form-label">
-                  <input 
-                    type="checkbox" 
-                    checked={formData.is_multi_day}
-                    onChange={(e) => setFormData({ ...formData, is_multi_day: e.target.checked })}
-                    style={{ marginRight: '8px' }}
-                  />
-                  ลาหลายวัน?
-                </label>
+            <form onSubmit={handleSubmit} className="p-6 space-y-6">
+              <div className="flex items-center gap-3">
+                <input 
+                  type="checkbox" 
+                  id="multiday"
+                  checked={formData.is_multi_day}
+                  onChange={(e) => setFormData({ ...formData, is_multi_day: e.target.checked })}
+                  className="w-4 h-4 accent-emerald-600"
+                />
+                <label htmlFor="multiday" className="font-semibold text-slate-700 cursor-pointer">ลาหลายวัน?</label>
               </div>
 
               {formData.is_multi_day ? (
                 <>
-                  <div className="absence-form-group">
-                    <label className="absence-form-label">วันเริ่มต้น *</label>
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-2">วันเริ่มต้น *</label>
                     <select
-                      className="form-select"
                       value={formData.absence_date_start}
                       onChange={(e) => setFormData({ ...formData, absence_date_start: e.target.value })}
                       required
+                      className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-slate-50"
                     >
                       <option value="">-- เลือกวันเริ่มต้น --</option>
-                      {getAvailableDates().map(d => (
+                      {availableDates.map(d => (
                         <option key={d} value={d}>{formatDate(d)}</option>
                       ))}
                     </select>
                   </div>
 
-                  <div className="absence-form-group">
-                    <label className="absence-form-label">วันสิ้นสุด *</label>
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-2">วันสิ้นสุด *</label>
                     <select
-                      className="form-select"
                       value={formData.absence_date_end}
                       onChange={(e) => setFormData({ ...formData, absence_date_end: e.target.value })}
                       required
+                      className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-slate-50"
                     >
                       <option value="">-- เลือกวันสิ้นสุด --</option>
-                      {getAvailableDates().map(d => (
+                      {availableDates.map(d => (
                         <option key={d} value={d}>{formatDate(d)}</option>
                       ))}
                     </select>
                   </div>
                 </>
               ) : (
-                <div className="absence-form-group">
-                  <label className="absence-form-label">วันที่ขออนุญาตการลา *</label>
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">วันที่ลา *</label>
                   <select
-                    className="form-select"
                     value={formData.absence_date_start}
                     onChange={(e) => setFormData({ ...formData, absence_date_start: e.target.value })}
                     required
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-slate-50"
                   >
-                    <option value="">-- เลือกวันที่ --</option>
-                    {getAvailableDates().map(d => (
+                    <option value="">-- เลือกวันที่ลา --</option>
+                    {availableDates.map(d => (
                       <option key={d} value={d}>{formatDate(d)}</option>
                     ))}
                   </select>
                 </div>
               )}
 
-              <div className="absence-form-group">
-                <label className="absence-form-label">ประเภทการลา *</label>
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">ประเภทการลา *</label>
                 <select
-                  className="form-select"
                   value={formData.absence_type}
                   onChange={(e) => setFormData({ ...formData, absence_type: e.target.value })}
-                  required
+                  className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-slate-50"
                 >
-                  <option value="personal">ลากิจ</option>
-                  <option value="sick">ป่วย</option>
-                  <option value="other">อื่นๆ</option>
+                  <option value="personal">👤 ลากิจ</option>
+                  <option value="sick">🤒 ป่วย</option>
+                  <option value="other">📝 อื่นๆ</option>
                 </select>
               </div>
 
-              <div className="absence-form-group">
-                <label className="absence-form-label">รายการวิชา (ไม่บังคับ)</label>
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">วิชา (ถ้ามี)</label>
                 <select
-                  className="form-select"
                   value={formData.subject_id}
                   onChange={(e) => setFormData({ ...formData, subject_id: e.target.value })}
+                  className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-slate-50"
                 >
-                  <option value="">-- ไม่มีวิชา / ทั้งวัน --</option>
-                  {Array.isArray(studentSubjects) && studentSubjects.map(s => (
-                    <option key={s.id} value={s.id}>{s.name} {s.code ? `(${s.code})` : ''}</option>
+                  <option value="">-- เลือกวิชา --</option>
+                  {studentSubjects.filter(s => {
+                    const isAllEnded = s.teachers?.length > 0 && s.teachers.every(t => t.is_ended);
+                    return !isAllEnded;
+                  }).map(s => (
+                    <option key={s.id} value={s.id}>{s.name} ({s.code || 'ไม่มีรหัส'})</option>
                   ))}
                 </select>
               </div>
 
-              <div className="absence-form-group">
-                <label className="absence-form-label">เหตุผล</label>
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">เหตุผล</label>
                 <textarea
-                  className="absence-form-textarea"
-                  placeholder="ระบุเหตุผลการลา (ไม่บังคับ)"
                   value={formData.reason}
                   onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
+                  placeholder="อธิบายเหตุผลการลา"
+                  rows="3"
+                  className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-slate-50"
                 />
               </div>
 
-              <div className="absence-form-actions">
+              <div className="flex gap-3 pt-4 border-t border-slate-200">
+                <button
+                  type="submit"
+                  className="flex-1 px-4 py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all active:scale-95"
+                >
+                  {editingId ? 'แก้ไข' : 'ส่งคำขอ'}
+                </button>
                 <button
                   type="button"
-                  className="form-btn form-btn-cancel"
                   onClick={() => cancelForm()}
+                  className="flex-1 px-4 py-3 bg-slate-200 text-slate-700 rounded-xl font-bold hover:bg-slate-300 transition-all"
                 >
                   ยกเลิก
-                </button>
-                <button type="submit" className="form-btn form-btn-submit">
-                  {editingId ? '💾 บันทึกการแก้ไข' : '✉️ ส่งคำขออนุญาต'}
                 </button>
               </div>
             </form>
@@ -628,15 +587,6 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
         </div>,
         document.body
       )}
-
-      {/* Global confirm modal for delete absence */}
-      <ConfirmModal
-        isOpen={showDeleteConfirm}
-        title="ยืนยันการลบคำขอการลา"
-        message="คุณต้องการลบคำขอนี้ใช่หรือไม่? การลบจะไม่สามารถกู้คืนได้"
-        onConfirm={handleDelete}
-        onCancel={() => setShowDeleteConfirm(false)}
-      />
     </section>
   );
 }

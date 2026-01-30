@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import ReactDOM from 'react-dom';
 import { toast } from 'react-toastify';
-import '../css/SubjectManagementModal.css';
 import { API_BASE_URL } from '../endpoints';
+import { X, BookOpen, Clock, Users, Hash, Info, Check } from 'lucide-react';
 
 function SubjectManagementModal({ isOpen, onClose, onSave, subject, teachers, classrooms, currentSchoolId }) {
   const [formData, setFormData] = useState({
@@ -18,6 +19,18 @@ function SubjectManagementModal({ isOpen, onClose, onSave, subject, teachers, cl
   const [localTeachers, setLocalTeachers] = useState([]);
   const [localClassrooms, setLocalClassrooms] = useState([]);
   const [selectedClassroomsForUI, setSelectedClassroomsForUI] = useState(new Set());
+
+  // Body Scroll Lock
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [isOpen]);
 
   // Load teachers and classrooms when modal opens
   useEffect(() => {
@@ -119,32 +132,27 @@ function SubjectManagementModal({ isOpen, onClose, onSave, subject, teachers, cl
         return;
       }
       
-      // Check if adding/changing this percentage would exceed 100% total
       const newPercent = formData.activity_percentage === '' ? 0 : Number(formData.activity_percentage);
-      const currentPercent = subject?.activity_percentage || 0;
-      
-      // Only validate if percentage is being changed or this is a new activity subject
-      if (newPercent !== currentPercent) {
-        // Calculate current total from other activity subjects (excluding this one)
-        const otherActivityTotal = localClassrooms.reduce((sum, cls) => {
-          // This is a rough estimate - ideally should fetch from server
-          return sum;
-        }, 0);
-        
-        // The server will validate the exact total, but we can give a warning
-        if (newPercent > 100) {
-          toast.error('เปอร์เซ็นต์ไม่สามารถเกิน 100% ได้');
-          return;
-        }
+      if (newPercent > 100) {
+        toast.error('เปอร์เซ็นต์ไม่สามารถเกิน 100% ได้');
+        return;
       }
     }
 
     setSaving(true);
     try {
       const token = localStorage.getItem('token');
-      
       let subjectId = subject?.id;
       
+      const payload = {
+        name: formData.name,
+        code: formData.code,
+        subject_type: formData.subject_type,
+        teacher_id: formData.teacher_id || null,
+        credits: formData.credits === '' ? null : Number(formData.credits),
+        activity_percentage: formData.activity_percentage === '' ? null : Number(formData.activity_percentage)
+      };
+
       if (subject) {
         // Update existing subject
         const res = await fetch(`${API_BASE_URL}/subjects/${subject.id}`, {
@@ -153,14 +161,7 @@ function SubjectManagementModal({ isOpen, onClose, onSave, subject, teachers, cl
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`
           },
-          body: JSON.stringify({
-            name: formData.name,
-            code: formData.code,
-            subject_type: formData.subject_type,
-            teacher_id: formData.teacher_id || null,
-            credits: formData.credits === '' ? null : Number(formData.credits),
-            activity_percentage: formData.activity_percentage === '' ? null : Number(formData.activity_percentage)
-          })
+          body: JSON.stringify(payload)
         });
         
         if (!res.ok) {
@@ -176,13 +177,8 @@ function SubjectManagementModal({ isOpen, onClose, onSave, subject, teachers, cl
             Authorization: `Bearer ${token}`
           },
           body: JSON.stringify({
-            name: formData.name,
-            code: formData.code,
-            subject_type: formData.subject_type,
-            teacher_id: formData.teacher_id || null,
-            school_id: currentSchoolId,
-            credits: formData.credits === '' ? null : Number(formData.credits),
-            activity_percentage: formData.activity_percentage === '' ? null : Number(formData.activity_percentage)
+            ...payload,
+            school_id: currentSchoolId
           })
         });
         
@@ -195,11 +191,13 @@ function SubjectManagementModal({ isOpen, onClose, onSave, subject, teachers, cl
         subjectId = newSubject.id;
       }
       
-      // Handle classroom assignments
-      const currentAssignedIds = subject ? new Set(await getSubjectClassroomIds(subjectId)) : new Set();
+      const resClassrooms = await fetch(`${API_BASE_URL}/subjects/${subjectId}/classrooms`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const dataClassrooms = resClassrooms.ok ? await resClassrooms.json() : { classrooms: [] };
+      const currentAssignedIds = new Set(dataClassrooms.classrooms.map(c => c.id));
       const newAssignedIds = selectedClassroomsForUI;
       
-      // Unassign removed classrooms
       for (const classroomId of currentAssignedIds) {
         if (!newAssignedIds.has(classroomId)) {
           await fetch(`${API_BASE_URL}/subjects/${subjectId}/unassign-classroom/${classroomId}`, {
@@ -209,7 +207,6 @@ function SubjectManagementModal({ isOpen, onClose, onSave, subject, teachers, cl
         }
       }
       
-      // Assign new classrooms
       for (const classroomId of newAssignedIds) {
         if (!currentAssignedIds.has(classroomId)) {
           await fetch(`${API_BASE_URL}/subjects/${subjectId}/assign-classroom`, {
@@ -234,148 +231,222 @@ function SubjectManagementModal({ isOpen, onClose, onSave, subject, teachers, cl
     }
   };
 
-  const getSubjectClassroomIds = async (subjectId) => {
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE_URL}/subjects/${subjectId}/classrooms`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        return data.classrooms.map(c => c.id);
-      }
-    } catch (err) {
-      console.error('Error fetching subject classrooms:', err);
-    }
-    return [];
-  };
-
   if (!isOpen) return null;
 
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={e => e.stopPropagation()}>
-        <div className="modal-header">
-          <h2>{subject ? 'แก้ไขรายวิชา' : 'สร้างรายวิชาใหม่'}</h2>
-          <button className="close-button" onClick={onClose}>×</button>
+  return ReactDOM.createPortal(
+    <div 
+      className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-[9999] p-4 animate-in fade-in duration-200"
+      onClick={onClose}
+    >
+      <div 
+        className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col animate-in zoom-in duration-300"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center">
+              <BookOpen className="w-5 h-5 text-emerald-600" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-slate-800 leading-tight">
+                {subject ? 'แก้ไขรายวิชา' : 'สร้างรายวิชาใหม่'}
+              </h2>
+              <p className="text-xs text-slate-500">จัดการข้อมูลรายวิชาและชั้นเรียน</p>
+            </div>
+          </div>
+          <button 
+            onClick={onClose}
+            className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400 hover:text-slate-600"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
         
-        <form onSubmit={handleSave} className="subject-form">
-          <div className="form-group">
-            <label>ชื่อรายวิชา *</label>
-            <input
-              type="text"
-              name="name"
-              value={formData.name}
-              onChange={handleChange}
-              placeholder="เช่น วิทยาศาสตร์"
-              required
-            />
-          </div>
-
-          <div className="form-row">
-            <div className="form-group">
-              <label>รหัสรายวิชา</label>
+        <form onSubmit={handleSave} className="flex flex-col">
+          <div className="p-6 space-y-5 overflow-y-auto max-h-[70vh] scrollbar-hide">
+            {/* Subject Name */}
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                <Info className="w-4 h-4 text-emerald-500" />
+                ชื่อรายวิชา <span className="text-rose-500">*</span>
+              </label>
               <input
                 type="text"
-                name="code"
-                value={formData.code}
+                name="name"
+                value={formData.name}
                 onChange={handleChange}
-                placeholder="เช่น SCI001"
+                placeholder="เช่น วิทยาศาสตร์"
+                required
+                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all outline-none text-slate-800 placeholder:text-slate-400"
               />
             </div>
 
-            <div className="form-group">
-              <label>ประเภทรายวิชา *</label>
+            <div className="grid grid-cols-2 gap-4">
+              {/* Subject Code */}
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                  <Hash className="w-4 h-4 text-emerald-500" />
+                  รหัสรายวิชา
+                </label>
+                <input
+                  type="text"
+                  name="code"
+                  value={formData.code}
+                  onChange={handleChange}
+                  placeholder="เช่น SCI001"
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all outline-none text-slate-800 placeholder:text-slate-400"
+                />
+              </div>
+
+              {/* Subject Type */}
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-emerald-500" />
+                  ประเภทรายวิชา <span className="text-rose-500">*</span>
+                </label>
+                <select
+                  name="subject_type"
+                  value={formData.subject_type}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all outline-none text-slate-800"
+                >
+                  <option value="main">รายวิชาหลัก</option>
+                  <option value="activity">รายวิชากิจกรรม</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Credits or Activity Percentage */}
+            {formData.subject_type === 'main' ? (
+              <div className="space-y-2 animate-in slide-in-from-top-2 duration-200">
+                <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                  <Hash className="w-4 h-4 text-emerald-500" />
+                  หน่วยกิต (Credits)
+                </label>
+                <input
+                  type="text"
+                  name="credits"
+                  value={formData.credits}
+                  onChange={handleNumberChange}
+                  placeholder="เช่น 3"
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all outline-none text-slate-800"
+                />
+              </div>
+            ) : (
+              <div className="space-y-2 animate-in slide-in-from-top-2 duration-200">
+                <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                  <Hash className="w-4 h-4 text-emerald-500" />
+                  เปอร์เซ็นต์คะแนนที่ระบบต้องการ (%)
+                </label>
+                <input
+                  type="text"
+                  name="activity_percentage"
+                  value={formData.activity_percentage}
+                  onChange={handleNumberChange}
+                  placeholder="เช่น 30"
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all outline-none text-slate-800"
+                />
+              </div>
+            )}
+
+            {/* Teacher */}
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                <Users className="w-4 h-4 text-emerald-500" />
+                ครูผู้สอน
+              </label>
               <select
-                name="subject_type"
-                value={formData.subject_type}
+                name="teacher_id"
+                value={formData.teacher_id}
                 onChange={handleChange}
+                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all outline-none text-slate-800"
               >
-                <option value="main">รายวิชาหลัก</option>
-                <option value="activity">รายวิชากิจกรรม</option>
+                <option value="">-- เลือกครูผู้สอน --</option>
+                {localTeachers.map(teacher => (
+                  <option key={teacher.id} value={teacher.id}>
+                    {teacher.full_name || teacher.username}
+                  </option>
+                ))}
               </select>
             </div>
+
+            {/* Classrooms Selection */}
+            <div className="space-y-3">
+              <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                <Users className="w-4 h-4 text-emerald-500" />
+                ชั้นเรียนที่เรียนรายวิชานี้
+              </label>
+              <div className="bg-slate-50 rounded-xl border border-slate-100 p-4">
+                {localClassrooms.length > 0 ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    {localClassrooms.map(classroom => {
+                      const isSelected = selectedClassroomsForUI.has(classroom.id);
+                      return (
+                        <button
+                          key={classroom.id}
+                          type="button"
+                          onClick={() => handleClassroomToggle(classroom.id)}
+                          className={`flex items-center gap-2 p-2 rounded-lg border transition-all text-left ${
+                            isSelected 
+                              ? 'bg-emerald-50 border-emerald-200 text-emerald-700' 
+                              : 'bg-white border-slate-200 text-slate-600 hover:border-emerald-200'
+                          }`}
+                        >
+                          <div className={`w-4 h-4 rounded flex items-center justify-center border transition-colors ${
+                            isSelected ? 'bg-emerald-500 border-emerald-500' : 'bg-white border-slate-300'
+                          }`}>
+                            {isSelected && <Check className="w-3 h-3 text-white" />}
+                          </div>
+                          <span className="text-sm font-medium truncate">
+                            {classroom.name} ({classroom.grade_level})
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-center py-4 text-slate-400 italic text-sm">
+                    ไม่มีชั้นเรียนในระบบ
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
 
-          {/* Credits for main subjects and activity percentage for activity subjects */}
-          {formData.subject_type === 'main' && (
-            <div className="form-group">
-              <label>หน่วยกิต (Credits)</label>
-              <input
-                type="number"
-                name="credits"
-                value={formData.credits}
-                onChange={handleNumberChange}
-                placeholder="เช่น 3"
-                min="0"
-              />
-            </div>
-          )}
-
-          {formData.subject_type === 'activity' && (
-            <div className="form-group">
-              <label>เปอร์เซ็นต์คะแนนที่ระบบต้องการ (%)</label>
-              <input
-                type="number"
-                name="activity_percentage"
-                value={formData.activity_percentage}
-                onChange={handleNumberChange}
-                placeholder="เช่น 30"
-                min="0"
-                max="100"
-              />
-            </div>
-          )}
-
-          <div className="form-group">
-            <label>ครูผู้สอน</label>
-            <select
-              name="teacher_id"
-              value={formData.teacher_id}
-              onChange={handleChange}
+          {/* Footer */}
+          <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex flex-col-reverse sm:flex-row justify-end gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-6 py-2.5 rounded-xl text-slate-600 font-semibold hover:bg-slate-100 transition-colors"
             >
-              <option value="">-- เลือกครูผู้สอน --</option>
-              {localTeachers.map(teacher => (
-                <option key={teacher.id} value={teacher.id}>
-                  {teacher.full_name || teacher.username}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="form-group">
-            <label>ชั้นเรียนที่เรียนรายวิชานี้</label>
-            <div className="classroom-list">
-              {localClassrooms.length > 0 ? (
-                localClassrooms.map(classroom => (
-                  <label key={classroom.id} className="checkbox-item">
-                    <input
-                      type="checkbox"
-                      checked={selectedClassroomsForUI.has(classroom.id)}
-                      onChange={() => handleClassroomToggle(classroom.id)}
-                    />
-                    <span>{classroom.name} ({classroom.grade_level})</span>
-                  </label>
-                ))
-              ) : (
-                <p className="no-data">ไม่มีชั้นเรียน</p>
-              )}
-            </div>
-          </div>
-
-          <div className="modal-footer">
-            <button type="button" className="btn-cancel" onClick={onClose}>
               ยกเลิก
             </button>
-            <button type="submit" className="btn-save" disabled={saving}>
-              {saving ? 'กำลังบันทึก...' : 'บันทึก'}
+            <button
+              type="submit"
+              disabled={saving}
+              className="px-8 py-2.5 rounded-xl bg-emerald-600 text-white font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-200 transition-all active:scale-95 disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center"
+            >
+              {saving ? (
+                <>
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  กำลังบันทึก...
+                </>
+              ) : (
+                'บันทึกรายวิชา'
+              )}
             </button>
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
 export default SubjectManagementModal;
+

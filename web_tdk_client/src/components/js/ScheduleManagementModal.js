@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import ReactDOM from 'react-dom';
 import { API_BASE_URL } from '../endpoints';
 import { toast } from 'react-toastify';
 
@@ -62,6 +63,14 @@ export default function ScheduleManagementModal({ isOpen, onClose, teachers, sub
     }
   }, [isOpen, editingAssignment]);
 
+  // Lock body scroll when modal is open
+  useEffect(() => {
+    if (!isOpen) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prevOverflow || ''; };
+  }, [isOpen]);
+
   const loadScheduleSlots = async () => {
     const token = localStorage.getItem('token');
     setSlotsLoading(true);
@@ -95,8 +104,6 @@ export default function ScheduleManagementModal({ isOpen, onClose, teachers, sub
     return timeStr.split(':').slice(0, 2).join(':');
   };
 
-  // ฟอร์แมต input เวลา: auto-colon และเติมนาทีเป็น 00 ถ้าพิมพ์แค่ชั่วโมง
-  // ตัวอย่าง: "08" -> "08:00", "830" -> "08:30", "0830" -> "08:30"
   const formatTimeInputAutoColon = (raw) => {
     if (!raw) return '';
     const digits = (raw || '').replace(/[^0-9]/g, '').slice(0, 4); // max 4 digits (HHMM)
@@ -107,12 +114,10 @@ export default function ScheduleManagementModal({ isOpen, onClose, teachers, sub
       return `${hh}:00`;
     }
     if (digits.length === 3) {
-      // e.g. '830' -> '08:30'
       const hh = digits.slice(0, 1).padStart(2, '0');
       const mm = digits.slice(1).padEnd(2, '0');
       return `${hh}:${mm}`;
     }
-    // 4 digits
     const hh = digits.slice(0, 2);
     const mm = digits.slice(2, 4);
     return `${hh}:${mm}`;
@@ -130,21 +135,17 @@ export default function ScheduleManagementModal({ isOpen, onClose, teachers, sub
     return `${newH}:${newM}`;
   };
 
-  // เปรียบเทียบเวลา โดยแปลง HH:MM:SS เป็น HH:MM ก่อน
   const isTimeInRange = (time, minTime, maxTime) => {
-    const formattedTime = time;
     const formattedMin = formatTimeToHHMM(minTime);
     const formattedMax = formatTimeToHHMM(maxTime);
-    return formattedTime >= formattedMin && formattedTime <= formattedMax;
+    return time >= formattedMin && time <= formattedMax;
   };
 
-  // ดึงวันที่ใช้ได้ (unique days จาก schedule slots)
   const getAvailableDays = () => {
     const days = [...new Set(scheduleSlots.map(s => s.day_of_week))];
     return days.map(d => parseInt(d)).sort((a, b) => a - b);
   };
 
-  // ดึงช่วงเวลา (min-max) ของวันที่เลือก
   const getTimeRangeForDay = (dayOfWeek) => {
     if (!dayOfWeek) return { minTime: '', maxTime: '' };
     const daySlots = scheduleSlots.filter(s => s.day_of_week === String(dayOfWeek));
@@ -159,7 +160,6 @@ export default function ScheduleManagementModal({ isOpen, onClose, teachers, sub
     };
   };
 
-  // ดึงตารางสอนทั้งหมด
   const getAllAdminSchedules = async () => {
     const token = localStorage.getItem('token');
     try {
@@ -176,9 +176,6 @@ export default function ScheduleManagementModal({ isOpen, onClose, teachers, sub
     return [];
   };
 
-  // ตรวจสอบการชนกันของเวลา
-  // 1. ครูคนเดียวกันไม่สามารถสอนในเวลาเดียวกัน (ข้ามชั้นก็ไม่ได้)
-  // 2. ชั้นเรียนไม่สามารถมีวิชา 2 วิชาในเวลาเดียวกัน
   const timeStringToMinutes = (timeStr) => {
     if (!timeStr) return null;
     const hhmm = formatTimeToHHMM(timeStr);
@@ -195,20 +192,15 @@ export default function ScheduleManagementModal({ isOpen, onClose, teachers, sub
     if (startMin === null || endMin === null) return { hasConflict: false };
 
     for (const schedule of allSchedules) {
-      // Skip current assignment if editing
       if (excludeAssignmentId && schedule.id === excludeAssignmentId) continue;
-      
-      // Check if day differs
       if (String(schedule.day_of_week) !== String(dayOfWeek)) continue;
       
       const scheduleStartMin = timeStringToMinutes(schedule.start_time);
       const scheduleEndMin = timeStringToMinutes(schedule.end_time);
       if (scheduleStartMin === null || scheduleEndMin === null) continue;
       
-      // Time overlap check: startMin < scheduleEndMin AND endMin > scheduleStartMin
       if (!(startMin < scheduleEndMin && endMin > scheduleStartMin)) continue;
 
-      // Condition 1: Same teacher (any subject) cannot have overlapping times
       if (teacherId && schedule.teacher_id === teacherId) {
         return {
           hasConflict: true,
@@ -216,7 +208,6 @@ export default function ScheduleManagementModal({ isOpen, onClose, teachers, sub
         };
       }
 
-      // Condition 2: Same classroom cannot have 2 subjects at same time
       if (classroomId && schedule.classroom_id === classroomId) {
         return {
           hasConflict: true,
@@ -228,18 +219,13 @@ export default function ScheduleManagementModal({ isOpen, onClose, teachers, sub
     return { hasConflict: false };
   };
 
-  // ดึงรายการ slot ของวันนั้น (unique) เพื่อแสดงเป็นปุ่มเลือกด่วน
   const getSlotTimesForDay = (dayOfWeek) => {
     if (!dayOfWeek) return [];
     const slots = scheduleSlots
       .filter(s => s.day_of_week === String(dayOfWeek))
       .map(s => ({ id: s.id, start: formatTimeToHHMM(s.start_time), end: formatTimeToHHMM(s.end_time) }));
-    // unique by start+end
     const uniqueMap = {};
     slots.forEach(s => { uniqueMap[`${s.start}-${s.end}`] = s; });
-    // If the schedule contains a full-day slot that equals the min/max opening hours,
-    // we filter it out from the quick-pick chips because the UI already shows the
-    // overall operating hours (min-max) above.
     const minMax = getTimeRangeForDay(dayOfWeek);
     const minStart = formatTimeToHHMM(minMax.minTime);
     const maxEnd = formatTimeToHHMM(minMax.maxTime);
@@ -250,13 +236,11 @@ export default function ScheduleManagementModal({ isOpen, onClose, teachers, sub
     return allSlots;
   };
 
-  // เมื่อเลือกวิชา ให้ดึงครูผู้สอนของวิชานั้น
   const handleSubjectChange = (subjectId) => {
     setSelectedSubject(subjectId);
     if (subjectId) {
       const subject = subjects.find(s => s.id === parseInt(subjectId));
       if (subject && subject.teacher_id) {
-        // ค้นหาชื่อครูจากรหัสครู
         const teacher = teachers.find(t => t.id === subject.teacher_id);
         if (teacher) {
           setSelectedTeacher(subject.teacher_id);
@@ -279,65 +263,31 @@ export default function ScheduleManagementModal({ isOpen, onClose, teachers, sub
     const token = localStorage.getItem('token');
     
     try {
-      if (!selectedTeacher) {
-        toast.error('วิชานี้ไม่มีครูผู้สอน');
-        return;
-      }
-      if (!selectedSubject) {
-        toast.error('กรุณาเลือกวิชา');
-        return;
-      }
-      if (!selectedClassroom) {
-        toast.error('กรุณาเลือกชั้นเรียน');
-        return;
-      }
-      if (!selectedDayOfWeek) {
-        toast.error('กรุณาเลือกวัน');
-        return;
-      }
-      if (!startTime) {
-        toast.error('กรุณาใส่เวลาเริ่มต้น (HH:MM)');
-        return;
-      }
-      if (!endTime) {
-        toast.error('กรุณาใส่เวลาสิ้นสุด (HH:MM)');
-        return;
-      }
-      // normalize times to HH:MM in local vars
+      if (!selectedSubject) { toast.error('กรุณาเลือกวิชา'); return; }
+      if (!selectedTeacher) { toast.error('วิชานี้ไม่มีครูผู้สอน'); return; }
+      if (!selectedClassroom) { toast.error('กรุณาเลือกชั้นเรียน'); return; }
+      if (!selectedDayOfWeek) { toast.error('กรุณาเลือกวัน'); return; }
+      if (!startTime) { toast.error('กรุณาใส่เวลาเริ่มต้น (HH:MM)'); return; }
+      if (!endTime) { toast.error('กรุณาใส่เวลาสิ้นสุด (HH:MM)'); return; }
+      
       const st = formatTimeInputAutoColon(startTime);
       const en = formatTimeInputAutoColon(endTime);
 
-      // ตรวจสอบ format เวลา
-      if (!isValidTimeFormat(st)) {
-        toast.error('เวลาเริ่มต้นไม่ถูกต้อง (ใช้ format HH:MM เช่น 08:30)');
-        return;
-      }
-      if (!isValidTimeFormat(en)) {
-        toast.error('เวลาสิ้นสุดไม่ถูกต้อง (ใช้ format HH:MM เช่น 09:30)');
-        return;
-      }
+      if (!isValidTimeFormat(st)) { toast.error('เวลาเริ่มต้นไม่ถูกต้อง'); return; }
+      if (!isValidTimeFormat(en)) { toast.error('เวลาสิ้นสุดไม่ถูกต้อง'); return; }
+      if (st >= en) { toast.error('เวลาเริ่มต้นต้องน้อยกว่าเวลาสิ้นสุด'); return; }
 
-      // ตรวจสอบว่าเวลาเริ่มต้นน้อยกว่าเวลาสิ้นสุด
-      if (st >= en) {
-        toast.error('เวลาเริ่มต้นต้องน้อยกว่าเวลาสิ้นสุด');
-        return;
-      }
-
-      // ตรวจสอบว่าเวลาอยู่ภายในช่วงเปิดเรียน
       const timeRange = getTimeRangeForDay(selectedDayOfWeek);
-      const minTimeFormatted = formatTimeToHHMM(timeRange.minTime);
-      const maxTimeFormatted = formatTimeToHHMM(timeRange.maxTime);
-      
       if (!isTimeInRange(st, timeRange.minTime, timeRange.maxTime)) {
-        toast.error(`เวลาเริ่มต้นต้องอยู่ระหว่าง ${minTimeFormatted} - ${maxTimeFormatted}`);
+        toast.error(`เวลาเริ่มต้นต้องอยู่ระหว่าง ${formatTimeToHHMM(timeRange.minTime)} - ${formatTimeToHHMM(timeRange.maxTime)}`);
         return;
       }
       if (!isTimeInRange(en, timeRange.minTime, timeRange.maxTime)) {
-        toast.error(`เวลาสิ้นสุดต้องอยู่ระหว่าง ${minTimeFormatted} - ${maxTimeFormatted}`);
+        toast.error(`เวลาสิ้นสุดต้องอยู่ระหว่าง ${formatTimeToHHMM(timeRange.minTime)} - ${formatTimeToHHMM(timeRange.maxTime)}`);
         return;
       }
 
-      // ตรวจสอบการชนกันของเวลา
+      setLoading(true);
       const conflictCheck = await checkScheduleConflict(
         parseInt(selectedTeacher),
         parseInt(selectedSubject),
@@ -349,13 +299,10 @@ export default function ScheduleManagementModal({ isOpen, onClose, teachers, sub
       );
       
       if (conflictCheck.hasConflict) {
-        const action = (editingAssignment && editingAssignment.id) ? 'แก้ไข' : 'เพิ่ม';
-        toast.error(`ไม่สามารถ${action}ตารางเรียน: ${conflictCheck.message}`);
+        toast.error(conflictCheck.message);
         setLoading(false);
         return;
       }
-
-      setLoading(true);
       
       const payload = {
         subject_id: parseInt(selectedSubject),
@@ -365,8 +312,7 @@ export default function ScheduleManagementModal({ isOpen, onClose, teachers, sub
         end_time: en
       };
 
-      if (editingAssignment && editingAssignment.id) {
-        // Update existing assignment
+      if (editingAssignment?.id) {
         const response = await fetch(`${API_BASE_URL}/schedule/assign/${editingAssignment.id}`, {
           method: 'PUT',
           headers: {
@@ -382,13 +328,13 @@ export default function ScheduleManagementModal({ isOpen, onClose, teachers, sub
             end_time: en
           })
         });
-        const data = await response.json();
         if (response.ok) {
           toast.success(`แก้ไขตารางเรียนเรียบร้อย`);
           handleReset();
           if (onSuccess) onSuccess();
         } else {
-          toast.error(data.detail || 'แก้ไขตารางเรียนไม่สำเร็จ');
+          const data = await response.json();
+          toast.error(data.detail || 'แก้ไขไม่สำเร็จ');
         }
       } else {
         const response = await fetch(`${API_BASE_URL}/schedule/assign_admin?teacher_id=${selectedTeacher}`, {
@@ -400,17 +346,17 @@ export default function ScheduleManagementModal({ isOpen, onClose, teachers, sub
           body: JSON.stringify(payload)
         });
 
-        const data = await response.json();
         if (response.ok) {
           toast.success(`เพิ่มตารางเรียนสำเร็จ`);
           handleReset();
           if (onSuccess) onSuccess();
         } else {
-          toast.error(data.detail || 'เพิ่มตารางเรียนไม่สำเร็จ');
+          const data = await response.json();
+          toast.error(data.detail || 'เพิ่มไม่สำเร็จ');
         }
       }
     } catch (err) {
-      console.error('Error adding schedule:', err);
+      console.error(err);
       toast.error('เกิดข้อผิดพลาด');
     } finally {
       setLoading(false);
@@ -428,201 +374,215 @@ export default function ScheduleManagementModal({ isOpen, onClose, teachers, sub
     onClose();
   };
 
-  // note: times are normalized on blur using formatTimeInputAutoColon above
-
   if (!isOpen) return null;
 
-  return (
-    <div className="admin-modal-overlay">
-      <div className="modal" style={{ maxWidth: '600px' }}>
-        <div className="admin-modal-header">
-          <h3>{editingAssignment && editingAssignment.id ? 'แก้ไขตารางเรียน' : 'เพิ่มตารางเรียน'}</h3>
-          <button className="admin-modal-close" onClick={handleReset}>×</button>
+  const modal = (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+      {/* Overlay */}
+      <div 
+        className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" 
+        onClick={handleReset}
+      ></div>
+
+      {/* Modal Content */}
+      <div className="relative w-full max-w-2xl bg-white rounded-[2.5rem] shadow-2xl overflow-hidden transform transition-all animate-in fade-in zoom-in duration-200 flex flex-col max-h-[90vh]">
+        {/* Header */}
+        <div className="bg-gradient-to-r from-emerald-600 to-teal-700 p-8 text-white relative shrink-0">
+          <button 
+                onClick={handleReset}
+                className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/20 transition-all text-2xl leading-none"
+            >
+                ✕
+            </button>
+          
+          <div className="flex items-center gap-6">
+            <div className="w-16 h-16 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center text-4xl shadow-inner shrink-0">
+              📅
+            </div>
+            <div>
+              <h3 className="text-2xl font-black">{editingAssignment?.id ? 'แก้ไขตารางเรียน' : 'เพิ่มตารางเรียนใหม่'}</h3>
+              <p className="text-emerald-100/80 text-sm font-bold mt-1 uppercase tracking-widest">
+                {editingAssignment?.id ? `Assignment ID: ${editingAssignment.id}` : 'Schedule Management System'}
+              </p>
+            </div>
+          </div>
         </div>
 
-        <div className="admin-modal-body">
-          {/* Show a short subtitle to clarify mode */}
-          {(editingAssignment && editingAssignment.id) ? (
-            <div style={{ marginBottom: '8px', color: '#064E3B', background: '#ECFDF5', padding: '8px 12px', borderRadius: '6px' }}>
-              กำลังแก้ไขตารางเรียน: ID {editingAssignment.id}
-            </div>
-          ) : (
-            <div style={{ marginBottom: '8px', color: '#1E3A8A', background: '#EFF6FF', padding: '8px 12px', borderRadius: '6px' }}>
-              กำลังเพิ่มตารางเรียนใหม่
-            </div>
-          )}
-          <div className="admin-form-group">
-            {/* Select Subject */}
-            <label className="admin-form-label">
-              เลือกวิชา
-            </label>
-            <select
-              className="admin-form-input"
-              value={selectedSubject}
-              onChange={e => handleSubjectChange(e.target.value)}
-              required
-            >
-              <option value="">-- เลือกวิชา --</option>
-              {availableSubjects.map(s => (
-                <option key={s.id} value={s.id}>
-                  {s.name} ({s.code})
-                </option>
-              ))}
-            </select>
-
-            {/* Display Teacher (Auto-filled from Subject) */}
-            <label className="admin-form-label" style={{ marginTop: '1rem' }}>
-              ครูผู้สอน
-            </label>
-            <input
-              type="text"
-              className="admin-form-input"
-              value={teacherName}
-              disabled
-              style={{ backgroundColor: '#f5f5f5' }}
-              placeholder="(จะปรากฏอัตโนมัติเมื่อเลือกวิชา)"
-            />
-
-            {/* Select Classroom */}
-            <label className="admin-form-label" style={{ marginTop: '1rem' }}>
-              เลือกชั้นเรียน
-            </label>
-            <select
-              className="admin-form-input"
-              value={selectedClassroom}
-              onChange={e => setSelectedClassroom(e.target.value)}
-              required
-            >
-              <option value="">-- เลือกชั้นเรียน --</option>
-              {classrooms.map(c => (
-                <option key={c.id} value={c.id}>
-                  {c.name} ({c.grade_level})
-                </option>
-              ))}
-            </select>
-
-            {slotsLoading ? (
-              <div style={{ marginTop: '1rem', padding: '12px', color: '#666', fontSize: '0.9rem' }}>
-                ⏳ กำลังโหลดข้อมูลช่วงเวลา...
-              </div>
-            ) : scheduleSlots.length === 0 ? (
-              <div style={{ marginTop: '1rem', padding: '12px', backgroundColor: '#FFF3CD', borderRadius: '8px', color: '#856404', fontSize: '0.9rem' }}>
-                ⚠️ ไม่พบช่วงเวลาเรียน - แอดมินต้องตั้งค่าช่วงเวลาเปิดเรียนก่อน
-              </div>
-            ) : (
-              <>
-                {/* Select Day */}
-                <label className="admin-form-label" style={{ marginTop: '1rem' }}>
-                  เลือกวัน
-                </label>
+        {/* Body */}
+        <div className="p-8 space-y-8 overflow-y-auto bg-slate-50/50 flex-1 custom-scrollbar">
+          {/* Main Selects */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">เลือกวิชา</label>
                 <select
-                  className="admin-form-input"
-                  value={selectedDayOfWeek}
-                  onChange={e => {
-                    const d = e.target.value;
-                    setSelectedDayOfWeek(d);
-                    setStartTime(''); // Reset times when day changes
-                    setEndTime('');
-                    // Only auto-fill times when editing an existing assignment.
-                    // When creating a new schedule we keep the time inputs empty
-                    // to avoid accidental pre-filled values.
-                    if (editingAssignment && editingAssignment.id) {
-                      setTimeout(() => {
-                        const range = getTimeRangeForDay(d);
-                        if (range.minTime) {
-                          const defaultStart = formatTimeToHHMM(range.minTime);
-                          const defaultEnd = addMinutesToHHMM(defaultStart, 45);
-                          setStartTime(defaultStart);
-                          setEndTime(defaultEnd);
-                        }
-                      }, 0);
-                    }
-                  }}
-                  required
+                    className="w-full bg-white border-2 border-slate-100 rounded-2xl px-5 py-4 font-bold text-slate-700 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all shadow-sm hover:border-slate-200 appearance-none"
+                    value={selectedSubject}
+                    onChange={e => handleSubjectChange(e.target.value)}
                 >
-                  <option value="">-- เลือกวัน --</option>
-                  {getAvailableDays().map(day => (
-                    <option key={day} value={day}>
-                      {dayNames[day] || day}
-                    </option>
-                  ))}
+                    <option value="">-- เลือกวิชา --</option>
+                    {availableSubjects.map(s => (
+                        <option key={s.id} value={s.id}>{s.name} ({s.code})</option>
+                    ))}
                 </select>
+            </div>
 
-                {/* Input Start Time and End Time */}
-                {selectedDayOfWeek && (
-                  <>
-                    <div style={{ marginTop: '1rem', padding: '12px', backgroundColor: '#E3F2FD', borderRadius: '8px', fontSize: '0.9rem', color: '#1976D2' }}>
-                      ℹ️ ช่วงเวลาเปิดเรียน: {formatTimeToHHMM(getTimeRangeForDay(selectedDayOfWeek).minTime)} - {formatTimeToHHMM(getTimeRangeForDay(selectedDayOfWeek).maxTime)}
+            <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">ครูผู้สอน</label>
+                <div className="relative">
+                    <input
+                        type="text"
+                        className="w-full bg-slate-100 border-2 border-transparent rounded-2xl px-5 py-4 font-black text-slate-500 cursor-not-allowed"
+                        value={teacherName}
+                        disabled
+                        placeholder="จะระบุอัตโนมัติ"
+                    />
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xl grayscale opacity-50">👨‍🏫</span>
+                </div>
+            </div>
+
+            <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">เลือกชั้นเรียน</label>
+                <select
+                    className="w-full bg-white border-2 border-slate-100 rounded-2xl px-5 py-4 font-bold text-slate-700 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all shadow-sm hover:border-slate-200 appearance-none"
+                    value={selectedClassroom}
+                    onChange={e => setSelectedClassroom(e.target.value)}
+                >
+                    <option value="">-- เลือกชั้นเรียน --</option>
+                    {classrooms.map(c => (
+                        <option key={c.id} value={c.id}>{c.name} ({c.grade_level})</option>
+                    ))}
+                </select>
+            </div>
+
+            <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">เลือกวัน</label>
+                <select
+                    className="w-full bg-white border-2 border-slate-100 rounded-2xl px-5 py-4 font-bold text-slate-700 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all shadow-sm hover:border-slate-200 appearance-none"
+                    value={selectedDayOfWeek}
+                    onChange={e => {
+                        const d = e.target.value;
+                        setSelectedDayOfWeek(d);
+                        setStartTime('');
+                        setEndTime('');
+                        if (editingAssignment?.id) {
+                            setTimeout(() => {
+                                const range = getTimeRangeForDay(d);
+                                if (range.minTime) {
+                                    const ds = formatTimeToHHMM(range.minTime);
+                                    setStartTime(ds);
+                                    setEndTime(addMinutesToHHMM(ds, 45));
+                                }
+                            }, 50);
+                        }
+                    }}
+                >
+                    <option value="">-- เลือกวัน --</option>
+                    {getAvailableDays().map(day => (
+                        <option key={day} value={day}>{dayNames[day] || day}</option>
+                    ))}
+                </select>
+            </div>
+          </div>
+
+          {slotsLoading ? (
+            <div className="flex items-center justify-center p-12 bg-white rounded-3xl border border-dashed border-slate-200">
+                <div className="flex flex-col items-center gap-3">
+                    <div className="w-10 h-10 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin"></div>
+                    <p className="text-sm font-bold text-slate-400">กำลังโหลดช่วงเวลา...</p>
+                </div>
+            </div>
+          ) : scheduleSlots.length === 0 ? (
+            <div className="bg-amber-50 border-2 border-dashed border-amber-200 p-8 rounded-[2rem] text-center">
+                <div className="text-4xl mb-3 opacity-50">⚠️</div>
+                <p className="text-amber-800 font-bold">ไม่พบช่วงเวลาเรียน</p>
+                <p className="text-amber-600/70 text-sm mt-1">แอดมินต้องตั้งค่าช่วงเวลาเปิดเรียน (Schedule Slots) ก่อน</p>
+            </div>
+          ) : selectedDayOfWeek && (
+            <div className="space-y-6">
+                <div className="bg-white p-6 rounded-3xl border-2 border-slate-100 shadow-sm space-y-4">
+                    <div className="flex items-center justify-between">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">ช่วงเวลาที่เปิดเรียน</label>
+                        <span className="px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full text-[10px] font-black">
+                            {formatTimeToHHMM(getTimeRangeForDay(selectedDayOfWeek).minTime)} - {formatTimeToHHMM(getTimeRangeForDay(selectedDayOfWeek).maxTime)}
+                        </span>
                     </div>
-                    {/* Quick pick times */}
-                    <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                      {getSlotTimesForDay(selectedDayOfWeek).map(slot => (
-                        <button
-                          key={`${slot.start}-${slot.end}`}
-                          type="button"
-                          className="admin-chip"
-                          onClick={() => { setStartTime(slot.start); setEndTime(slot.end); }}
-                          style={{ padding: '6px 10px', borderRadius: '999px', border: '1px solid #DBEAFE', background: '#F8FAFF', cursor: 'pointer' }}
-                        >
-                          {slot.start} - {slot.end}
-                        </button>
-                      ))}
+                    
+                    <div className="flex flex-wrap gap-2">
+                        {getSlotTimesForDay(selectedDayOfWeek).map(slot => (
+                            <button
+                                key={`${slot.start}-${slot.end}`}
+                                type="button"
+                                className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:border-emerald-500 hover:text-emerald-600 hover:bg-emerald-50 transition-all active:scale-95 shadow-sm"
+                                onClick={() => { setStartTime(slot.start); setEndTime(slot.end); }}
+                            >
+                                {slot.start} - {slot.end}
+                            </button>
+                        ))}
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1rem' }}>
-                      <div>
-                        <label className="admin-form-label">เวลาเริ่มต้น (HH:MM)</label>
-                              <input
+
+                    <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-slate-50">
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-bold text-slate-400">เวลาเริ่มต้น</label>
+                            <input
                                 type="text"
-                                inputMode="numeric"
-                                pattern="[0-9:]*"
-                                className="admin-form-input"
+                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-black text-slate-700 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all"
                                 value={startTime}
                                 onChange={e => setStartTime(e.target.value.replace(/[^0-9:]/g, ''))}
                                 onBlur={() => setStartTime(formatTimeInputAutoColon(startTime))}
                                 placeholder="08:30"
-                                required
-                              />
-                      </div>
-                      <div>
-                        <label className="admin-form-label">เวลาสิ้นสุด (HH:MM)</label>
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          pattern="[0-9:]*"
-                          className="admin-form-input"
-                          value={endTime}
-                          onChange={e => setEndTime(e.target.value.replace(/[^0-9:]/g, ''))}
-                          onBlur={() => setEndTime(formatTimeInputAutoColon(endTime))}
-                          placeholder="09:30"
-                          required
-                        />
-                      </div>
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-bold text-slate-400">เวลาสิ้นสุด</label>
+                            <input
+                                type="text"
+                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-black text-slate-700 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all"
+                                value={endTime}
+                                onChange={e => setEndTime(e.target.value.replace(/[^0-9:]/g, ''))}
+                                onBlur={() => setEndTime(formatTimeInputAutoColon(endTime))}
+                                placeholder="09:15"
+                            />
+                        </div>
                     </div>
-                  </>
-                )}
-              </>
-            )}
-          </div>
+                </div>
+            </div>
+          )}
         </div>
 
-          <div className="admin-modal-footer">
+        {/* Footer */}
+        <div className="p-6 bg-white border-t border-slate-100 flex gap-3 justify-end shrink-0">
           <button
             type="button"
-            className="admin-btn-secondary"
+            className="px-8 py-3.5 text-slate-500 font-bold hover:bg-slate-50 rounded-2xl transition-all"
             onClick={handleReset}
           >
             ยกเลิก
           </button>
           <button
             type="button"
-            className="admin-btn-primary"
+            className={`px-12 py-3.5 rounded-2xl font-black transition-all shadow-lg active:scale-95 flex items-center gap-2
+                ${loading ? 'bg-slate-200 text-slate-400' : 'bg-slate-900 text-white hover:bg-slate-800 shadow-slate-200'}
+            `}
             onClick={handleAddSchedule}
             disabled={loading}
           >
-            {loading ? 'กำลังบันทึก...' : (editingAssignment && editingAssignment.id ? '💾 บันทึกการแก้ไข' : '✅ บันทึก')}
+            {loading ? (
+                <>
+                    <span className="w-4 h-4 border-2 border-slate-300 border-t-slate-500 rounded-full animate-spin"></span>
+                    <span>กำลังบันทึก...</span>
+                </>
+            ) : (
+                <>
+                    <span>{editingAssignment?.id ? 'บันทึกการแก้ไข' : 'ยืนยันข้อมูล'}</span>
+                    <span className="text-xl">✓</span>
+                </>
+            )}
           </button>
         </div>
       </div>
     </div>
   );
+
+  return ReactDOM.createPortal(modal, document.body);
 }
+

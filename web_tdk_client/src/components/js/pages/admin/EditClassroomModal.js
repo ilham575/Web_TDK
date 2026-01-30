@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import { X, Edit3, GraduationCap, Calendar, Hash, ClipboardList, CheckCircle, Loader2 } from 'lucide-react';
 
 const EditClassroomModal = ({
   isOpen,
@@ -8,20 +10,18 @@ const EditClassroomModal = ({
   onUpdateClassroom,
   onClose,
 }) => {
-  // Local state สำหรับ modal นี้เท่านั้น
+  const { t } = useTranslation();
   const [gradeLevel, setGradeLevel] = useState('');
   const [roomNumber, setRoomNumber] = useState('');
   const [semester, setSemester] = useState(1);
   const [academicYear, setAcademicYear] = useState('');
 
-  // ฟังก์ชันสำหรับสร้างชื่อชั้นเรียนอัตโนมัติ
   const generateClassName = () => {
     if (!gradeLevel) return '';
     if (roomNumber) return `${gradeLevel}/${roomNumber}`;
     return gradeLevel;
   };
 
-  // เมื่อ modal เปิด ให้โหลดข้อมูลจาก selectedClassroom
   useEffect(() => {
     if (isOpen && selectedClassroom) {
       setGradeLevel(selectedClassroom.grade_level || '');
@@ -31,7 +31,6 @@ const EditClassroomModal = ({
     }
   }, [isOpen, selectedClassroom]);
 
-  // Reset form เมื่อ modal ปิด
   useEffect(() => {
     if (!isOpen) {
       setGradeLevel('');
@@ -49,7 +48,6 @@ const EditClassroomModal = ({
       semester,
       academicYear,
     });
-    // Reset form หลังแก้ไขสำเร็จ
     setGradeLevel('');
     setRoomNumber('');
     setSemester(1);
@@ -59,107 +57,135 @@ const EditClassroomModal = ({
   if (!isOpen || classroomStep !== 'edit') return null;
 
   return (
-    <div className="admin-modal-overlay">
-      <div className="modal" style={{ maxWidth: '800px', maxHeight: '90vh', overflowY: 'auto' }}>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-6 backdrop-blur-sm bg-slate-900/40 animate-in fade-in duration-300">
+      <div className="bg-white w-full max-w-xl rounded-[2.5rem] shadow-2xl shadow-slate-900/20 overflow-hidden flex flex-col animate-in zoom-in-95 duration-300 max-h-[90vh]">
         {/* Header */}
-        <div className="admin-modal-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flex: 1 }}>
+        <div className="px-8 py-6 border-b border-slate-50 flex items-center justify-between bg-white sticky top-0 z-10">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center">
+              <Edit3 className="w-5 h-5" />
+            </div>
             <div>
-              <h3 style={{ margin: 0 }}>
-                ✏️ แก้ไขชั้นเรียน
+              <h3 className="text-lg font-black text-slate-800 tracking-tight leading-none">
+                {t('admin.editClassroom')}
               </h3>
-              <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>
-                อัพเดตรายละเอียดชั้นเรียน
-              </div>
+              <p className="text-[11px] font-bold text-slate-400 mt-1 uppercase tracking-widest leading-none">
+                {t('admin.editClassroomDetails')}
+              </p>
             </div>
           </div>
-          <button className="admin-modal-close" onClick={onClose}>×</button>
+          <button 
+            onClick={onClose}
+            className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-50 text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-all active:scale-95"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
         {/* Body */}
-        <div className="admin-modal-body">
-          {/* Instructions box */}
-          <div style={{ marginBottom: '1.5rem', padding: '1rem', backgroundColor: '#e3f2fd', borderLeft: '4px solid #1976d2', borderRadius: '4px' }}>
-            <p style={{ margin: 0, color: '#1565c0', fontSize: '14px' }}>
-              📝 แก้ไขรายละเอียดชั้นเรียน (ชื่อชั้นเรียนสร้างจากชั้นปี/เลขห้องอัตโนมัติ)
+        <div className="p-8 overflow-y-auto space-y-6">
+          <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100/50">
+            <p className="text-sm font-black text-blue-800 flex items-center gap-2">
+              <ClipboardList className="w-4 h-4" />
+              {t('admin.fillClassroomDetails')}
             </p>
           </div>
 
-          <div className="admin-form-group">
-            <label className="admin-form-label">ชั้นปี <span style={{ color: 'red' }}>*</span></label>
-            <input 
-              className="admin-form-input"
-              type="text"
-              value={gradeLevel}
-              onChange={e => setGradeLevel(e.target.value)}
-              placeholder="เช่น ป.1, ป.2, ป.3, มัธยม 1, มัธยม 2"
-            />
-            <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>ระบุชั้นปีให้ตรงกับโครงสร้างของโรงเรียน</div>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-            <div className="admin-form-group">
-              <label className="admin-form-label">เทอม</label>
-              <select 
-                className="admin-form-input"
-                value={semester}
-                onChange={e => setSemester(parseInt(e.target.value))}
-              >
-                <option value={1}>เทอม 1</option>
-                <option value={2}>เทอม 2</option>
-              </select>
-            </div>
-
-            <div className="admin-form-group">
-              <label className="admin-form-label">ปีการศึกษา</label>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 px-1">
+                <GraduationCap className="w-3.5 h-3.5" />
+                {t('admin.gradeLevel')} <span className="text-rose-500">*</span>
+              </label>
               <input 
-                className="admin-form-input"
+                className="w-full h-14 px-6 bg-slate-50 border-2 border-transparent focus:border-blue-500 focus:bg-white rounded-2xl text-slate-700 font-bold text-sm outline-none transition-all placeholder:text-slate-300"
                 type="text"
-                value={academicYear}
-                onChange={e => setAcademicYear(e.target.value)}
-                placeholder="เช่น 2567"
+                value={gradeLevel}
+                onChange={e => setGradeLevel(e.target.value)}
+                placeholder={t('admin.gradeExample')}
               />
+              <p className="px-1 text-[10px] font-bold text-slate-400 italic">{t('admin.specifyGrade')}</p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 px-1">
+                  <Calendar className="w-3.5 h-3.5" />
+                  {t('admin.semester')}
+                </label>
+                <select 
+                  className="w-full h-14 px-6 bg-slate-50 border-2 border-transparent focus:border-blue-500 focus:bg-white rounded-2xl text-slate-700 font-bold text-sm outline-none transition-all appearance-none cursor-pointer"
+                  value={semester}
+                  onChange={e => setSemester(parseInt(e.target.value))}
+                >
+                  <option value={1}>{t('admin.semester1')}</option>
+                  <option value={2}>{t('admin.semester2')}</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 px-1">
+                  <Calendar className="w-3.5 h-3.5" />
+                  {t('admin.academicYear')}
+                </label>
+                <input 
+                  className="w-full h-14 px-6 bg-slate-50 border-2 border-transparent focus:border-blue-500 focus:bg-white rounded-2xl text-slate-700 font-bold text-sm outline-none transition-all placeholder:text-slate-300"
+                  type="text"
+                  value={academicYear}
+                  onChange={e => setAcademicYear(e.target.value)}
+                  placeholder={t('admin.academicYearExample')}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 px-1">
+                <Hash className="w-3.5 h-3.5" />
+                {t('admin.roomNumberOptional')}
+              </label>
+              <input 
+                className="w-full h-14 px-6 bg-slate-50 border-2 border-transparent focus:border-blue-500 focus:bg-white rounded-2xl text-slate-700 font-bold text-sm outline-none transition-all placeholder:text-slate-300"
+                type="text"
+                value={roomNumber}
+                onChange={e => setRoomNumber(e.target.value)}
+                placeholder={t('admin.roomNumberExample')}
+              />
+              <p className="px-1 text-[10px] font-bold text-slate-400 italic">{t('admin.roomNumberDescription')}</p>
             </div>
           </div>
 
-          <div className="admin-form-group">
-            <label className="admin-form-label">เลขห้อง (ไม่บังคับ)</label>
-            <input 
-              className="admin-form-input"
-              type="text"
-              value={roomNumber}
-              onChange={e => setRoomNumber(e.target.value)}
-              placeholder="เช่น 101, 102, 201"
-            />
-            <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>สำหรับระบุตำแหน่งห้องเรียน</div>
+          <div className="pt-4">
+            <div className="bg-slate-50 rounded-2xl p-4 flex items-center justify-between px-6 border border-slate-100">
+              <span className="text-[11px] font-black text-slate-400 uppercase tracking-widest">{t('admin.classNamePreview')}</span>
+              <span className="text-xl font-black text-blue-600">{generateClassName() || '-'}</span>
+            </div>
           </div>
         </div>
 
         {/* Footer */}
-        <div className="admin-modal-footer">
-          <div style={{ fontSize: '13px', color: '#666', marginBottom: '1rem' }}>
-            ✓ ชื่อชั้นเรียน: <strong>{generateClassName() || '-'}</strong>
-          </div>
+        <div className="px-8 py-6 bg-slate-50/50 flex flex-col sm:flex-row gap-3 mt-auto">
           <button 
             type="button" 
-            className="admin-btn-secondary"
+            className="flex-1 h-12 bg-white hover:bg-slate-100 text-slate-600 rounded-xl font-black text-sm transition-all active:scale-95 border border-slate-100 shadow-sm"
             onClick={onClose}
           >
-            ยกเลิก
+            {t('common.cancel')}
           </button>
           <button 
             type="button" 
-            className="admin-btn-primary save-edit-btn" 
+            className="flex-[2] h-12 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black text-sm transition-all active:scale-95 shadow-lg shadow-blue-200 flex items-center justify-center gap-2" 
             onClick={handleSubmit}
             disabled={updatingClassroom || !gradeLevel}
-            aria-label={updatingClassroom ? 'กำลังบันทึกการแก้ไข' : 'บันทึกการแก้ไข'}
           >
             {updatingClassroom ? (
-              <span className="btn-loading">⏳ กำลังบันทึก...</span>
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                {t('admin.creating')}
+              </>
             ) : (
               <>
-                <span className="btn-icon">✓</span>
-                <span className="btn-text">บันทึกการแก้ไข</span>
+                <CheckCircle className="w-4 h-4" />
+                {t('admin.editClassroom')}
               </>
             )}
           </button>
@@ -170,3 +196,4 @@ const EditClassroomModal = ({
 };
 
 export default EditClassroomModal;
+

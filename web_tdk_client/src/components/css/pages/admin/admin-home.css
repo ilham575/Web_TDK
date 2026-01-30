@@ -7,73 +7,7 @@
   overflow-x: hidden;
 }
 
-.admin-dashboard::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: 
-    radial-gradient(circle at 20% 80%, rgba(59, 130, 246, 0.08) 0%, transparent 50%),
-    radial-gradient(circle at 80% 20%, rgba(167, 139, 250, 0.08) 0%, transparent 50%),
-    radial-gradient(circle at 40% 40%, rgba(34, 197, 94, 0.06) 0%, transparent 50%);
-  pointer-events: none;
-}
-
-/* Header Section */
-.admin-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 2.5rem 3rem;
-  background: linear-gradient(135deg,
-    rgba(255, 255, 255, 0.3) 0%,
-    rgba(255, 255, 255, 0.2) 50%,
-    rgba(255, 255, 255, 0.1) 100%);
-  backdrop-filter: blur(25px);
-  -webkit-backdrop-filter: blur(25px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.4);
-  box-shadow:
-    0 12px 40px rgba(0, 0, 0, 0.12),
-    inset 0 1px 0 rgba(255, 255, 255, 0.6),
-    0 0 60px rgba(102, 126, 234, 0.08);
-  animation: slideDown 0.8s cubic-bezier(0.16, 1, 0.3, 1);
-  position: relative;
-  z-index: 10;
-  border-radius: 0 0 30px 30px;
-  overflow: hidden;
-}
-
-.admin-header::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 4px;
-  background: linear-gradient(90deg,
-    #667eea 0%,
-    #764ba2 25%,
-    #f093fb 50%,
-    #f5576c 75%,
-    #4facfe 100%);
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
-}
-
-.admin-header::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background:
-    radial-gradient(circle at 20% 80%, rgba(120, 119, 198, 0.1) 0%, transparent 50%),
-    radial-gradient(circle at 80% 20%, rgba(255, 255, 255, 0.1) 0%, transparent 50%),
-    radial-gradient(circle at 40% 40%, rgba(120, 119, 198, 0.05) 0%, transparent 50%);
-  pointer-events: none;
-}
+/* Note: admin-header styles are now unified in PageHeader.css */
 
 .header-left {
   display: flex;
@@ -398,6 +332,81 @@
   border-bottom: 1px solid rgba(226,232,240,0.8);
 }
 
+/* Selection checkbox styling (nicer, more visible) */
+.admin-table input[type="checkbox"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  border: 2px solid #e2e8f0;
+  background: #fff;
+  display: inline-block;
+  position: relative;
+  vertical-align: middle;
+  cursor: pointer;
+  transition: all 0.16s ease;
+  box-shadow: 0 6px 18px rgba(15,23,42,0.06);
+}
+.admin-table input[type="checkbox"]:hover {
+  transform: translateY(-1px) scale(1.03);
+}
+.admin-table input[type="checkbox"]:focus {
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(99,102,241,0.12);
+}
+.admin-table input[type="checkbox"]:checked {
+  background: linear-gradient(135deg, #ffb347 0%, #ffcc33 100%);
+  border-color: #ffb347;
+}
+.admin-table input[type="checkbox"]:checked::after {
+  content: "\2713";
+  position: absolute;
+  left: 3px;
+  top: -3px;
+  color: rgba(40,21,7,0.95);
+  font-weight: 800;
+  font-size: 14px;
+}
+
+/* Bulk-reset / warning button (distinct and prominent) */
+.admin-btn-warning, .bulk-reset-btn {
+  background: linear-gradient(135deg, #ff9a8b 0%, #ff6a88 50%, #ff99cc 100%);
+  color: #fff;
+  border: none;
+  padding: 0.6rem 0.9rem;
+  border-radius: 10px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+  box-shadow: 0 10px 30px rgba(255,106,136,0.18), inset 0 1px 0 rgba(255,255,255,0.12);
+  transition: transform 0.14s ease, box-shadow 0.14s ease, opacity 0.14s ease;
+  cursor: pointer;
+}
+.admin-btn-warning:hover, .bulk-reset-btn:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 16px 40px rgba(255,106,136,0.22);
+}
+.admin-btn-warning:active, .bulk-reset-btn:active {
+  transform: translateY(-1px) scale(0.995);
+}
+.admin-btn-warning:disabled, .bulk-reset-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Small button compact variant */
+.admin-btn-small {
+  padding: 0.35rem 0.5rem;
+  border-radius: 8px;
+  font-size: 0.88rem;
+}
+
+/* Row highlight for selected rows (optional visual aid) */
+.admin-table tbody tr.selected-row {
+  background: linear-gradient(90deg, rgba(255,239,242,0.6), rgba(255,250,250,0.2));
+}
+
 /* Constrain subject credit column header and cells to avoid wide labels */
 .subjects-table th.subject-credit,
 .subjects-table td.subject-credit {
@@ -416,7 +425,39 @@
     max-width: 110px;
     font-size: 0.85rem;
   }
+
+  /* Responsive: stack action buttons and hide text for narrow views */
+  .action-buttons {
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: nowrap;
+  }
+  .action-buttons .action-text { display: none; }
 }
+
+/* Action buttons layout */
+.action-buttons {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: flex-end;
+}
+.action-buttons .admin-btn-small {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.6rem;
+  min-width: 44px;
+  height: 36px;
+  font-size: 0.9rem;
+}
+.action-buttons .admin-btn-small .action-text {
+  display: inline-block;
+}
+.action-buttons .admin-btn-small[title] { padding-left: 0.6rem; padding-right: 0.6rem; }
+
 .admin-table tbody td {
   padding: 0.9rem 1rem;
   border-bottom: 1px solid rgba(226,232,240,0.7);
@@ -499,11 +540,290 @@
   .admin-pagination .pagination-summary { display: none; }
 }
 
+/* Subjects table: improve mobile layout */
+@media (max-width: 720px) {
+  /* show condensed meta under subject name */
+  .subject-meta-mobile { display: block; color: #6b7280; font-size: 0.9rem; margin-top: 6px; }
+
+  /* hide less important columns on small screens (code, type, credit, teacher, counts) */
+  .subjects-table thead th:nth-child(2),
+  .subjects-table thead th:nth-child(3),
+  .subjects-table thead th:nth-child(4),
+  .subjects-table thead th:nth-child(5),
+  .subjects-table thead th:nth-child(6),
+  .subjects-table thead th:nth-child(7),
+  .subjects-table tbody td:nth-child(2),
+  .subjects-table tbody td:nth-child(3),
+  .subjects-table tbody td:nth-child(4),
+  .subjects-table tbody td:nth-child(5),
+  .subjects-table tbody td:nth-child(6),
+  .subjects-table tbody td:nth-child(7) {
+    display: none;
+  }
+
+  /* Make actions stack vertically and buttons full width */
+  .subjects-table tbody td:last-child {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: stretch;
+  }
+
+  .subjects-table tbody td:last-child button {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-weight: 700;
+  }
+
+  /* Make the subject name wrap and ellipsis if very long */
+  .subjects-table .subject-name { white-space: normal; line-height: 1.2; }
+}
+
+/* Desktop: hide subject-meta-mobile (only mobile shows it) */
+.subject-meta-mobile { display: none; }
+
+/* === DESKTOP SUBJECTS TABLE BUTTONS === */
+.subjects-table tbody td:last-child button {
+  padding: 8px 12px;
+  margin-right: 0.5rem;
+  background-color: #2196F3;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.subjects-table tbody td:last-child button:hover {
+  background-color: #1976D2;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(33, 150, 243, 0.3);
+}
+
+.subjects-table tbody td:last-child button:last-child {
+  background-color: #f44336;
+  margin-right: 0;
+}
+
+.subjects-table tbody td:last-child button:last-child:hover {
+  background-color: #d32f2f;
+  box-shadow: 0 4px 12px rgba(244, 67, 54, 0.3);
+}
+
+/* ===== MOBILE SUBJECTS TABLE REDESIGN (720px and below) ===== */
+@media (max-width: 720px) {
+  /* Hide desktop table header entirely */
+  .subjects-table {
+    border: none;
+    background: transparent;
+    width: 100%;
+  }
+
+  .subjects-table thead {
+    display: none;
+  }
+
+  .subjects-table tbody {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  /* === CARD CONTAINER === */
+  .subjects-table tbody tr {
+    display: block;
+    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+    border-radius: 16px;
+    padding: 18px;
+    margin-bottom: 0;
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
+    border: 1px solid rgba(59, 130, 246, 0.1);
+    box-sizing: border-box;
+    overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .subjects-table tbody tr:hover {
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+    border-color: rgba(59, 130, 246, 0.2);
+    transform: translateY(-2px);
+  }
+
+  /* === HIDDEN COLUMNS === */
+  .subjects-table tbody td:nth-child(2),
+  .subjects-table tbody td:nth-child(3),
+  .subjects-table tbody td:nth-child(4),
+  .subjects-table tbody td:nth-child(5),
+  .subjects-table tbody td:nth-child(6),
+  .subjects-table tbody td:nth-child(7) {
+    display: none;
+  }
+
+  /* === SUBJECT INFO (FIRST CELL) === */
+  .subjects-table tbody td:first-child {
+    display: block;
+    padding: 0;
+    border: none;
+    margin-bottom: 14px;
+    min-width: 0;
+  }
+
+  /* Subject Name - Large and Bold */
+  .subjects-table .subject-name {
+    font-size: 1.15rem;
+    font-weight: 900;
+    color: #0f172a;
+    margin: 0;
+    margin-bottom: 12px;
+    line-height: 1.3;
+    word-break: break-word;
+    letter-spacing: -0.5px;
+  }
+
+  /* Type Badge */
+  .subject-type-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 7px 13px;
+    border-radius: 22px;
+    background: linear-gradient(135deg, #eef2ff 0%, #dbeafe 100%);
+    color: #1e40af;
+    font-weight: 800;
+    font-size: 0.82rem;
+    margin-bottom: 12px;
+    margin-right: 10px;
+    white-space: nowrap;
+    box-shadow: 0 2px 8px rgba(30, 64, 175, 0.1);
+    border: 1px solid rgba(30, 64, 175, 0.2);
+  }
+
+  /* Meta Information (Credits/Percentage) */
+  .subject-meta-mobile {
+    display: inline-block;
+    color: #5a6b7d;
+    font-size: 0.92rem;
+    font-weight: 600;
+    margin-top: 0;
+    word-break: break-word;
+    background: rgba(59, 130, 246, 0.05);
+    padding: 4px 10px;
+    border-radius: 6px;
+  }
+
+  /* === ACTION BUTTONS (LAST CELL) === */
+  .subjects-table tbody td:last-child {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 11px !important;
+    padding: 0 !important;
+    border: none !important;
+    border-top: 2px solid rgba(15, 23, 42, 0.1) !important;
+    padding-top: 14px !important;
+    margin: 0 !important;
+    width: 100% !important;
+    flex: unset !important;
+  }
+
+  /* Button Styling - Override ALL inline styles */
+  .subjects-table tbody td:last-child button {
+    width: 100% !important;
+    padding: 13px 15px !important;
+    border-radius: 11px !important;
+    font-size: 0.93rem !important;
+    font-weight: 700 !important;
+    border: none !important;
+    cursor: pointer !important;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 6px !important;
+    min-width: unset !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
+    line-height: 1.4 !important;
+    height: auto !important;
+    flex: 1 !important;
+    font-family: inherit !important;
+    letter-spacing: 0.3px !important;
+  }
+
+  .subjects-table tbody td:last-child button:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12) !important;
+  }
+
+  .subjects-table tbody td:last-child button:active {
+    transform: translateY(0) !important;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08) !important;
+  }
+
+  /* Edit Button (Blue) */
+  .subjects-table tbody td:last-child button:first-child {
+    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%) !important;
+    color: #ffffff !important;
+  }
+
+  .subjects-table tbody td:last-child button:first-child:hover {
+    background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%) !important;
+  }
+
+  /* Delete Button (Red) */
+  .subjects-table tbody td:last-child button:last-child {
+    background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%) !important;
+    color: #ffffff !important;
+  }
+
+  .subjects-table tbody td:last-child button:last-child:hover {
+    background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%) !important;
+  }
+}
+
+/* === EXTRA SMALL SCREENS (420px and below) === */
 @media (max-width: 420px) {
+  /* Pagination optimization */
   .admin-pagination { justify-content: space-between; padding: 0 0.5rem; }
   .admin-pagination .pagination-pages { overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 6px; }
   .admin-pagination .pagination-pages::-webkit-scrollbar { height: 6px; }
   .admin-pagination .pagination-pages::-webkit-scrollbar-thumb { background: rgba(99,102,241,0.35); border-radius: 6px; }
+
+  /* Further optimize subjects cards on very small screens */
+  .subjects-table tbody tr {
+    padding: 14px;
+    gap: 10px;
+    border-radius: 14px;
+  }
+
+  .subjects-table .subject-name {
+    font-size: 1rem;
+    margin-bottom: 8px;
+  }
+
+  .subject-type-badge {
+    padding: 5px 10px;
+    font-size: 0.75rem;
+  }
+
+  .subject-meta-mobile {
+    font-size: 0.85rem;
+  }
+
+  .subjects-table tbody td:last-child {
+    gap: 8px;
+    margin-top: 10px;
+  }
+
+  .subjects-table tbody td:last-child button {
+    padding: 10px 10px !important;
+    font-size: 0.85rem !important;
+    border-radius: 8px !important;
+  }
 }
 
 .admin-stats-card::before {
@@ -842,6 +1162,18 @@
 
 .admin-btn-small.admin-btn-secondary:hover {
   background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
+}
+
+.admin-btn-small.admin-btn-primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 25%, #f093fb 50%, #f5576c 75%, #4facfe 100%);
+  color: white;
+  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.admin-btn-small.admin-btn-primary:hover {
+  background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 25%, #ee82f0 50%, #f34560 75%, #3d9be0 100%);
+  box-shadow: 0 12px 35px rgba(102, 126, 234, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  transform: translateY(-2px);
 }
 
 /* Announcement Form */
@@ -1785,6 +2117,37 @@
   }
 }
 
+/* Admin tabs open/close animations */
+@keyframes adminSlideIn {
+  from { opacity: 0; transform: translateX(-12px) translateY(-6px) scale(0.995); }
+  to { opacity: 1; transform: translateX(0) translateY(0) scale(1); }
+}
+@keyframes adminSlideOut {
+  from { opacity: 1; transform: translateX(0) translateY(0) scale(1); }
+  to { opacity: 0; transform: translateX(-12px) translateY(-6px) scale(0.995); }
+}
+
+.admin-tabs-nav.opening {
+  animation: adminSlideIn 260ms cubic-bezier(0.2,0,0,1) both;
+}
+.admin-tabs-nav.closing {
+  animation: adminSlideOut 200ms cubic-bezier(0.4,0,0.2,1) both;
+}
+
+/* small interactive feedback for the collapsed open button */
+.admin-open-btn {
+  transition: transform 140ms ease, opacity 120ms ease;
+}
+.admin-open-btn:active { transform: scale(0.94) rotate(-6deg); opacity: 0.95; }
+
+/* also animate nav items slightly when opening */
+.admin-tabs-nav.opening > button {
+  animation: adminSlideIn 320ms cubic-bezier(0.2,0,0,1);
+}
+.admin-tabs-nav.closing > button {
+  animation: adminSlideOut 180ms cubic-bezier(0.4,0,0.2,1);
+}
+
 /* Responsive Design */
 @media (max-width: 1024px) {
   .user-management {
@@ -1815,16 +2178,19 @@
     border-radius: 0 0 20px 20px;
   }
 
+  /* Ensure user info/text comes first and actions sit below on mobile */
   .header-left {
-    order: 2;
+    order: 1;
+    width: 100%;
   }
 
   .header-right {
-    order: 1;
-    flex-direction: row;
-    justify-content: center;
-    gap: 1rem;
+    order: 2;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
     align-items: center;
+    gap: 0.75rem;
   }
 
   .admin-avatar {
@@ -1847,8 +2213,10 @@
 
   .header-actions {
     gap: 0.5rem;
-    flex-wrap: wrap;
-    justify-content: center;
+    /* Switch to grid so buttons can form 2 columns on mobile */
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    justify-items: center;
     width: 100%;
   }
 
@@ -1856,14 +2224,19 @@
     padding: 0.75rem 1.25rem;
     font-size: 0.8rem;
     gap: 0.375rem;
-    min-width: 120px;
-    flex: 1;
+    min-width: 0;
+    width: 100%;
     justify-content: center;
+    max-width: none;
   }
 
-  /* Show hamburger and hide default header actions under small width */
-  .header-menu-btn { display: inline-flex; }
-  .header-actions { display: none; }
+  /* Hide hamburger and show header actions as 2-column grid on small screens */
+  .header-menu-btn { display: none !important; }
+  /* Additional overrides to ensure order and layout are enforced */
+  .admin-header .header-left { order: 1 !important; width: 100% !important; }
+  .admin-header .header-right { order: 2 !important; width: 100% !important; display: flex !important; flex-direction: column !important; align-items: center !important; gap: 0.75rem !important; }
+  .admin-header .header-actions { display: grid !important; grid-template-columns: repeat(2, 1fr) !important; gap: 0.75rem !important; width: 100% !important; }
+  .admin-header .header-menu { display: none !important; }
 
   .stats-section {
     grid-template-columns: 1fr;

@@ -5,7 +5,7 @@ from datetime import datetime
 # Base schema
 class UserBase(BaseModel):
     username: str
-    email: EmailStr
+    email: Optional[EmailStr] = None
     full_name: str
     role: str = "student"
     school_id: Optional[int] = None
@@ -52,7 +52,7 @@ class Token(BaseModel):
 # Admin request schema
 class AdminRequestCreate(BaseModel):
     username: str
-    email: EmailStr
+    email: Optional[EmailStr] = None
     full_name: str
     password: str
     school_name: str

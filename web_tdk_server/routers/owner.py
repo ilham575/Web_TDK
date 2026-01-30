@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends, status
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from typing import List
 from schemas.user import UserCreate, User, AdminRequestCreate
 from schemas.school import SchoolCreate, School
@@ -10,9 +11,19 @@ from models.subject import Subject as SubjectModel
 from models.attendance import Attendance as AttendanceModel
 from models.grade import Grade as GradeModel
 from models.admin_request import AdminRequest as AdminRequestModel
+from models.document import Document as DocumentModel
+from models.subject_student import SubjectStudent as SubjectStudentModel
+from models.classroom import Classroom as ClassroomModel, ClassroomStudent as ClassroomStudentModel
+from models.classroom_subject import ClassroomSubject as ClassroomSubjectModel
+from models.schedule import ScheduleSlot as ScheduleSlotModel, SubjectSchedule as SubjectScheduleModel
+from models.absence import Absence as AbsenceModel
+from models.homeroom import HomeroomTeacher as HomeroomTeacherModel
+from models.school_deletion_request import SchoolDeletionRequest as SchoolDeletionRequestModel
+from models.password_reset_request import PasswordResetRequest as PasswordResetRequestModel
 from utils.security import hash_password
 from database.connection import get_db
 from routers.user import get_current_user
+import os
 from datetime import datetime, timedelta
 
 router = APIRouter(prefix="/owner", tags=["owner"])
@@ -91,15 +102,16 @@ def create_admin_for_school(
         raise HTTPException(status_code=400, detail="Username already exists")
     
     # Check if email already exists
-    db_email = db.query(UserModel).filter(UserModel.email == email).first()
-    if db_email:
-        raise HTTPException(status_code=400, detail="Email already exists")
+    if email:
+        db_email = db.query(UserModel).filter(UserModel.email == email).first()
+        if db_email:
+            raise HTTPException(status_code=400, detail="Email already exists")
     
     # Create admin user
     hashed_password = hash_password(password)
     db_user = UserModel(
         username=username,
-        email=email,
+        email=email if email else None,
         full_name=full_name,
         hashed_password=hashed_password,
         role="admin",
@@ -187,18 +199,24 @@ def request_admin(request: AdminRequestCreate, db: Session = Depends(get_db)):
     if existing_user:
         raise HTTPException(status_code=400, detail="Username already exists")
     
-    existing_request = db.query(AdminRequestModel).filter(AdminRequestModel.username == request.username).first()
+    existing_request = db.query(AdminRequestModel).filter(AdminRequestModel.username == request.username, AdminRequestModel.status == "pending").first()
     if existing_request:
         raise HTTPException(status_code=400, detail="Request already exists for this username")
     
     # Check email
-    existing_email = db.query(UserModel).filter(UserModel.email == request.email).first()
-    if existing_email:
-        raise HTTPException(status_code=400, detail="Email already exists")
+    if request.email:
+        existing_email = db.query(UserModel).filter(UserModel.email == request.email).first()
+        if existing_email:
+            raise HTTPException(status_code=400, detail="Email already exists")
+        
+        existing_email_request = db.query(AdminRequestModel).filter(AdminRequestModel.email == request.email, AdminRequestModel.status == "pending").first()
+        if existing_email_request:
+            raise HTTPException(status_code=400, detail="Request already exists for this email")
     
-    existing_email_request = db.query(AdminRequestModel).filter(AdminRequestModel.email == request.email).first()
-    if existing_email_request:
-        raise HTTPException(status_code=400, detail="Request already exists for this email")
+    # Delete any non-pending requests for this username and email to allow re-requesting
+    db.query(AdminRequestModel).filter(AdminRequestModel.username == request.username, AdminRequestModel.status != "pending").delete()
+    if request.email:
+        db.query(AdminRequestModel).filter(AdminRequestModel.email == request.email, AdminRequestModel.status != "pending").delete()
     
     # Hash password
     hashed = hash_password(request.password)
@@ -206,7 +224,7 @@ def request_admin(request: AdminRequestCreate, db: Session = Depends(get_db)):
     # Create request
     request_obj = AdminRequestModel(
         username=request.username,
-        email=request.email,
+        email=request.email if request.email else None,
         full_name=request.full_name,
         password_hash=hashed,
         school_name=request.school_name,
@@ -216,6 +234,136 @@ def request_admin(request: AdminRequestCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(request_obj)
     return {"message": "Admin request submitted successfully", "id": request_obj.id}
+
+
+@router.delete("/schools/{school_id}", status_code=204)
+def delete_school_as_owner(school_id: int, db: Session = Depends(get_db), current_user: UserModel = Depends(require_owner)):
+    """Delete a school and all users associated with it. Only owners may call this."""
+
+    # Check if there's a deletion request for this school
+    deletion_request = db.query(SchoolDeletionRequestModel).filter(
+        SchoolDeletionRequestModel.school_id == school_id
+    ).first()
+
+    if not deletion_request:
+        raise HTTPException(
+            status_code=403,
+            detail="Cannot delete school without a deletion request from an admin"
+        )
+
+    # Proceed with deletion (existing logic)
+    school = db.query(SchoolModel).filter(SchoolModel.id == school_id).first()
+    if not school:
+        raise HTTPException(status_code=404, detail="School not found")
+
+    # Get all user IDs belonging to this school for cascade deletions
+    user_ids = [u.id for u in db.query(UserModel).filter(UserModel.school_id == school_id).all()]
+    # Get all subject IDs for this school
+    subject_ids = [s.id for s in db.query(SubjectModel).filter(SubjectModel.school_id == school_id).all()]
+    # Get all classroom IDs for this school
+    classroom_ids = [c.id for c in db.query(ClassroomModel).filter(ClassroomModel.school_id == school_id).all()]
+
+    print(f"Deleting school {school_id}")
+    print(f"user_ids: {user_ids}")
+    print(f"subject_ids: {subject_ids}")
+    print(f"classroom_ids: {classroom_ids}")
+
+    # Delete in dependency order (respecting FK constraints)
+    try:
+        # 1. Delete announcements for this school
+        db.query(AnnouncementModel).filter(AnnouncementModel.school_id == school_id).delete(synchronize_session=False)
+
+        # 2. Delete documents uploaded by users in this school
+        db.query(DocumentModel).filter(DocumentModel.uploaded_by.in_(user_ids)).delete(synchronize_session=False)
+
+        # 3. Delete grades for students in this school OR for subjects/classrooms in this school
+        db.query(GradeModel).filter(
+            (GradeModel.student_id.in_(user_ids)) |
+            (GradeModel.subject_id.in_(subject_ids)) |
+            (GradeModel.classroom_id.in_(classroom_ids))
+        ).delete(synchronize_session=False)
+
+        # 4. Delete subject enrollments for students in this school OR for subjects in this school
+        db.query(SubjectStudentModel).filter(
+            (SubjectStudentModel.student_id.in_(user_ids)) |
+            (SubjectStudentModel.subject_id.in_(subject_ids))
+        ).delete(synchronize_session=False)
+
+        # 5. Delete subject schedules (teacher assignments) for teachers/subjects/classrooms in this school
+        db.query(SubjectScheduleModel).filter(
+            (SubjectScheduleModel.subject_id.in_(subject_ids)) |
+            (SubjectScheduleModel.teacher_id.in_(user_ids)) |
+            (SubjectScheduleModel.classroom_id.in_(classroom_ids))
+        ).delete(synchronize_session=False)
+
+        # 6. Delete schedule slots created by users in this school (after subject_schedules cleanup)
+        db.query(ScheduleSlotModel).filter(ScheduleSlotModel.created_by.in_(user_ids)).delete(synchronize_session=False)
+
+        # 7. Delete classroom students for students in this school
+        db.query(ClassroomStudentModel).filter(ClassroomStudentModel.student_id.in_(user_ids)).delete(synchronize_session=False)
+
+        # 8. Delete absences (both student_id and approved_by can be from this school)
+        db.query(AbsenceModel).filter(AbsenceModel.student_id.in_(user_ids)).delete(synchronize_session=False)
+        db.query(AbsenceModel).filter(AbsenceModel.approved_by.in_(user_ids)).delete(synchronize_session=False)
+
+        # 9. Delete password reset requests for users in this school
+        db.query(PasswordResetRequestModel).filter(PasswordResetRequestModel.user_id.in_(user_ids)).delete(synchronize_session=False)
+
+        # 10. Delete school deletion requests for this school (before deleting users)
+        db.query(SchoolDeletionRequestModel).filter(SchoolDeletionRequestModel.school_id == school_id).delete(synchronize_session=False)
+
+        # 11. Delete homeroom teacher assignments for teachers in this school
+        db.query(HomeroomTeacherModel).filter(HomeroomTeacherModel.teacher_id.in_(user_ids)).delete(synchronize_session=False)
+
+        # 12. Delete attendance records for subjects in this school
+        db.query(AttendanceModel).filter(AttendanceModel.subject_id.in_(subject_ids)).delete(synchronize_session=False)
+
+        # 13. Delete classroom_subject relations for subjects/classrooms in this school
+        print("Deleting classroom_subjects by subject_ids")
+        if subject_ids:
+            db.execute(text("DELETE FROM classroom_subjects WHERE subject_id IN :subject_ids"), {"subject_ids": tuple(subject_ids)})
+        print("Deleting classroom_subjects by classroom_ids")
+        if classroom_ids:
+            db.execute(text("DELETE FROM classroom_subjects WHERE classroom_id IN :classroom_ids"), {"classroom_ids": tuple(classroom_ids)})
+        print("Flushing classroom_subjects")
+        db.flush()  # Ensure the deletes are executed before proceeding
+
+        # 14. Delete subjects for this school (after all references are cleaned up)
+        print("Deleting subjects")
+        db.execute(text("DELETE FROM subjects WHERE school_id = :school_id"), {"school_id": school_id})
+
+        # 15. Delete classrooms for this school
+        db.query(ClassroomModel).filter(ClassroomModel.school_id == school_id).delete(synchronize_session=False)
+
+        # 16. Delete all users belonging to this school
+        db.query(UserModel).filter(UserModel.school_id == school_id).delete(synchronize_session=False)
+
+        # Keep logo path for safe deletion after commit
+        old_logo = school.logo_url
+
+        # 17. Delete the school
+        db.delete(school)
+        db.commit()
+
+        # Safely delete logo file if it looks like our managed upload
+        try:
+            UPLOAD_DIR = "uploads/logos"
+            if old_logo and isinstance(old_logo, str) and old_logo.startswith('/uploads/logos/'):
+                filename = os.path.basename(old_logo)
+                abs_upload_dir = os.path.abspath(UPLOAD_DIR)
+                candidate = os.path.abspath(os.path.join(UPLOAD_DIR, filename))
+                if candidate.startswith(abs_upload_dir + os.path.sep) or candidate == abs_upload_dir:
+                    if os.path.exists(candidate):
+                        os.remove(candidate)
+        except Exception:
+            # Don't fail the request if file deletion fails
+            pass
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error deleting school and related data: {str(e)}")
+
+    return
 
 @router.get("/admin_requests", response_model=List[dict])
 def get_admin_requests(db: Session = Depends(get_db), current_user: UserModel = Depends(require_owner)):
@@ -282,3 +430,85 @@ def reject_admin_request(request_id: int, db: Session = Depends(get_db), current
     db.commit()
     
     return {"message": "Admin request rejected"}
+
+@router.get("/school_deletion_requests", response_model=List[dict])
+def get_school_deletion_requests(db: Session = Depends(get_db), current_user: UserModel = Depends(require_owner)):
+    """Owner can view all pending school deletion requests."""
+    from models.user import User as UserModel
+    from models.school import School as SchoolModel
+
+    requests = db.query(SchoolDeletionRequestModel).filter(
+        SchoolDeletionRequestModel.status == "pending"
+    ).order_by(SchoolDeletionRequestModel.created_at.desc()).all()
+
+    result = []
+    for req in requests:
+        # Get school info
+        school = db.query(SchoolModel).filter(SchoolModel.id == req.school_id).first()
+        # Get requester info
+        requester = db.query(UserModel).filter(UserModel.id == req.requested_by).first()
+
+        result.append({
+            "id": req.id,
+            "school_id": req.school_id,
+            "school_name": school.name if school else "Unknown School",
+            "requested_by": req.requested_by,
+            "requester_name": requester.full_name if requester else "Unknown User",
+            "requester_username": requester.username if requester else "Unknown",
+            "reason": req.reason,
+            "status": req.status,
+            "created_at": req.created_at
+        })
+
+    return result
+
+@router.patch("/school_deletion_requests/{request_id}/approve")
+def approve_school_deletion_request(request_id: int, db: Session = Depends(get_db), current_user: UserModel = Depends(require_owner)):
+    """Owner approves a school deletion request, which will delete the school."""
+    request = db.query(SchoolDeletionRequestModel).filter(SchoolDeletionRequestModel.id == request_id).first()
+    if not request:
+        raise HTTPException(status_code=404, detail="Request not found")
+
+    if request.status != "pending":
+        raise HTTPException(status_code=400, detail="Request already processed")
+
+    # Mark request as approved
+    request.status = "approved"
+    request.reviewed_by = current_user.id
+    request.reviewed_at = datetime.utcnow()
+    db.commit()
+
+    # Now delete the school (this will use our existing delete_school_as_owner function)
+    try:
+        delete_school_as_owner(request.school_id, db, current_user)
+        return {"message": "School deletion request approved and school deleted successfully"}
+    except Exception as e:
+        # If deletion fails, revert the request status
+        request.status = "pending"
+        request.reviewed_by = None
+        request.reviewed_at = None
+        db.commit()
+        raise HTTPException(status_code=500, detail=f"Failed to delete school: {str(e)}")
+
+@router.patch("/school_deletion_requests/{request_id}/reject")
+def reject_school_deletion_request(
+    request_id: int,
+    review_notes: str = None,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(require_owner)
+):
+    """Owner rejects a school deletion request."""
+    request = db.query(SchoolDeletionRequestModel).filter(SchoolDeletionRequestModel.id == request_id).first()
+    if not request:
+        raise HTTPException(status_code=404, detail="Request not found")
+
+    if request.status != "pending":
+        raise HTTPException(status_code=400, detail="Request already processed")
+
+    request.status = "rejected"
+    request.reviewed_by = current_user.id
+    request.reviewed_at = datetime.utcnow()
+    request.review_notes = review_notes
+    db.commit()
+
+    return {"message": "School deletion request rejected"}

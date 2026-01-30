@@ -27,4 +27,4 @@ Write-Host "Server will be available at: http://localhost:8000" -ForegroundColor
 Write-Host "Press Ctrl+C to stop the server" -ForegroundColor Yellow
 Write-Host ""
 
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+uvicorn main:app --reload --host 0.0.0.0 --port 8080

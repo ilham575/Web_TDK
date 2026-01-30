@@ -1,12 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import '../../../css/pages/student/student-home.css';
 import ScheduleGrid from '../../ScheduleGrid';
 import AbsenceManager from './AbsenceManager';
 import AcademicTranscript from './AcademicTranscript';
 import PageHeader from '../../PageHeader';
-import { ToastContainer, toast } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
+import { toast } from 'react-toastify';
 import { API_BASE_URL } from '../../../endpoints';
 import { setSchoolFavicon } from '../../../../utils/faviconUtils';
 import { logout } from '../../../../utils/authUtils';
@@ -24,8 +22,6 @@ function StudentPage() {
   // Schedule state
   const [studentSchedule, setStudentSchedule] = useState([]);
   const [operatingHours, setOperatingHours] = useState([]);
-
-  // We rely on styles in src/components/css/pages/student/student-home.css
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -204,20 +200,20 @@ function StudentPage() {
 
     if (days.length === 0) {
       return (
-        <div className="schedule-no-data">
-          <div className="empty-icon">📅</div>
-          <div className="empty-text">ยังไม่ได้กำหนดเวลาเปิดเรียน</div>
-          <div className="empty-subtitle">กรุณาติดต่อผู้ดูแลระบบ</div>
+        <div className="text-center py-12">
+          <div className="text-5xl mb-4 opacity-50">📅</div>
+          <p className="text-slate-600 font-medium">ยังไม่ได้กำหนดเวลาเปิดเรียน</p>
+          <p className="text-sm text-slate-500 mt-2">กรุณาติดต่อผู้ดูแลระบบ</p>
         </div>
       );
     }
 
     if (studentSchedule.length === 0) {
       return (
-        <div className="schedule-no-data">
-          <div className="empty-icon">📅</div>
-          <div className="empty-text">ยังไม่มีตารางเรียน</div>
-          <div className="empty-subtitle">ติดต่อครูผู้สอนเพื่อดูตารางเรียน</div>
+        <div className="text-center py-12">
+          <div className="text-5xl mb-4 opacity-50">📅</div>
+          <p className="text-slate-600 font-medium">ยังไม่มีตารางเรียน</p>
+          <p className="text-sm text-slate-500 mt-2">ติดต่อครูผู้สอนเพื่อดูตารางเรียน</p>
         </div>
       );
     }
@@ -263,131 +259,213 @@ function StudentPage() {
   }, [displaySchool]);
 
   return (
-    <div className="student-container">
-      <ToastContainer />
+    <div className="min-h-screen bg-slate-50 font-sans">
       <PageHeader 
         currentUser={currentUser}
         role="student"
         displaySchool={displaySchool}
-        rightContent={
-          <>
-            <div className="account-info">
-              <div className="account-label">ข้อมูลบัญชี</div>
-              <div className="account-email">{currentUser?.email || ''}</div>
-              <div className="school-info">โรงเรียน: {displaySchool}</div>
-              <div className="grade-info">
-                <div className="grade-display">
-                  <span>ชั้นปี: <strong>{currentUser?.grade_level || 'ไม่ระบุ'}</strong></span>
-                </div>
-              </div>
-            </div>
-            <div className="header-actions">
-              <button className="student-btn-secondary" onClick={() => navigate('/profile')}>👤 โปรไฟล์</button>
-              <button onClick={handleSignout} className="student-signout-btn">Sign out</button>
-            </div>
-          </>
-        }
+        onLogout={handleSignout}
       />
 
-      <div className="dashboard-grid">
-        <div className="student-stats-card">
-          <div className="stats-content">
-            <div className="student-stats-value">{studentSubjects.length}</div>
-            <div className="student-stats-label">รายวิชาที่ลงทะเบียน</div>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div className="bg-white rounded-2xl p-6 shadow-lg shadow-slate-100/50 border border-slate-100 hover:shadow-xl transition-all">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-4xl font-black text-emerald-600">{studentSubjects.length}</p>
+                <p className="text-sm text-slate-600 font-semibold mt-2">รายวิชาที่ลงทะเบียน</p>
+              </div>
+              <div className="text-5xl opacity-70">📚</div>
+            </div>
           </div>
-          <div className="stats-icon" aria-hidden>📚</div>
+
+          <div className="bg-white rounded-2xl p-6 shadow-lg shadow-slate-100/50 border border-slate-100 hover:shadow-xl transition-all">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-4xl font-black text-emerald-600">{visibleAnnouncements.length}</p>
+                <p className="text-sm text-slate-600 font-semibold mt-2">ข่าวสาร</p>
+              </div>
+              <div className="text-5xl opacity-70">📢</div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl p-6 shadow-lg shadow-slate-100/50 border border-slate-100 hover:shadow-xl transition-all">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-lg font-bold text-emerald-600">{currentUser?.username || '-'}</p>
+                <p className="text-xs text-slate-500 mt-1">#{currentUser?.id || '-'}</p>
+                <p className="text-sm text-slate-600 font-semibold mt-2">ผู้ใช้</p>
+              </div>
+              <div className="text-5xl opacity-70">🆔</div>
+            </div>
+          </div>
         </div>
 
-        <div className="student-stats-card">
-          <div className="stats-content">
-            <div className="student-stats-value">{visibleAnnouncements.length}</div>
-            <div className="student-stats-label">ข่าวสาร</div>
+        {/* Tabs Navigation */}
+        <div className="sticky top-16 z-30 bg-white/80 backdrop-blur-md border-b border-slate-200 shadow-sm rounded-t-2xl -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 mb-6">
+          <div className="flex overflow-x-auto no-scrollbar">
+            {[
+              { id: 'subjects', label: '📚 รายวิชา' },
+              { id: 'announcements', label: '📢 ข่าวสาร' },
+              { id: 'schedule', label: '📅 ตารางเรียน' },
+              { id: 'absences', label: '✋ การลา' },
+              { id: 'transcript', label: '📊 ผลการเรียน' },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex-1 px-4 py-4 font-bold text-sm whitespace-nowrap transition-all duration-200 border-b-2 relative
+                  ${
+                    activeTab === tab.id
+                      ? 'text-emerald-600 border-emerald-600 bg-emerald-50'
+                      : 'text-slate-600 border-transparent hover:text-emerald-600 hover:bg-slate-50'
+                  }
+                `}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
-          <div className="stats-icon" aria-hidden>📣</div>
         </div>
 
-        <div className="student-stats-card">
-          <div className="stats-content">
-            <div className="student-stats-value">{currentUser?.username || '-'} <small>#{currentUser?.id || '-'}</small></div>
-            <div className="student-stats-label">ผู้ใช้</div>
-          </div>
-          <div className="stats-icon" aria-hidden>🆔</div>
-        </div>
-      </div>
-
-      <div className="tabs-header">
-        <button className={`student-tab-button ${activeTab === 'subjects' ? 'active' : ''}`} onClick={() => setActiveTab('subjects')}>รายวิชา</button>
-        <button className={`student-tab-button ${activeTab === 'announcements' ? 'active' : ''}`} onClick={() => setActiveTab('announcements')}>ข่าวสาร</button>
-        <button className={`student-tab-button ${activeTab === 'schedule' ? 'active' : ''}`} onClick={() => setActiveTab('schedule')}>ตารางเรียน</button>
-        <button className={`student-tab-button ${activeTab === 'absences' ? 'active' : ''}`} onClick={() => setActiveTab('absences')}>การลา</button>
-        <button className={`student-tab-button ${activeTab === 'transcript' ? 'active' : ''}`} onClick={() => setActiveTab('transcript')}>📊 ผลการเรียน</button>
-      </div>
-      <div className="tab-content">
+        {/* Tab Content */}
+        <div>
         {activeTab === 'subjects' && (
-          <section className="student-section">
-            <h4><span className="section-icon">📚</span> รายวิชาของฉัน</h4>
+          <section className="bg-white rounded-2xl shadow-lg shadow-slate-100/50 border border-slate-100 overflow-hidden">
+            <div className="p-6 border-b border-slate-100">
+              <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                <span>📚</span> รายวิชาของฉัน
+              </h3>
+            </div>
             {studentSubjects.length === 0 ? (
-              <div className="empty-state">ยังไม่มีรายวิชาที่ลงทะเบียน</div>
+              <div className="p-12 text-center">
+                <div className="text-5xl mb-4 opacity-50">🚫</div>
+                <p className="text-slate-500 font-medium">ยังไม่มีรายวิชาที่ลงทะเบียน</p>
+              </div>
             ) : (
-              <table className="student-subject-table">
-                <thead>
-                  <tr><th>ชื่อวิชา</th><th>รหัส</th><th>สถานะ</th></tr>
-                </thead>
-                <tbody>
-                  {studentSubjects.map(sub => (
-                    <tr key={sub.id}>
-                      <td className="subject-name">{sub.name}</td>
-                      <td className="subject-code">{sub.code || ''}</td>
-                      <td className="subject-status">
-                        <span className={`status-badge ${sub.is_ended ? 'ended' : 'active'}`}>
-                          {sub.is_ended ? '✅ จบแล้ว' : '📚 กำลังเรียน'}
-                        </span>
-                      </td>
+              <>
+              {/* Desktop View: Table */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-slate-50 border-b border-slate-200">
+                    <tr>
+                      <th className="px-6 py-4 text-left text-sm font-bold text-slate-700">ข้อมูลรายวิชา</th>
+                      <th className="px-6 py-4 text-center text-sm font-bold text-slate-700">สถานะการเรียน</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {studentSubjects.map(sub => {
+                      const isAllEnded = sub.teachers?.length > 0 && sub.teachers.every(t => t.is_ended);
+                      return (
+                        <tr key={sub.id} className="hover:bg-slate-50 transition-colors">
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-3">
+                              <span className="text-2xl">📖</span>
+                              <div>
+                                <p className="font-bold text-slate-800">{sub.name}</p>
+                                <p className="text-xs text-slate-500 mt-1">รหัสวิชา: {sub.code || 'ไม่มีรหัส'}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            <span className={`inline-flex items-center gap-2 px-3 py-2 rounded-full text-sm font-bold
+                              ${isAllEnded 
+                                ? 'bg-slate-100 text-slate-600'
+                                : 'bg-emerald-100 text-emerald-600'
+                              }
+                            `}>
+                              <span className={`w-2 h-2 rounded-full ${isAllEnded ? 'bg-slate-400' : 'bg-emerald-500'}`}></span>
+                              {isAllEnded ? 'จบการเรียนแล้ว' : 'กำลังเรียน'}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile View: Cards */}
+              <div className="md:hidden grid grid-cols-1 gap-4 p-4">
+                  {studentSubjects.map(sub => {
+                      const isAllEnded = sub.teachers?.length > 0 && sub.teachers.every(t => t.is_ended);
+                      return (
+                        <div key={sub.id} className="bg-white rounded-xl p-4 shadow-sm border border-slate-100 flex flex-col gap-3">
+                            <div className="flex items-start justify-between">
+                                <div className="flex items-start gap-3">
+                                    <span className="text-2xl mt-1">📖</span>
+                                    <div>
+                                        <h4 className="font-bold text-slate-800 text-lg leading-tight">{sub.name}</h4>
+                                        <div className="text-xs text-slate-500 font-medium bg-slate-100 px-2 py-1 rounded-md inline-block mt-1">
+                                            {sub.code || 'ไม่มีรหัส'}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="pt-2 border-t border-slate-50">
+                                <span className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-bold
+                                  ${isAllEnded 
+                                    ? 'bg-slate-100 text-slate-600'
+                                    : 'bg-emerald-50 text-emerald-600'
+                                  }
+                                `}>
+                                  <span className={`w-2 h-2 rounded-full ${isAllEnded ? 'bg-slate-400' : 'bg-emerald-500'}`}></span>
+                                  {isAllEnded ? 'จบการเรียนแล้ว' : 'กำลังเรียน'}
+                                </span>
+                            </div>
+                        </div>
+                      );
+                  })}
+              </div>
+              </>
             )}
           </section>
         )}
         {activeTab === 'announcements' && (
-          <aside className="student-section">
-            <div className="announcement-header"><span className="announcement-icon">📣</span> ข่าวสารโรงเรียน</div>
+          <section className="bg-white rounded-2xl shadow-lg shadow-slate-100/50 border border-slate-100 overflow-hidden">
+            <div className="p-6 border-b border-slate-100">
+              <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                <span>📢</span> ข่าวสารโรงเรียน
+              </h3>
+            </div>
             {visibleAnnouncements.length === 0 ? (
-              <div className="empty-state">ไม่มีข้อมูลข่าวสาร</div>
+              <div className="p-12 text-center">
+                <div className="text-5xl mb-4 opacity-50">🚫</div>
+                <p className="text-slate-500 font-medium">ไม่มีข้อมูลข่าวสาร</p>
+              </div>
             ) : (
-              <ul className="announcement-list enhanced-announcement-list">
+              <div className="divide-y divide-slate-100">
                 {visibleAnnouncements.map(item => (
-                  <li key={item.id} className="announcement-item enhanced-announcement-item">
-                    <article className={`announcement-card ${expandedAnnouncement === item.id ? 'expanded' : ''}`}>
-                      <div className="announcement-card-header">
-                        <div className="announcement-card-title">{item.title}</div>
-                        <div className="announcement-card-date">{item.created_at ? parseLocalDatetime(item.created_at).toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' }) : ''}</div>
+                  <div key={item.id} className="p-6 hover:bg-slate-50 transition-colors cursor-pointer" onClick={() => toggleAnnouncement(item.id)}>
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1">
+                        <h4 className="font-bold text-slate-800 text-lg">{item.title}</h4>
+                        <p className="text-xs text-slate-500 mt-2">
+                          {item.created_at ? parseLocalDatetime(item.created_at).toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' }) : ''}
+                        </p>
                       </div>
-                      <div className="announcement-card-content">
-                        {expandedAnnouncement === item.id ? (
-                          <div>
-                            <p className="announcement-text">{item.content}</p>
-                            <button className="collapse-btn" onClick={() => toggleAnnouncement(item.id)}>ย่อ</button>
-                          </div>
-                        ) : (
-                          <div>
-                            <p className="announcement-preview">{item.content}</p>
-                            <button className="read-more-btn" onClick={() => toggleAnnouncement(item.id)}>อ่านเพิ่มเติม</button>
-                          </div>
-                        )}
-                      </div>
-                    </article>
-                  </li>
+                      <span className="text-2xl flex-shrink-0">{expandedAnnouncement === item.id ? '▼' : '▶'}</span>
+                    </div>
+                    {expandedAnnouncement === item.id && (
+                      <p className="mt-4 text-slate-700 leading-relaxed whitespace-pre-wrap">{item.content}</p>
+                    )}
+                  </div>
                 ))}
-              </ul>
+              </div>
             )}
-          </aside>
+          </section>
         )}
         {activeTab === 'schedule' && (
-          <section className="student-section">
-            <div className="schedule-header"><span className="schedule-icon">📅</span> ตารางเรียนของฉัน</div>
-            {renderScheduleTable()}
+          <section className="bg-white rounded-2xl shadow-lg shadow-slate-100/50 border border-slate-100 overflow-hidden">
+            <div className="p-6 border-b border-slate-100">
+              <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                <span>📅</span> ตารางเรียนของฉัน
+              </h3>
+            </div>
+            <div className="p-6">
+              {renderScheduleTable()}
+            </div>
           </section>
         )}
         {activeTab === 'absences' && (
@@ -396,6 +474,7 @@ function StudentPage() {
         {activeTab === 'transcript' && (
           <AcademicTranscript studentId={currentUser?.id} studentSubjects={studentSubjects} />
         )}
+        </div>
       </div>
     </div>
   );
