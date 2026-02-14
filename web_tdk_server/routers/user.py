@@ -143,7 +143,23 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
             detail="บัญชีผู้ใช้ถูกปิดใช้งานแล้ว"
         )
     
-    access_token = create_access_token(data={"sub": user.username})
+    # Get token expiration setting from database if available, otherwise use default
+    expires_delta = None
+    if user.school_id:  # รวม owner ด้วย
+        try:
+            from models.token_setting import TokenExpireSetting as TokenExpireSettingModel
+            setting = db.query(TokenExpireSettingModel).filter(
+                TokenExpireSettingModel.school_id == user.school_id,
+                TokenExpireSettingModel.role == user.role
+            ).first()
+            if setting:
+                # ใช้ค่าจาก database แทน default
+                expires_delta = timedelta(minutes=setting.expire_minutes)
+        except Exception:
+            pass
+    
+    # Create token with custom expiration if available, otherwise use role-based default
+    access_token = create_access_token(data={"sub": user.username}, role=user.role, expires_delta=expires_delta)
     return {
         "access_token": access_token, 
         "token_type": "bearer",

@@ -8,6 +8,7 @@ import Loading from '../../Loading';
 import PageHeader from '../../PageHeader';
 
 import swalMessenger from './swalmessenger';
+import TokenExpireSettings from '../../../modals/TokenExpireSettings';
 import { API_BASE_URL } from '../../../endpoints';
 import { setSchoolFavicon } from '../../../../utils/faviconUtils';
 import { logout } from '../../../../utils/authUtils';
@@ -44,6 +45,7 @@ function OwnerPage() {
   const [loadingRequests, setLoadingRequests] = useState(false);
 
   const [activeTab, setActiveTab] = useState('schools');
+  const [selectedSchoolForTokenSettings, setSelectedSchoolForTokenSettings] = useState('');
 
   // Activities filter state
   const [selectedSchoolForActivities, setSelectedSchoolForActivities] = useState('all');
@@ -58,6 +60,11 @@ function OwnerPage() {
   // School deletion requests state
   const [schoolDeletionRequests, setSchoolDeletionRequests] = useState([]);
   const [loadingDeletionRequests, setLoadingDeletionRequests] = useState(false);
+
+  // Settings state
+  const [selectedSchoolForSettings, setSelectedSchoolForSettings] = useState('');
+  const [schoolSettings, setSchoolSettings] = useState(null);
+  const [loadingSettings, setLoadingSettings] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -441,6 +448,54 @@ function OwnerPage() {
     logout();
     navigate('/signin', { state: { signedOut: true } });
   }
+
+  // Settings functions
+  const fetchSchoolSettings = async (schoolId) => {
+    if (!schoolId) return;
+    setLoadingSettings(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE_URL}/owner/settings/${schoolId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSchoolSettings(data);
+      } else {
+        toast.error(data.detail || 'Failed to load settings');
+      }
+    } catch (err) {
+      console.error('fetch settings error', err);
+      toast.error('Error loading settings');
+    } finally {
+      setLoadingSettings(false);
+    }
+  };
+
+  const updateSchoolSettings = async (settingsUpdate) => {
+    if (!selectedSchoolForSettings) return;
+    setLoadingSettings(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE_URL}/owner/settings/${selectedSchoolForSettings}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(settingsUpdate)
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSchoolSettings(data);
+        toast.success('Settings updated successfully');
+      } else {
+        toast.error(data.detail || 'Failed to update settings');
+      }
+    } catch (err) {
+      console.error('update settings error', err);
+      toast.error('Error updating settings');
+    } finally {
+      setLoadingSettings(false);
+    }
+  };
 
   // Confirmations are performed inline using `swalMessenger.confirm`.
 
@@ -974,6 +1029,42 @@ function OwnerPage() {
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {activeTab === 'token_settings' && (
+          <div className="space-y-6 transition-all duration-300">
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+              <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
+                <span className="p-2 bg-yellow-50 rounded-lg">⏱️</span>
+                ตั้งค่าอายุ Token
+              </h2>
+              
+              <div className="mb-6">
+                <label className="block text-sm font-bold text-slate-700 mb-2">
+                  เลือกโรงเรียน
+                </label>
+                <select
+                  value={selectedSchoolForTokenSettings}
+                  onChange={(e) => setSelectedSchoolForTokenSettings(e.target.value)}
+                  className="w-full border border-slate-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="">-- เลือกโรงเรียน --</option>
+                  {schools.map(school => (
+                    <option key={school.id} value={school.id}>
+                      {school.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {selectedSchoolForTokenSettings && (
+                <TokenExpireSettings 
+                  currentUser={currentUser}
+                  schoolId={parseInt(selectedSchoolForTokenSettings)}
+                />
+              )}
+            </div>
           </div>
         )}
 

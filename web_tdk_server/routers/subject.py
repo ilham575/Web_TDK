@@ -214,6 +214,8 @@ def subjects_by_teacher(teacher_id: int, db: Session = Depends(get_db)):
             'school_id': subject.school_id,
             'credits': subject.credits,
             'activity_percentage': subject.activity_percentage,
+            'max_collected_score': subject.max_collected_score,
+            'max_exam_score': subject.max_exam_score,
             'is_ended': subject.is_ended,
             'created_at': subject.created_at,
             'updated_at': subject.updated_at,
@@ -277,6 +279,8 @@ def subjects_by_student(student_id: int, db: Session = Depends(get_db), current_
             'school_id': subject.school_id,
             'credits': subject.credits,
             'activity_percentage': subject.activity_percentage,
+            'max_collected_score': subject.max_collected_score,
+            'max_exam_score': subject.max_exam_score,
             'is_ended': subject.is_ended,
             'created_at': subject.created_at,
             'updated_at': subject.updated_at,
@@ -838,6 +842,8 @@ def get_all_subjects_by_school(school_id: int, db: Session = Depends(get_db), cu
             'subject_type': subj.subject_type,
             'credits': getattr(subj, 'credits', None),
             'activity_percentage': getattr(subj, 'activity_percentage', None),
+            'max_collected_score': subj.max_collected_score,
+            'max_exam_score': subj.max_exam_score,
             'teacher_id': subj.teacher_id,  # Keep for backward compatibility
             'teacher_name': teacher_name,  # Keep for backward compatibility
             'teachers': teachers_info,  # New field with all teachers

@@ -9,6 +9,7 @@ function OwnerTabs({ activeTab, setActiveTab, passwordResetCount = 0 }) {
     { id: 'activities', label: t('owner.recentActivities'), icon: '📋' },
     { id: 'create_admin', label: t('owner.addAdmin'), icon: '➕' },
     { id: 'admin_requests', label: t('owner.adminRequests'), icon: '📩' },
+    { id: 'token_settings', label: 'Token Settings', icon: '⏱️' },
     { id: 'password_reset_requests', label: t('owner.passwordResetRequests'), icon: '🔐', count: passwordResetCount },
   ];
 

@@ -176,8 +176,8 @@ function GradeSummary() {
           const data = await subjectRes.json();
           setSubjectName(data.name || data.title || data.subject_name || '');
           if (data.subject_type) setSubjectType(data.subject_type);
-          setMaxCollectedScore(data.max_collected_score || 100);
-          setMaxExamScore(data.max_exam_score || 100);
+          setMaxCollectedScore((data.max_collected_score !== undefined && data.max_collected_score !== null) ? data.max_collected_score : 100);
+          setMaxExamScore((data.max_exam_score !== undefined && data.max_exam_score !== null) ? data.max_exam_score : 100);
         }
 
         // Load Students

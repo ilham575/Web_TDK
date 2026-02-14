@@ -28,12 +28,26 @@ function PageHeader({
   const navigate = useNavigate();
   const [showHeaderMenu, setShowHeaderMenu] = useState(false);
   
-  const handleSignout = () => {
-    if (onLogout) {
-      onLogout();
-    } else {
-      logout();
+  const handleSignout = async () => {
+    try {
+      // If caller provided a custom onLogout, call it (e.g. to clear extra state).
+      // Always navigate to /signin afterwards to ensure the user is redirected.
+      if (onLogout) {
+        // support promise-returning handlers
+        await onLogout();
+      } else {
+        logout();
+      }
+    } catch (err) {
+      // swallow errors from custom handlers but still navigate away
+      console.error('onLogout handler failed:', err);
+    }
+
+    // Ensure we always navigate to the sign-in page after logout
+    try {
       navigate('/signin');
+    } catch (err) {
+      console.error('Failed to navigate to /signin after logout', err);
     }
   };
 

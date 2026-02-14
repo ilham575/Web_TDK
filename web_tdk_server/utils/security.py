@@ -13,6 +13,19 @@ from database.connection import get_db
 # Secret key สำหรับการเข้ารหัส JWT
 SECRET_KEY = "your_secret_key"
 ALGORITHM = "HS256"
+
+# Default token expiration by role (in minutes)
+# IMPORTANT: Owner token expiry is intended to be configured in code only
+# (DEFAULT_TOKEN_EXPIRE_MINUTES['owner']). The owner-facing UI and owner
+# management APIs must not be able to change the owner value.
+DEFAULT_TOKEN_EXPIRE_MINUTES = {
+    'owner': 45,
+    'admin': 30,
+    'teacher': 30,
+    'student': 30
+}
+
+# Fallback expiration time if no role-specific setting found
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 
@@ -29,13 +42,19 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
 # ฟังก์ชันสำหรับสร้าง JWT
-def create_access_token(data: dict, expires_delta: timedelta = None):
-    expires_delta = expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode = data.copy()
+def create_access_token(data: dict, expires_delta: timedelta = None, role: str = None):
+    # ถ้ากำหนด expires_delta มาให้ ให้ใช้ค่านั้น
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        pass
+    # ถ้ามีการกำหนด role ให้หาเวลาจาก DEFAULT_TOKEN_EXPIRE_MINUTES
+    elif role and role in DEFAULT_TOKEN_EXPIRE_MINUTES:
+        expires_delta = timedelta(minutes=DEFAULT_TOKEN_EXPIRE_MINUTES[role])
+    # ถ้าไม่มีข้อมูลเพิ่มเติม ให้ใช้ค่า default
     else:
-        expire = datetime.utcnow() + timedelta(minutes=15)
+        expires_delta = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    
+    to_encode = data.copy()
+    expire = datetime.utcnow() + expires_delta
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt

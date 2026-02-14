@@ -28,8 +28,8 @@ function SubjectManagementModal({ isOpen, onClose, onSave, subject, currentSchoo
           subject_type: subject.subject_type || 'main',
           credits: subject.credits || '',
           activity_percentage: subject.activity_percentage || '',
-          max_collected_score: subject.max_collected_score || 100,
-          max_exam_score: subject.max_exam_score || 100
+          max_collected_score: (subject.max_collected_score !== undefined && subject.max_collected_score !== null) ? subject.max_collected_score : 100,
+          max_exam_score: (subject.max_exam_score !== undefined && subject.max_exam_score !== null) ? subject.max_exam_score : 100
         });
       } else {
         // Creating new subject

@@ -48,6 +48,12 @@ function StudentDetailModal({
             >
               ✅ สรุปการเข้าเรียน
             </button>
+            <button
+              className={`student-detail-tab ${activeTab === 'evaluation' ? 'active' : ''}`}
+              onClick={() => setActiveTab('evaluation')}
+            >
+              🧠 การประเมิน
+            </button>
           </div>
 
           {/* Tab Content */}
@@ -240,6 +246,77 @@ function StudentDetailModal({
               ) : (
                 <div className="homeroom-empty">
                   <div className="homeroom-empty-text">ยังไม่มีข้อมูลการเข้าเรียน</div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'evaluation' && (
+            <div className="student-detail-section">
+              {selectedStudentDetail.evaluations && Array.isArray(selectedStudentDetail.evaluations) && selectedStudentDetail.evaluations.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  {selectedStudentDetail.evaluations.map((evalItem, idx) => (
+                    <div key={idx} style={{ padding: '1.25rem', backgroundColor: '#f8fafc', borderRadius: '1rem', border: '1px solid #e2e8f0' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem' }}>
+                        <h5 style={{ margin: 0, color: '#0f172a', fontWeight: 'bold' }}>📚 {evalItem.subject_name || 'ไม่ระบุวิชา'}</h5>
+                        <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                          {new Date(evalItem.created_at).toLocaleDateString('th-TH')}
+                        </span>
+                      </div>
+                      
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
+                        <div style={{ textAlign: 'center' }}>
+                          <p style={{ margin: '0 0 0.25rem 0', fontSize: '0.75rem', color: '#64748b', fontWeight: 'bold' }}>การอ่าน</p>
+                          {evalItem.reading === 'excellent' && <span style={{ padding: '0.25rem 0.75rem', backgroundColor: '#ecfdf5', color: '#10b981', borderRadius: '1rem', fontSize: '0.75rem', fontWeight: 'bold' }}>ดีเยี่ยม</span>}
+                          {evalItem.reading === 'good' && <span style={{ padding: '0.25rem 0.75rem', backgroundColor: '#eff6ff', color: '#3b82f6', borderRadius: '1rem', fontSize: '0.75rem', fontWeight: 'bold' }}>ดี</span>}
+                          {evalItem.reading === 'pass' && <span style={{ padding: '0.25rem 0.75rem', backgroundColor: '#fffbeb', color: '#f59e0b', borderRadius: '1rem', fontSize: '0.75rem', fontWeight: 'bold' }}>ผ่าน</span>}
+                          {evalItem.reading === 'fail' && <span style={{ padding: '0.25rem 0.75rem', backgroundColor: '#fef2f2', color: '#ef4444', borderRadius: '1rem', fontSize: '0.75rem', fontWeight: 'bold' }}>ไม่ผ่าน</span>}
+                        </div>
+                        <div style={{ textAlign: 'center' }}>
+                          <p style={{ margin: '0 0 0.25rem 0', fontSize: '0.75rem', color: '#64748b', fontWeight: 'bold' }}>การเขียน</p>
+                          {evalItem.writing === 'excellent' && <span style={{ padding: '0.25rem 0.75rem', backgroundColor: '#ecfdf5', color: '#10b981', borderRadius: '1rem', fontSize: '0.75rem', fontWeight: 'bold' }}>ดีเยี่ยม</span>}
+                          {evalItem.writing === 'good' && <span style={{ padding: '0.25rem 0.75rem', backgroundColor: '#eff6ff', color: '#3b82f6', borderRadius: '1rem', fontSize: '0.75rem', fontWeight: 'bold' }}>ดี</span>}
+                          {evalItem.writing === 'pass' && <span style={{ padding: '0.25rem 0.75rem', backgroundColor: '#fffbeb', color: '#f59e0b', borderRadius: '1rem', fontSize: '0.75rem', fontWeight: 'bold' }}>ผ่าน</span>}
+                          {evalItem.writing === 'fail' && <span style={{ padding: '0.25rem 0.75rem', backgroundColor: '#fef2f2', color: '#ef4444', borderRadius: '1rem', fontSize: '0.75rem', fontWeight: 'bold' }}>ไม่ผ่าน</span>}
+                        </div>
+                        <div style={{ textAlign: 'center' }}>
+                          <p style={{ margin: '0 0 0.25rem 0', fontSize: '0.75rem', color: '#64748b', fontWeight: 'bold' }}>การคิดวิเคราะห์</p>
+                          {evalItem.analysis === 'excellent' && <span style={{ padding: '0.25rem 0.75rem', backgroundColor: '#ecfdf5', color: '#10b981', borderRadius: '1rem', fontSize: '0.75rem', fontWeight: 'bold' }}>ดีเยี่ยม</span>}
+                          {evalItem.analysis === 'good' && <span style={{ padding: '0.25rem 0.75rem', backgroundColor: '#eff6ff', color: '#3b82f6', borderRadius: '1rem', fontSize: '0.75rem', fontWeight: 'bold' }}>ดี</span>}
+                          {evalItem.analysis === 'pass' && <span style={{ padding: '0.25rem 0.75rem', backgroundColor: '#fffbeb', color: '#f59e0b', borderRadius: '1rem', fontSize: '0.75rem', fontWeight: 'bold' }}>ผ่าน</span>}
+                          {evalItem.analysis === 'fail' && <span style={{ padding: '0.25rem 0.75rem', backgroundColor: '#fef2f2', color: '#ef4444', borderRadius: '1rem', fontSize: '0.75rem', fontWeight: 'bold' }}>ไม่ผ่าน</span>}
+                        </div>
+                      </div>
+
+                      {/* Characteristic Scores */}
+                      {evalItem.characteristic_scores && evalItem.characteristic_scores.length > 0 && (
+                        <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px dashed #e2e8f0' }}>
+                          <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.8rem', color: '#64748b', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                            🌟 คุณลักษณะอันพึงประสงค์
+                          </p>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '0.75rem' }}>
+                            {evalItem.characteristic_scores.map((score, sIdx) => (
+                              <div key={sIdx} style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', padding: '0.5rem', backgroundColor: 'white', borderRadius: '0.75rem', border: '1px solid #f1f5f9' }}>
+                                <span style={{ fontSize: '0.7rem', color: '#475569', fontWeight: 'bold', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={score.topic_name}>
+                                  {score.topic_name}
+                                </span>
+                                <div>
+                                  {score.rating === 'excellent' && <span style={{ color: '#10b981', fontSize: '0.7rem', fontWeight: 'bold' }}>ดีเยี่ยม</span>}
+                                  {score.rating === 'good' && <span style={{ color: '#3b82f6', fontSize: '0.7rem', fontWeight: 'bold' }}>ดี</span>}
+                                  {score.rating === 'pass' && <span style={{ color: '#f59e0b', fontSize: '0.7rem', fontWeight: 'bold' }}>ผ่าน</span>}
+                                  {score.rating === 'fail' && <span style={{ color: '#ef4444', fontSize: '0.7rem', fontWeight: 'bold' }}>ไม่ผ่าน</span>}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="homeroom-empty">
+                  <div className="homeroom-empty-text">ยังไม่มีข้อมูลการประเมิน</div>
                 </div>
               )}
             </div>

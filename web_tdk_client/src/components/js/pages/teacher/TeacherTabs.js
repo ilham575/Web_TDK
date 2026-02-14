@@ -4,12 +4,14 @@ import {
   Home, 
   Megaphone, 
   ClipboardCheck, 
-  CalendarDays 
+  CalendarDays,
+  Brain
 } from 'lucide-react';
 
 function TeacherTabs({ activeTab, setActiveTab }) {
   const tabs = [
     { id: 'subjects', label: 'รายวิชา', icon: BookOpen },
+    { id: 'evaluations', label: 'การประเมิน', icon: Brain },
     { id: 'homeroom', label: 'ประจำชั้น', icon: Home },
     { id: 'announcements', label: 'ประกาศข่าว', icon: Megaphone },
     { id: 'absences', label: 'อนุมัติการลา', icon: ClipboardCheck },

@@ -6,7 +6,7 @@ import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
 import Loading from '../../Loading';
-import PageHeader from '../../PageHeader';
+import PageHeader, { getInitials } from '../../PageHeader';
 
 import swalMessenger from '../owner/swalmessenger';
 import ExpiryModal from '../../ExpiryModal';
@@ -28,6 +28,7 @@ import PasswordResetModal from './PasswordResetModal';
 import AdminScheduleModal from './AdminScheduleModal';
 import HomeroomTeacherModal from './HomeroomTeacherModal';
 import AdminTabs from './AdminTabs';
+import StudentDetailModal from '../../../modals/StudentDetailModal';
 import { API_BASE_URL } from '../../../endpoints';
 import { setSchoolFavicon } from '../../../../utils/faviconUtils';
 import { logout } from '../../../../utils/authUtils';
@@ -186,6 +187,273 @@ function AdminPage() {
   const [showClassroomSubjectModal, setShowClassroomSubjectModal] = useState(false);
   const [selectedSubjectForClassrooms, setSelectedSubjectForClassrooms] = useState(null);
   const [subjectSearchTerm, setSubjectSearchTerm] = useState('');
+  
+  // Student detail modal state
+  const [showStudentDetailModal, setShowStudentDetailModal] = useState(false);
+  const [selectedStudentDetail, setSelectedStudentDetail] = useState(null);
+  const [loadingStudentDetail, setLoadingStudentDetail] = useState(false);
+
+  const getLetterGrade = (percentage) => {
+    percentage = parseFloat(percentage);
+    if (percentage >= 95) return { grade: 'A+', gpaValue: 4.0, color: '#059669', bg: '#ecfdf5' };
+    if (percentage >= 80) return { grade: 'A', gpaValue: 4.0, color: '#059669', bg: '#ecfdf5' };
+    if (percentage >= 75) return { grade: 'B+', gpaValue: 3.5, color: '#2563eb', bg: '#eff6ff' };
+    if (percentage >= 70) return { grade: 'B', gpaValue: 3.0, color: '#2563eb', bg: '#eff6ff' };
+    if (percentage >= 65) return { grade: 'C+', gpaValue: 2.5, color: '#ea580c', bg: '#fff7ed' };
+    if (percentage >= 60) return { grade: 'C', gpaValue: 2.0, color: '#ea580c', bg: '#fff7ed' };
+    if (percentage >= 55) return { grade: 'D+', gpaValue: 1.5, color: '#d97706', bg: '#fffbeb' };
+    if (percentage >= 50) return { grade: 'D', gpaValue: 1.0, color: '#d97706', bg: '#fffbeb' };
+    return { grade: 'F', gpaValue: 0, color: '#dc2626', bg: '#fef2f2' };
+  };
+
+  const getSynchronizedSubjectScore = (subject) => {
+    if (!subject || subject.is_activity) {
+      return { 
+        score: Number(subject?.total_score || 0), 
+        max: Number(subject?.total_max_score || 0) 
+      };
+    }
+    
+    const assignments = subject.assignments || [];
+    if (assignments.length === 0) {
+      return { 
+        score: Number(subject.total_score || 0), 
+        max: Number(subject.total_max_score || 0) 
+      };
+    }
+
+    const checkIsExam = (title) => {
+      if (!title) return false;
+      const t = title.toLowerCase();
+      return t.includes('กลางภาค') || t.includes('ปลายภาค') || t.includes('final') || t.includes('midterm') || t.includes('คะแนนสอบ');
+    };
+
+    const maxCollected = (subject.max_collected_score !== undefined && subject.max_collected_score !== null) ? subject.max_collected_score : 100;
+    const maxExam = (subject.max_exam_score !== undefined && subject.max_exam_score !== null) ? subject.max_exam_score : 100;
+
+    const collectedList = assignments.filter(a => !checkIsExam(a.title));
+    const examList = assignments.filter(a => checkIsExam(a.title));
+
+    const systemCollected = collectedList.find(a => a.title === "คะแนนเก็บรวม");
+    const systemExam = examList.find(a => a.title === "คะแนนสอบรวม");
+
+    let finalCollectedScore = 0;
+    if (systemCollected) {
+      finalCollectedScore = Math.min(systemCollected.score, maxCollected);
+    } else {
+      const rawCollectedScore = collectedList.reduce((sum, a) => sum + a.score, 0);
+      const rawCollectedMax = collectedList.reduce((sum, a) => sum + a.max_score, 0);
+      finalCollectedScore = rawCollectedMax > 0 ? Math.round((rawCollectedScore / rawCollectedMax) * maxCollected) : rawCollectedScore;
+    }
+
+    let finalExamScore = 0;
+    if (systemExam) {
+      finalExamScore = Math.min(systemExam.score, maxExam);
+    } else {
+      const rawExamScore = examList.reduce((sum, a) => sum + a.score, 0);
+      const rawExamMax = examList.reduce((sum, a) => sum + a.max_score, 0);
+      finalExamScore = rawExamMax > 0 ? Math.round((rawExamScore / rawExamMax) * maxExam) : rawExamScore;
+    }
+
+    return { 
+      score: finalCollectedScore + finalExamScore, 
+      max: maxCollected + maxExam 
+    };
+  };
+
+  const calculateGPA = (subjectDataArray) => {
+    if (!Array.isArray(subjectDataArray) || subjectDataArray.length === 0) return 0;
+    const graded = subjectDataArray.filter(s => !s.is_activity);
+    if (graded.length === 0) return 0;
+    let totalWeighted = 0, totalCredits = 0;
+    graded.forEach(s => {
+      const sync = getSynchronizedSubjectScore(s);
+      if (sync.max <= 0) return;
+      
+      const gpa = getLetterGrade((sync.score / sync.max) * 100).gpaValue;
+      const credit = Number(s.credits || 1);
+      totalWeighted += gpa * credit;
+      totalCredits += credit;
+    });
+    return totalCredits === 0 ? 0 : Number((totalWeighted / totalCredits).toFixed(2));
+  };
+
+  const calculateDetailedSubjectScore = (subject) => {
+    if (!subject || subject.is_activity) {
+      return { collectedScore: 0, examScore: 0, totalScore: 0, totalMax: 0, collectedMax: 0, examMax: 0 };
+    }
+    
+    const assignments = subject.assignments || [];
+    if (assignments.length === 0) {
+      return { 
+        collectedScore: 0, 
+        examScore: 0, 
+        totalScore: Number(subject.total_score || 0), 
+        totalMax: Number(subject.total_max_score || 0),
+        collectedMax: 0,
+        examMax: 0
+      };
+    }
+
+    const checkIsExam = (title) => {
+      if (!title) return false;
+      const t = title.toLowerCase();
+      return t.includes('กลางภาค') || t.includes('ปลายภาค') || t.includes('final') || t.includes('midterm') || t.includes('คะแนนสอบ');
+    };
+
+    const maxCollected = (subject.max_collected_score !== undefined && subject.max_collected_score !== null) ? subject.max_collected_score : 100;
+    const maxExam = (subject.max_exam_score !== undefined && subject.max_exam_score !== null) ? subject.max_exam_score : 100;
+
+    const collectedList = assignments.filter(a => !checkIsExam(a.title));
+    const examList = assignments.filter(a => checkIsExam(a.title));
+
+    const systemCollected = collectedList.find(a => a.title === "คะแนนเก็บรวม");
+    const systemExam = examList.find(a => a.title === "คะแนนสอบรวม");
+
+    let finalCollectedScore = 0;
+    if (systemCollected) {
+      finalCollectedScore = Math.min(systemCollected.score, maxCollected);
+    } else {
+      const rawCollectedScore = collectedList.reduce((sum, a) => sum + a.score, 0);
+      const rawCollectedMax = collectedList.reduce((sum, a) => sum + a.max_score, 0);
+      finalCollectedScore = rawCollectedMax > 0 ? Math.round((rawCollectedScore / rawCollectedMax) * maxCollected) : rawCollectedScore;
+    }
+
+    let finalExamScore = 0;
+    if (systemExam) {
+      finalExamScore = Math.min(systemExam.score, maxExam);
+    } else {
+      const rawExamScore = examList.reduce((sum, a) => sum + a.score, 0);
+      const rawExamMax = examList.reduce((sum, a) => sum + a.max_score, 0);
+      finalExamScore = rawExamMax > 0 ? Math.round((rawExamScore / rawExamMax) * maxExam) : rawExamScore;
+    }
+
+    return { 
+      collectedScore: finalCollectedScore,
+      examScore: finalExamScore,
+      totalScore: finalCollectedScore + finalExamScore, 
+      totalMax: maxCollected + maxExam,
+      collectedMax: maxCollected,
+      examMax: maxExam
+    };
+  };
+
+  const calculateMainSubjectsScore = (subjectsList) => {
+    if (!subjectsList || !Array.isArray(subjectsList) || subjectsList.length === 0) {
+      return { totalScore: 0, totalMaxScore: 0, collectedScore: 0, examScore: 0, collectedMaxScore: 0, examMaxScore: 0, percentage: 0, mainSubjectsCount: 0 };
+    }
+    let totalScore = 0, totalMaxScore = 0, totalCollected = 0, totalExam = 0, totalCollectedMax = 0, totalExamMax = 0, mainSubjectsCount = 0;
+    subjectsList.forEach(subject => {
+      if (!subject || subject.is_activity) return;
+      const detail = calculateDetailedSubjectScore(subject);
+      if (detail.totalMax <= 0) return;
+      
+      mainSubjectsCount++;
+      totalScore += detail.totalScore;
+      totalMaxScore += detail.totalMax;
+      totalCollected += detail.collectedScore;
+      totalExam += detail.examScore;
+      totalCollectedMax += detail.collectedMax;
+      totalExamMax += detail.examMax;
+    });
+    return { 
+      totalScore, 
+      totalMaxScore, 
+      collectedScore: totalCollected,
+      examScore: totalExam,
+      collectedMaxScore: totalCollectedMax,
+      examMaxScore: totalExamMax,
+      percentage: totalMaxScore > 0 ? (totalScore / totalMaxScore) * 100 : 0, 
+      mainSubjectsCount 
+    };
+  };
+
+  const openStudentDetail = async (student) => {
+    setLoadingStudentDetail(true);
+    try {
+      const token = localStorage.getItem('token');
+      const headers = { ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+      
+      // Fetch everything for this student
+      const [gradesRes, attendanceRes, evaluationsRes, subjectsRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/grades/student/${student.id}`, { headers }),
+        fetch(`${API_BASE_URL}/attendance/student/${student.id}`, { headers }),
+        fetch(`${API_BASE_URL}/evaluations/student/${student.id}`, { headers }),
+        fetch(`${API_BASE_URL}/subjects/`, { headers })
+      ]);
+      
+      const [gradesData, attendanceData, evaluationsData, allSubjects] = await Promise.all([
+        gradesRes.json(),
+        attendanceRes.json(),
+        evaluationsRes.json(),
+        subjectsRes.json()
+      ]);
+      
+      // Organize grades by subject
+      const gradesBySubject = {};
+      (Array.isArray(gradesData) ? gradesData : []).forEach(g => {
+        if (!gradesBySubject[g.subject_id]) {
+          const sub = (Array.isArray(allSubjects) ? allSubjects : []).find(s => s.id === g.subject_id);
+          gradesBySubject[g.subject_id] = {
+            subject_id: g.subject_id,
+            subject_name: sub ? sub.name : `วิชา #${g.subject_id}`,
+            is_activity: sub ? sub.is_activity : false,
+            total_score: 0,
+            total_max_score: 0,
+            assignments: []
+          };
+        }
+        gradesBySubject[g.subject_id].assignments.push(g);
+        gradesBySubject[g.subject_id].total_score += g.score;
+        gradesBySubject[g.subject_id].total_max_score += g.max_score;
+      });
+      
+      // Organize attendance by subject
+      const attendanceBySubject = {};
+      (Array.isArray(attendanceData) ? attendanceData : []).forEach(a => {
+        if (!attendanceBySubject[a.subject_id]) {
+          const sub = (Array.isArray(allSubjects) ? allSubjects : []).find(s => s.id === a.subject_id);
+          attendanceBySubject[a.subject_id] = {
+            subject_id: a.subject_id,
+            subject_name: sub ? sub.name : `วิชา #${a.subject_id}`,
+            present_days: 0,
+            absent_days: 0,
+            late_days: 0,
+            sick_leave_days: 0,
+            total_days: 0
+          };
+        }
+        attendanceBySubject[a.subject_id].total_days++;
+        if (a.status === 'present') attendanceBySubject[a.subject_id].present_days++;
+        else if (a.status === 'absent') attendanceBySubject[a.subject_id].absent_days++;
+        else if (a.status === 'late') attendanceBySubject[a.subject_id].late_days++;
+        else if (a.status === 'sick_leave') attendanceBySubject[a.subject_id].sick_leave_days++;
+      });
+
+      // Map evaluations with subject names
+      const evaluationsWithNames = (Array.isArray(evaluationsData) ? evaluationsData : []).map(ev => {
+        const sub = (Array.isArray(allSubjects) ? allSubjects : []).find(s => s.id === ev.subject_id);
+        return {
+          ...ev,
+          subject_name: sub ? sub.name : `วิชา #${ev.subject_id}`
+        };
+      });
+      
+      setSelectedStudentDetail({
+        ...student,
+        grades_by_subject: Object.values(gradesBySubject),
+        attendance_by_subject: Object.values(attendanceBySubject),
+        evaluations: evaluationsWithNames
+      });
+      setShowStudentDetailModal(true);
+    } catch (err) {
+      console.error('Failed to load student detail:', err);
+      toast.error('โหลดข้อมูลนักเรียนล้มเหลว');
+    } finally {
+      setLoadingStudentDetail(false);
+    }
+  };
+
   const [subjectTypeFilter, setSubjectTypeFilter] = useState('all');
   const [subjectCurrentPage, setSubjectCurrentPage] = useState(1);
 
@@ -805,6 +1073,10 @@ function AdminPage() {
     if (activeTab === 'users' && currentUser) {
       fetchPasswordResetRequests();
     }
+    if (activeTab === 'evaluations' && currentUser) {
+      loadCharacteristicTopics();
+      loadEvaluationSummary();
+    }
   }, [activeTab, currentUser]);
 
   // Parse server-provided datetime strings into a local Date object.
@@ -906,6 +1178,99 @@ function AdminPage() {
       await swalMessenger.alert({ title, text: message });
     } catch (err) {
       console.error('alert error', err);
+    }
+  };
+
+  // Characteristic evaluation topics state
+  const [characteristicTopics, setCharacteristicTopics] = useState([]);
+  const [loadingTopics, setLoadingTopics] = useState(false);
+  const [newTopicName, setNewTopicName] = useState('');
+  const [creatingTopic, setCreatingTopic] = useState(false);
+
+  // Evaluation summary state
+  const [evaluationSummary, setEvaluationSummary] = useState(null);
+  const [loadingSummary, setLoadingSummary] = useState(false);
+
+  const loadCharacteristicTopics = async () => {
+    const schoolId = currentUser?.school_id || localStorage.getItem('school_id');
+    if (!schoolId) return;
+    setLoadingTopics(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/evaluations/characteristic-topics?school_id=${schoolId}`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setCharacteristicTopics(data);
+      }
+    } catch (err) {
+      console.error('Failed to load characteristic topics:', err);
+    } finally {
+      setLoadingTopics(false);
+    }
+  };
+
+  const handleAddTopic = async (e) => {
+    e.preventDefault();
+    if (!newTopicName.trim()) return;
+    setCreatingTopic(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/evaluations/characteristic-topics`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ name: newTopicName.trim() })
+      });
+      if (response.ok) {
+        toast.success('เพิ่มหัวข้อประเมินสำเร็จ');
+        setNewTopicName('');
+        loadCharacteristicTopics();
+      } else {
+        toast.error('เพิ่มหัวข้อประเมินไม่สำเร็จ');
+      }
+    } catch (err) {
+      toast.error('เกิดข้อผิดพลาด');
+    } finally {
+      setCreatingTopic(false);
+    }
+  };
+
+  const handleDeleteTopic = async (id) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/evaluations/characteristic-topics/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+      if (response.ok) {
+        toast.success('ลบหัวข้อประเมินสำเร็จ');
+        loadCharacteristicTopics();
+      } else {
+        toast.error('ลบไม่สำเร็จ');
+      }
+    } catch (err) {
+      toast.error('เกิดข้อผิดพลาด');
+    }
+  };
+
+  const loadEvaluationSummary = async () => {
+    setLoadingSummary(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/evaluations/summary`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setEvaluationSummary(data);
+      } else {
+        setEvaluationSummary(null);
+      }
+    } catch (err) {
+      console.error('Failed to load evaluation summary:', err);
+      setEvaluationSummary(null);
+    } finally {
+      setLoadingSummary(false);
     }
   };
 
@@ -2979,7 +3344,14 @@ function AdminPage() {
                                       className="w-5 h-5 rounded-md border-2 border-slate-300 text-emerald-600 focus:ring-emerald-500 focus:ring-offset-0 cursor-pointer transition-all duration-200"
                                     />
                                   </td>
-                                  <td className="px-4 py-4"><span className="font-semibold text-slate-800">{student.full_name || student.username}</span></td>
+                                  <td className="px-4 py-4">
+                                    <button 
+                                      className="font-semibold text-slate-800 hover:text-emerald-600 hover:underline transition-colors text-left"
+                                      onClick={() => openStudentDetail(student)}
+                                    >
+                                      {student.full_name || student.username}
+                                    </button>
+                                  </td>
                                   <td className="px-4 py-4 text-slate-600">{student.email}</td>
                                   <td className="px-4 py-4 text-slate-500">{student.username}</td>
                                   <td className="px-4 py-4 text-center">
@@ -3078,7 +3450,12 @@ function AdminPage() {
                                           className="w-5 h-5 mt-1 rounded-md border-2 border-slate-300 text-emerald-600 focus:ring-emerald-500 focus:ring-offset-0 cursor-pointer"
                                         />
                                         <div>
-                                            <div className="font-bold text-slate-800 text-lg">{student.full_name || student.username}</div>
+                                            <button 
+                                              className="font-bold text-slate-800 text-lg hover:text-emerald-600 transition-colors text-left"
+                                              onClick={() => openStudentDetail(student)}
+                                            >
+                                              {student.full_name || student.username}
+                                            </button>
                                             <div className="text-sm text-slate-500 font-medium">@{student.username}</div>
                                         </div>
                                     </div>
@@ -3976,6 +4353,266 @@ function AdminPage() {
         )}
         {activeTab === 'absences' && (
           <AbsenceApproval />
+        )}
+        {activeTab === 'evaluations' && (
+          <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-xl overflow-hidden">
+            <div className="px-8 py-8 border-b border-slate-50 bg-gradient-to-r from-emerald-50/50 to-white">
+              <h2 className="flex items-center gap-4 text-2xl font-black text-slate-800 tracking-tight">
+                <div className="w-12 h-12 bg-emerald-500 text-white rounded-2xl flex items-center justify-center text-2xl">🧠</div>
+                จัดการหัวข้อคุณลักษณะอันพึงประสงค์
+              </h2>
+              <p className="text-slate-500 font-medium mt-1 pl-16">กำหนดหัวข้อที่ครูต้องประเมินนักเรียนในแต่ละรายวิชา</p>
+            </div>
+            
+            <div className="p-8 space-y-8">
+              {/* Form to add new topic */}
+              <div className="max-w-2xl bg-slate-50 p-6 rounded-3xl border border-slate-100">
+                <h3 className="text-lg font-bold text-slate-700 mb-4 flex items-center gap-2">
+                  <span className="text-xl">➕</span> เพิ่มหัวข้อใหม่
+                </h3>
+                <form onSubmit={handleAddTopic} className="flex flex-col sm:flex-row gap-3">
+                  <input
+                    type="text"
+                    value={newTopicName}
+                    onChange={(e) => setNewTopicName(e.target.value)}
+                    placeholder="เช่น ความซื่อสัตย์สุจริต, มีวินัย, ใฝ่เรียนรู้..."
+                    className="flex-1 px-5 py-3.5 rounded-2xl border border-slate-200 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all font-medium"
+                    required
+                  />
+                  <button
+                    type="submit"
+                    disabled={creatingTopic || !newTopicName.trim()}
+                    className="px-8 py-3.5 bg-emerald-600 text-white rounded-2xl font-black text-sm hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 disabled:opacity-50 active:scale-95"
+                  >
+                    {creatingTopic ? '⏳ กำลังเพิ่ม...' : 'เพิ่มหัวข้อ'}
+                  </button>
+                </form>
+              </div>
+
+              {/* Topics List */}
+              <div>
+                <h3 className="text-lg font-bold text-slate-700 mb-4 pl-2">รายการหัวข้อปัจจุบัน ({characteristicTopics.length})</h3>
+                {loadingTopics ? (
+                  <div className="flex flex-col items-center justify-center py-12">
+                     <div className="w-10 h-10 border-4 border-emerald-100 border-t-emerald-600 rounded-full animate-spin" />
+                  </div>
+                ) : characteristicTopics.length === 0 ? (
+                  <div className="text-center py-16 bg-white border-2 border-dashed border-slate-100 rounded-3xl">
+                     <div className="text-5xl mb-4 grayscale opacity-30">📋</div>
+                     <p className="text-slate-400 font-bold">ยังไม่มีหัวข้อการประเมิน</p>
+                     <p className="text-slate-300 text-sm">เริ่มเพิ่มหัวข้อแรกที่แบบฟอร์มด้านบน</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {characteristicTopics.map(topic => (
+                      <div key={topic.id} className="group p-5 bg-white border border-slate-100 rounded-2xl hover:border-emerald-200 hover:shadow-md transition-all flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                           <div className="w-2 h-10 bg-emerald-400 rounded-full" />
+                           <span className="font-bold text-slate-700">{topic.name}</span>
+                        </div>
+                        <button
+                          onClick={() => openConfirmModal('ยืนยันการลบ', `ต้องการลบหัวข้อ "${topic.name}" หรือไม่?`, () => handleDeleteTopic(topic.id))}
+                          className="p-2.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all"
+                          title="ลบหัวข้อ"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Evaluation Summary Statistics */}
+              <div className="mt-8">
+                <h3 className="text-lg font-bold text-slate-700 mb-4 pl-2 flex items-center gap-2">
+                  <span className="text-xl">📊</span> สรุปผลการประเมินคุณลักษณะอันพึงประสงค์
+                </h3>
+                
+                {loadingSummary ? (
+                  <div className="flex flex-col items-center justify-center py-12">
+                     <div className="w-10 h-10 border-4 border-emerald-100 border-t-emerald-600 rounded-full animate-spin" />
+                     <p className="text-slate-500 mt-4">กำลังโหลดข้อมูลสรุป...</p>
+                  </div>
+                ) : evaluationSummary ? (
+                  <div className="space-y-6">
+                    {/* Overall Statistics */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-2xl border border-blue-200">
+                        <div className="flex items-center gap-3 mb-2">
+                          <div className="w-10 h-10 bg-blue-500 text-white rounded-xl flex items-center justify-center text-lg">📝</div>
+                          <div>
+                            <p className="text-sm font-medium text-blue-700">จำนวนการประเมินทั้งหมด</p>
+                            <p className="text-2xl font-black text-blue-800">{evaluationSummary.total_evaluations}</p>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="bg-gradient-to-br from-emerald-50 to-green-50 p-6 rounded-2xl border border-emerald-200">
+                        <div className="flex items-center gap-3 mb-2">
+                          <div className="w-10 h-10 bg-emerald-500 text-white rounded-xl flex items-center justify-center text-lg">👥</div>
+                          <div>
+                            <p className="text-sm font-medium text-emerald-700">จำนวนนักเรียนที่ถูกประเมิน</p>
+                            <p className="text-2xl font-black text-emerald-800">{evaluationSummary.total_students_evaluated}</p>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="bg-gradient-to-br from-purple-50 to-violet-50 p-6 rounded-2xl border border-purple-200">
+                        <div className="flex items-center gap-3 mb-2">
+                          <div className="w-10 h-10 bg-purple-500 text-white rounded-xl flex items-center justify-center text-lg">📈</div>
+                          <div>
+                            <p className="text-sm font-medium text-purple-700">คะแนนเฉลี่ยรวม</p>
+                            <p className="text-2xl font-black text-purple-800">
+                              {((evaluationSummary.average_reading_score + evaluationSummary.average_writing_score + evaluationSummary.average_analysis_score) / 3).toFixed(1)}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Detailed Scores */}
+                    <div className="bg-white p-6 rounded-2xl border border-slate-200">
+                      <h4 className="text-lg font-bold text-slate-700 mb-4">คะแนนเฉลี่ยแต่ละด้าน</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="text-center p-4 bg-slate-50 rounded-xl">
+                          <div className="text-3xl font-black text-blue-600 mb-1">{evaluationSummary.average_reading_score.toFixed(1)}</div>
+                          <div className="text-sm font-medium text-slate-600">การอ่าน</div>
+                          <div className="w-full bg-slate-200 rounded-full h-2 mt-2">
+                            <div className="bg-blue-500 h-2 rounded-full" style={{width: `${(evaluationSummary.average_reading_score / 4) * 100}%`}}></div>
+                          </div>
+                        </div>
+                        
+                        <div className="text-center p-4 bg-slate-50 rounded-xl">
+                          <div className="text-3xl font-black text-emerald-600 mb-1">{evaluationSummary.average_writing_score.toFixed(1)}</div>
+                          <div className="text-sm font-medium text-slate-600">การเขียน</div>
+                          <div className="w-full bg-slate-200 rounded-full h-2 mt-2">
+                            <div className="bg-emerald-500 h-2 rounded-full" style={{width: `${(evaluationSummary.average_writing_score / 4) * 100}%`}}></div>
+                          </div>
+                        </div>
+                        
+                        <div className="text-center p-4 bg-slate-50 rounded-xl">
+                          <div className="text-3xl font-black text-purple-600 mb-1">{evaluationSummary.average_analysis_score.toFixed(1)}</div>
+                          <div className="text-sm font-medium text-slate-600">การวิเคราะห์</div>
+                          <div className="w-full bg-slate-200 rounded-full h-2 mt-2">
+                            <div className="bg-purple-500 h-2 rounded-full" style={{width: `${(evaluationSummary.average_analysis_score / 4) * 100}%`}}></div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Characteristic Scores Summary */}
+                    {evaluationSummary.characteristic_scores_summary && evaluationSummary.characteristic_scores_summary.length > 0 && (
+                      <div className="bg-white p-6 rounded-2xl border border-slate-200">
+                        <h4 className="text-lg font-bold text-slate-700 mb-4">คะแนนเฉลี่ยคุณลักษณะเฉพาะ (ทั้งโรงเรียน)</h4>
+                        <div className="space-y-3">
+                          {evaluationSummary.characteristic_scores_summary.map((item, index) => (
+                            <div key={index} className="flex items-center justify-between p-4 bg-slate-50 rounded-xl">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 bg-emerald-500 text-white rounded-lg flex items-center justify-center text-sm font-bold">
+                                  {index + 1}
+                                </div>
+                                <div>
+                                  <p className="font-semibold text-slate-700">{item.topic_name}</p>
+                                  <p className="text-sm text-slate-500">{item.count} การประเมิน</p>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-2xl font-black text-emerald-600">{item.average_score.toFixed(1)}</div>
+                                <div className="w-24 bg-slate-200 rounded-full h-2 mt-1">
+                                  <div className="bg-emerald-500 h-2 rounded-full" style={{width: `${(item.average_score / 4) * 100}%`}}></div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Subject-wise Summaries */}
+                    {evaluationSummary.subject_summaries && evaluationSummary.subject_summaries.length > 0 && (
+                      <div className="bg-white p-6 rounded-2xl border border-slate-200">
+                        <h4 className="text-lg font-bold text-slate-700 mb-4">สรุปผลการประเมินแยกตามรายวิชา</h4>
+                        <div className="space-y-6">
+                          {evaluationSummary.subject_summaries.map((subject, subjectIndex) => (
+                            <div key={subject.subject_id} className="border border-slate-100 rounded-xl p-6 bg-gradient-to-r from-slate-50/50 to-white">
+                              <div className="flex items-center gap-3 mb-4">
+                                <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-xl flex items-center justify-center text-lg font-bold">
+                                  📚
+                                </div>
+                                <div>
+                                  <h5 className="text-xl font-bold text-slate-800">{subject.subject_name}</h5>
+                                  <p className="text-sm text-slate-600">
+                                    {subject.total_evaluations} การประเมิน • {subject.total_students_evaluated} นักเรียน
+                                  </p>
+                                </div>
+                              </div>
+
+                              {/* Subject Statistics */}
+                              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                                <div className="text-center p-3 bg-blue-50 rounded-lg">
+                                  <div className="text-lg font-black text-blue-600">{subject.average_reading_score.toFixed(1)}</div>
+                                  <div className="text-xs font-medium text-blue-700">การอ่าน</div>
+                                </div>
+                                <div className="text-center p-3 bg-emerald-50 rounded-lg">
+                                  <div className="text-lg font-black text-emerald-600">{subject.average_writing_score.toFixed(1)}</div>
+                                  <div className="text-xs font-medium text-emerald-700">การเขียน</div>
+                                </div>
+                                <div className="text-center p-3 bg-purple-50 rounded-lg">
+                                  <div className="text-lg font-black text-purple-600">{subject.average_analysis_score.toFixed(1)}</div>
+                                  <div className="text-xs font-medium text-purple-700">การวิเคราะห์</div>
+                                </div>
+                                <div className="text-center p-3 bg-orange-50 rounded-lg">
+                                  <div className="text-lg font-black text-orange-600">
+                                    {((subject.average_reading_score + subject.average_writing_score + subject.average_analysis_score) / 3).toFixed(1)}
+                                  </div>
+                                  <div className="text-xs font-medium text-orange-700">เฉลี่ยรวม</div>
+                                </div>
+                              </div>
+
+                              {/* Subject Characteristic Scores */}
+                              {subject.characteristic_scores_summary && subject.characteristic_scores_summary.length > 0 && (
+                                <div>
+                                  <h6 className="text-sm font-semibold text-slate-700 mb-3">คะแนนเฉลี่ยคุณลักษณะเฉพาะ</h6>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    {subject.characteristic_scores_summary.map((item, index) => (
+                                      <div key={index} className="flex items-center justify-between p-3 bg-white border border-slate-100 rounded-lg">
+                                        <div className="flex items-center gap-2">
+                                          <div className="w-6 h-6 bg-emerald-500 text-white rounded-md flex items-center justify-center text-xs font-bold">
+                                            {index + 1}
+                                          </div>
+                                          <div>
+                                            <p className="text-sm font-semibold text-slate-700">{item.topic_name}</p>
+                                            <p className="text-xs text-slate-500">{item.count} การประเมิน</p>
+                                          </div>
+                                        </div>
+                                        <div className="text-right">
+                                          <div className="text-lg font-bold text-emerald-600">{item.average_score.toFixed(1)}</div>
+                                          <div className="w-16 bg-slate-200 rounded-full h-1.5 mt-1">
+                                            <div className="bg-emerald-500 h-1.5 rounded-full" style={{width: `${(item.average_score / 4) * 100}%`}}></div>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-center py-16 bg-white border-2 border-dashed border-slate-100 rounded-3xl">
+                     <div className="text-5xl mb-4 grayscale opacity-30">📊</div>
+                     <p className="text-slate-400 font-bold">ไม่มีข้อมูลสรุปการประเมิน</p>
+                     <p className="text-slate-300 text-sm">ข้อมูลจะแสดงเมื่อมีครูทำการประเมินนักเรียนแล้ว</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         )}
         {activeTab === 'announcements' && (
           <div className="bg-white/80 backdrop-blur-xl rounded-3xl border border-white/60 shadow-xl shadow-slate-200/50 overflow-hidden">
@@ -4994,6 +5631,17 @@ function AdminPage() {
         loadAdminSchedules();
         setEditingAssignment(null);
       }}
+    />
+
+    {/* Student Detail Modal */}
+    <StudentDetailModal
+      isOpen={showStudentDetailModal}
+      onClose={() => setShowStudentDetailModal(false)}
+      selectedStudentDetail={selectedStudentDetail}
+      calculateMainSubjectsScore={calculateMainSubjectsScore}
+      calculateGPA={calculateGPA}
+      getLetterGrade={getLetterGrade}
+      initials={getInitials}
     />
     </>
   );

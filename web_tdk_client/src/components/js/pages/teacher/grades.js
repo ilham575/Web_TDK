@@ -191,8 +191,8 @@ function GradesPage(){
           const name = data.name || data.title || data.subject_name || '';
           if (name) setSubjectName(name);
           if (data.subject_type) setSubjectType(data.subject_type);
-          setMaxCollectedScore(data.max_collected_score || 100);
-          setMaxExamScore(data.max_exam_score || 100);
+          setMaxCollectedScore((data.max_collected_score !== undefined && data.max_collected_score !== null) ? data.max_collected_score : 100);
+          setMaxExamScore((data.max_exam_score !== undefined && data.max_exam_score !== null) ? data.max_exam_score : 100);
         } else {
           if (students && students.length > 0) {
             const s = students[0];

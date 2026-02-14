@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { toast } from 'react-toastify';
 import { API_BASE_URL } from '../endpoints';
-import { X, BookOpen, Clock, Users, Hash, Info, Check } from 'lucide-react';
+import { X, BookOpen, Clock, Users, Hash, Info, Check, Target } from 'lucide-react';
 
 function SubjectManagementModal({ isOpen, onClose, onSave, subject, teachers, classrooms, currentSchoolId }) {
   const [formData, setFormData] = useState({
@@ -12,7 +12,9 @@ function SubjectManagementModal({ isOpen, onClose, onSave, subject, teachers, cl
     teacher_id: '',
     selected_classrooms: [],
     credits: '',
-    activity_percentage: ''
+    activity_percentage: '',
+    max_collected_score: '100',
+    max_exam_score: '100'
   });
   
   const [saving, setSaving] = useState(false);
@@ -47,7 +49,9 @@ function SubjectManagementModal({ isOpen, onClose, onSave, subject, teachers, cl
           teacher_id: subject.teacher_id || '',
           selected_classrooms: [],
           credits: subject.credits != null ? String(subject.credits) : '',
-          activity_percentage: subject.activity_percentage != null ? String(subject.activity_percentage) : ''
+          activity_percentage: subject.activity_percentage != null ? String(subject.activity_percentage) : '',
+          max_collected_score: subject.max_collected_score != null ? String(subject.max_collected_score) : '100',
+          max_exam_score: subject.max_exam_score != null ? String(subject.max_exam_score) : '100'
         });
         // Fetch current classrooms for this subject
         fetchSubjectClassrooms(subject.id);
@@ -60,7 +64,9 @@ function SubjectManagementModal({ isOpen, onClose, onSave, subject, teachers, cl
           teacher_id: '',
           selected_classrooms: [],
           credits: '',
-          activity_percentage: ''
+          activity_percentage: '',
+          max_collected_score: '100',
+          max_exam_score: '100'
         });
         setSelectedClassroomsForUI(new Set());
       }
@@ -150,7 +156,9 @@ function SubjectManagementModal({ isOpen, onClose, onSave, subject, teachers, cl
         subject_type: formData.subject_type,
         teacher_id: formData.teacher_id || null,
         credits: formData.credits === '' ? null : Number(formData.credits),
-        activity_percentage: formData.activity_percentage === '' ? null : Number(formData.activity_percentage)
+        activity_percentage: formData.activity_percentage === '' ? null : Number(formData.activity_percentage),
+        max_collected_score: formData.max_collected_score === '' ? 100 : Number(formData.max_collected_score),
+        max_exam_score: formData.max_exam_score === '' ? 100 : Number(formData.max_exam_score)
       };
 
       if (subject) {
@@ -319,20 +327,58 @@ function SubjectManagementModal({ isOpen, onClose, onSave, subject, teachers, cl
 
             {/* Credits or Activity Percentage */}
             {formData.subject_type === 'main' ? (
-              <div className="space-y-2 animate-in slide-in-from-top-2 duration-200">
-                <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                  <Hash className="w-4 h-4 text-emerald-500" />
-                  หน่วยกิต (Credits)
-                </label>
-                <input
-                  type="text"
-                  name="credits"
-                  value={formData.credits}
-                  onChange={handleNumberChange}
-                  placeholder="เช่น 3"
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all outline-none text-slate-800"
-                />
-              </div>
+              <>
+                <div className="space-y-2 animate-in slide-in-from-top-2 duration-200">
+                  <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                    <Hash className="w-4 h-4 text-emerald-500" />
+                    หน่วยกิต (Credits)
+                  </label>
+                  <input
+                    type="text"
+                    name="credits"
+                    value={formData.credits}
+                    onChange={handleNumberChange}
+                    placeholder="เช่น 3"
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all outline-none text-slate-800"
+                  />
+                </div>
+
+                <div className="pt-4 border-t border-slate-100 animate-in fade-in duration-500">
+                  <h3 className="text-sm font-bold text-slate-400 flex items-center gap-2 mb-4 uppercase tracking-wider">
+                    <Target className="w-4 h-4" /> การตั้งค่าคะแนนเต็ม
+                  </h3>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">
+                        คะแนนเต็ม (คะแนนเก็บ)
+                      </label>
+                      <input
+                        type="text"
+                        name="max_collected_score"
+                        value={formData.max_collected_score}
+                        onChange={handleNumberChange}
+                        placeholder="เช่น 60"
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all outline-none text-slate-800 font-bold"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">
+                        คะแนนเต็ม (คะแนนสอบ)
+                      </label>
+                      <input
+                        type="text"
+                        name="max_exam_score"
+                        value={formData.max_exam_score}
+                        onChange={handleNumberChange}
+                        placeholder="เช่น 40"
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all outline-none text-slate-800 font-bold"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </>
             ) : (
               <div className="space-y-2 animate-in slide-in-from-top-2 duration-200">
                 <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">

@@ -17,7 +17,8 @@ import {
   XCircle,
   FileText,
   Mail,
-  MoreHorizontal
+  MoreHorizontal,
+  Brain
 } from 'lucide-react';
 
 import Loading from '../../Loading';
@@ -32,6 +33,7 @@ function AdminSubjectDetails() {
   const [attendanceRecords, setAttendanceRecords] = useState([]);
   const [grades, setGrades] = useState([]);
   const [assignments, setAssignments] = useState([]);
+  const [evaluations, setEvaluations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState(null);
   const [activeTab, setActiveTab] = useState('attendance');
@@ -83,24 +85,27 @@ function AdminSubjectDetails() {
         }
         setSubject(subj);
 
-        const [studentsRes, attendanceRes, gradesRes, assignmentsRes] = await Promise.all([
+        const [studentsRes, attendanceRes, gradesRes, assignmentsRes, evaluationsRes] = await Promise.all([
           fetch(`${API_BASE_URL}/subjects/${subjectId}/students`, { headers }),
           fetch(`${API_BASE_URL}/attendance/?subject_id=${subjectId}`, { headers }),
           fetch(`${API_BASE_URL}/grades/?subject_id=${subjectId}`, { headers }),
-          fetch(`${API_BASE_URL}/grades/assignments/${subjectId}`, { headers })
+          fetch(`${API_BASE_URL}/grades/assignments/${subjectId}`, { headers }),
+          fetch(`${API_BASE_URL}/evaluations/subject/${subjectId}`, { headers })
         ]);
 
-        const [studs, att, grds, ass] = await Promise.all([
+        const [studs, att, grds, ass, evals] = await Promise.all([
           studentsRes.json(),
           attendanceRes.json(),
           gradesRes.json(),
-          assignmentsRes.json()
+          assignmentsRes.json(),
+          evaluationsRes.json()
         ]);
 
         setStudents(Array.isArray(studs) ? studs : []);
         setAttendanceRecords(Array.isArray(att) ? att : []);
         setGrades(Array.isArray(grds) ? grds : []);
         setAssignments(Array.isArray(ass) ? ass : []);
+        setEvaluations(Array.isArray(evals) ? evals : []);
 
       } catch (err) {
         console.error('fetch data error', err);
@@ -490,7 +495,8 @@ function AdminSubjectDetails() {
             <div className="flex gap-2">
               {[
                 { id: 'attendance', label: 'บันทึกการเข้าเรียน', icon: Calendar },
-                { id: 'grades', label: 'บันทึกคะแนน/เกรด', icon: BadgeCheck }
+                { id: 'grades', label: 'บันทึกคะแนน/เกรด', icon: BadgeCheck },
+                { id: 'evaluations', label: 'การประเมินการอ่าน/เขียน/คิด', icon: Brain }
               ].map(tab => (
                 <button
                   key={tab.id}
@@ -663,6 +669,66 @@ function AdminSubjectDetails() {
                             </td>
                           </tr>
                         ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'evaluations' && (
+              <div>
+                {students.length === 0 ? (
+                  <div className="py-20 flex flex-col items-center justify-center gap-4 text-slate-300">
+                    <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center">
+                      <Brain className="w-10 h-10" />
+                    </div>
+                    <p className="text-lg font-black tracking-tight text-slate-400 text-center">ยังไม่มีข้อมูลการประเมิน</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto rounded-[2rem] border border-slate-100">
+                    <table className="w-full text-left">
+                      <thead>
+                        <tr className="bg-slate-50/50">
+                          <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest z-10 border-r border-slate-100 min-w-[200px]">รายชื่อนักเรียน</th>
+                          <th className="px-6 py-5 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest">การอ่าน</th>
+                          <th className="px-6 py-5 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest">การเขียน</th>
+                          <th className="px-6 py-5 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest">คิดวิเคราะห์</th>
+                          <th className="px-6 py-5 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest">วันที่ประเมิน</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50">
+                        {students.map(student => {
+                          const evaluation = evaluations.find(e => e.student_id === student.id);
+                          const getResultBadge = (result) => {
+                            switch(result) {
+                              case 'excellent': return <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full font-bold text-xs">ดีเยี่ยม</span>;
+                              case 'good': return <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full font-bold text-xs">ดี</span>;
+                              case 'pass': return <span className="px-3 py-1 bg-amber-100 text-amber-700 rounded-full font-bold text-xs">ผ่าน</span>;
+                              case 'fail': return <span className="px-3 py-1 bg-rose-100 text-rose-700 rounded-full font-bold text-xs">ไม่ผ่าน</span>;
+                              default: return <span className="text-slate-300">-</span>;
+                            }
+                          };
+                          return (
+                            <tr key={student.id} className="hover:bg-slate-50/30 transition-colors group">
+                              <td className="px-6 py-5 text-sm font-bold text-slate-700 border-r border-slate-100">
+                                {student.full_name || student.username}
+                              </td>
+                              <td className="px-6 py-5 text-center">
+                                {evaluation ? getResultBadge(evaluation.reading) : <span className="text-slate-200">-</span>}
+                              </td>
+                              <td className="px-6 py-5 text-center">
+                                {evaluation ? getResultBadge(evaluation.writing) : <span className="text-slate-200">-</span>}
+                              </td>
+                              <td className="px-6 py-5 text-center">
+                                {evaluation ? getResultBadge(evaluation.analysis) : <span className="text-slate-200">-</span>}
+                              </td>
+                              <td className="px-6 py-5 text-center text-xs text-slate-400">
+                                {evaluation ? new Date(evaluation.created_at).toLocaleDateString('th-TH') : '-'}
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>

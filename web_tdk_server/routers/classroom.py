@@ -7,6 +7,7 @@ from database.connection import get_db
 from models.classroom import Classroom, ClassroomStudent
 from models.user import User
 from models.grade import Grade
+from models.schedule import SubjectSchedule as SubjectScheduleModel
 from schemas.classroom import (
     ClassroomCreate,
     ClassroomUpdate,
@@ -704,6 +705,57 @@ async def get_grades_from_previous_term(
             for g in grades
         ]
     }
+
+
+@router.get("/teacher-classrooms", response_model=List[ClassroomResponse])
+async def get_teacher_classrooms(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """ดึงชั้นเรียนที่ครูคนนี้สอน (จาก subject schedules)"""
+    if current_user.role not in ["teacher", "admin"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    # ดึง classroom IDs ที่ teacher สอน
+    classroom_ids = db.query(SubjectScheduleModel.classroom_id).filter(
+        SubjectScheduleModel.teacher_id == current_user.id,
+        SubjectScheduleModel.classroom_id.isnot(None)  # ไม่รวม global assignments
+    ).distinct().all()
+    
+    classroom_ids = [cid[0] for cid in classroom_ids]
+    
+    if not classroom_ids:
+        return []
+    
+    # ดึง classroom details
+    classrooms = db.query(Classroom).filter(
+        Classroom.id.in_(classroom_ids),
+        Classroom.is_active == True
+    ).all()
+    
+    results = []
+    for classroom in classrooms:
+        student_count = db.query(ClassroomStudent).filter(
+            ClassroomStudent.classroom_id == classroom.id,
+            ClassroomStudent.is_active == True
+        ).count()
+        
+        results.append(ClassroomResponse(
+            id=classroom.id,
+            name=classroom.name,
+            grade_level=classroom.grade_level,
+            room_number=classroom.room_number,
+            semester=classroom.semester,
+            academic_year=classroom.academic_year,
+            school_id=classroom.school_id,
+            is_active=classroom.is_active,
+            parent_classroom_id=classroom.parent_classroom_id,
+            student_count=student_count,
+            created_at=classroom.created_at,
+            updated_at=classroom.updated_at
+        ))
+    
+    return results
 
 
 @router.get("/my-classrooms", response_model=List[ClassroomResponse])

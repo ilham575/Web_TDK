@@ -5,12 +5,16 @@ from sqlalchemy import inspect
 from dotenv import load_dotenv
 import os
 
-load_dotenv()  # Load environment variables from .env file
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env'))  # Load environment variables from .env file
 
 # Database configuration
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 # Create SQLAlchemy engine
+# Use a placeholder if DATABASE_URL is not set (e.g., during some build/discovery phases)
+if not DATABASE_URL:
+    DATABASE_URL = "sqlite:///./temp_discovery.db"
+
 engine = create_engine(
     DATABASE_URL,
     echo=False,  # Set to False in production
@@ -38,5 +42,5 @@ def table_exists(table_name):
 
 def create_all_tables():
     # Import models to register them with Base
-    from models import user, school, announcement, document, subject, subject_student, attendance, grade, schedule, admin_request
+    from models import user, school, announcement, document, subject, subject_student, attendance, grade, schedule, admin_request, evaluation
     Base.metadata.create_all(bind=engine)

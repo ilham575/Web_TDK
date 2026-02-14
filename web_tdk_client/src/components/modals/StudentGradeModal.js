@@ -121,10 +121,10 @@ function StudentGradeModal({ isOpen, student, onClose, calculateMainSubjectsScor
                     const systemExam = examList.find(a => a.title === "คะแนนสอบรวม");
 
                     const finalCollectedScore = systemCollected ? systemCollected.score : collectedList.reduce((sum, a) => sum + a.score, 0);
-                    const finalCollectedMax = systemCollected ? systemCollected.max_score : (subject.max_collected_score || collectedList.reduce((sum, a) => sum + a.max_score, 0));
+                    const finalCollectedMax = systemCollected ? systemCollected.max_score : ((subject.max_collected_score !== undefined && subject.max_collected_score !== null) ? subject.max_collected_score : collectedList.reduce((sum, a) => sum + a.max_score, 0));
 
                     const finalExamScore = systemExam ? systemExam.score : examList.reduce((sum, a) => sum + a.score, 0);
-                    const finalExamMax = systemExam ? systemExam.max_score : (subject.max_exam_score || examList.reduce((sum, a) => sum + a.max_score, 0));
+                    const finalExamMax = systemExam ? systemExam.max_score : ((subject.max_exam_score !== undefined && subject.max_exam_score !== null) ? subject.max_exam_score : examList.reduce((sum, a) => sum + a.max_score, 0));
 
                     // Filter out system titles from details list
                     const filteredAssignments = rawAssignments.filter(a => 

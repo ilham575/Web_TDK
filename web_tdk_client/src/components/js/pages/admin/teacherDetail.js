@@ -229,7 +229,7 @@ function TeacherDetail() {
                 </div>
                 <div className="space-y-1">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-center md:text-left">สถานะสมาชิก</p>
-                  <p className="text-2xl font-black text-emerald-600 flex items-center gap-2">Active <div className="w-3 h-3 bg-emerald-500 rounded-full animate-pulse"></div></p>
+                  <div className="text-2xl font-black text-emerald-600 flex items-center gap-2">Active <div className="w-3 h-3 bg-emerald-500 rounded-full animate-pulse"></div></div>
                 </div>
               </div>
             </div>

@@ -20,6 +20,8 @@ from models.absence import Absence as AbsenceModel
 from models.homeroom import HomeroomTeacher as HomeroomTeacherModel
 from models.school_deletion_request import SchoolDeletionRequest as SchoolDeletionRequestModel
 from models.password_reset_request import PasswordResetRequest as PasswordResetRequestModel
+from models.token_setting import TokenExpireSetting as TokenExpireSettingModel
+from schemas.token_setting import TokenExpireSettingCreate, TokenExpireSettingResponse, TokenExpireSettingsResponse, TokenExpireSettingsUpdate
 from utils.security import hash_password
 from database.connection import get_db
 from routers.user import get_current_user
@@ -512,3 +514,79 @@ def reject_school_deletion_request(
     db.commit()
 
     return {"message": "School deletion request rejected"}
+
+
+# ===== Token Expiration Settings APIs =====
+
+@router.get("/schools/{school_id}/token-settings", response_model=TokenExpireSettingsResponse)
+def get_token_expire_settings(school_id: int, db: Session = Depends(get_db), current_user: UserModel = Depends(require_owner)):
+    """Get token expiration settings for a school"""
+    settings = db.query(TokenExpireSettingModel).filter(
+        TokenExpireSettingModel.school_id == school_id
+    ).all()
+    
+    # Build response with role-based settings. IMPORTANT: owner must come from code defaults only
+    from utils.security import DEFAULT_TOKEN_EXPIRE_MINUTES
+    response_data = {
+        'owner': DEFAULT_TOKEN_EXPIRE_MINUTES['owner'],
+        'admin': DEFAULT_TOKEN_EXPIRE_MINUTES['admin'],
+        'teacher': DEFAULT_TOKEN_EXPIRE_MINUTES['teacher'],
+        'student': DEFAULT_TOKEN_EXPIRE_MINUTES['student']
+    }
+    
+    # Override with actual settings if they exist — but DO NOT override owner (owner is code-controlled)
+    for setting in settings:
+        if setting.role == 'owner':
+            # For owner, use the DB value if it exists, otherwise keep the default
+            response_data[setting.role] = setting.expire_minutes
+        elif setting.role in response_data:
+            response_data[setting.role] = setting.expire_minutes
+    
+    return response_data
+
+
+@router.put("/schools/{school_id}/token-settings")
+def update_token_expire_settings(
+    school_id: int,
+    settings: TokenExpireSettingsUpdate,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(require_owner)
+):
+    """Update token expiration settings for a school.
+    NOTE: owner is managed in code and cannot be changed via this API — any owner value in the request is ignored.
+    """
+    # Only update these editable roles
+    editable_roles = ['admin', 'teacher', 'student']
+    from utils.security import DEFAULT_TOKEN_EXPIRE_MINUTES
+
+    for role in editable_roles:
+        expire_minutes = getattr(settings, role)
+        
+        # Find existing setting
+        existing = db.query(TokenExpireSettingModel).filter(
+            TokenExpireSettingModel.school_id == school_id,
+            TokenExpireSettingModel.role == role
+        ).first()
+        
+        if existing:
+            existing.expire_minutes = expire_minutes
+        else:
+            new_setting = TokenExpireSettingModel(
+                school_id=school_id,
+                role=role,
+                expire_minutes=expire_minutes
+            )
+            db.add(new_setting)
+    
+    db.commit()
+    
+    # Return the effective settings; owner comes from code defaults
+    return {
+        "message": "Token expiration settings updated successfully",
+        "settings": {
+            'owner': DEFAULT_TOKEN_EXPIRE_MINUTES['owner'],
+            'admin': settings.admin,
+            'teacher': settings.teacher,
+            'student': settings.student
+        }
+    }

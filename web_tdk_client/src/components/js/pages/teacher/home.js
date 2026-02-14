@@ -11,6 +11,7 @@ import ConfirmModal from '../../ConfirmModal';
 import StudentGradeModal from '../../../modals/StudentGradeModal';
 import StudentAttendanceModal from '../../../modals/StudentAttendanceModal';
 import ScheduleModal from '../../../modals/ScheduleModal';
+import StudentEvaluationModal from '../../../modals/StudentEvaluationModal';
 import { API_BASE_URL } from '../../../endpoints';
 import { setSchoolFavicon } from '../../../../utils/faviconUtils';
 import { logout } from '../../../../utils/authUtils';
@@ -32,7 +33,8 @@ import {
   Award,
   Users,
   Settings,
-  Trash2
+  Trash2,
+  Brain
 } from 'lucide-react';
 
 function TeacherPage() {
@@ -55,6 +57,11 @@ function TeacherPage() {
   const [expiryModalValue, setExpiryModalValue] = useState('');
   const [expiryModalId, setExpiryModalId] = useState(null);
   const [activeTab, setActiveTab] = useState('subjects');
+
+  // Evaluation state
+  const [showStudentEvaluationModal, setShowStudentEvaluationModal] = useState(false);
+  const [selectedSubjectForEvaluation, setSelectedSubjectForEvaluation] = useState(null);
+  const [studentsForEvaluation, setStudentsForEvaluation] = useState([]);
 
   // Schedule state
   const [scheduleSlots, setScheduleSlots] = useState([]);
@@ -171,6 +178,7 @@ function TeacherPage() {
         const teachersMap = {};
         for (const subject of mappedData) {
           try {
+            // Load teachers
             const teachersRes = await fetch(`${API_BASE_URL}/subjects/${subject.id}/teachers`, {
               headers: { Authorization: `Bearer ${token}` }
             });
@@ -238,6 +246,10 @@ function TeacherPage() {
     } catch { 
       toast.error('เกิดข้อผิดพลาด'); 
     }
+  };
+
+  const handleOpenEvaluationModal = async (subject) => {
+    navigate(`/teacher/evaluations/${subject.id}`);
   };
 
   const displaySchool = currentUser?.school_name || currentUser?.school?.name || localStorage.getItem('school_name') || '-';
@@ -498,8 +510,8 @@ function TeacherPage() {
       return t.includes('กลางภาค') || t.includes('ปลายภาค') || t.includes('final') || t.includes('midterm') || t.includes('คะแนนสอบ');
     };
 
-    const maxCollected = subject.max_collected_score || 100;
-    const maxExam = subject.max_exam_score || 100;
+    const maxCollected = (subject.max_collected_score !== undefined && subject.max_collected_score !== null) ? subject.max_collected_score : 100;
+    const maxExam = (subject.max_exam_score !== undefined && subject.max_exam_score !== null) ? subject.max_exam_score : 100;
 
     const collectedList = assignments.filter(a => !checkIsExam(a.title));
     const examList = assignments.filter(a => checkIsExam(a.title));
@@ -571,8 +583,8 @@ function TeacherPage() {
       return t.includes('กลางภาค') || t.includes('ปลายภาค') || t.includes('final') || t.includes('midterm') || t.includes('คะแนนสอบ');
     };
 
-    const maxCollected = subject.max_collected_score || 100;
-    const maxExam = subject.max_exam_score || 100;
+    const maxCollected = (subject.max_collected_score !== undefined && subject.max_collected_score !== null) ? subject.max_collected_score : 100;
+    const maxExam = (subject.max_exam_score !== undefined && subject.max_exam_score !== null) ? subject.max_exam_score : 100;
 
     const collectedList = assignments.filter(a => !checkIsExam(a.title));
     const examList = assignments.filter(a => checkIsExam(a.title));
@@ -807,6 +819,7 @@ function TeacherPage() {
 
   const tabs = [
     { id: 'subjects', label: 'รายวิชา', icon: BookOpen },
+    { id: 'evaluations', label: 'การประเมิน', icon: Brain },
     { id: 'homeroom', label: 'ประจำชั้น', icon: Home },
     { id: 'announcements', label: 'ประกาศข่าว', icon: Bell },
     { id: 'absences', label: 'อนุมัติการลา', icon: ClipboardList },
@@ -833,9 +846,9 @@ function TeacherPage() {
           {tabs.map(tab => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => tab.id === 'evaluations' ? navigate('/teacher/evaluations') : setActiveTab(tab.id)}
               className={`flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-sm transition-all active:scale-95 ${
-                activeTab === tab.id 
+                (activeTab === tab.id && tab.id !== 'evaluations')
                   ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200' 
                   : 'text-slate-500 hover:bg-slate-50 hover:text-emerald-600'
               }`}
@@ -913,7 +926,7 @@ function TeacherPage() {
                             </div>
                           )}
 
-                          <div className="grid grid-cols-2 gap-2">
+                          <div className="grid grid-cols-3 gap-2">
                             {isAllEnded ? (
                               <button 
                                 onClick={() => handleUnendSubject(sub.id)}
@@ -934,6 +947,12 @@ function TeacherPage() {
                                   className="py-2.5 bg-white text-emerald-600 border border-emerald-100 rounded-xl text-xs font-black hover:bg-emerald-50 transition-all flex items-center justify-center gap-2"
                                 >
                                   <Award className="w-3.5 h-3.5" /> ให้คะแนน
+                                </button>
+                                <button 
+                                  onClick={() => handleOpenEvaluationModal(sub)}
+                                  className="py-2.5 bg-blue-600 text-white rounded-xl text-xs font-black hover:bg-blue-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-100"
+                                >
+                                  <Brain className="w-3.5 h-3.5" /> ประเมินนักเรียน
                                 </button>
                                 <button 
                                   onClick={() => openConfirm('จบคอร์ส', 'ต้องการจบคอร์สนี้ใช่หรือไม่? ข้อมูลจะถูกล็อคหลังดำเนินการ', () => handleEndSubject(sub.id))}
@@ -1566,6 +1585,14 @@ function TeacherPage() {
         onConfirm={confirmState.onConfirm}
         onCancel={() => setConfirmState(prev => ({ ...prev, isOpen: false }))}
         variant={confirmState.variant}
+      />
+
+      <StudentEvaluationModal
+        isOpen={showStudentEvaluationModal}
+        subject={selectedSubjectForEvaluation}
+        students={studentsForEvaluation}
+        onClose={() => setShowStudentEvaluationModal(false)}
+        teacherId={currentUser?.id}
       />
     </div>
   );
