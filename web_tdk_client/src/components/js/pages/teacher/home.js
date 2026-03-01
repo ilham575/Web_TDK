@@ -1,10 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ScheduleGrid from '../../ScheduleGrid';
 import AbsenceApproval from '../admin/AbsenceApproval';
 import PageHeader, { getInitials } from '../../PageHeader';
-import { ToastContainer, toast } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
+import { toast } from 'react-toastify';
 import ExpiryModal from '../../ExpiryModal';
 import AnnouncementModal from '../../AnnouncementModal';
 import ConfirmModal from '../../ConfirmModal';
@@ -49,6 +48,8 @@ function TeacherPage() {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [expiry, setExpiry] = useState('');
+  const [announcementPdfFile, setAnnouncementPdfFile] = useState(null);
+  const announcementPdfInputRef = useRef(null);
   const [announcements, setAnnouncements] = useState([]);
   const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
   const [modalAnnouncement, setModalAnnouncement] = useState(null);
@@ -336,6 +337,24 @@ function TeacherPage() {
     setTimeout(() => navigate('/signin'), 1000);
   };
 
+  const uploadAnnouncementPdf = async (announcementId, pdfFile) => {
+    if (!pdfFile || !announcementId) return null;
+    const token = localStorage.getItem('token');
+    const formData = new FormData();
+    formData.append('file', pdfFile);
+    try {
+      const res = await fetch(`${API_BASE_URL}/announcements/${announcementId}/upload-pdf`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData
+      });
+      if (res.ok) return await res.json();
+      const err = await res.json();
+      toast.error(err.detail || 'อัปโหลด PDF ไม่สำเร็จ');
+    } catch { toast.error('เกิดข้อผิดพลาดในการอัปโหลด PDF'); }
+    return null;
+  };
+
   const handleAnnouncement = async (e) => {
     e.preventDefault();
     const token = localStorage.getItem('token');
@@ -353,12 +372,17 @@ function TeacherPage() {
         body: JSON.stringify(body)
       });
       const data = await res.json();
-      if (!res.ok) toast.error(data.detail || 'ประกาศข่าวไม่สำเร็จ');
-      else { 
-        toast.success('ประกาศข่าวสำเร็จ!'); 
-        setTitle(''); setContent(''); setExpiry(''); 
-        if (data && data.id) setAnnouncements(prev => [data, ...prev]); 
+      if (!res.ok) { toast.error(data.detail || 'ประกาศข่าวไม่สำเร็จ'); return; }
+      toast.success('ประกาศข่าวสำเร็จ!');
+      setTitle(''); setContent(''); setExpiry('');
+      let finalAnnouncement = data;
+      if (announcementPdfFile && data.id) {
+        const updated = await uploadAnnouncementPdf(data.id, announcementPdfFile);
+        if (updated) { finalAnnouncement = updated; toast.success('อัปโหลด PDF สำเร็จ!'); }
+        setAnnouncementPdfFile(null);
+        if (announcementPdfInputRef.current) announcementPdfInputRef.current.value = '';
       }
+      if (finalAnnouncement?.id) setAnnouncements(prev => [finalAnnouncement, ...prev]);
     } catch { toast.error('เกิดข้อผิดพลาดในการประกาศข่าว'); }
   };
 
@@ -653,7 +677,7 @@ function TeacherPage() {
   const openAnnouncementModal = (item) => { setModalAnnouncement(item || null); setShowAnnouncementModal(true); };
   const closeAnnouncementModal = () => { setShowAnnouncementModal(false); setModalAnnouncement(null); };
 
-  const saveAnnouncementFromModal = async ({ title: t, content: c, expiry: ex }) => {
+  const saveAnnouncementFromModal = async ({ title: t, content: c, expiry: ex, pdfFile: pdf }) => {
     if (!modalAnnouncement?.id) return;
     const token = localStorage.getItem('token');
     try {
@@ -665,8 +689,13 @@ function TeacherPage() {
       });
       const data = await res.json();
       if (!res.ok) { toast.error(data.detail || 'แก้ไขไม่สำเร็จ'); return; }
+      let finalData = data;
+      if (pdf) {
+        const updated = await uploadAnnouncementPdf(modalAnnouncement.id, pdf);
+        if (updated) { finalData = updated; toast.success('อัปโหลด PDF สำเร็จ!'); }
+      }
       toast.success('แก้ไขข่าวสำเร็จ!');
-      setAnnouncements(prev => prev.map(a => (a.id === data.id ? data : a)));
+      setAnnouncements(prev => prev.map(a => (a.id === finalData.id ? finalData : a)));
       closeAnnouncementModal();
     } catch { toast.error('เกิดข้อผิดพลาด'); }
   };
@@ -828,7 +857,6 @@ function TeacherPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 pb-20">
-      <ToastContainer />
       <div className="max-w-7xl mx-auto px-4 py-8">
         <PageHeader 
           currentUser={currentUser}
@@ -1107,18 +1135,8 @@ function TeacherPage() {
                                 <thead>
                                   <tr className="bg-slate-50/50 text-slate-400 text-[10px] font-black uppercase tracking-widest border-b border-slate-100">
                                     {homeroomSubTab === 'grades' && <th className="px-6 py-4 text-center">ลำดับ</th>}
+                                    <th className="px-6 py-4 text-center">เลขที่</th>
                                     <th className="px-6 py-4">ข้อมูลนักเรียน</th>
-                                    {homeroomSubTab === 'grades' ? (
-                                      <>
-                                        <th className="px-6 py-4 text-center bg-blue-50/30">
-                                          คะแนนเก็บ
-                                        </th>
-                                        <th className="px-6 py-4 text-center bg-amber-50/30">
-                                          คะแนนสอบ
-                                        </th>
-                                        <th className="px-6 py-4 text-center bg-slate-50">รวม / เกรด</th>
-                                      </>
-                                    ) : <th className="px-6 py-4">อัตราการมาเรียน</th>}
                                     <th className="px-6 py-4 text-center">จัดการ</th>
                                   </tr>
                                 </thead>
@@ -1138,8 +1156,6 @@ function TeacherPage() {
                                     });
 
                                     return studentsWithScores.map(student => {
-                                      const score = student.recalculatedScore;
-                                      const grade = getLetterGrade(score.percentage);
                                       const rank = student.localRank;
                                       
                                       return (
@@ -1156,6 +1172,11 @@ function TeacherPage() {
                                               </div>
                                             </td>
                                           )}
+                                          <td className="px-6 py-4 text-center">
+                                            <span className="text-sm font-black text-slate-600">
+                                              {student.student_number || '-'}
+                                            </span>
+                                          </td>
                                           <td className="px-6 py-4">
                                             <div className="flex items-center gap-3">
                                               <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-xs font-black text-slate-400 group-hover:bg-emerald-600 group-hover:text-white transition-all duration-300">
@@ -1167,50 +1188,6 @@ function TeacherPage() {
                                               </div>
                                             </div>
                                           </td>
-                                          {homeroomSubTab === 'grades' ? (
-                                            score.totalMaxScore > 0 ? (
-                                              <>
-                                                <td className="px-6 py-4 text-center bg-blue-50/10">
-                                                  <div className="flex flex-col items-center gap-1">
-                                                    <span className="text-sm font-black text-blue-700">{score.collectedScore.toFixed(0)}</span>
-                                                    <span className="text-[9px] text-blue-400 font-bold">/{score.collectedMaxScore}</span>
-                                                  </div>
-                                                </td>
-                                                <td className="px-6 py-4 text-center bg-amber-50/10">
-                                                  <div className="flex flex-col items-center gap-1">
-                                                    <span className="text-sm font-black text-amber-700">{score.examScore.toFixed(0)}</span>
-                                                    <span className="text-[9px] text-amber-400 font-bold">/{score.examMaxScore}</span>
-                                                  </div>
-                                                </td>
-                                                <td className="px-6 py-4 text-center bg-slate-50/50">
-                                                  <div className="flex items-center justify-center gap-2">
-                                                    <span className="text-xs font-black text-slate-800">{score.totalScore.toFixed(0)}/{score.totalMaxScore}</span>
-                                                    <span className={`w-8 h-8 flex items-center justify-center rounded-lg text-[10px] font-black border uppercase ${grade.bg} ${grade.color} border-current`}>
-                                                      {grade.grade}
-                                                    </span>
-                                                  </div>
-                                                </td>
-                                              </>
-                                            ) : (
-                                              <>
-                                                <td className="px-6 py-4 text-center" colSpan="3">
-                                                  <span className="text-[10px] font-bold text-slate-300 italic uppercase">No graded subjects</span>
-                                                </td>
-                                              </>
-                                            )
-                                          ) : (
-                                            <td className="px-6 py-4">
-                                              <div className="flex items-center gap-3">
-                                                <div className="flex-1 max-w-[100px] h-2 bg-slate-100 rounded-full overflow-hidden">
-                                                  <div 
-                                                    className={`h-full rounded-full ${student.attendance?.attendance_rate >= 80 ? 'bg-emerald-500' : 'bg-amber-500'}`} 
-                                                    style={{ width: `${student.attendance?.attendance_rate || 0}%` }}
-                                                  />
-                                                </div>
-                                                <span className="text-xs font-black text-slate-700">{(student.attendance?.attendance_rate || 0).toFixed(0)}%</span>
-                                              </div>
-                                            </td>
-                                          )}
                                           <td className="px-6 py-4 text-center">
                                             <button 
                                               onClick={() => viewStudentDetail(student, homeroomSubTab)}
@@ -1252,8 +1229,13 @@ function TeacherPage() {
                                             <div key={student.id} className="p-4 flex flex-col gap-4">
                                                 <div className="flex items-center justify-between">
                                                     <div className="flex items-center gap-3">
-                                                        <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-sm font-black text-slate-400">
+                                                        <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-sm font-black text-slate-400 relative">
                                                           {getInitials(student.full_name, 'S')}
+                                                          {student.student_number && (
+                                                            <div className="absolute -top-1 -right-1 w-6 h-6 bg-emerald-600 text-white text-[10px] rounded-lg flex items-center justify-center border-2 border-white shadow-sm">
+                                                              {student.student_number}
+                                                            </div>
+                                                          )}
                                                         </div>
                                                         <div>
                                                           <div className="text-sm font-black text-slate-800">{student.full_name}</div>
@@ -1273,53 +1255,6 @@ function TeacherPage() {
                                                 </div>
 
                                                 <div className="pl-[3.75rem]">
-                                                    {homeroomSubTab === 'grades' ? (
-                                                        score.totalMaxScore > 0 ? (
-                                                          <div className="space-y-2 mb-2">
-                                                            <div className="flex items-center justify-between gap-2 p-2 bg-blue-50/30 rounded-lg">
-                                                              <span className="text-[10px] font-bold text-slate-600 uppercase">คะแนนเก็บ:</span>
-                                                              <div className="flex flex-col items-end">
-                                                                <span className="text-sm font-black text-blue-700">{score.collectedScore.toFixed(0)}</span>
-                                                                <span className="text-[9px] text-blue-400 font-bold">/{score.collectedMaxScore}</span>
-                                                              </div>
-                                                            </div>
-                                                            <div className="flex items-center justify-between gap-2 p-2 bg-amber-50/30 rounded-lg">
-                                                              <span className="text-[10px] font-bold text-slate-600 uppercase">คะแนนสอบ:</span>
-                                                              <div className="flex flex-col items-end">
-                                                                <span className="text-sm font-black text-amber-700">{score.examScore.toFixed(0)}</span>
-                                                                <span className="text-[9px] text-amber-400 font-bold">/{score.examMaxScore}</span>
-                                                              </div>
-                                                            </div>
-                                                            <div className="flex items-center justify-between gap-2 pt-2 border-t-2 border-slate-200">
-                                                              <span className="text-xs font-bold text-slate-700 uppercase">รวม:</span>
-                                                              <div className="flex items-center gap-2">
-                                                                <span className="text-base font-black text-slate-800">{score.totalScore.toFixed(0)}/{score.totalMaxScore}</span>
-                                                                <span className={`px-2 py-1 rounded text-xs font-black uppercase ${grade.bg} ${grade.color}`}>
-                                                                  {grade.grade}
-                                                                </span>
-                                                              </div>
-                                                            </div>
-                                                            <div className="text-[9px] font-bold text-slate-400 text-center pt-1 mt-2 border-t border-slate-100">
-                                                              ลำดับที่ {rank} / {studentsWithScores.length} ({score.percentage.toFixed(1)}%)
-                                                            </div>
-                                                          </div>
-                                                        ) : (
-                                                          <div className="mb-2">
-                                                              <span className="text-[10px] font-bold text-slate-300 italic uppercase">No graded subjects</span>
-                                                          </div>
-                                                        )
-                                                      ) : (
-                                                        <div className="flex items-center gap-3 mb-2">
-                                                          <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
-                                                            <div 
-                                                              className={`h-full rounded-full ${student.attendance?.attendance_rate >= 80 ? 'bg-emerald-500' : 'bg-amber-500'}`} 
-                                                              style={{ width: `${student.attendance?.attendance_rate || 0}%` }}
-                                                            />
-                                                          </div>
-                                                          <span className="text-xs font-black text-slate-700">{(student.attendance?.attendance_rate || 0).toFixed(0)}%</span>
-                                                        </div>
-                                                      )}
-
                                                   <button 
                                                     onClick={() => viewStudentDetail(student, homeroomSubTab)}
                                                     className="w-full py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-black hover:border-emerald-500 hover:text-emerald-700 transition-all hover:bg-emerald-50 flex items-center justify-center gap-2"
@@ -1384,6 +1319,43 @@ function TeacherPage() {
                           className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm font-bold transition-all outline-none"
                         />
                       </div>
+                      {/* PDF Attachment */}
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">แนบไฟล์ PDF (ถ้ามี)</label>
+                        <div
+                          className="border-2 border-dashed border-slate-200 rounded-2xl p-4 text-center cursor-pointer hover:border-emerald-400 hover:bg-slate-50 transition-all"
+                          onClick={() => announcementPdfInputRef.current && announcementPdfInputRef.current.click()}
+                        >
+                          <input
+                            ref={announcementPdfInputRef}
+                            type="file"
+                            accept="application/pdf"
+                            className="hidden"
+                            onChange={e => {
+                              const f = e.target.files[0];
+                              if (f && f.name.toLowerCase().endsWith('.pdf')) setAnnouncementPdfFile(f);
+                              else if (f) toast.error('รองรับเฉพาะไฟล์ PDF เท่านั้น');
+                            }}
+                          />
+                          {announcementPdfFile ? (
+                            <div className="flex items-center justify-center gap-2">
+                              <span className="text-red-500">📄</span>
+                              <span className="text-xs font-bold text-slate-700 truncate max-w-[140px]">{announcementPdfFile.name}</span>
+                              <button
+                                type="button"
+                                onClick={e => { e.stopPropagation(); setAnnouncementPdfFile(null); if (announcementPdfInputRef.current) announcementPdfInputRef.current.value = ''; }}
+                                className="text-slate-400 hover:text-rose-500 transition-colors text-sm leading-none"
+                              >✕</button>
+                            </div>
+                          ) : (
+                            <div className="flex flex-col items-center gap-0.5 text-slate-400">
+                              <span className="text-xl">📎</span>
+                              <p className="text-[10px] font-bold">คลิกเพื่อแนบ PDF</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
                       <button 
                         type="submit" 
                         className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-black text-sm shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-all active:scale-[0.98] flex items-center justify-center gap-2 mt-4"
@@ -1432,6 +1404,18 @@ function TeacherPage() {
                               <p className="text-slate-600 text-sm leading-relaxed whitespace-pre-wrap">
                                 {item.content}
                               </p>
+                              {item.pdf_file_path && (
+                                <a
+                                  href={`${API_BASE_URL}${item.pdf_file_path}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center gap-1.5 mt-3 px-3 py-1.5 bg-red-50 text-red-600 text-xs font-black rounded-xl hover:bg-red-100 transition-all"
+                                  onClick={e => e.stopPropagation()}
+                                >
+                                  <span>📄</span>
+                                  {item.pdf_file_name || 'ดาวน์โหลด PDF'}
+                                </a>
+                              )}
                             </div>
 
                             {ownedBy(item) && (
@@ -1527,6 +1511,7 @@ function TeacherPage() {
       <AnnouncementModal 
         isOpen={showAnnouncementModal} 
         initialData={modalAnnouncement} 
+        apiBaseUrl={API_BASE_URL}
         onClose={closeAnnouncementModal} 
         onSave={saveAnnouncementFromModal} 
       />

@@ -2,8 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import '../../../css/pages/admin/admin-home.css';
-import { ToastContainer, toast } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
+import { toast } from 'react-toastify';
 
 import Loading from '../../Loading';
 import PageHeader, { getInitials } from '../../PageHeader';
@@ -54,6 +53,8 @@ function AdminPage() {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [expiry, setExpiry] = useState('');
+  const [announcementPdfFile, setAnnouncementPdfFile] = useState(null);
+  const announcementPdfInputRef = React.useRef(null);
   const [uploading, setUploading] = useState(false);
   const [uploadFile, setUploadFile] = useState(null);
 
@@ -70,6 +71,44 @@ function AdminPage() {
   // Logo upload modal state
   const [showLogoUploadModal, setShowLogoUploadModal] = useState(false);
   const [schoolData, setSchoolData] = useState(null);
+  const [updatingSettings, setUpdatingSettings] = useState(false);
+
+  const updateSchoolSetting = async (field, value) => {
+    if (!currentUser || !currentUser.school_id) return;
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    // Optimistic update: อัปเดต UI ทันทีก่อน API ตอบกลับ
+    const newNumericValue = value ? 1 : 0;
+    const previousSchoolData = schoolData;
+    setSchoolData(prev => ({ ...prev, [field]: newNumericValue }));
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/schools/${currentUser.school_id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ [field]: newNumericValue })
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setSchoolData(prev => ({ ...prev, ...updated }));
+        toast.success('อัปเดตการตั้งค่าเรียบร้อย');
+      } else {
+        // Revert on error
+        setSchoolData(previousSchoolData);
+        const err = await res.json();
+        toast.error(err.detail || 'ไม่สามารถอัปเดตได้');
+      }
+    } catch (error) {
+      // Revert on network error
+      setSchoolData(previousSchoolData);
+      console.error('Update school setting error:', error);
+      toast.error('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+    }
+  };
   const [showHeaderMenu, setShowHeaderMenu] = useState(false);
   const headerMenuRef = React.useRef(null);
   const location = useLocation();
@@ -157,6 +196,20 @@ function AdminPage() {
   // Bulk password reset (teachers)
   const [selectedTeachersForReset, setSelectedTeachersForReset] = useState(new Set());
   const [bulkResetTeachersLoading, setBulkResetTeachersLoading] = useState(false);
+
+  // Bulk disable/deactivate operations
+  const [selectedStudentsForDisable, setSelectedStudentsForDisable] = useState(new Set());
+  const [bulkDisableStudentsLoading, setBulkDisableStudentsLoading] = useState(false);
+
+  const [selectedTeachersForDisable, setSelectedTeachersForDisable] = useState(new Set());
+  const [bulkDisableTeachersLoading, setBulkDisableTeachersLoading] = useState(false);
+
+  // Bulk delete operations
+  const [selectedStudentsForDelete, setSelectedStudentsForDelete] = useState(new Set());
+  const [bulkDeleteStudentsLoading, setBulkDeleteStudentsLoading] = useState(false);
+
+  const [selectedTeachersForDelete, setSelectedTeachersForDelete] = useState(new Set());
+  const [bulkDeleteTeachersLoading, setBulkDeleteTeachersLoading] = useState(false);
 
   // Classroom management state
   const [classrooms, setClassrooms] = useState([]);
@@ -461,9 +514,13 @@ function AdminPage() {
   const [teacherSearchTerm, setTeacherSearchTerm] = useState('');
   const [studentSearchTermUsers, setStudentSearchTermUsers] = useState('');
   const [teacherStatusFilter, setTeacherStatusFilter] = useState('all'); // 'all', 'active', 'inactive'
+  const [teacherBulkMode, setTeacherBulkMode] = useState('reset'); // 'reset', 'disable', 'delete'
   const [studentStatusFilter, setStudentStatusFilter] = useState('all');
+  const [studentBulkMode, setStudentBulkMode] = useState('reset'); // 'reset', 'disable', 'delete'
   const [teacherCurrentPage, setTeacherCurrentPage] = useState(1);
   const [studentCurrentPage, setStudentCurrentPage] = useState(1);
+  const [teacherRowsPerPage, setTeacherRowsPerPage] = useState(5);
+  const [studentRowsPerPage, setStudentRowsPerPage] = useState(5);
   const ITEMS_PER_PAGE = 5;
 
   // Password reset requests state
@@ -597,28 +654,31 @@ function AdminPage() {
 
   // If backend only returns school_id (not name), try to load school name from /schools/
   useEffect(() => {
-    const tryResolveSchoolName = async () => {
+    const tryResolveSchoolData = async () => {
       if (!currentUser) return;
-      // already have a name
-      if (currentUser?.school_name || currentUser?.school?.name) return;
       const sid = currentUser?.school_id || localStorage.getItem('school_id');
       if (!sid) return;
+
       try {
-        const res = await fetch(`${API_BASE_URL}/schools/`);
+        const token = localStorage.getItem('token');
+        const res = await fetch(`${API_BASE_URL}/schools/${sid}`, {
+          headers: { ...(token ? { 'Authorization': `Bearer ${token}` } : {}) }
+        });
+        if (res.ok) {
           const data = await res.json();
-        if (Array.isArray(data)) {
-          const found = data.find(s => String(s.id) === String(sid));
-          if (found) {
-            // persist and update currentUser so UI updates
-            localStorage.setItem('school_name', found.name);
-            setCurrentUser(prev => prev ? ({...prev, school_name: found.name}) : prev);
+          setSchoolData(data);
+          if (data.name) {
+            localStorage.setItem('school_name', data.name);
+            if (!currentUser.school_name) {
+              setCurrentUser(prev => prev ? ({...prev, school_name: data.name}) : prev);
+            }
           }
         }
       } catch (err) {
-        // ignore quietly
+        console.error('Failed to resolve school data:', err);
       }
     };
-    tryResolveSchoolName();
+    tryResolveSchoolData();
   }, [currentUser]);
 
   // Load full school data (including logo and grade_announcement_date) for current user if available
@@ -711,16 +771,30 @@ function AdminPage() {
       const body = { title, content, school_id: Number(schoolId) };
       if (expiry) {
         try {
-          // `expiry` comes from <input type="datetime-local" /> as "YYYY-MM-DDTHH:MM"
-          // Keep it as a local naive datetime string when sending to the server to avoid
-          // unintended UTC conversions (avoid toISOString which adds a Z/UTC offset).
           const localWithSec = expiry.length === 16 ? expiry + ':00' : expiry;
-          body.expires_at = localWithSec.replace('T', ' '); // "YYYY-MM-DD HH:MM:SS"
+          body.expires_at = localWithSec.replace('T', ' ');
         } catch (e) { /* ignore invalid date */ }
       }
       const res = await fetch(`${API_BASE_URL}/announcements/`, { method:'POST', headers:{ 'Content-Type':'application/json', ...(token?{Authorization:`Bearer ${token}`}:{}) }, body:JSON.stringify(body) });
       const data = await res.json();
-      if (!res.ok) toast.error(data.detail || t('admin.announcementFailed')); else { toast.success(t('admin.announcementSuccess')); setTitle(''); setContent(''); setExpiry(''); if (data && data.id) setAnnouncements(prev=>Array.isArray(prev)?[data,...prev]:[data]); }
+      if (!res.ok) { toast.error(data.detail || t('admin.announcementFailed')); return; }
+      let finalData = data;
+      if (announcementPdfFile && data.id) {
+        const formData = new FormData();
+        formData.append('file', announcementPdfFile);
+        try {
+          const pdfRes = await fetch(`${API_BASE_URL}/announcements/${data.id}/upload-pdf`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+            body: formData
+          });
+          if (pdfRes.ok) { finalData = await pdfRes.json(); toast.success('อัปโหลด PDF สำเร็จ!'); }
+          else { toast.error('อัปโหลด PDF ไม่สำเร็จ'); }
+        } catch { toast.error('เกิดข้อผิดพลาดในการอัปโหลด PDF'); }
+      }
+      toast.success(t('admin.announcementSuccess'));
+      setTitle(''); setContent(''); setExpiry(''); setAnnouncementPdfFile(null);
+      if (finalData && finalData.id) setAnnouncements(prev => Array.isArray(prev) ? [finalData, ...prev] : [finalData]);
     } catch (err) { console.error('announcement error', err); toast.error(t('admin.announcementError')); }
   };
 
@@ -930,7 +1004,7 @@ function AdminPage() {
     if (!token) { toast.error(t('admin.loginRequired')); return; }
     setBulkResetLoading(true);
     try {
-      const ids = Array.from(selectedStudentsForReset);
+      const ids = Array.from(selectedStudentsForReset).map(id => Number(id));
       const results = await Promise.all(ids.map(async (id) => {
         try {
           const res = await fetch(`${API_BASE_URL}/users/${id}/admin_reset`, { method: 'POST', headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
@@ -968,7 +1042,7 @@ function AdminPage() {
     if (!token) { toast.error(t('admin.loginRequired')); return; }
     setBulkResetTeachersLoading(true);
     try {
-      const ids = Array.from(selectedTeachersForReset);
+      const ids = Array.from(selectedTeachersForReset).map(id => Number(id));
       const results = await Promise.all(ids.map(async (id) => {
         try {
           const res = await fetch(`${API_BASE_URL}/users/${id}/admin_reset`, { method: 'POST', headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
@@ -996,6 +1070,150 @@ function AdminPage() {
       toast.error(t('admin.resetPasswordError'));
     } finally {
       setBulkResetTeachersLoading(false);
+    }
+  };
+
+  // Bulk disable users (teachers)
+  const bulkDisableSelectedTeachers = async () => {
+    if (!selectedTeachersForDisable || selectedTeachersForDisable.size === 0) return;
+    const token = localStorage.getItem('token');
+    if (!token) { toast.error(t('admin.loginRequired')); return; }
+    setBulkDisableTeachersLoading(true);
+    try {
+      const ids = Array.from(selectedTeachersForDisable).map(id => Number(id));
+      const res = await fetch(`${API_BASE_URL}/users/bulk/deactivate`, {
+        method: 'PATCH',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_ids: ids })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.detail || 'Failed to disable users');
+      } else {
+        let message = `✅ Disabled: ${data.success.length}\n❌ Failed: ${data.failed.length}\n\n`;
+        data.success.forEach(u => { message += `✓ ${u.full_name || u.username}\n`; });
+        if (data.failed.length > 0) {
+          message += '\nFailed:\n';
+          data.failed.forEach(f => { message += `✗ ID ${f.id}: ${f.reason}\n`; });
+        }
+        openAlertModal('Bulk Disable Result', message);
+        toast.success('Disabled selected users');
+        setSelectedTeachersForDisable(new Set());
+        window.location.reload();
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Error disabling users');
+    } finally {
+      setBulkDisableTeachersLoading(false);
+    }
+  };
+
+  // Bulk disable users (students)
+  const bulkDisableSelectedStudents = async () => {
+    if (!selectedStudentsForDisable || selectedStudentsForDisable.size === 0) return;
+    const token = localStorage.getItem('token');
+    if (!token) { toast.error(t('admin.loginRequired')); return; }
+    setBulkDisableStudentsLoading(true);
+    try {
+      const ids = Array.from(selectedStudentsForDisable).map(id => Number(id));
+      const res = await fetch(`${API_BASE_URL}/users/bulk/deactivate`, {
+        method: 'PATCH',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_ids: ids })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.detail || 'Failed to disable users');
+      } else {
+        let message = `✅ Disabled: ${data.success.length}\n❌ Failed: ${data.failed.length}\n\n`;
+        data.success.forEach(u => { message += `✓ ${u.full_name || u.username}\n`; });
+        if (data.failed.length > 0) {
+          message += '\nFailed:\n';
+          data.failed.forEach(f => { message += `✗ ID ${f.id}: ${f.reason}\n`; });
+        }
+        openAlertModal('Bulk Disable Result', message);
+        toast.success('Disabled selected users');
+        setSelectedStudentsForDisable(new Set());
+        window.location.reload();
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Error disabling users');
+    } finally {
+      setBulkDisableStudentsLoading(false);
+    }
+  };
+
+  // Bulk delete users (teachers)
+  const bulkDeleteSelectedTeachers = async () => {
+    if (!selectedTeachersForDelete || selectedTeachersForDelete.size === 0) return;
+    const token = localStorage.getItem('token');
+    if (!token) { toast.error(t('admin.loginRequired')); return; }
+    setBulkDeleteTeachersLoading(true);
+    try {
+      const ids = Array.from(selectedTeachersForDelete).map(id => Number(id));
+      const res = await fetch(`${API_BASE_URL}/users/bulk/delete`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_ids: ids })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.detail || 'Failed to delete users');
+      } else {
+        let message = `✅ Deleted: ${data.success.length}\n❌ Failed: ${data.failed.length}\n\n`;
+        data.success.forEach(u => { message += `✓ ${u.full_name || u.username}\n`; });
+        if (data.failed.length > 0) {
+          message += '\nFailed:\n';
+          data.failed.forEach(f => { message += `✗ ID ${f.id}: ${f.reason}\n`; });
+        }
+        openAlertModal('Bulk Delete Result', message);
+        toast.success('Deleted selected users');
+        setSelectedTeachersForDelete(new Set());
+        window.location.reload();
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Error deleting users');
+    } finally {
+      setBulkDeleteTeachersLoading(false);
+    }
+  };
+
+  // Bulk delete users (students)
+  const bulkDeleteSelectedStudents = async () => {
+    if (!selectedStudentsForDelete || selectedStudentsForDelete.size === 0) return;
+    const token = localStorage.getItem('token');
+    if (!token) { toast.error(t('admin.loginRequired')); return; }
+    setBulkDeleteStudentsLoading(true);
+    try {
+      const ids = Array.from(selectedStudentsForDelete).map(id => Number(id));
+      const res = await fetch(`${API_BASE_URL}/users/bulk/delete`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_ids: ids })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.detail || 'Failed to delete users');
+      } else {
+        let message = `✅ Deleted: ${data.success.length}\n❌ Failed: ${data.failed.length}\n\n`;
+        data.success.forEach(u => { message += `✓ ${u.full_name || u.username}\n`; });
+        if (data.failed.length > 0) {
+          message += '\nFailed:\n';
+          data.failed.forEach(f => { message += `✗ ID ${f.id}: ${f.reason}\n`; });
+        }
+        openAlertModal('Bulk Delete Result', message);
+        toast.success('Deleted selected users');
+        setSelectedStudentsForDelete(new Set());
+        window.location.reload();
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Error deleting users');
+    } finally {
+      setBulkDeleteStudentsLoading(false);
     }
   };
 
@@ -1121,7 +1339,7 @@ function AdminPage() {
 
   const closeAnnouncementModal = () => { setShowAnnouncementModal(false); setModalAnnouncement(null); };
 
-  const saveAnnouncementFromModal = async ({ title: t, content: c, expiry: ex }) => {
+  const saveAnnouncementFromModal = async ({ title: t, content: c, expiry: ex, pdfFile: pdf }) => {
     if (!modalAnnouncement || !modalAnnouncement.id) { toast.error('Invalid announcement to update'); return; }
     const token = localStorage.getItem('token');
     try {
@@ -1134,11 +1352,22 @@ function AdminPage() {
       }
       const res = await fetch(`${API_BASE_URL}/announcements/${modalAnnouncement.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...(token?{Authorization:`Bearer ${token}`}:{}) }, body: JSON.stringify(body) });
       const data = await res.json();
-      if (!res.ok) { toast.error(data.detail || t('admin.editAnnouncementFailed')); return; }
-      toast.success(t('admin.editAnnouncementSuccess'));
-      setAnnouncements(prev => Array.isArray(prev) ? prev.map(a => a.id === data.id ? data : a) : prev);
+      if (!res.ok) { toast.error(data.detail || 'แก้ไขประกาศไม่สำเร็จ'); return; }
+      let finalData = data;
+      if (pdf) {
+        const formData = new FormData();
+        formData.append('file', pdf);
+        try {
+          const pdfRes = await fetch(`${API_BASE_URL}/announcements/${modalAnnouncement.id}/upload-pdf`, {
+            method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: formData
+          });
+          if (pdfRes.ok) { finalData = await pdfRes.json(); toast.success('อัปโหลด PDF สำเร็จ!'); }
+        } catch { /* ignore pdf error */ }
+      }
+      toast.success('แก้ไขประกาศสำเร็จ!');
+      setAnnouncements(prev => Array.isArray(prev) ? prev.map(a => a.id === finalData.id ? finalData : a) : prev);
       closeAnnouncementModal();
-    } catch (err) { console.error('save announcement modal error', err); toast.error(t('admin.editAnnouncementError')); }
+    } catch (err) { console.error('save announcement modal error', err); toast.error('เกิดข้อผิดพลาด'); }
   };
 
   const openExpiryModal = (item) => {
@@ -2713,8 +2942,6 @@ function AdminPage() {
   return (
     <>
       <div className="bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
-        <ToastContainer />
-
         <PageHeader 
           currentUser={currentUser}
           role="admin"
@@ -2928,15 +3155,104 @@ function AdminPage() {
                       <option value="active">✅ ใช้งาน</option>
                       <option value="inactive">🚫 ปิดใช้งาน</option>
                     </select>
-                    <div className="flex gap-2 items-center">
+
+                    {/* Rows per page selector */}
+                    <div className="flex items-center gap-2 px-4 py-2 bg-white/80 border border-slate-200 rounded-xl">
+                      <span className="text-sm font-semibold text-slate-600">📄 แสดง:</span>
+                      <select
+                        value={teacherRowsPerPage}
+                        onChange={(e) => {
+                          setTeacherRowsPerPage(parseInt(e.target.value));
+                          setTeacherCurrentPage(1);
+                        }}
+                        className="text-sm border-none bg-transparent focus:ring-0 cursor-pointer font-bold text-violet-600 focus:outline-none"
+                      >
+                        <option value={5}>5 คน</option>
+                        <option value={10}>10 คน</option>
+                        <option value={20}>20 คน</option>
+                        <option value={50}>50 คน</option>
+                        <option value={999999}>ทั้งหมด</option>
+                      </select>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 items-center">
+                      <span className="text-sm font-semibold text-slate-600 bg-slate-100 px-3 py-2 rounded-lg">🛠️ เลือกการทำงาน:</span>
                       <button
                         type="button"
-                        className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-rose-400 via-pink-500 to-rose-500 text-white font-semibold shadow-lg shadow-rose-500/30 hover:shadow-xl hover:shadow-rose-500/40 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-60 disabled:cursor-not-allowed disabled:transform-none transition-all duration-300"
+                        onClick={() => { setTeacherBulkMode('reset'); }}
+                        className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all duration-300 ${
+                          teacherBulkMode === 'reset'
+                            ? 'bg-gradient-to-r from-rose-400 via-pink-500 to-rose-500 text-white shadow-lg shadow-rose-500/40'
+                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200'
+                        }`}
+                        title="รีเซ็ตรหัสผ่านสำหรับผู้ใช้ที่เลือก"
+                      >
+                        🔄 รีเซ็ตรหัสผ่าน {teacherBulkMode === 'reset' && selectedTeachersForReset.size > 0 && `(${selectedTeachersForReset.size})`}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setTeacherBulkMode('disable'); }}
+                        className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all duration-300 ${
+                          teacherBulkMode === 'disable'
+                            ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg shadow-amber-500/40'
+                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200'
+                        }`}
+                        title="ปิดใช้งานผู้ใช้ที่เลือก"
+                      >
+                        🚫 ปิดใช้งาน {teacherBulkMode === 'disable' && selectedTeachersForDisable.size > 0 && `(${selectedTeachersForDisable.size})`}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setTeacherBulkMode('delete'); }}
+                        className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all duration-300 ${
+                          teacherBulkMode === 'delete'
+                            ? 'bg-gradient-to-r from-red-500 to-pink-600 text-white shadow-lg shadow-red-500/40'
+                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200'
+                        }`}
+                        title="ลบผู้ใช้ที่เลือก (ถาวร)"
+                      >
+                        🗑️ ลบ {teacherBulkMode === 'delete' && selectedTeachersForDelete.size > 0 && `(${selectedTeachersForDelete.size})`}
+                      </button>
+                    </div>
+                    <div className="flex gap-2 items-center flex-wrap">
+                      <button
+                        type="button"
+                        className={`inline-flex items-center gap-2 px-5 py-3 rounded-xl font-semibold shadow-lg transition-all duration-300 ${
+                          teacherBulkMode === 'reset'
+                            ? 'bg-gradient-to-r from-rose-400 via-pink-500 to-rose-500 text-white shadow-rose-500/30 hover:shadow-xl hover:shadow-rose-500/40 hover:-translate-y-0.5'
+                            : 'hidden'
+                        }`}
                         onClick={() => openConfirmModal(t('admin.bulkResetTitle'), `${t('admin.bulkResetConfirm')} ${selectedTeachersForReset.size} ${t('admin.peopleSelected')}?`, async () => { await bulkResetSelectedTeachers(); })}
                         disabled={selectedTeachersForReset.size === 0 || bulkResetTeachersLoading}
                         title={t('admin.resetSelectedPasswords')}
                       >
-                        {bulkResetTeachersLoading ? `⏳ ${t('admin.resetting')}` : `🔄 ${t('admin.resetSelectedPasswords')} (${selectedTeachersForReset.size})`}
+                        {bulkResetTeachersLoading ? `⏳ ${t('admin.resetting')}...` : `💾 ยืนยันรีเซ็ต (${selectedTeachersForReset.size})`}
+                      </button>
+                      <button
+                        type="button"
+                        className={`inline-flex items-center gap-2 px-5 py-3 rounded-xl font-semibold shadow-lg transition-all duration-300 ${
+                          teacherBulkMode === 'disable'
+                            ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-amber-500/30 hover:shadow-xl hover:shadow-amber-500/40 hover:-translate-y-0.5'
+                            : 'hidden'
+                        }`}
+                        onClick={() => openConfirmModal('🚫 ปิดใช้งาน', `ปิดใช้งาน ${selectedTeachersForDisable.size} ผู้ช่วยสอน?`, async () => { await bulkDisableSelectedTeachers(); })}
+                        disabled={selectedTeachersForDisable.size === 0 || bulkDisableTeachersLoading}
+                        title="ปิดใช้งานผู้ใช้ที่เลือก"
+                      >
+                        {bulkDisableTeachersLoading ? '⏳ กำลังปิด...' : `💾 ยืนยันปิด (${selectedTeachersForDisable.size})`}
+                      </button>
+                      <button
+                        type="button"
+                        className={`inline-flex items-center gap-2 px-5 py-3 rounded-xl font-semibold shadow-lg transition-all duration-300 ${
+                          teacherBulkMode === 'delete'
+                            ? 'bg-gradient-to-r from-red-500 to-pink-600 text-white shadow-red-500/30 hover:shadow-xl hover:shadow-red-500/40 hover:-translate-y-0.5'
+                            : 'hidden'
+                        }`}
+                        onClick={() => openConfirmModal('⚠️ ลบผู้ช่วยสอน', `ลบ ${selectedTeachersForDelete.size} ผู้ช่วยสอน? การกระทำนี้ไม่สามารถยกเลิกได้!`, async () => { await bulkDeleteSelectedTeachers(); })}
+                        disabled={selectedTeachersForDelete.size === 0 || bulkDeleteTeachersLoading}
+                        title="ลบผู้ใช้ที่เลือก (ถาวร)"
+                      >
+                        {bulkDeleteTeachersLoading ? '⏳ กำลังลบ...' : `💾 ยืนยันลบ (${selectedTeachersForDelete.size})`}
                       </button>
                     </div>
                   </div>
@@ -2959,9 +3275,10 @@ function AdminPage() {
                       return matchSearch && matchStatus;
                     });
 
-                    const totalPages = Math.ceil(filteredTeachers.length / ITEMS_PER_PAGE);
-                    const startIdx = (teacherCurrentPage - 1) * ITEMS_PER_PAGE;
-                    const paginatedTeachers = filteredTeachers.slice(startIdx, startIdx + ITEMS_PER_PAGE);
+                    const rowsPerPage = teacherRowsPerPage || 5;
+                    const totalPages = Math.ceil(filteredTeachers.length / rowsPerPage);
+                    const startIdx = (teacherCurrentPage - 1) * rowsPerPage;
+                    const paginatedTeachers = filteredTeachers.slice(startIdx, startIdx + rowsPerPage);
 
                     return (
                       <>
@@ -2974,15 +3291,38 @@ function AdminPage() {
                                   {/* header checkbox: select/deselect all on current page */}
                                   <input
                                     type="checkbox"
-                                    checked={paginatedTeachers && paginatedTeachers.length > 0 ? paginatedTeachers.every(t => selectedTeachersForReset.has(t.id)) : false}
+                                    checked={paginatedTeachers && paginatedTeachers.length > 0 ? paginatedTeachers.every(t => {
+                                      if (teacherBulkMode === 'reset') return selectedTeachersForReset.has(t.id);
+                                      if (teacherBulkMode === 'disable') return selectedTeachersForDisable.has(t.id);
+                                      if (teacherBulkMode === 'delete') return selectedTeachersForDelete.has(t.id);
+                                      return false;
+                                    }) : false}
                                     onChange={(e) => {
-                                      const next = new Set(selectedTeachersForReset);
-                                      if (e.target.checked) {
-                                        paginatedTeachers.forEach(t => next.add(t.id));
-                                      } else {
-                                        paginatedTeachers.forEach(t => next.delete(t.id));
+                                      if (teacherBulkMode === 'reset') {
+                                        const next = new Set(selectedTeachersForReset);
+                                        if (e.target.checked) {
+                                          paginatedTeachers.forEach(t => next.add(t.id));
+                                        } else {
+                                          paginatedTeachers.forEach(t => next.delete(t.id));
+                                        }
+                                        setSelectedTeachersForReset(next);
+                                      } else if (teacherBulkMode === 'disable') {
+                                        const next = new Set(selectedTeachersForDisable);
+                                        if (e.target.checked) {
+                                          paginatedTeachers.forEach(t => next.add(t.id));
+                                        } else {
+                                          paginatedTeachers.forEach(t => next.delete(t.id));
+                                        }
+                                        setSelectedTeachersForDisable(next);
+                                      } else if (teacherBulkMode === 'delete') {
+                                        const next = new Set(selectedTeachersForDelete);
+                                        if (e.target.checked) {
+                                          paginatedTeachers.forEach(t => next.add(t.id));
+                                        } else {
+                                          paginatedTeachers.forEach(t => next.delete(t.id));
+                                        }
+                                        setSelectedTeachersForDelete(next);
                                       }
-                                      setSelectedTeachersForReset(next);
                                     }}
                                     className="w-5 h-5 rounded-md border-2 border-slate-300 text-violet-600 focus:ring-violet-500 focus:ring-offset-0 cursor-pointer transition-all duration-200"
                                   />
@@ -2995,19 +3335,40 @@ function AdminPage() {
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
-                              {paginatedTeachers.map(teacher => (
-                                <tr key={teacher.id} className={`hover:bg-violet-50/50 transition-colors duration-200 ${selectedTeachersForReset.has(teacher.id) ? 'bg-violet-50 border-l-4 border-l-violet-500' : ''}`}>
+                              {paginatedTeachers.map(teacher => {
+                                const isSelectedForReset = selectedTeachersForReset.has(teacher.id);
+                                const isSelectedForDisable = selectedTeachersForDisable.has(teacher.id);
+                                const isSelectedForDelete = selectedTeachersForDelete.has(teacher.id);
+                                const isSelected = teacherBulkMode === 'reset' ? isSelectedForReset : teacherBulkMode === 'disable' ? isSelectedForDisable : isSelectedForDelete;
+                                return (
+                                <tr key={teacher.id} className={`hover:bg-violet-50/50 transition-colors duration-200 ${isSelected ? 'bg-violet-50 border-l-4 border-l-violet-500' : ''}`}>
                                   <td className="px-4 py-4 text-center">
                                     <input
                                       type="checkbox"
-                                      checked={selectedTeachersForReset.has(teacher.id)}
+                                      checked={isSelected}
                                       onChange={() => {
-                                        setSelectedTeachersForReset(prev => {
-                                          const next = new Set(prev);
-                                          if (next.has(teacher.id)) next.delete(teacher.id);
-                                          else next.add(teacher.id);
-                                          return next;
-                                        });
+                                        if (teacherBulkMode === 'reset') {
+                                          setSelectedTeachersForReset(prev => {
+                                            const next = new Set(prev);
+                                            if (next.has(teacher.id)) next.delete(teacher.id);
+                                            else next.add(teacher.id);
+                                            return next;
+                                          });
+                                        } else if (teacherBulkMode === 'disable') {
+                                          setSelectedTeachersForDisable(prev => {
+                                            const next = new Set(prev);
+                                            if (next.has(teacher.id)) next.delete(teacher.id);
+                                            else next.add(teacher.id);
+                                            return next;
+                                          });
+                                        } else if (teacherBulkMode === 'delete') {
+                                          setSelectedTeachersForDelete(prev => {
+                                            const next = new Set(prev);
+                                            if (next.has(teacher.id)) next.delete(teacher.id);
+                                            else next.add(teacher.id);
+                                            return next;
+                                          });
+                                        }
                                       }}
                                       className="w-5 h-5 rounded-md border-2 border-slate-300 text-violet-600 focus:ring-violet-500 focus:ring-offset-0 cursor-pointer transition-all duration-200"
                                     />
@@ -3074,7 +3435,8 @@ function AdminPage() {
                                     </div>
                                   </td>
                                 </tr>
-                              ))}
+                                );
+                              })}
                             </tbody>
                           </table>
                         </div>
@@ -3085,35 +3447,79 @@ function AdminPage() {
                                 <label className="flex items-center gap-2 text-sm font-bold text-slate-600">
                                     <input
                                       type="checkbox"
-                                      checked={paginatedTeachers && paginatedTeachers.length > 0 ? paginatedTeachers.every(t => selectedTeachersForReset.has(t.id)) : false}
+                                      checked={paginatedTeachers && paginatedTeachers.length > 0 ? paginatedTeachers.every(t => {
+                                        if (teacherBulkMode === 'reset') return selectedTeachersForReset.has(t.id);
+                                        if (teacherBulkMode === 'disable') return selectedTeachersForDisable.has(t.id);
+                                        if (teacherBulkMode === 'delete') return selectedTeachersForDelete.has(t.id);
+                                        return false;
+                                      }) : false}
                                       onChange={(e) => {
-                                        const next = new Set(selectedTeachersForReset);
-                                        if (e.target.checked) {
-                                          paginatedTeachers.forEach(t => next.add(t.id));
-                                        } else {
-                                          paginatedTeachers.forEach(t => next.delete(t.id));
+                                        if (teacherBulkMode === 'reset') {
+                                          const next = new Set(selectedTeachersForReset);
+                                          if (e.target.checked) {
+                                            paginatedTeachers.forEach(t => next.add(t.id));
+                                          } else {
+                                            paginatedTeachers.forEach(t => next.delete(t.id));
+                                          }
+                                          setSelectedTeachersForReset(next);
+                                        } else if (teacherBulkMode === 'disable') {
+                                          const next = new Set(selectedTeachersForDisable);
+                                          if (e.target.checked) {
+                                            paginatedTeachers.forEach(t => next.add(t.id));
+                                          } else {
+                                            paginatedTeachers.forEach(t => next.delete(t.id));
+                                          }
+                                          setSelectedTeachersForDisable(next);
+                                        } else if (teacherBulkMode === 'delete') {
+                                          const next = new Set(selectedTeachersForDelete);
+                                          if (e.target.checked) {
+                                            paginatedTeachers.forEach(t => next.add(t.id));
+                                          } else {
+                                            paginatedTeachers.forEach(t => next.delete(t.id));
+                                          }
+                                          setSelectedTeachersForDelete(next);
                                         }
-                                        setSelectedTeachersForReset(next);
                                       }}
                                       className="w-5 h-5 rounded-md border-2 border-slate-300 text-violet-600 focus:ring-violet-500 focus:ring-offset-0 cursor-pointer"
                                     />
                                     เลือกทั้งหมดในหน้านี้
                                 </label>
                             </div>
-                            {paginatedTeachers.map(teacher => (
-                                <div key={teacher.id} className={`bg-white rounded-2xl p-5 shadow-sm border border-slate-100 flex flex-col gap-4 ${selectedTeachersForReset.has(teacher.id) ? 'ring-2 ring-violet-500 bg-violet-50/10' : ''}`}>
+                            {paginatedTeachers.map(teacher => {
+                                const isSelectedForReset = selectedTeachersForReset.has(teacher.id);
+                                const isSelectedForDisable = selectedTeachersForDisable.has(teacher.id);
+                                const isSelectedForDelete = selectedTeachersForDelete.has(teacher.id);
+                                const isSelected = teacherBulkMode === 'reset' ? isSelectedForReset : teacherBulkMode === 'disable' ? isSelectedForDisable : isSelectedForDelete;
+                                return (
+                                <div key={teacher.id} className={`bg-white rounded-2xl p-5 shadow-sm border border-slate-100 flex flex-col gap-4 ${isSelected ? 'ring-2 ring-violet-500 bg-violet-50/10' : ''}`}>
                                   <div className="flex justify-between items-start">
                                     <div className="flex items-start gap-3">
                                         <input
                                           type="checkbox"
-                                          checked={selectedTeachersForReset.has(teacher.id)}
+                                          checked={isSelected}
                                           onChange={() => {
-                                            setSelectedTeachersForReset(prev => {
-                                              const next = new Set(prev);
-                                              if (next.has(teacher.id)) next.delete(teacher.id);
-                                              else next.add(teacher.id);
-                                              return next;
-                                            });
+                                            if (teacherBulkMode === 'reset') {
+                                              setSelectedTeachersForReset(prev => {
+                                                const next = new Set(prev);
+                                                if (next.has(teacher.id)) next.delete(teacher.id);
+                                                else next.add(teacher.id);
+                                                return next;
+                                              });
+                                            } else if (teacherBulkMode === 'disable') {
+                                              setSelectedTeachersForDisable(prev => {
+                                                const next = new Set(prev);
+                                                if (next.has(teacher.id)) next.delete(teacher.id);
+                                                else next.add(teacher.id);
+                                                return next;
+                                              });
+                                            } else if (teacherBulkMode === 'delete') {
+                                              setSelectedTeachersForDelete(prev => {
+                                                const next = new Set(prev);
+                                                if (next.has(teacher.id)) next.delete(teacher.id);
+                                                else next.add(teacher.id);
+                                                return next;
+                                              });
+                                            }
                                           }}
                                           className="w-5 h-5 mt-1 rounded-md border-2 border-slate-300 text-violet-600 focus:ring-violet-500 focus:ring-offset-0 cursor-pointer"
                                         />
@@ -3183,7 +3589,8 @@ function AdminPage() {
                                       )}
                                     </div>
                                 </div>
-                            ))}
+                                );
+                            })}
                         </div>
 
                         {/* Pagination */}
@@ -3260,15 +3667,104 @@ function AdminPage() {
                       <option value="active">✅ ใช้งาน</option>
                       <option value="inactive">🚫 ปิดใช้งาน</option>
                     </select>
-                    <div className="flex gap-2 items-center">
+
+                    {/* Rows per page selector */}
+                    <div className="flex items-center gap-2 px-4 py-2 bg-white/80 border border-slate-200 rounded-xl">
+                      <span className="text-sm font-semibold text-slate-600">📄 แสดง:</span>
+                      <select
+                        value={studentRowsPerPage}
+                        onChange={(e) => {
+                          setStudentRowsPerPage(parseInt(e.target.value));
+                          setStudentCurrentPage(1);
+                        }}
+                        className="text-sm border-none bg-transparent focus:ring-0 cursor-pointer font-bold text-emerald-600 focus:outline-none"
+                      >
+                        <option value={5}>5 คน</option>
+                        <option value={10}>10 คน</option>
+                        <option value={20}>20 คน</option>
+                        <option value={50}>50 คน</option>
+                        <option value={999999}>ทั้งหมด</option>
+                      </select>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 items-center">
+                      <span className="text-sm font-semibold text-slate-600 bg-slate-100 px-3 py-2 rounded-lg">🛠️ เลือกการทำงาน:</span>
                       <button
                         type="button"
-                        className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-rose-400 via-pink-500 to-rose-500 text-white font-semibold shadow-lg shadow-rose-500/30 hover:shadow-xl hover:shadow-rose-500/40 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-60 disabled:cursor-not-allowed disabled:transform-none transition-all duration-300"
+                        onClick={() => { setStudentBulkMode('reset'); }}
+                        className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all duration-300 ${
+                          studentBulkMode === 'reset'
+                            ? 'bg-gradient-to-r from-rose-400 via-pink-500 to-rose-500 text-white shadow-lg shadow-rose-500/40'
+                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200'
+                        }`}
+                        title="รีเซ็ตรหัสผ่านสำหรับนักเรียนที่เลือก"
+                      >
+                        🔄 รีเซ็ตรหัสผ่าน {studentBulkMode === 'reset' && selectedStudentsForReset.size > 0 && `(${selectedStudentsForReset.size})`}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setStudentBulkMode('disable'); }}
+                        className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all duration-300 ${
+                          studentBulkMode === 'disable'
+                            ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg shadow-amber-500/40'
+                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200'
+                        }`}
+                        title="ปิดใช้งานนักเรียนที่เลือก"
+                      >
+                        🚫 ปิดใช้งาน {studentBulkMode === 'disable' && selectedStudentsForDisable.size > 0 && `(${selectedStudentsForDisable.size})`}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setStudentBulkMode('delete'); }}
+                        className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all duration-300 ${
+                          studentBulkMode === 'delete'
+                            ? 'bg-gradient-to-r from-red-500 to-pink-600 text-white shadow-lg shadow-red-500/40'
+                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200'
+                        }`}
+                        title="ลบนักเรียนที่เลือก (ถาวร)"
+                      >
+                        🗑️ ลบ {studentBulkMode === 'delete' && selectedStudentsForDelete.size > 0 && `(${selectedStudentsForDelete.size})`}
+                      </button>
+                    </div>
+                    <div className="flex gap-2 items-center flex-wrap">
+                      <button
+                        type="button"
+                        className={`inline-flex items-center gap-2 px-5 py-3 rounded-xl font-semibold shadow-lg transition-all duration-300 ${
+                          studentBulkMode === 'reset'
+                            ? 'bg-gradient-to-r from-rose-400 via-pink-500 to-rose-500 text-white shadow-rose-500/30 hover:shadow-xl hover:shadow-rose-500/40 hover:-translate-y-0.5'
+                            : 'hidden'
+                        }`}
                         onClick={() => openConfirmModal(t('admin.bulkResetTitle'), `${t('admin.bulkResetConfirm')} ${selectedStudentsForReset.size} ${t('admin.peopleSelected')}?`, async () => { await bulkResetSelectedStudents(); })}
                         disabled={selectedStudentsForReset.size === 0 || bulkResetLoading}
                         title={t('admin.resetSelectedPasswords')}
                       >
-                        {bulkResetLoading ? `⏳ ${t('admin.resetting')}` : `🔄 ${t('admin.resetSelectedPasswords')} (${selectedStudentsForReset.size})`}
+                        {bulkResetLoading ? `⏳ ${t('admin.resetting')}...` : `💾 ยืนยันรีเซ็ต (${selectedStudentsForReset.size})`}
+                      </button>
+                      <button
+                        type="button"
+                        className={`inline-flex items-center gap-2 px-5 py-3 rounded-xl font-semibold shadow-lg transition-all duration-300 ${
+                          studentBulkMode === 'disable'
+                            ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-amber-500/30 hover:shadow-xl hover:shadow-amber-500/40 hover:-translate-y-0.5'
+                            : 'hidden'
+                        }`}
+                        onClick={() => openConfirmModal('🚫 ปิดใช้งาน', `ปิดใช้งาน ${selectedStudentsForDisable.size} นักเรียน?`, async () => { await bulkDisableSelectedStudents(); })}
+                        disabled={selectedStudentsForDisable.size === 0 || bulkDisableStudentsLoading}
+                        title="ปิดใช้งานนักเรียนที่เลือก"
+                      >
+                        {bulkDisableStudentsLoading ? '⏳ กำลังปิด...' : `💾 ยืนยันปิด (${selectedStudentsForDisable.size})`}
+                      </button>
+                      <button
+                        type="button"
+                        className={`inline-flex items-center gap-2 px-5 py-3 rounded-xl font-semibold shadow-lg transition-all duration-300 ${
+                          studentBulkMode === 'delete'
+                            ? 'bg-gradient-to-r from-red-500 to-pink-600 text-white shadow-red-500/30 hover:shadow-xl hover:shadow-red-500/40 hover:-translate-y-0.5'
+                            : 'hidden'
+                        }`}
+                        onClick={() => openConfirmModal('⚠️ ลบนักเรียน', `ลบ ${selectedStudentsForDelete.size} นักเรียน? การกระทำนี้ไม่สามารถยกเลิกได้!`, async () => { await bulkDeleteSelectedStudents(); })}
+                        disabled={selectedStudentsForDelete.size === 0 || bulkDeleteStudentsLoading}
+                        title="ลบนักเรียนที่เลือก (ถาวร)"
+                      >
+                        {bulkDeleteStudentsLoading ? '⏳ กำลังลบ...' : `💾 ยืนยันลบ (${selectedStudentsForDelete.size})`}
                       </button>
                     </div>
                   </div>
@@ -3291,9 +3787,10 @@ function AdminPage() {
                       return matchSearch && matchStatus;
                     });
 
-                    const totalPages = Math.ceil(filteredStudents.length / ITEMS_PER_PAGE);
-                    const startIdx = (studentCurrentPage - 1) * ITEMS_PER_PAGE;
-                    const paginatedStudents = filteredStudents.slice(startIdx, startIdx + ITEMS_PER_PAGE);
+                    const rowsPerPage = studentRowsPerPage || 5;
+                    const totalPages = Math.ceil(filteredStudents.length / rowsPerPage);
+                    const startIdx = (studentCurrentPage - 1) * rowsPerPage;
+                    const paginatedStudents = filteredStudents.slice(startIdx, startIdx + rowsPerPage);
 
                     return (
                       <>
@@ -3306,15 +3803,38 @@ function AdminPage() {
                                   {/* header checkbox: select/deselect all on current page */}
                                   <input
                                     type="checkbox"
-                                    checked={paginatedStudents && paginatedStudents.length > 0 ? paginatedStudents.every(s => selectedStudentsForReset.has(s.id)) : false}
+                                    checked={paginatedStudents && paginatedStudents.length > 0 ? paginatedStudents.every(s => {
+                                      if (studentBulkMode === 'reset') return selectedStudentsForReset.has(s.id);
+                                      if (studentBulkMode === 'disable') return selectedStudentsForDisable.has(s.id);
+                                      if (studentBulkMode === 'delete') return selectedStudentsForDelete.has(s.id);
+                                      return false;
+                                    }) : false}
                                     onChange={(e) => {
-                                      const next = new Set(selectedStudentsForReset);
-                                      if (e.target.checked) {
-                                        paginatedStudents.forEach(s => next.add(s.id));
-                                      } else {
-                                        paginatedStudents.forEach(s => next.delete(s.id));
+                                      if (studentBulkMode === 'reset') {
+                                        const next = new Set(selectedStudentsForReset);
+                                        if (e.target.checked) {
+                                          paginatedStudents.forEach(s => next.add(s.id));
+                                        } else {
+                                          paginatedStudents.forEach(s => next.delete(s.id));
+                                        }
+                                        setSelectedStudentsForReset(next);
+                                      } else if (studentBulkMode === 'disable') {
+                                        const next = new Set(selectedStudentsForDisable);
+                                        if (e.target.checked) {
+                                          paginatedStudents.forEach(s => next.add(s.id));
+                                        } else {
+                                          paginatedStudents.forEach(s => next.delete(s.id));
+                                        }
+                                        setSelectedStudentsForDisable(next);
+                                      } else if (studentBulkMode === 'delete') {
+                                        const next = new Set(selectedStudentsForDelete);
+                                        if (e.target.checked) {
+                                          paginatedStudents.forEach(s => next.add(s.id));
+                                        } else {
+                                          paginatedStudents.forEach(s => next.delete(s.id));
+                                        }
+                                        setSelectedStudentsForDelete(next);
                                       }
-                                      setSelectedStudentsForReset(next);
                                     }}
                                     className="w-5 h-5 rounded-md border-2 border-slate-300 text-emerald-600 focus:ring-emerald-500 focus:ring-offset-0 cursor-pointer transition-all duration-200"
                                   />
@@ -3327,19 +3847,40 @@ function AdminPage() {
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
-                              {paginatedStudents.map(student => (
-                                <tr key={student.id} className={`hover:bg-emerald-50/50 transition-colors duration-200 ${selectedStudentsForReset.has(student.id) ? 'bg-emerald-50 border-l-4 border-l-emerald-500' : ''}`}>
+                            {paginatedStudents.map(student => {
+                                const isSelectedForReset = selectedStudentsForReset.has(student.id);
+                                const isSelectedForDisable = selectedStudentsForDisable.has(student.id);
+                                const isSelectedForDelete = selectedStudentsForDelete.has(student.id);
+                                const isSelected = studentBulkMode === 'reset' ? isSelectedForReset : studentBulkMode === 'disable' ? isSelectedForDisable : isSelectedForDelete;
+                                return (
+                                <tr key={student.id} className={`hover:bg-emerald-50/50 transition-colors duration-200 ${isSelected ? 'bg-emerald-50 border-l-4 border-l-emerald-500' : ''}`}>
                                   <td className="px-4 py-4 text-center">
                                     <input
                                       type="checkbox"
-                                      checked={selectedStudentsForReset.has(student.id)}
+                                      checked={isSelected}
                                       onChange={() => {
-                                        setSelectedStudentsForReset(prev => {
-                                          const next = new Set(prev);
-                                          if (next.has(student.id)) next.delete(student.id);
-                                          else next.add(student.id);
-                                          return next;
-                                        });
+                                        if (studentBulkMode === 'reset') {
+                                          setSelectedStudentsForReset(prev => {
+                                            const next = new Set(prev);
+                                            if (next.has(student.id)) next.delete(student.id);
+                                            else next.add(student.id);
+                                            return next;
+                                          });
+                                        } else if (studentBulkMode === 'disable') {
+                                          setSelectedStudentsForDisable(prev => {
+                                            const next = new Set(prev);
+                                            if (next.has(student.id)) next.delete(student.id);
+                                            else next.add(student.id);
+                                            return next;
+                                          });
+                                        } else if (studentBulkMode === 'delete') {
+                                          setSelectedStudentsForDelete(prev => {
+                                            const next = new Set(prev);
+                                            if (next.has(student.id)) next.delete(student.id);
+                                            else next.add(student.id);
+                                            return next;
+                                          });
+                                        }
                                       }}
                                       className="w-5 h-5 rounded-md border-2 border-slate-300 text-emerald-600 focus:ring-emerald-500 focus:ring-offset-0 cursor-pointer transition-all duration-200"
                                     />
@@ -3406,7 +3947,8 @@ function AdminPage() {
                                     </div>
                                   </td>
                                 </tr>
-                              ))}
+                                );
+                            })}
                             </tbody>
                           </table>
                         </div>
@@ -3417,35 +3959,79 @@ function AdminPage() {
                                 <label className="flex items-center gap-2 text-sm font-bold text-slate-600">
                                     <input
                                       type="checkbox"
-                                      checked={paginatedStudents && paginatedStudents.length > 0 ? paginatedStudents.every(s => selectedStudentsForReset.has(s.id)) : false}
+                                      checked={paginatedStudents && paginatedStudents.length > 0 ? paginatedStudents.every(s => {
+                                        if (studentBulkMode === 'reset') return selectedStudentsForReset.has(s.id);
+                                        if (studentBulkMode === 'disable') return selectedStudentsForDisable.has(s.id);
+                                        if (studentBulkMode === 'delete') return selectedStudentsForDelete.has(s.id);
+                                        return false;
+                                      }) : false}
                                       onChange={(e) => {
-                                        const next = new Set(selectedStudentsForReset);
-                                        if (e.target.checked) {
-                                          paginatedStudents.forEach(s => next.add(s.id));
-                                        } else {
-                                          paginatedStudents.forEach(s => next.delete(s.id));
+                                        if (studentBulkMode === 'reset') {
+                                          const next = new Set(selectedStudentsForReset);
+                                          if (e.target.checked) {
+                                            paginatedStudents.forEach(s => next.add(s.id));
+                                          } else {
+                                            paginatedStudents.forEach(s => next.delete(s.id));
+                                          }
+                                          setSelectedStudentsForReset(next);
+                                        } else if (studentBulkMode === 'disable') {
+                                          const next = new Set(selectedStudentsForDisable);
+                                          if (e.target.checked) {
+                                            paginatedStudents.forEach(s => next.add(s.id));
+                                          } else {
+                                            paginatedStudents.forEach(s => next.delete(s.id));
+                                          }
+                                          setSelectedStudentsForDisable(next);
+                                        } else if (studentBulkMode === 'delete') {
+                                          const next = new Set(selectedStudentsForDelete);
+                                          if (e.target.checked) {
+                                            paginatedStudents.forEach(s => next.add(s.id));
+                                          } else {
+                                            paginatedStudents.forEach(s => next.delete(s.id));
+                                          }
+                                          setSelectedStudentsForDelete(next);
                                         }
-                                        setSelectedStudentsForReset(next);
                                       }}
                                       className="w-5 h-5 rounded-md border-2 border-slate-300 text-emerald-600 focus:ring-emerald-500 focus:ring-offset-0 cursor-pointer"
                                     />
                                     เลือกทั้งหมดในหน้านี้
                                 </label>
                             </div>
-                            {paginatedStudents.map(student => (
-                                <div key={student.id} className={`bg-white rounded-2xl p-5 shadow-sm border border-slate-100 flex flex-col gap-4 ${selectedStudentsForReset.has(student.id) ? 'ring-2 ring-emerald-500 bg-emerald-50/10' : ''}`}>
+                            {paginatedStudents.map(student => {
+                                const isSelectedForReset = selectedStudentsForReset.has(student.id);
+                                const isSelectedForDisable = selectedStudentsForDisable.has(student.id);
+                                const isSelectedForDelete = selectedStudentsForDelete.has(student.id);
+                                const isSelected = studentBulkMode === 'reset' ? isSelectedForReset : studentBulkMode === 'disable' ? isSelectedForDisable : isSelectedForDelete;
+                                return (
+                                <div key={student.id} className={`bg-white rounded-2xl p-5 shadow-sm border border-slate-100 flex flex-col gap-4 ${isSelected ? 'ring-2 ring-emerald-500 bg-emerald-50/10' : ''}`}>
                                   <div className="flex justify-between items-start">
                                     <div className="flex items-start gap-3">
                                         <input
                                           type="checkbox"
-                                          checked={selectedStudentsForReset.has(student.id)}
+                                          checked={isSelected}
                                           onChange={() => {
-                                            setSelectedStudentsForReset(prev => {
-                                              const next = new Set(prev);
-                                              if (next.has(student.id)) next.delete(student.id);
-                                              else next.add(student.id);
-                                              return next;
-                                            });
+                                            if (studentBulkMode === 'reset') {
+                                              setSelectedStudentsForReset(prev => {
+                                                const next = new Set(prev);
+                                                if (next.has(student.id)) next.delete(student.id);
+                                                else next.add(student.id);
+                                                return next;
+                                              });
+                                            } else if (studentBulkMode === 'disable') {
+                                              setSelectedStudentsForDisable(prev => {
+                                                const next = new Set(prev);
+                                                if (next.has(student.id)) next.delete(student.id);
+                                                else next.add(student.id);
+                                                return next;
+                                              });
+                                            } else if (studentBulkMode === 'delete') {
+                                              setSelectedStudentsForDelete(prev => {
+                                                const next = new Set(prev);
+                                                if (next.has(student.id)) next.delete(student.id);
+                                                else next.add(student.id);
+                                                return next;
+                                              });
+                                            }
                                           }}
                                           className="w-5 h-5 mt-1 rounded-md border-2 border-slate-300 text-emerald-600 focus:ring-emerald-500 focus:ring-offset-0 cursor-pointer"
                                         />
@@ -3514,7 +4100,8 @@ function AdminPage() {
                                       )}
                                     </div>
                                 </div>
-                            ))}
+                                );
+                            })}
                         </div>
 
                         {/* Pagination */}
@@ -4658,6 +5245,36 @@ function AdminPage() {
                     />
                   </div>
                   <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">แนบไฟล์ PDF (ไม่บังคับ)</label>
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => announcementPdfInputRef.current && announcementPdfInputRef.current.click()}
+                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-dashed border-amber-400 bg-amber-50 text-amber-700 text-sm font-medium hover:bg-amber-100 transition-all"
+                      >
+                        <span>📎</span> เลือกไฟล์ PDF
+                      </button>
+                      {announcementPdfFile && (
+                        <div className="flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-medium">
+                          <span>📄</span>
+                          <span className="max-w-[160px] truncate">{announcementPdfFile.name}</span>
+                          <button type="button" onClick={() => setAnnouncementPdfFile(null)} className="ml-1 text-red-400 hover:text-red-600 font-bold">✕</button>
+                        </div>
+                      )}
+                    </div>
+                    <input
+                      ref={announcementPdfInputRef}
+                      type="file"
+                      accept=".pdf"
+                      className="hidden"
+                      onChange={ev => {
+                        const f = ev.target.files && ev.target.files[0];
+                        if (f) { if (!f.name.toLowerCase().endsWith('.pdf')) { toast.error('กรุณาเลือกเฉพาะไฟล์ .pdf'); return; } setAnnouncementPdfFile(f); }
+                        ev.target.value = '';
+                      }}
+                    />
+                  </div>
+                  <div>
                     <button 
                       type="submit" 
                       className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 text-white font-semibold shadow-lg shadow-amber-500/30 hover:shadow-xl hover:shadow-amber-500/40 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-300"
@@ -4705,6 +5322,18 @@ function AdminPage() {
                         </div>
                       </div>
                       <div className="text-slate-600 leading-relaxed">{item.content}</div>
+                      {item.pdf_file_path && (
+                        <a
+                          href={`${API_BASE_URL}${item.pdf_file_path}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1.5 mt-3 px-3 py-1.5 bg-red-50 text-red-600 text-xs font-black rounded-xl hover:bg-red-100 transition-all"
+                          onClick={e => e.stopPropagation()}
+                        >
+                          <span>📄</span>
+                          {item.pdf_file_name || 'ดาวน์โหลด PDF'}
+                        </a>
+                      )}
                     </div>
                   ))
                 )}
@@ -5270,172 +5899,57 @@ function AdminPage() {
             <div className="p-8">
               <div className="max-w-2xl">
                 <div className="p-8 bg-gradient-to-br from-slate-50 to-white rounded-2xl border border-slate-200 shadow-sm">
-                  <h3 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2">
-                    <span className="text-2xl">📢</span> วันประกาศผลคะแนน
-                  </h3>
-                  
-                  <div className="p-5 bg-gradient-to-r from-amber-50 to-yellow-50 rounded-xl border border-amber-200 mb-6">
-                    <div className="text-amber-800 leading-relaxed">
-                      <strong className="flex items-center gap-2 mb-2">📋 คำอธิบาย:</strong>
-                      กำหนดวันและเวลาที่นักเรียนและครูสามารถดูผลคะแนนได้ ก่อนถึงวันที่กำหนด นักเรียนจะไม่สามารถดูผลการเรียนได้ และครูประจำชั้นจะไม่สามารถดูสรุปคะแนนได้
-                    </div>
-                  </div>
+<div className="mt-2 pt-2">
+                    <h3 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2">
+                      <span className="text-2xl">🔒</span> ควบคุมการเข้าถึงข้อมูล
+                    </h3>
 
-                  <div className="mb-6">
-                    <label className="block text-sm font-semibold text-slate-700 mb-3">
-                      เลือกวันและเวลาแยกกัน:
-                    </label>
-                    <div className="flex flex-wrap gap-3 items-center">
-                      {/* Day Input */}
-                      <input
-                        type="number"
-                        placeholder="วัน"
-                        min="1"
-                        max="31"
-                        value={gradeAnnouncementDay}
-                        onChange={(e) => {
-                          let dd = e.target.value;
-                          if (dd) {
-                            dd = String(parseInt(dd)).padStart(2, '0');
-                            if (parseInt(dd) > 31) dd = '31';
-                            if (parseInt(dd) < 1) dd = '01';
-                          }
-                          setGradeAnnouncementDay(dd);
-                          const mm = gradeAnnouncementMonth && gradeAnnouncementMonth.length ? gradeAnnouncementMonth : '01';
-                          const yy = gradeAnnouncementYear && gradeAnnouncementYear.length ? gradeAnnouncementYear : String(new Date().getFullYear());
-                          setGradeAnnouncementDate(`${yy}-${mm}-${dd}`);
-                        }}
-                        className="w-[70px] px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 text-center focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400 transition-all duration-300"
-                      />
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between p-5 bg-white rounded-2xl border border-slate-200 shadow-sm hover:border-blue-200 transition-colors">
+                        <div className="flex-1 pr-4">
+                          <h4 className="font-bold text-slate-800 flex items-center gap-2">
+                            📊 สรุปคะแนน/ลำดับที่ (Teacher Summary)
+                          </h4>
+                          <p className="text-sm text-slate-500 mt-1">
+                            อนุญาตให้ครูประจำชั้นดูสรุปเกรดเฉลี่ย ลำดับที่ และกราฟวิเคราะห์คะแนนในห้องเรียนของตนเอง
+                          </p>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input 
+                            type="checkbox" 
+                            className="sr-only peer"
+                            checked={schoolData?.can_teacher_view_summary === 1}
+                            onChange={(e) => updateSchoolSetting('can_teacher_view_summary', e.target.checked)}
+                          />
+                          <div className="relative w-14 h-7 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-100 rounded-full peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                        </label>
+                      </div>
 
-                      {/* Month Input */}
-                      <input
-                        type="number"
-                        placeholder="เดือน"
-                        min="1"
-                        max="12"
-                        value={gradeAnnouncementMonth}
-                        onChange={(e) => {
-                          let mm = e.target.value;
-                          if (mm) {
-                            mm = String(parseInt(mm)).padStart(2, '0');
-                            if (parseInt(mm) > 12) mm = '12';
-                            if (parseInt(mm) < 1) mm = '01';
-                          }
-                          setGradeAnnouncementMonth(mm);
-                          const dd = gradeAnnouncementDay && gradeAnnouncementDay.length ? gradeAnnouncementDay : '01';
-                          const yy = gradeAnnouncementYear && gradeAnnouncementYear.length ? gradeAnnouncementYear : String(new Date().getFullYear());
-                          setGradeAnnouncementDate(`${yy}-${mm}-${dd}`);
-                        }}
-                        className="w-[80px] px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 text-center focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400 transition-all duration-300"
-                      />
-
-                      {/* Year Input */}
-                      <input
-                        type="number"
-                        placeholder="ปี"
-                        value={gradeAnnouncementYear}
-                        onChange={(e) => {
-                          let yy = e.target.value;
-                          if (yy && yy.length === 4) {
-                            yy = String(parseInt(yy));
-                          }
-                          setGradeAnnouncementYear(yy);
-                          const mm = gradeAnnouncementMonth && gradeAnnouncementMonth.length ? gradeAnnouncementMonth : '01';
-                          const dd = gradeAnnouncementDay && gradeAnnouncementDay.length ? gradeAnnouncementDay : '01';
-                          setGradeAnnouncementDate(`${yy}-${mm}-${dd}`);
-                        }}
-                        className="w-[100px] px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 text-center focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400 transition-all duration-300"
-                      />
-
-                      {/* Hour / Minute Inputs */}
-                      <div className="flex gap-2 ml-2">
-                        <input
-                          type="number"
-                          placeholder="ชั่วโมง"
-                          min="0"
-                          max="23"
-                          value={gradeAnnouncementHour}
-                          onChange={(e) => {
-                            let h = e.target.value;
-                            if (h) {
-                              h = String(parseInt(h)).padStart(2, '0');
-                              if (parseInt(h) > 23) h = '23';
-                              if (parseInt(h) < 0) h = '00';
-                            }
-                            setGradeAnnouncementHour(h);
-                            const m = gradeAnnouncementMinute && gradeAnnouncementMinute.length ? gradeAnnouncementMinute : '00';
-                            setGradeAnnouncementTime(`${h}:${m}`);
-                          }}
-                          className="w-[70px] px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 text-center focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400 transition-all duration-300"
-                        />
-
-                        <input
-                          type="number"
-                          placeholder="นาที"
-                          min="0"
-                          max="59"
-                          value={gradeAnnouncementMinute}
-                          onChange={(e) => {
-                            let mm = e.target.value;
-                            if (mm) {
-                              mm = String(parseInt(mm)).padStart(2, '0');
-                              if (parseInt(mm) > 59) mm = '59';
-                              if (parseInt(mm) < 0) mm = '00';
-                            }
-                            setGradeAnnouncementMinute(mm);
-                            const h = gradeAnnouncementHour && gradeAnnouncementHour.length ? gradeAnnouncementHour : '00';
-                            setGradeAnnouncementTime(`${h}:${mm}`);
-                          }}
-                          className="w-[70px] px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 text-center focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400 transition-all duration-300"
-                        />
+                      <div className="flex items-center justify-between p-5 bg-white rounded-2xl border border-slate-200 shadow-sm hover:border-blue-200 transition-colors">
+                        <div className="flex-1 pr-4">
+                          <h4 className="font-bold text-slate-800 flex items-center gap-2">
+                            📣 ประกาศผลสอบ (Student Portal)
+                          </h4>
+                          <p className="text-sm text-slate-500 mt-1">
+                            เปิดให้นักเรียนสามารถเข้าดูผลคะแนนและใบเกรดผ่านหน้าเว็บได้ทันที (Manual Override)
+                          </p>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input 
+                            type="checkbox" 
+                            className="sr-only peer"
+                            checked={schoolData?.is_grade_announced === 1}
+                            onChange={(e) => updateSchoolSetting('is_grade_announced', e.target.checked)}
+                          />
+                          <div className="relative w-14 h-7 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-100 rounded-full peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                        </label>
                       </div>
                     </div>
-                    {(gradeAnnouncementDate || gradeAnnouncementTime) && (
-                      <div className="mt-4 p-4 bg-gradient-to-r from-emerald-50 to-green-50 rounded-xl border border-emerald-200 text-emerald-700 text-sm font-medium">
-                        ✅ วันประกาศ: {(() => {
-                          if (!gradeAnnouncementDate) return '-';
-                          // combine date and time (time may be empty)
-                          const timePart = gradeAnnouncementTime && gradeAnnouncementTime.length ? gradeAnnouncementTime : '00:00';
-                          const iso = `${gradeAnnouncementDate}T${timePart}:00`;
-                          const d = new Date(iso);
-                          // display day/month/year explicitly
-                          const day = String(d.getDate()).padStart(2,'0');
-                          const month = String(d.getMonth()+1).padStart(2,'0');
-                          const year = d.getFullYear();
-                          const time = d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', hour12: false });
-                          return `${day}/${month}/${year} เวลา ${time}`;
-                        })()}
-                      </div>
-                    )}
-                  </div>
 
-                  <div className="flex gap-4">
-                    <button
-                      onClick={saveGradeAnnouncementDate}
-                      disabled={savingGradeAnnouncement}
-                      className={`flex-1 inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-semibold shadow-lg transition-all duration-300 ${
-                        savingGradeAnnouncement 
-                          ? 'bg-slate-300 text-slate-500 cursor-not-allowed' 
-                          : 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-blue-500/30 hover:shadow-xl hover:shadow-blue-500/40 hover:-translate-y-0.5 active:translate-y-0'
-                      }`}
-                    >
-                      {savingGradeAnnouncement ? '⏳ กำลังบันทึก...' : '💾 บันทึก'}
-                    </button>
-                    <button
-                      onClick={() => {
-                        setGradeAnnouncementDate('');
-                        setGradeAnnouncementTime('');
-                        setGradeAnnouncementHour('');
-                        setGradeAnnouncementMinute('');
-                        setGradeAnnouncementDay('');
-                        setGradeAnnouncementMonth('');
-                        setGradeAnnouncementYear('');
-                      }}
-                      className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-semibold bg-gradient-to-r from-red-500 to-rose-600 text-white shadow-lg shadow-red-500/30 hover:shadow-xl hover:shadow-red-500/40 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-300"
-                    >
-                      ❌ ล้าง
-                    </button>
+                    <div className="mt-6 p-4 bg-blue-50 rounded-xl border border-blue-100 flex gap-3 italic text-blue-700 text-sm">
+                      <span className="text-lg">💡</span>
+                      การตั้งค่านี้จะมีผลทันทีโดยไม่ต้องกดบันทึก
+                    </div>
                   </div>
                 </div>
               </div>
@@ -5460,7 +5974,7 @@ function AdminPage() {
       )}
       {/* Confirm & Alert modals (shared) */}
   <ExpiryModal isOpen={showExpiryModal} initialValue={expiryModalValue} onClose={() => setShowExpiryModal(false)} onSave={saveExpiry} title="ตั้งวันหมดอายุ" />
-  <AnnouncementModal isOpen={showAnnouncementModal} initialData={modalAnnouncement} onClose={closeAnnouncementModal} onSave={saveAnnouncementFromModal} />
+  <AnnouncementModal isOpen={showAnnouncementModal} initialData={modalAnnouncement} apiBaseUrl={API_BASE_URL} onClose={closeAnnouncementModal} onSave={saveAnnouncementFromModal} />
 
       {/* ConfirmModal replaced by swalMessenger.confirm via `openConfirmModal` */}
 

@@ -44,7 +44,7 @@ function DefaultHome() {
               ศูนย์การเรียนรู้อิสลามประจำมัสยิด
             </h1>
             <p className="max-w-2xl mx-auto text-lg sm:text-xl text-slate-600 mb-10 leading-relaxed">
-              ยกระดับการจัดการเรียนการสอนที่ทันสมัย 🌟 ครอบคลุมตั้งแต่วิชาสามัญ 
+              ยกระดับการจัดการเรียนการสอนที่ทันสมัย 🌟 ครอบคลุมตั้งแต่ 
               วิชาศาสนา ไปจนถึงการติดตามผลการศึกษาอย่างมีประสิทธิภาพ
             </p>
             <div className="flex flex-col sm:flex-row justify-center gap-4">

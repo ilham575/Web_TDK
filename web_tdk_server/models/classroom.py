@@ -47,6 +47,7 @@ class ClassroomStudent(Base):
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     classroom_id = Column(Integer, ForeignKey("classrooms.id"), nullable=False, index=True)
     student_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    student_number = Column(Integer, nullable=True)  # เลขที่ในห้องเรียน
     is_active = Column(Boolean, default=True, nullable=False)
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())

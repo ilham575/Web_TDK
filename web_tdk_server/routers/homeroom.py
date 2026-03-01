@@ -331,19 +331,29 @@ def get_homeroom_summary(
     if not homerooms:
         return {"classrooms": [], "message": "ไม่พบข้อมูลครูประจำชั้น"}
     
-    # Check if grades are announced (for non-admin teachers)
-    grades_announced = True
+    # Check if grades are announced or if summary view is permitted (for non-admin teachers)
+    is_permitted = True
     if current_user.role == 'teacher':
         for hr in homerooms:
             school = db.query(SchoolModel).filter(SchoolModel.id == hr.school_id).first()
-            if school and school.grade_announcement_date:
-                now = datetime.now(timezone.utc)
-                announcement_date = school.grade_announcement_date
-                if announcement_date.tzinfo is None:
-                    announcement_date = announcement_date.replace(tzinfo=timezone.utc)
-                if now < announcement_date:
-                    grades_announced = False
+            if school:
+                # 1. Check if Teacher is explicitly blocked by manual toggle
+                if hasattr(school, 'can_teacher_view_summary') and school.can_teacher_view_summary == 0:
+                    is_permitted = False
                     break
+                
+                # 2. Check if Date-based restriction applies
+                if school.grade_announcement_date:
+                    now = datetime.now(timezone.utc)
+                    announcement_date = school.grade_announcement_date
+                    if announcement_date.tzinfo is None:
+                        announcement_date = announcement_date.replace(tzinfo=timezone.utc)
+                    if now < announcement_date:
+                        is_permitted = False
+                        break
+    
+    if not is_permitted and current_user.role == 'teacher':
+        return {"classrooms": [], "message": "ยังไม่ถึงเวลาประกาศผล หรือแอดมินยังไม่อนุญาตให้ดูสรุปคะแนน"}
     
     result = []
     
@@ -385,7 +395,7 @@ def get_homeroom_summary(
                             'total_max_score': 0
                         }
                     # Only include grades if they are announced
-                    if grades_announced and grade.grade is not None and grade.max_score:
+                    if grade.grade is not None and grade.max_score:
                         grades_by_subject[subject.id]['assignments'].append({
                             'title': grade.title,
                             'score': float(grade.grade),
@@ -450,6 +460,7 @@ def get_homeroom_summary(
                     'username': student.username,
                     'full_name': student.full_name,
                     'email': student.email,
+                    'student_number': enrollment.student_number if hasattr(enrollment, 'student_number') else None,
                     'grades_by_subject': list(grades_by_subject.values()),
                     'attendance_by_subject': list(attendance_by_subject.values()),
                     'attendance': {
@@ -587,6 +598,7 @@ def get_homeroom_classroom_students(
             'username': student.username,
             'full_name': student.full_name,
             'email': student.email,
+            'student_number': enrollment.student_number if hasattr(enrollment, 'student_number') else None,
             'grades_by_subject': list(grades_by_subject.values()),
             'attendance_by_subject': list(attendance_by_subject.values())
         })

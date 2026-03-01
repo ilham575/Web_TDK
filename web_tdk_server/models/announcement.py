@@ -13,6 +13,8 @@ class Announcement(Base):
     school_id = Column(Integer, ForeignKey("schools.id"), nullable=False)  # เพิ่มบรรทัดนี้
     is_published = Column(Boolean, default=True, nullable=False)
     expires_at = Column(DateTime(timezone=True), nullable=True)
+    pdf_file_path = Column(String(500), nullable=True)
+    pdf_file_name = Column(String(255), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ToastContainer, toast } from 'react-toastify';
+import { toast } from 'react-toastify';
 import { 
   ArrowLeft, 
   User, 
@@ -163,8 +163,6 @@ function TeacherDetail() {
 
   return (
     <div className="min-h-screen bg-[#f8fafc] p-4 sm:p-8 lg:p-12">
-      <ToastContainer position="top-right" autoClose={3000} theme="light" />
-      
       <div className="max-w-6xl mx-auto space-y-8">
         {/* Navigation & Actions */}
         <div className="flex items-center justify-between animate-in fade-in slide-in-from-top-4 duration-500">

@@ -640,20 +640,48 @@ def get_student_transcript(student_id: int, classroom_id: int = None, db: Sessio
     """
     # Authorization: Student themselves, Admin, or Teacher
     is_authorized = False
+    is_student = (getattr(current_user, 'id', None) == student_id)
+    is_teacher = (getattr(current_user, 'role', None) == 'teacher')
+    
     if getattr(current_user, 'role', None) == 'admin':
         is_authorized = True
-    elif getattr(current_user, 'id', None) == student_id:
+    elif is_student:
         is_authorized = True
-    elif getattr(current_user, 'role', None) == 'teacher':
+    elif is_teacher:
         is_authorized = True 
 
     if not is_authorized:
         raise HTTPException(status_code=403, detail='Not authorized to view this student transcript')
-    
+
     # Check student exists
     student = db.query(UserModel).filter(UserModel.id == student_id).first()
     if not student:
         raise HTTPException(status_code=404, detail='Student not found')
+
+    # Manual Toggle / Phase Release Logic for Students/Teachers
+    if not getattr(current_user, 'role', None) == 'admin':
+        school = db.query(SchoolModel).filter(SchoolModel.id == student.school_id).first()
+        if school:
+            # Check if student is blocked from seeing grades
+            if is_student:
+                # 1. Manual Toggle
+                if hasattr(school, 'is_grade_announced') and school.is_grade_announced == 0:
+                    raise HTTPException(status_code=403, detail="ทางโรงเรียนยังไม่เปิดให้เข้าดูผลการเรียน")
+                # 2. Date-based (Auto)
+                if school.grade_announcement_date:
+                    now = datetime.now(timezone.utc)
+                    ann_date = school.grade_announcement_date.replace(tzinfo=timezone.utc) if school.grade_announcement_date.tzinfo is None else school.grade_announcement_date
+                    if now < ann_date:
+                        raise HTTPException(status_code=403, detail="ยังไม่ถึงกําหนดวันประกาศผลการเรียน")
+
+            # Check if teacher is blocked from summary/detail views (optional, depending on policy)
+            # For transcript, usually teacher can see but if we want strictly manual:
+            if is_teacher:
+                if hasattr(school, 'can_teacher_view_summary') and school.can_teacher_view_summary == 0:
+                     # For transcript specifically, we might allow teacher to see indvidual student but 
+                     # if it's considered "Summary" context, we block. 
+                     # Let's keep transcript open for teachers but homeroom summary blocked.
+                     pass 
     
     return _get_student_transcript_internal(student_id, classroom_id, db)
 

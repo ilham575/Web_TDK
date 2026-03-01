@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import PageHeader, { getInitials } from '../../PageHeader';
-import { ToastContainer, toast } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
+import { toast } from 'react-toastify';
 import ConfirmModal from '../../ConfirmModal';
 import StudentEvaluationModal from '../../../modals/StudentEvaluationModal';
 import { API_BASE_URL } from '../../../endpoints';
@@ -191,6 +190,10 @@ function TeacherEvaluationsPage() {
   useEffect(() => {
     if (teacherSubjects.length > 0) {
       fetchAllEvaluations();
+    } else if (currentUser) {
+      // No subjects — nothing to load, stop loading spinner
+      toast.error('ไม่มีวิชาที่สามารถแสดงผลได้');
+      setLoading(false);
     }
   }, [teacherSubjects]);
 
@@ -669,18 +672,6 @@ function TeacherEvaluationsPage() {
         onConfirm={confirmState.onConfirm}
         onCancel={() => setConfirmState(prev => ({ ...prev, isOpen: false }))}
         variant={confirmState.variant}
-      />
-
-      <ToastContainer
-        position="top-right"
-        autoClose={3000}
-        hideProgressBar={false}
-        newestOnTop
-        closeOnClick
-        rtl={false}
-        pauseOnFocusLoss
-        draggable
-        pauseOnHover
       />
     </div>
   );

@@ -730,6 +730,11 @@ def assign_classroom_to_subject(subject_id: int, classroom_id: int = Body(..., e
     
     enrolled_count = 0
     for cs in students:
+        # Verify student exists in User table to avoid FK IntegrityError
+        student_exists = db.query(UserModel).filter(UserModel.id == cs.student_id).first()
+        if not student_exists:
+            continue
+            
         # Check if already enrolled in subject
         existing_enrollment = db.query(SubjectStudentModel).filter(
             SubjectStudentModel.subject_id == subject_id,

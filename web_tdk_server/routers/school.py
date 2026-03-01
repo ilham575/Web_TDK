@@ -90,6 +90,12 @@ def update_school(school_id: int, school_update: SchoolUpdate, db: Session = Dep
     if 'grade_announcement_date' in update_data:
         school.grade_announcement_date = school_update.grade_announcement_date
     
+    # Update manual toggles
+    if 'can_teacher_view_summary' in update_data:
+        school.can_teacher_view_summary = school_update.can_teacher_view_summary
+    if 'is_grade_announced' in update_data:
+        school.is_grade_announced = school_update.is_grade_announced
+    
     # Update logo_url if provided (can be None to delete logo)
     # Check using dict to see if field was explicitly set in request
     if 'logo_url' in update_data:

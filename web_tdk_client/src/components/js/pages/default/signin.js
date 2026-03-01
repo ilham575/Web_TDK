@@ -1,20 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ToastContainer, toast } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
+import { toast } from 'react-toastify';
 import { API_BASE_URL } from '../../../endpoints';
 import { setSchoolFavicon } from '../../../../utils/faviconUtils';
-
-// Custom close button for toast
-const CustomCloseButton = ({ closeToast }) => (
-  <button
-    onClick={closeToast}
-    className="ml-4 bg-transparent border-none text-xl font-bold text-white self-center cursor-pointer"
-    aria-label="close"
-  >
-    ✖
-  </button>
-);
 
 function SigninPage() {
   // User type selection ('staff' or 'student')
@@ -225,13 +213,6 @@ function SigninPage() {
       <div className="absolute top-0 left-0 w-full h-2 bg-emerald-600"></div>
       <div className="absolute -top-24 -left-24 w-96 h-96 bg-emerald-100 rounded-full opacity-50 blur-3xl"></div>
       <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-indigo-100 rounded-full opacity-50 blur-3xl"></div>
-
-      <ToastContainer
-        position="top-center"
-        hideProgressBar={false}
-        theme="colored"
-        closeButton={CustomCloseButton}
-      />
 
       <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10">
         <div className="flex justify-center mb-6">

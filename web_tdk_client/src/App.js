@@ -23,6 +23,8 @@ import ProfilePage from './components/js/pages/profile';
 import OwnerPage from './components/js/pages/owner/home';
 import Footer from './components/js/Footer';
 import { setSchoolFavicon, resetFavicon } from './utils/faviconUtils';
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 // ฟังก์ชั่นตรวจสอบ login
 function isLoggedIn() {
@@ -46,11 +48,11 @@ function RequireAuth({ children }) {
   return children;
 }
 
-if (process.env.NODE_ENV === 'production') {
-  console.log = function () {};
-} else {
-  // console.log = function () {};
-}
+// if (process.env.NODE_ENV === 'production') {
+//   console.log = function () {};
+// } else {
+//   // console.log = function () {};
+// }
 
 // Component สำหรับจัดการ favicon เมื่อเข้าสู่ระบบ
 function FaviconHandler() {
@@ -93,6 +95,7 @@ function App() {
     <I18nextProvider i18n={i18n}>
       <BrowserRouter>
         <FaviconHandler />
+        <div className="pb-14">
         <Routes>
           <Route path="/" element={<DefaultHome />} />
           <Route path="/home" element={<DefaultHome />} />
@@ -192,7 +195,9 @@ function App() {
         <Route path="/change-password" element={<RequireAuth><ChangePasswordPage /></RequireAuth>} />
         <Route path="/profile" element={<RequireAuth><ProfilePage /></RequireAuth>} />
       </Routes>
+      </div>
       {/* Global footer (shows remaining JWT expiry) */}
+      <ToastContainer position="top-right" autoClose={3000} />
       <Footer />
     </BrowserRouter>
     </I18nextProvider>

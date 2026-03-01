@@ -134,7 +134,7 @@ function HomeroomTeacherModal({ isOpen, editingHomeroom, teachers, availableGrad
                     onChange={e => setNewHomeroomGradeLevel(e.target.value)}
                     required
                   >
-                    <option value="">{t('admin.selectDayOfWeek')}</option>
+                    <option value="">{t('admin.pleaseSelectClassroom')}</option>
                     {availableGradeLevels.map((grade, idx) => (
                       <option key={idx} value={grade}>
                         {grade}

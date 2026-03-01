@@ -19,6 +19,8 @@ class Announcement(AnnouncementBase):
     created_at: datetime
     updated_at: Optional[datetime] = None
     author_id: Optional[int] = None
+    pdf_file_path: Optional[str] = None
+    pdf_file_name: Optional[str] = None
 
     class Config:
         from_attributes = True

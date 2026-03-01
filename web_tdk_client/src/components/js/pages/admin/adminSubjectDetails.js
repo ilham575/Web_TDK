@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ToastContainer, toast } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
+import { toast } from 'react-toastify';
 import { 
   BookOpen, 
   ArrowLeft, 
@@ -311,8 +310,6 @@ function AdminSubjectDetails() {
 
   return (
     <div className="min-h-screen bg-slate-50/50 pb-20">
-      <ToastContainer />
-      
       {/* Header section */}
       <div className="bg-white border-b border-slate-100 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">

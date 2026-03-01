@@ -472,7 +472,11 @@ function StudentPage() {
           <AbsenceManager studentId={currentUser?.id} operatingHours={operatingHours} studentSubjects={studentSubjects} />
         )}
         {activeTab === 'transcript' && (
-          <AcademicTranscript studentId={currentUser?.id} studentSubjects={studentSubjects} />
+          <AcademicTranscript 
+            studentId={currentUser?.id} 
+            studentSubjects={studentSubjects}
+            onGradesNotAnnounced={() => setActiveTab('subjects')}
+          />
         )}
         </div>
       </div>

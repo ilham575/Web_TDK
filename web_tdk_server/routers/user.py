@@ -27,6 +27,23 @@ try:
 except Exception:
     openpyxl = None
 
+def _normalize_cell_str(val) -> str:
+    """Convert an Excel cell value to a clean string.
+    Handles float cells that represent integers: 1.0 -> '1', 2.0 -> '2'.
+    """
+    if val is None:
+        return ''
+    s = str(val).strip()
+    # Strip trailing .0 from numeric-looking values (openpyxl reads ints as float)
+    try:
+        f = float(s)
+        if f == int(f):
+            return str(int(f))
+    except (ValueError, OverflowError):
+        pass
+    return s
+
+
 # สร้าง router พร้อมกำหนด prefix
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -439,8 +456,9 @@ def reset_password(token: str = Body(...), new_password: str = Body(...), db: Se
 def bulk_upload_users(file: UploadFile = File(...), db: Session = Depends(get_db), current_user: UserModel = Depends(get_current_user)):
     """Upload an Excel (.xlsx) file to bulk-create users.
 
-    Expected columns (first row header): username,email,full_name,password,role,school_id (optional)
+    Expected columns (first row header): username,email,full_name,password,role,school_id (optional), grade_level (optional), classroom_id or classroom (optional), student_number (optional)
     Only admins are allowed to use this endpoint. If school_id is missing for a row, current_user.school_id is used.
+    If classroom_id (or classroom) is provided for a student, they will be enrolled in that classroom with the specified student_number.
     Returns a summary of created users and per-row errors.
     """
     if getattr(current_user, 'role', None) != 'admin':
@@ -469,8 +487,10 @@ def bulk_upload_users(file: UploadFile = File(...), db: Session = Depends(get_db
         if col not in idx:
             raise HTTPException(status_code=400, detail=f'ขาดคอลัมน์ที่จำเป็น: {col}')
 
-    created = []
+    # PHASE 1: Validate ALL rows first (no database changes yet)
+    validated_rows = []
     errors = []
+    
     for r_i, row in enumerate(rows[1:], start=2):
         try:
             username = str(row[idx['username']]).strip() if row[idx['username']] is not None else ''
@@ -487,8 +507,30 @@ def bulk_upload_users(file: UploadFile = File(...), db: Session = Depends(get_db
             
             grade_level = None
             if 'grade_level' in idx and row[idx['grade_level']] is not None:
-                grade_level = str(row[idx['grade_level']]).strip()
+                grade_level = _normalize_cell_str(row[idx['grade_level']])
 
+            classroom_name = None
+            if 'classroom' in idx and row[idx['classroom']] is not None:
+                classroom_name = _normalize_cell_str(row[idx['classroom']])
+            elif 'classroom_name' in idx and row[idx['classroom_name']] is not None:
+                classroom_name = _normalize_cell_str(row[idx['classroom_name']])
+
+            classroom_id = None
+            # Accept both 'classroom_id' and 'classroom' as column names
+            if 'classroom_id' in idx and row[idx['classroom_id']] is not None:
+                try:
+                    classroom_id = int(row[idx['classroom_id']])
+                except Exception:
+                    classroom_id = None
+            
+            student_number = None
+            if 'student_number' in idx and row[idx['student_number']] is not None:
+                try:
+                    student_number = int(row[idx['student_number']])
+                except Exception:
+                    student_number = None
+
+            # Validate required fields
             if not username or not password or role not in ('teacher', 'student'):
                 raise ValueError('ข้อมูลไม่ถูกต้อง - ชื่อผู้ใช้, รหัสผ่าน หายไป หรือบทบาทไม่ถูกต้อง')
 
@@ -496,8 +538,7 @@ def bulk_upload_users(file: UploadFile = File(...), db: Session = Depends(get_db
             if school_id is None:
                 school_id = getattr(current_user, 'school_id', None)
 
-            # uniqueness checks
-            # Username check
+            # Check uniqueness in database
             existing_username = db.query(UserModel).filter(UserModel.username == username).first()
             if existing_username:
                 raise ValueError(f'ชื่อผู้ใช้ "{username}" นี้มีการใช้งานแล้ว')
@@ -508,25 +549,90 @@ def bulk_upload_users(file: UploadFile = File(...), db: Session = Depends(get_db
                 existing_email = db.query(UserModel).filter(UserModel.email == db_email).first()
                 if existing_email:
                     raise ValueError(f'อีเมล "{db_email}" นี้มีการใช้งานแล้ว')
-
-            hashed = hash_password(password)
+            
+            # Check classroom exists (if provided)
+            if role == 'student':
+                from models.classroom import Classroom
+                # Case 1: user provided classroom_id (int)
+                if classroom_id:
+                    classroom_check = db.query(Classroom).filter(Classroom.id == classroom_id).first()
+                    if not classroom_check:
+                        raise ValueError(f'ไม่พบชั้นเรียน ID {classroom_id}')
+                # Case 2: User provided classroom NAME/NUMBER (e.g., "1", "2")
+                elif classroom_name:
+                    classroom_check = db.query(Classroom).filter(
+                        Classroom.name == classroom_name,
+                        Classroom.school_id == school_id,
+                        Classroom.is_active == True
+                    ).first()
+                    if classroom_check:
+                        classroom_id = classroom_check.id
+                # Case 3: user provided grade_level but NO classroom info
+                elif grade_level:
+                    classroom_check = db.query(Classroom).filter(
+                        Classroom.grade_level == grade_level,
+                        Classroom.school_id == school_id,
+                        Classroom.is_active == True
+                    ).first()
+                    # If we found a matching classroom, we set classroom_id so they get enrolled in Phase 2
+                    if classroom_check:
+                        classroom_id = classroom_check.id
+            
+            # All validations passed for this row
+            validated_rows.append({
+                'row': r_i,
+                'username': username,
+                'email': db_email,
+                'full_name': full_name,
+                'password': password,
+                'role': role,
+                'school_id': school_id,
+                'grade_level': grade_level,
+                'classroom_id': classroom_id,
+                'student_number': student_number
+            })
+        except Exception as e:
+            errors.append({'row': r_i, 'error': str(e)})
+    
+    # If there are any errors, return immediately without saving anything
+    if errors:
+        return {
+            'created_count': 0,
+            'created': [],
+            'errors': errors,
+            'message': f'ไม่สามารถบันทึกข้อมูลได้เนื่องจากข้อผิดพลาด {len(errors)} รายการ กรุณาแก้ไขแล้วลองใหม่'
+        }
+    
+    # PHASE 2: All rows are valid, now create all users atomically
+    created = []
+    try:
+        for row_data in validated_rows:
+            hashed = hash_password(row_data['password'])
             new_user = UserModel(
-                username=username, 
-                email=db_email, 
-                full_name=full_name, 
-                hashed_password=hashed, 
-                role=role, 
-                school_id=school_id, 
-                grade_level=grade_level
+                username=row_data['username'],
+                email=row_data['email'],
+                full_name=row_data['full_name'],
+                hashed_password=hashed,
+                role=row_data['role'],
+                school_id=row_data['school_id'],
+                grade_level=row_data['grade_level']
             )
             db.add(new_user)
             db.flush()
-            created.append({'row': r_i, 'username': username, 'id': new_user.id})
-        except Exception as e:
-            errors.append({'row': r_i, 'error': str(e)})
-
-    # commit only after processing all rows to keep atomic-ish behavior for created set
-    try:
+            
+            # If classroom_id is provided, add student to classroom
+            if row_data['classroom_id'] and row_data['role'] == 'student':
+                from models.classroom import ClassroomStudent as CSModel
+                enrollment = CSModel(
+                    classroom_id=row_data['classroom_id'],
+                    student_id=new_user.id,
+                    student_number=row_data['student_number'],
+                    is_active=True
+                )
+                db.add(enrollment)
+            
+            created.append({'row': row_data['row'], 'username': row_data['username'], 'id': new_user.id})
+        
         db.commit()
     except Exception as e:
         db.rollback()
@@ -828,7 +934,13 @@ def bulk_assign_grade_to_students(
             username = row[idx['username']].strip() if row[idx['username']] is not None else ''
             email = row[idx['email']].strip() if row[idx['email']] is not None else ''
             full_name = row[idx['full_name']].strip() if row[idx['full_name']] is not None else ''
-            grade_level = row[idx['grade_level']].strip() if row[idx['grade_level']] is not None else ''
+            grade_level = _normalize_cell_str(row[idx['grade_level']]) if row[idx['grade_level']] is not None else ''
+
+            classroom_name = None
+            if 'classroom' in idx and row[idx['classroom']] is not None:
+                classroom_name = _normalize_cell_str(row[idx['classroom']])
+            elif 'classroom_name' in idx and row[idx['classroom_name']] is not None:
+                classroom_name = _normalize_cell_str(row[idx['classroom_name']])
 
             if not username or not email or not full_name or not grade_level:
                 raise ValueError('Invalid data - required fields missing')
@@ -842,6 +954,42 @@ def bulk_assign_grade_to_students(
             if existing_student:
                 # Update existing student's grade level
                 existing_student.grade_level = grade_level
+                
+                # Check for matching classroom and enroll if found
+                from models.classroom import Classroom, ClassroomStudent as CSModel
+                
+                # Try to match by Classroom Name first (if provided in excel)
+                classroom_match = None
+                if classroom_name:
+                    classroom_match = db.query(Classroom).filter(
+                        Classroom.name == classroom_name,
+                        Classroom.school_id == getattr(current_user, 'school_id', None),
+                        Classroom.is_active == True
+                    ).first()
+                
+                # If no direct name match, fallback to grade_level match
+                if not classroom_match:
+                    classroom_match = db.query(Classroom).filter(
+                        Classroom.grade_level == grade_level,
+                        Classroom.school_id == getattr(current_user, 'school_id', None),
+                        Classroom.is_active == True
+                    ).first()
+                
+                if classroom_match:
+                    # Check if already enrolled in this classroom to avoid double-entry
+                    already_enrolled = db.query(CSModel).filter(
+                        CSModel.student_id == existing_student.id,
+                        CSModel.classroom_id == classroom_match.id
+                    ).first()
+                    
+                    if not already_enrolled:
+                        enrollment = CSModel(
+                            student_id=existing_student.id,
+                            classroom_id=classroom_match.id,
+                            is_active=True
+                        )
+                        db.add(enrollment)
+
                 db.flush()
                 updated.append({
                     'row': r_i,
@@ -855,6 +1003,7 @@ def bulk_assign_grade_to_students(
                 temp_password = secrets.token_urlsafe(8)
                 hashed_pass = hash_password(temp_password)
                 
+                # ... admin-reset student user creating logic
                 new_student = UserModel(
                     username=username,
                     email=email,
@@ -867,6 +1016,34 @@ def bulk_assign_grade_to_students(
                 )
                 db.add(new_student)
                 db.flush()
+
+                # Enroll in matching classroom if found
+                from models.classroom import Classroom, ClassroomStudent as CSModel
+                
+                classroom_match = None
+                if classroom_name:
+                    classroom_match = db.query(Classroom).filter(
+                        Classroom.name == classroom_name,
+                        Classroom.school_id == getattr(current_user, 'school_id', None),
+                        Classroom.is_active == True
+                    ).first()
+                
+                if not classroom_match:
+                    classroom_match = db.query(Classroom).filter(
+                        Classroom.grade_level == grade_level,
+                        Classroom.school_id == getattr(current_user, 'school_id', None),
+                        Classroom.is_active == True
+                    ).first()
+
+                if classroom_match:
+                    enrollment = CSModel(
+                        student_id=new_student.id,
+                        classroom_id=classroom_match.id,
+                        is_active=True
+                    )
+                    db.add(enrollment)
+                    db.flush()
+
                 created.append({
                     'row': r_i,
                     'username': username,
@@ -892,6 +1069,156 @@ def bulk_assign_grade_to_students(
         'created': created,
         'errors': errors,
         'message': f'อัปเดต {len(updated)} นักเรียน สร้างใหม่ {len(created)} นักเรียน'
+    }
+
+
+# Bulk operations MUST come before parameterized routes (/{user_id}/...)
+# to prevent FastAPI from matching /bulk/... against /{user_id}/...
+
+@router.patch("/bulk/deactivate")
+def bulk_deactivate_users(
+    user_ids: List[int] = Body(..., embed=True),
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user)
+):
+    """Admin-only: Deactivate multiple users at once"""
+    if getattr(current_user, 'role', None) != 'admin':
+        raise HTTPException(status_code=403, detail='Only admins can deactivate users')
+    
+    if not user_ids:
+        raise HTTPException(status_code=400, detail='No user IDs provided')
+    
+    results = {
+        'success': [],
+        'failed': []
+    }
+    
+    for user_id in user_ids:
+        # Cannot deactivate yourself
+        if current_user.id == user_id:
+            results['failed'].append({
+                'id': user_id,
+                'reason': 'Cannot deactivate your own account'
+            })
+            continue
+        
+        user = db.query(UserModel).filter(UserModel.id == user_id).first()
+        if not user:
+            results['failed'].append({
+                'id': user_id,
+                'reason': 'User not found'
+            })
+            continue
+        
+        # Cannot deactivate admins
+        if user.role == 'admin':
+            results['failed'].append({
+                'id': user_id,
+                'reason': 'Cannot deactivate admin accounts'
+            })
+            continue
+        
+        try:
+            user.is_active = False
+            db.add(user)
+            results['success'].append({
+                'id': user_id,
+                'username': user.username,
+                'full_name': user.full_name
+            })
+        except Exception as e:
+            results['failed'].append({
+                'id': user_id,
+                'reason': str(e)
+            })
+    
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f'Failed to deactivate users: {str(e)}')
+    
+    return {
+        'message': f'Deactivated {len(results["success"])} user(s), {len(results["failed"])} failed',
+        'success': results['success'],
+        'failed': results['failed']
+    }
+
+
+@router.post("/bulk/delete")
+def bulk_delete_users(
+    user_ids: List[int] = Body(..., embed=True),
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user)
+):
+    """Admin-only: Delete multiple users at once"""
+    if getattr(current_user, 'role', None) != 'admin':
+        raise HTTPException(status_code=403, detail='Only admins can delete users')
+    
+    if not user_ids:
+        raise HTTPException(status_code=400, detail='No user IDs provided')
+    
+    results = {
+        'success': [],
+        'failed': []
+    }
+    
+    for user_id in user_ids:
+        # Cannot delete yourself
+        if current_user.id == user_id:
+            results['failed'].append({
+                'id': user_id,
+                'reason': 'Cannot delete your own account'
+            })
+            continue
+        
+        user_to_delete = db.query(UserModel).filter(UserModel.id == user_id).first()
+        if not user_to_delete:
+            results['failed'].append({
+                'id': user_id,
+                'reason': 'User not found'
+            })
+            continue
+        
+        # Can only delete inactive users
+        if user_to_delete.is_active:
+            results['failed'].append({
+                'id': user_id,
+                'reason': 'Can only delete inactive users. Please deactivate first.'
+            })
+            continue
+        
+        # Cannot delete admin accounts
+        if user_to_delete.role == 'admin':
+            results['failed'].append({
+                'id': user_id,
+                'reason': 'Cannot delete admin accounts'
+            })
+            continue
+        
+        try:
+            db.delete(user_to_delete)
+            results['success'].append({
+                'id': user_id,
+                'username': user_to_delete.username,
+                'full_name': user_to_delete.full_name
+            })
+        except Exception as e:
+            results['failed'].append({
+                'id': user_id,
+                'reason': str(e)
+            })
+    
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f'Failed to delete users: {str(e)}')
+    
+    return {
+        'message': f'Deleted {len(results["success"])} user(s), {len(results["failed"])} failed',
+        'success': results['success'],
+        'failed': results['failed']
     }
 
 
@@ -941,6 +1268,7 @@ def activate_user(
     return {'message': f'User {user.username} activated successfully', 'user': user}
 
 
+
 @router.get('/bulk_template')
 def download_bulk_template(current_user: UserModel = Depends(get_current_user)):
     """Return an Excel template (.xlsx) for admins to fill and upload via /users/bulk_upload."""
@@ -953,11 +1281,11 @@ def download_bulk_template(current_user: UserModel = Depends(get_current_user)):
     wb = Workbook()
     ws = wb.active
     # Header row
-    headers = ['username', 'email', 'full_name', 'password', 'role', 'school_id', 'grade_level']
+    headers = ['username', 'email', 'full_name', 'password', 'role', 'school_id', 'grade_level', 'classroom_id', 'student_number']
     ws.append(headers)
     # Example rows
-    ws.append(['alice', 'alice@example.com', 'Alice A', 'secret123', 'teacher', '', ''])
-    ws.append(['bob', 'bob@example.com', 'Bob B', 'p@ssw0rd', 'student', '', 'ป.1'])
+    ws.append(['alice', 'alice@example.com', 'Alice A', 'secret123', 'teacher', '', '', '', ''])
+    ws.append(['bob', 'bob@example.com', 'Bob B', 'p@ssw0rd', 'student', '', 'ป.1', '1', '1'])
 
     stream = BytesIO()
     wb.save(stream)

@@ -1,15 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import ReactDOM from 'react-dom';
 
-export default function AnnouncementModal({ isOpen, initialData = {}, onClose, onSave }) {
+export default function AnnouncementModal({ isOpen, initialData = {}, apiBaseUrl = '', onClose, onSave }) {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [expiry, setExpiry] = useState('');
+  const [pdfFile, setPdfFile] = useState(null);
+  const [pdfDragOver, setPdfDragOver] = useState(false);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     if (!isOpen) return;
     setTitle(initialData.title || '');
     setContent(initialData.content || '');
+    setPdfFile(null);
     // normalize expiry for input: try ISO or "YYYY-MM-DD HH:MM:SS" -> "YYYY-MM-DDTHH:MM"
     const s = initialData.expires_at || initialData.expire_at || initialData.expiresAt || '';
     if (!s) setExpiry('');
@@ -29,6 +33,18 @@ export default function AnnouncementModal({ isOpen, initialData = {}, onClose, o
   }, [isOpen]);
 
   if (!isOpen) return null;
+
+  const existingPdfName = initialData.pdf_file_name || null;
+  const existingPdfPath = initialData.pdf_file_path || null;
+
+  const handleFileChange = (file) => {
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.pdf')) {
+      alert('รองรับเฉพาะไฟล์ PDF เท่านั้น');
+      return;
+    }
+    setPdfFile(file);
+  };
 
   const modal = (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
@@ -103,6 +119,69 @@ export default function AnnouncementModal({ isOpen, initialData = {}, onClose, o
               <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">📅</span>
             </div>
           </div>
+
+          {/* PDF Attachment */}
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">แนบไฟล์ PDF (ถ้ามี)</label>
+
+            {/* Show existing PDF */}
+            {existingPdfName && !pdfFile && (
+              <div className="flex items-center gap-3 px-4 py-3 bg-red-50 border border-red-100 rounded-2xl">
+                <span className="text-red-500 text-lg">📄</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-slate-700 truncate">{existingPdfName}</p>
+                  <p className="text-[10px] text-slate-400">ไฟล์แนบปัจจุบัน — เลือกไฟล์ใหม่เพื่อแทนที่</p>
+                </div>
+                {existingPdfPath && apiBaseUrl && (
+                  <a
+                    href={`${apiBaseUrl}${existingPdfPath}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[10px] font-black text-emerald-600 hover:underline shrink-0"
+                  >
+                    เปิด
+                  </a>
+                )}
+              </div>
+            )}
+
+            {/* Drag-drop / file picker */}
+            <div
+              className={`relative border-2 border-dashed rounded-2xl p-5 text-center cursor-pointer transition-all ${pdfDragOver ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 hover:border-emerald-400 hover:bg-slate-50'}`}
+              onDragOver={e => { e.preventDefault(); setPdfDragOver(true); }}
+              onDragLeave={() => setPdfDragOver(false)}
+              onDrop={e => { e.preventDefault(); setPdfDragOver(false); handleFileChange(e.dataTransfer.files[0]); }}
+              onClick={() => fileInputRef.current && fileInputRef.current.click()}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="application/pdf"
+                className="hidden"
+                onChange={e => handleFileChange(e.target.files[0])}
+              />
+              {pdfFile ? (
+                <div className="flex items-center justify-center gap-3">
+                  <span className="text-red-500 text-2xl">📄</span>
+                  <div className="text-left">
+                    <p className="text-sm font-black text-slate-700 truncate max-w-[220px]">{pdfFile.name}</p>
+                    <p className="text-[10px] text-slate-400">{(pdfFile.size / 1024).toFixed(1)} KB</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={e => { e.stopPropagation(); setPdfFile(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
+                    className="ml-2 text-slate-400 hover:text-rose-500 transition-colors text-lg leading-none"
+                  >✕</button>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-1 text-slate-400">
+                  <span className="text-2xl">📎</span>
+                  <p className="text-xs font-bold">คลิกหรือลากไฟล์ PDF มาที่นี่</p>
+                  <p className="text-[10px]">รองรับ .pdf เท่านั้น</p>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Footer */}
@@ -116,7 +195,7 @@ export default function AnnouncementModal({ isOpen, initialData = {}, onClose, o
 
             <button 
                 disabled={!title || !content}
-                onClick={() => onSave({ title, content, expiry })} 
+                onClick={() => onSave({ title, content, expiry, pdfFile })} 
                 className="px-10 py-3 bg-emerald-600 text-white rounded-2xl font-black hover:bg-emerald-700 shadow-lg shadow-emerald-100 transition-all active:scale-95 disabled:opacity-50 disabled:grayscale disabled:scale-100 disabled:cursor-not-allowed flex items-center gap-2"
             >
                 <span>บันทึกข้อมูล</span>

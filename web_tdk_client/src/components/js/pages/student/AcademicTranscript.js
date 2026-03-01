@@ -3,7 +3,7 @@ import { API_BASE_URL } from '../../../endpoints';
 import { toast } from 'react-toastify';
 import ActivityDetailModal from '../../ActivityDetailModal';
 
-export default function AcademicTranscript({ studentId, studentSubjects }) {
+export default function AcademicTranscript({ studentId, studentSubjects, onGradesNotAnnounced }) {
   const [grades, setGrades] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expandedSubject, setExpandedSubject] = useState(null);
@@ -47,6 +47,19 @@ export default function AcademicTranscript({ studentId, studentSubjects }) {
         });
 
         if (!transcriptRes.ok) {
+          // Check if it's a 403 error due to grades not being announced
+          if (transcriptRes.status === 403) {
+            const errorData = await transcriptRes.json();
+            const errorMsg = errorData.detail;
+            if (errorMsg && errorMsg.includes('ยังไม่เปิดให้เข้าดูผลการเรียน')) {
+              toast.warning(errorMsg);
+              if (onGradesNotAnnounced) {
+                onGradesNotAnnounced();
+              }
+              setLoading(false);
+              return;
+            }
+          }
           throw new Error('Failed to load transcript');
         }
 

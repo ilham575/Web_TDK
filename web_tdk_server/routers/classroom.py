@@ -469,10 +469,78 @@ async def get_students_in_classroom(
             full_name=student.full_name,
             username=student.username,
             email=student.email,
+            student_number=enrollment.student_number,
             is_active=enrollment.is_active  # ใช้ enrollment.is_active ไม่ใช่ student.is_active
         ))
 
     return result
+
+
+@router.put("/{classroom_id}/students/{student_id}/student-number")
+async def update_student_number(
+    classroom_id: int,
+    student_id: int,
+    data: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """อัปเดตเลขที่นักเรียนในชั้นเรียน"""
+    if current_user.role not in ["admin", "owner", "teacher"]:
+        raise HTTPException(status_code=403, detail="ไม่มีสิทธิ์")
+
+    enrollment = db.query(ClassroomStudent).filter(
+        ClassroomStudent.classroom_id == classroom_id,
+        ClassroomStudent.student_id == student_id,
+        ClassroomStudent.is_active == True
+    ).first()
+
+    if not enrollment:
+        raise HTTPException(status_code=404, detail="ไม่พบนักเรียนในชั้นเรียนนี้")
+
+    new_number = data.get("student_number")
+    if new_number is not None:
+        new_number = int(new_number)
+        # ตรวจสอบเลขที่ซ้ำในห้องเรียนเดียวกัน
+        existing = db.query(ClassroomStudent).filter(
+            ClassroomStudent.classroom_id == classroom_id,
+            ClassroomStudent.student_number == new_number,
+            ClassroomStudent.is_active == True,
+            ClassroomStudent.student_id != student_id
+        ).first()
+        if existing:
+            raise HTTPException(status_code=400, detail=f"เลขที่ {new_number} ถูกใช้แล้วในชั้นเรียนนี้")
+
+    enrollment.student_number = new_number
+    db.commit()
+
+    return {"message": "อัปเดตเลขที่เรียบร้อยแล้ว", "student_number": new_number}
+
+
+@router.put("/{classroom_id}/auto-assign-student-numbers")
+async def auto_assign_student_numbers(
+    classroom_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """สุ่มเลขที่ให้นักเรียนทั้งห้องโดยอัตโนมัติ (เรียงตามชื่อ)"""
+    if current_user.role not in ["admin", "owner", "teacher"]:
+        raise HTTPException(status_code=403, detail="ไม่มีสิทธิ์")
+
+    classroom = get_classroom_or_404(classroom_id, db)
+
+    enrollments = db.query(ClassroomStudent, User).join(
+        User, ClassroomStudent.student_id == User.id
+    ).filter(
+        ClassroomStudent.classroom_id == classroom_id,
+        ClassroomStudent.is_active == True
+    ).order_by(User.full_name).all()
+
+    for idx, (enrollment, student) in enumerate(enrollments, start=1):
+        enrollment.student_number = idx
+
+    db.commit()
+
+    return {"message": f"กำหนดเลขที่ให้ {len(enrollments)} คนเรียบร้อย", "count": len(enrollments)}
 
 
 @router.delete("/{classroom_id}/students/{student_id}", status_code=status.HTTP_200_OK)
