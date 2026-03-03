@@ -3,6 +3,7 @@ import './App.css';
 import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import { I18nextProvider } from 'react-i18next';
 import i18n from './i18n';
+import InstallPrompt from './components/js/InstallPrompt';
 import SigninPage from './components/js/pages/default/signin';
 import SignupPage from './components/js/pages/default/signup';
 import ForgotPage from './components/js/pages/default/forgot';
@@ -95,6 +96,7 @@ function App() {
     <I18nextProvider i18n={i18n}>
       <BrowserRouter>
         <FaviconHandler />
+        <InstallPrompt />
         <div className="pb-14">
         <Routes>
           <Route path="/" element={<DefaultHome />} />

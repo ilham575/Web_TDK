@@ -76,7 +76,9 @@ def create_subject(subject: SubjectCreate, db: Session = Depends(get_db), curren
         credits=getattr(subject, 'credits', None),
         activity_percentage=getattr(subject, 'activity_percentage', None),
         max_collected_score=getattr(subject, 'max_collected_score', 100),
-        max_exam_score=getattr(subject, 'max_exam_score', 100)
+        max_exam_score=getattr(subject, 'max_exam_score', 100),
+        academic_year=getattr(subject, 'academic_year', None),
+        semester=getattr(subject, 'semester', None)
     )
     db.add(new_sub)
     db.commit()
@@ -124,6 +126,10 @@ def update_subject(subject_id: int, subject: SubjectCreate, db: Session = Depend
         subj.max_collected_score = subject.max_collected_score
     if getattr(subject, 'max_exam_score', None) is not None:
         subj.max_exam_score = subject.max_exam_score
+    if getattr(subject, 'academic_year', None) is not None:
+        subj.academic_year = subject.academic_year
+    if getattr(subject, 'semester', None) is not None:
+        subj.semester = subject.semester
     
     db.commit()
     db.refresh(subj)
@@ -132,10 +138,14 @@ def update_subject(subject_id: int, subject: SubjectCreate, db: Session = Depend
 
 @router.get("", response_model=List[Subject])
 @router.get("/", response_model=List[Subject])
-def list_subjects(db: Session = Depends(get_db), school_id: int = None):
+def list_subjects(db: Session = Depends(get_db), school_id: int = None, academic_year: str = None, semester: int = None):
     query = db.query(SubjectModel)
     if school_id is not None:
         query = query.filter(SubjectModel.school_id == school_id)
+    if academic_year is not None:
+        query = query.filter(SubjectModel.academic_year == academic_year)
+    if semester is not None:
+        query = query.filter(SubjectModel.semester == semester)
     return query.order_by(SubjectModel.created_at.desc()).all()
 
 
@@ -149,13 +159,18 @@ def get_subject(subject_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/teacher/{teacher_id}", response_model=List[dict])
-def subjects_by_teacher(teacher_id: int, db: Session = Depends(get_db)):
+def subjects_by_teacher(teacher_id: int, academic_year: str = None, semester: int = None, db: Session = Depends(get_db)):
     # Get all subjects where the teacher is assigned via SubjectSchedule (both active and ended)
-    subjects = db.query(SubjectModel).join(
+    query = db.query(SubjectModel).join(
         SubjectScheduleModel, SubjectModel.id == SubjectScheduleModel.subject_id
     ).filter(
         SubjectScheduleModel.teacher_id == teacher_id
-    ).distinct().all()
+    )
+    if academic_year is not None:
+        query = query.filter(SubjectModel.academic_year == academic_year)
+    if semester is not None:
+        query = query.filter(SubjectModel.semester == semester)
+    subjects = query.distinct().all()
     
     result = []
     for subject in subjects:
@@ -223,7 +238,9 @@ def subjects_by_teacher(teacher_id: int, db: Session = Depends(get_db)):
             'teacher_count': len(teachers_list),
             'classroom_count': classroom_count,
             'student_count': student_count,
-            'teacher_is_ended': schedule.is_ended if schedule else False
+            'teacher_is_ended': schedule.is_ended if schedule else False,
+            'academic_year': subject.academic_year,
+            'semester': subject.semester
         })
     
     return result
@@ -383,7 +400,11 @@ def get_subject_students(subject_id: int, db: Session = Depends(get_db), current
         if classroom_student:
             classroom = db.query(ClassroomModel).filter(ClassroomModel.id == classroom_student.classroom_id).first()
             if classroom:
-                classroom_info = {'id': classroom.id, 'name': classroom.name}
+                classroom_info = {
+                    'id': classroom.id, 
+                    'name': classroom.name,
+                    'student_number': classroom_student.student_number
+                }
 
         result.append({
             'id': student.id,
@@ -394,7 +415,8 @@ def get_subject_students(subject_id: int, db: Session = Depends(get_db), current
             'school_id': student.school_id,
             'grade_level': student.grade_level,
             'is_active': student.is_active,
-            'classroom': classroom_info
+            'classroom': classroom_info,
+            'student_number': classroom_student.student_number if classroom_student else None
         })
 
     return result

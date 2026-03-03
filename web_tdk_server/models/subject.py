@@ -17,6 +17,8 @@ class Subject(Base):
     max_collected_score = Column(Integer, nullable=True, default=100)
     max_exam_score = Column(Integer, nullable=True, default=100)
     is_ended = Column(Boolean, default=False)
+    academic_year = Column(String(10), nullable=True)   # ปีการศึกษา เช่น "2567"
+    semester = Column(Integer, nullable=True)            # เทอม 1 หรือ 2
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     

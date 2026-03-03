@@ -316,6 +316,8 @@ def get_students_by_grade(
 
 @router.get("/my-classrooms/summary")
 def get_homeroom_summary(
+    academic_year: Optional[str] = None,
+    semester: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: UserModel = Depends(get_current_user)
 ):
@@ -380,7 +382,12 @@ def get_homeroom_summary(
                     SubjectModel, GradeModel.subject_id == SubjectModel.id
                 ).filter(
                     GradeModel.student_id == student.id
-                ).all()
+                )
+                if academic_year:
+                    grades_query = grades_query.filter(SubjectModel.academic_year == academic_year)
+                if semester is not None:
+                    grades_query = grades_query.filter(SubjectModel.semester == semester)
+                grades_query = grades_query.all()
                 
                 grades_by_subject = {}
                 for grade, subject in grades_query:
@@ -388,8 +395,12 @@ def get_homeroom_summary(
                         grades_by_subject[subject.id] = {
                             'subject_id': subject.id,
                             'subject_name': subject.name,
+                            'subject_type': subject.subject_type,
                             'is_activity': subject.subject_type == 'activity',
                             'credits': subject.credits if hasattr(subject, 'credits') else None,
+                            'activity_percentage': subject.activity_percentage if hasattr(subject, 'activity_percentage') and subject.activity_percentage is not None else 0,
+                            'max_collected_score': subject.max_collected_score if hasattr(subject, 'max_collected_score') and subject.max_collected_score is not None else 100,
+                            'max_exam_score': subject.max_exam_score if hasattr(subject, 'max_exam_score') and subject.max_exam_score is not None else 100,
                             'assignments': [],
                             'total_score': 0,
                             'total_max_score': 0
@@ -404,10 +415,43 @@ def get_homeroom_summary(
                         grades_by_subject[subject.id]['total_score'] += float(grade.grade)
                         grades_by_subject[subject.id]['total_max_score'] += float(grade.max_score)
                 
-                # Get attendance grouped by subject
-                enrolled_subjects = db.query(SubjectStudentModel.subject_id).filter(
-                    SubjectStudentModel.student_id == student.id
+                # Fetch distinct assignments for this subject from GradeModel (the real source of truth)
+                subject_assignments_query = db.query(
+                    GradeModel.title,
+                    GradeModel.grade,
+                    GradeModel.max_score
+                ).filter(
+                    GradeModel.subject_id == subject.id,
+                    GradeModel.student_id == student.id
                 ).all()
+
+                # Sync assignments to grades_by_subject if not already added
+                # This ensures activity scores (often single entry) are captured correctly
+                for title, score, m_score in subject_assignments_query:
+                    if score is not None and m_score:
+                        # Check if already added via previous grades_query loop
+                        already_present = any(a['title'] == title for a in grades_by_subject[subject.id]['assignments'])
+                        if not already_present:
+                            grades_by_subject[subject.id]['assignments'].append({
+                                'title': title,
+                                'score': float(score),
+                                'max_score': float(m_score)
+                            })
+                            # Re-aggregate total scores just in case
+                            grades_by_subject[subject.id]['total_score'] += float(score)
+                            grades_by_subject[subject.id]['total_max_score'] += float(m_score)
+
+                # Get attendance grouped by subject
+                enrolled_subjects_q = db.query(SubjectStudentModel.subject_id).join(
+                    SubjectModel, SubjectStudentModel.subject_id == SubjectModel.id
+                ).filter(
+                    SubjectStudentModel.student_id == student.id
+                )
+                if academic_year:
+                    enrolled_subjects_q = enrolled_subjects_q.filter(SubjectModel.academic_year == academic_year)
+                if semester is not None:
+                    enrolled_subjects_q = enrolled_subjects_q.filter(SubjectModel.semester == semester)
+                enrolled_subjects = enrolled_subjects_q.all()
                 enrolled_subject_ids = [s[0] for s in enrolled_subjects]
                 
                 attendance_by_subject = {}
@@ -480,7 +524,7 @@ def get_homeroom_summary(
                 'students': students_data
             })
     
-    return {"classrooms": result}
+    return {"classrooms": result, "academic_year": academic_year, "semester": semester}
 
 
 @router.get("/my-classrooms/{classroom_id}/students")
@@ -533,6 +577,9 @@ def get_homeroom_classroom_students(
                     'subject_name': subject.name,
                     'is_activity': subject.subject_type == 'activity',
                     'credits': subject.credits if hasattr(subject, 'credits') else None,
+                    'activity_percentage': subject.activity_percentage if hasattr(subject, 'activity_percentage') and subject.activity_percentage is not None else 0,
+                    'max_collected_score': subject.max_collected_score if hasattr(subject, 'max_collected_score') and subject.max_collected_score is not None else 100,
+                    'max_exam_score': subject.max_exam_score if hasattr(subject, 'max_exam_score') and subject.max_exam_score is not None else 100,
                     'assignments': [],
                     'total_score': 0,
                     'total_max_score': 0

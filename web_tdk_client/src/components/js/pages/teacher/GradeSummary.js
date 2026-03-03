@@ -342,21 +342,15 @@ function GradeSummary() {
 
   const baseVisibleStudents = selectedClass ? students.filter(s => getClassKey(s) === selectedClass.key) : students;
 
-  // Calculate ranks for the current selection
-  const studentsWithSummary = baseVisibleStudents.map(s => ({
+  // Calculate summaries and sort by student_number
+  const visibleStudents = baseVisibleStudents.map(s => ({
     ...s,
     summary: calculateStudentSummary(s.id)
-  })).sort((a, b) => b.summary.totalScore - a.summary.totalScore); // Sort by total points DESC
-
-  let currentRank = 1;
-  studentsWithSummary.forEach((s, idx) => {
-    if (idx > 0 && s.summary.totalScore < studentsWithSummary[idx-1].summary.totalScore) {
-       currentRank = idx + 1;
-    }
-    s.rank = currentRank;
+  })).sort((a, b) => {
+    const numA = a.student_number || a.classroom?.student_number || 999;
+    const numB = b.student_number || b.classroom?.student_number || 999;
+    return numA - numB;
   });
-
-  const visibleStudents = studentsWithSummary;
 
   return (
     <div className="min-h-screen bg-[#f8fafc] pb-20">
@@ -463,7 +457,7 @@ function GradeSummary() {
                 <table className="w-full border-collapse">
                     <thead>
                         <tr className="bg-slate-50/50">
-                            <th className="px-6 py-5 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest w-16">อันดับ</th>
+                            <th className="px-6 py-5 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest w-16">เลขที่</th>
                             <th className="px-8 py-5 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap sticky left-0 bg-slate-50/50 z-10 border-r border-slate-100">รายชื่อนักเรียน</th>
                             {assignments.filter(a => 
                                 (!selectedClass || !a.classroom_id || a.classroom_id === selectedClass.id) &&
@@ -490,18 +484,14 @@ function GradeSummary() {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
-                        {visibleStudents.map(student => {
+                        {visibleStudents.map((student, idx) => {
                             const summary = student.summary; // Use pre-calculated summary
+                            const studentNo = student.student_number || student.classroom?.student_number || '-';
                             return (
                                 <tr key={student.id} className="hover:bg-slate-50/20 group">
                                     <td className="px-6 py-5 text-center">
-                                       <span className={`inline-flex items-center justify-center w-8 h-8 rounded-lg font-black text-xs ${
-                                         student.rank === 1 ? 'bg-amber-100 text-amber-600 border border-amber-200' :
-                                         student.rank === 2 ? 'bg-slate-100 text-slate-500 border border-slate-200' :
-                                         student.rank === 3 ? 'bg-orange-50 text-orange-600 border border-orange-100' :
-                                         'text-slate-400'
-                                       }`}>
-                                         {student.rank}
+                                       <span className="text-xs font-black text-slate-400">
+                                         {studentNo !== '-' ? studentNo : idx + 1}
                                        </span>
                                     </td>
                                     <td className="px-8 py-5 sticky left-0 bg-white group-hover:bg-slate-50 transition-colors z-10 border-r border-slate-50">
@@ -572,19 +562,15 @@ function GradeSummary() {
 
             {/* Mobile View */}
             <div className="md:hidden divide-y divide-slate-100">
-                {visibleStudents.map(student => {
+                {visibleStudents.map((student, idx) => {
                     const summary = student.summary;
+                    const studentNo = student.student_number || student.classroom?.student_number || '-';
                     return (
                         <div key={student.id} className="p-6">
                             <div className="flex items-start justify-between mb-4">
                                 <div className="flex items-center gap-3">
-                                   <div className={`w-8 h-8 flex items-center justify-center rounded-lg font-black text-xs shrink-0 ${
-                                     student.rank === 1 ? 'bg-amber-100 text-amber-600' :
-                                     student.rank === 2 ? 'bg-slate-100 text-slate-500' :
-                                     student.rank === 3 ? 'bg-orange-50 text-orange-600' :
-                                     'bg-slate-50 text-slate-400'
-                                   }`}>
-                                     {student.rank}
+                                   <div className={`w-8 h-8 flex items-center justify-center rounded-lg font-black text-xs shrink-0 bg-slate-50 text-slate-400`}>
+                                     {studentNo !== '-' ? studentNo : idx + 1}
                                    </div>
                                    <div>
                                        <h5 className="text-sm font-black text-slate-800">{student.full_name || student.username}</h5>

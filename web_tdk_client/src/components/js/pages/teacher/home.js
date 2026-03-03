@@ -59,6 +59,12 @@ function TeacherPage() {
   const [expiryModalId, setExpiryModalId] = useState(null);
   const [activeTab, setActiveTab] = useState('subjects');
 
+  // Subject semester/year filter
+  const currentBEYear = new Date().getFullYear() + 543;
+  const BE_YEAR_OPTIONS = Array.from({ length: 5 }, (_, i) => String(currentBEYear + 1 - i));
+  const [selectedAcademicYear, setSelectedAcademicYear] = useState(''); // '' means all
+  const [selectedSemester, setSelectedSemester] = useState('');          // '' means all
+
   // Evaluation state
   const [showStudentEvaluationModal, setShowStudentEvaluationModal] = useState(false);
   const [selectedSubjectForEvaluation, setSelectedSubjectForEvaluation] = useState(null);
@@ -86,6 +92,10 @@ function TeacherPage() {
   const [selectedStudentDetail, setSelectedStudentDetail] = useState(null);
   const [teacherHomerooms, setTeacherHomerooms] = useState([]);
   const [homeroomRanking, setHomeroomRanking] = useState([]); // Array of { student_id, rank, average_score }
+
+  // Homeroom semester/year filter
+  const [homeroomYear, setHomeroomYear] = useState('');
+  const [homeroomSemester, setHomeroomSemester] = useState('');
 
   // Confirm Modal State
   const [confirmState, setConfirmState] = useState({
@@ -156,7 +166,11 @@ function TeacherPage() {
   const fetchTeacherSubjects = async () => {
     if (!currentUser) return;
     try {
-      const res = await fetch(`${API_BASE_URL}/subjects/teacher/${currentUser.id}`);
+      const params = new URLSearchParams();
+      if (selectedAcademicYear) params.set('academic_year', selectedAcademicYear);
+      if (selectedSemester) params.set('semester', selectedSemester);
+      const queryStr = params.toString() ? `?${params.toString()}` : '';
+      const res = await fetch(`${API_BASE_URL}/subjects/teacher/${currentUser.id}${queryStr}`);
       const data = await res.json();
       if (Array.isArray(data)) {
         const mappedData = data.map(sub => {
@@ -199,7 +213,7 @@ function TeacherPage() {
 
   useEffect(() => {
     fetchTeacherSubjects();
-  }, [currentUser]);
+  }, [currentUser, selectedAcademicYear, selectedSemester]);
 
   const handleEndSubject = async (id) => {
     try {
@@ -403,7 +417,11 @@ function TeacherPage() {
     setLoadingHomeroomSummary(true);
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE_URL}/homeroom/my-classrooms/summary`, {
+      const params = new URLSearchParams();
+      if (homeroomYear) params.set('academic_year', homeroomYear);
+      if (homeroomSemester) params.set('semester', homeroomSemester);
+      const qs = params.toString() ? `?${params.toString()}` : '';
+      const res = await fetch(`${API_BASE_URL}/homeroom/my-classrooms/summary${qs}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
@@ -420,7 +438,7 @@ function TeacherPage() {
     } finally {
       setLoadingHomeroomSummary(false);
     }
-  }, [currentUser, selectedHomeroomClassroom]);
+  }, [currentUser, selectedHomeroomClassroom, homeroomYear, homeroomSemester]);
 
   useEffect(() => {
     const loadTeacherHomerooms = async () => {
@@ -441,7 +459,7 @@ function TeacherPage() {
 
   useEffect(() => {
     if (activeTab === 'homeroom') loadHomeroomSummary();
-  }, [activeTab, loadHomeroomSummary]);
+  }, [activeTab, loadHomeroomSummary, homeroomYear, homeroomSemester]);
 
   // Load ranking for selected homeroom
   useEffect(() => {
@@ -467,6 +485,38 @@ function TeacherPage() {
 
   const viewStudentDetail = async (student, origin) => {
     if (!selectedHomeroomClassroom) return;
+    
+    // Fetch full student data with grades_by_subject from summary endpoint
+    if (origin === 'grades') {
+      try {
+        const token = localStorage.getItem('token');
+        const params = new URLSearchParams();
+        if (homeroomYear) params.set('academic_year', homeroomYear);
+        if (homeroomSemester) params.set('semester', homeroomSemester);
+        const qs = params.toString() ? `?${params.toString()}` : '';
+        const res = await fetch(`${API_BASE_URL}/homeroom/my-classrooms/summary${qs}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          // Find the classroom in the response
+          const classroomData = data.classrooms.find(c => c.classroom_id === selectedHomeroomClassroom.classroom_id);
+          if (classroomData) {
+            // Find the student in this classroom
+            const fullStudent = classroomData.students.find(s => s.id === student.student_id);
+            if (fullStudent) {
+              setSelectedStudentDetail(fullStudent);
+              setShowStudentGradeModal(true);
+              return;
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching full student data:', err);
+      }
+    }
+    
+    // Fallback: use the student data directly
     setSelectedStudentDetail(student);
     if (origin === 'attendance') setShowStudentAttendanceModal(true);
     else setShowStudentGradeModal(true);
@@ -561,9 +611,13 @@ function TeacherPage() {
       finalExamScore = rawExamMax > 0 ? Math.round((rawExamScore / rawExamMax) * maxExam) : rawExamScore;
     }
 
+    // Only include exam max in denominator if exam data actually exists
+    const hasExamData = systemExam !== undefined || examList.length > 0;
+    const effectiveMaxExam = hasExamData ? maxExam : 0;
+
     return { 
       score: finalCollectedScore + finalExamScore, 
-      max: maxCollected + maxExam 
+      max: maxCollected + effectiveMaxExam 
     };
   };
 
@@ -634,13 +688,17 @@ function TeacherPage() {
       finalExamScore = rawExamMax > 0 ? Math.round((rawExamScore / rawExamMax) * maxExam) : rawExamScore;
     }
 
+    // Only include exam max in denominator if exam data actually exists
+    const hasExamData = systemExam !== undefined || examList.length > 0;
+    const effectiveMaxExam = hasExamData ? maxExam : 0;
+
     return { 
       collectedScore: finalCollectedScore,
       examScore: finalExamScore,
       totalScore: finalCollectedScore + finalExamScore, 
-      totalMax: maxCollected + maxExam,
+      totalMax: maxCollected + effectiveMaxExam,
       collectedMax: maxCollected,
-      examMax: maxExam
+      examMax: effectiveMaxExam
     };
   };
 
@@ -896,6 +954,34 @@ function TeacherPage() {
                   <h3 className="text-2xl font-black text-slate-800 tracking-tight">📚 รายวิชาของฉัน</h3>
                   <p className="text-slate-500 font-medium">จัดการคอร์สเรียนและการวัดผลนักเรียน</p>
                 </div>
+                {/* Semester/Year filter */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <select
+                    className="h-10 pl-4 pr-8 bg-white border border-slate-200 rounded-xl text-slate-700 font-bold text-xs outline-none focus:border-emerald-500 appearance-none cursor-pointer shadow-sm"
+                    value={selectedAcademicYear}
+                    onChange={e => setSelectedAcademicYear(e.target.value)}
+                  >
+                    <option value="">ทุกปีการศึกษา</option>
+                    {BE_YEAR_OPTIONS.map(y => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                  <select
+                    className="h-10 pl-4 pr-8 bg-white border border-slate-200 rounded-xl text-slate-700 font-bold text-xs outline-none focus:border-emerald-500 appearance-none cursor-pointer shadow-sm"
+                    value={selectedSemester}
+                    onChange={e => setSelectedSemester(e.target.value)}
+                  >
+                    <option value="">ทุกภาคเรียน</option>
+                    <option value="1">ภาคเรียนที่ 1</option>
+                    <option value="2">ภาคเรียนที่ 2</option>
+                  </select>
+                  {(selectedAcademicYear || selectedSemester) && (
+                    <button
+                      onClick={() => { setSelectedAcademicYear(''); setSelectedSemester(''); }}
+                      className="h-10 px-3 bg-rose-50 text-rose-500 rounded-xl text-xs font-black hover:bg-rose-100 transition-colors border border-rose-100"
+                    >
+                      ล้างตัวกรอง
+                    </button>
+                  )}
+                </div>
               </div>
 
               {teacherSubjects.length === 0 ? (
@@ -1006,6 +1092,34 @@ function TeacherPage() {
                 <div>
                   <h3 className="text-2xl font-black text-slate-800 tracking-tight">🏫 ชั้นที่ได้รับมอบหมาย</h3>
                   <p className="text-slate-500 font-medium italic">ครูประจำชั้น: สรุปภาพรวมและติดตามความก้าวหน้า</p>
+                </div>
+                {/* Homeroom semester/year filter */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <select
+                    className="h-10 pl-4 pr-8 bg-white border border-slate-200 rounded-xl text-slate-700 font-bold text-xs outline-none focus:border-emerald-500 appearance-none cursor-pointer shadow-sm"
+                    value={homeroomYear}
+                    onChange={e => { setHomeroomYear(e.target.value); setHomeroomSemester(''); }}
+                  >
+                    <option value="">ทุกปี (สรุปทั้งปี)</option>
+                    {BE_YEAR_OPTIONS.map(y => <option key={y} value={y}>ปี {y}</option>)}
+                  </select>
+                  <select
+                    className="h-10 pl-4 pr-8 bg-white border border-slate-200 rounded-xl text-slate-700 font-bold text-xs outline-none focus:border-emerald-500 appearance-none cursor-pointer shadow-sm"
+                    value={homeroomSemester}
+                    onChange={e => setHomeroomSemester(e.target.value)}
+                  >
+                    <option value="">ทุกภาค</option>
+                    <option value="1">ภาคเรียนที่ 1</option>
+                    <option value="2">ภาคเรียนที่ 2</option>
+                  </select>
+                  {(homeroomYear || homeroomSemester) && (
+                    <button
+                      onClick={() => { setHomeroomYear(''); setHomeroomSemester(''); }}
+                      className="h-10 px-3 bg-rose-50 text-rose-500 rounded-xl text-xs font-black hover:bg-rose-100 transition-colors border border-rose-100"
+                    >
+                      ดูทั้งปี
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -1134,9 +1248,9 @@ function TeacherPage() {
                               <table className="w-full text-left">
                                 <thead>
                                   <tr className="bg-slate-50/50 text-slate-400 text-[10px] font-black uppercase tracking-widest border-b border-slate-100">
-                                    {homeroomSubTab === 'grades' && <th className="px-6 py-4 text-center">ลำดับ</th>}
                                     <th className="px-6 py-4 text-center">เลขที่</th>
                                     <th className="px-6 py-4">ข้อมูลนักเรียน</th>
+                                    {homeroomSubTab === 'grades' && <th className="px-6 py-4 text-center">ลำดับ</th>}
                                     <th className="px-6 py-4 text-center">จัดการ</th>
                                   </tr>
                                 </thead>
@@ -1145,14 +1259,16 @@ function TeacherPage() {
                                     const studentsWithScores = [...selectedHomeroomClassroom.students].map(s => ({
                                       ...s,
                                       recalculatedScore: calculateMainSubjectsScore(s.grades_by_subject || [])
-                                    })).sort((a, b) => b.recalculatedScore.totalScore - a.recalculatedScore.totalScore);
+                                    })).sort((a, b) => (a.student_number || 999) - (b.student_number || 999));
 
+                                    const sortedForRanking = [...studentsWithScores].sort((a, b) => b.recalculatedScore.totalScore - a.recalculatedScore.totalScore);
                                     let currentRank = 1;
-                                    studentsWithScores.forEach((s, idx) => {
-                                      if (idx > 0 && s.recalculatedScore.totalScore < studentsWithScores[idx-1].recalculatedScore.totalScore) {
+                                    sortedForRanking.forEach((s, idx) => {
+                                      if (idx > 0 && s.recalculatedScore.totalScore < sortedForRanking[idx-1].recalculatedScore.totalScore) {
                                         currentRank = idx + 1;
                                       }
-                                      s.localRank = currentRank;
+                                      const originalStudent = studentsWithScores.find(st => st.id === s.id);
+                                      if (originalStudent) originalStudent.localRank = currentRank;
                                     });
 
                                     return studentsWithScores.map(student => {
@@ -1160,18 +1276,6 @@ function TeacherPage() {
                                       
                                       return (
                                         <tr key={student.id} className="hover:bg-slate-50 transition-colors group">
-                                          {homeroomSubTab === 'grades' && (
-                                            <td className="px-6 py-4 text-center">
-                                              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-xs mx-auto ${
-                                                rank === 1 ? 'bg-amber-100 text-amber-600 ring-2 ring-amber-200' :
-                                                rank === 2 ? 'bg-slate-100 text-slate-500' :
-                                                rank === 3 ? 'bg-orange-50 text-orange-600' :
-                                                'bg-slate-50 text-slate-400'
-                                              }`}>
-                                                {rank}
-                                              </div>
-                                            </td>
-                                          )}
                                           <td className="px-6 py-4 text-center">
                                             <span className="text-sm font-black text-slate-600">
                                               {student.student_number || '-'}
@@ -1188,12 +1292,24 @@ function TeacherPage() {
                                               </div>
                                             </div>
                                           </td>
+                                          {homeroomSubTab === 'grades' && (
+                                            <td className="px-6 py-4 text-center">
+                                              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-xs mx-auto ${
+                                                rank === 1 ? 'bg-amber-100 text-amber-600 ring-2 ring-amber-200' :
+                                                rank === 2 ? 'bg-slate-100 text-slate-500' :
+                                                rank === 3 ? 'bg-orange-50 text-orange-600' :
+                                                'bg-slate-50 text-slate-400'
+                                              }`}>
+                                                {rank}
+                                              </div>
+                                            </td>
+                                          )}
                                           <td className="px-6 py-4 text-center">
                                             <button 
                                               onClick={() => viewStudentDetail(student, homeroomSubTab)}
                                               className="px-4 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg text-xs font-black hover:border-emerald-500 hover:text-emerald-700 transition-all hover:bg-emerald-50 flex items-center justify-center gap-2 mx-auto"
                                             >
-                                              RECORDS <ChevronRight className="w-3 h-3" />
+                                              ดูรีพอร์ต <ChevronRight className="w-3 h-3" />
                                             </button>
                                           </td>
                                         </tr>
@@ -1210,14 +1326,16 @@ function TeacherPage() {
                                     const studentsWithScores = [...selectedHomeroomClassroom.students].map(s => ({
                                       ...s,
                                       recalculatedScore: calculateMainSubjectsScore(s.grades_by_subject || [])
-                                    })).sort((a, b) => b.recalculatedScore.totalScore - a.recalculatedScore.totalScore);
+                                    })).sort((a, b) => (a.student_number || 999) - (b.student_number || 999));
 
+                                    const sortedForRanking = [...studentsWithScores].sort((a, b) => b.recalculatedScore.totalScore - a.recalculatedScore.totalScore);
                                     let currentRank = 1;
-                                    studentsWithScores.forEach((s, idx) => {
-                                      if (idx > 0 && s.recalculatedScore.totalScore < studentsWithScores[idx-1].recalculatedScore.totalScore) {
+                                    sortedForRanking.forEach((s, idx) => {
+                                      if (idx > 0 && s.recalculatedScore.totalScore < sortedForRanking[idx-1].recalculatedScore.totalScore) {
                                         currentRank = idx + 1;
                                       }
-                                      s.localRank = currentRank;
+                                      const originalStudent = studentsWithScores.find(st => st.id === s.id);
+                                      if (originalStudent) originalStudent.localRank = currentRank;
                                     });
 
                                     return studentsWithScores.map(student => {
@@ -1259,7 +1377,7 @@ function TeacherPage() {
                                                     onClick={() => viewStudentDetail(student, homeroomSubTab)}
                                                     className="w-full py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-black hover:border-emerald-500 hover:text-emerald-700 transition-all hover:bg-emerald-50 flex items-center justify-center gap-2"
                                                   >
-                                                    VIEW RECORDS <ChevronRight className="w-3 h-3" />
+                                                    ดูรีพอร์ต <ChevronRight className="w-3 h-3" />
                                                   </button>
                                             </div>
                                         </div>
@@ -1549,10 +1667,12 @@ function TeacherPage() {
         student={selectedStudentDetail}
         onClose={() => setShowStudentGradeModal(false)}
         calculateMainSubjectsScore={calculateMainSubjectsScore}
+        calculateDetailedSubjectScore={calculateDetailedSubjectScore}
         calculateGPA={calculateGPA}
         getLetterGrade={getLetterGrade}
         initials={getInitials}
         origin={homeroomSubTab}
+        semesterLabel={homeroomYear ? `ปีการศึกษา ${homeroomYear}${homeroomSemester ? ` ภาคเรียนที่ ${homeroomSemester}` : ''}` : 'สรุปทั้งปีการศึกษา'}
       />
 
       <StudentAttendanceModal
@@ -1561,6 +1681,7 @@ function TeacherPage() {
         onClose={() => setShowStudentAttendanceModal(false)}
         initials={getInitials}
         origin={homeroomSubTab}
+        semesterLabel={homeroomYear ? `ปีการศึกษา ${homeroomYear}${homeroomSemester ? ` ภาคเรียนที่ ${homeroomSemester}` : ''}` : 'สรุปทั้งปีการศึกษา'}
       />
 
       <ConfirmModal

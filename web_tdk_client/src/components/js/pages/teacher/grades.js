@@ -969,13 +969,14 @@ function GradesPage(){
                           const percentage = score !== null ? calculatePercentage(score, maxScore) : null;
                           const gradeLetter = percentage !== null ? calculateGrade(percentage) : null;
                           const isInvalid = currentGrades[s.id] && Number(currentGrades[s.id]) > maxScore;
+                          const studentNo = s.student_number || s.classroom?.student_number || '-';
 
                           return (
                             <tr key={s.id} className="group hover:bg-slate-50/50 transition-colors">
                               <td className="px-8 py-6">
                                 <div className="flex items-center gap-4">
                                   <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 font-black text-xs border-2 border-white group-hover:border-emerald-100 transition-all">
-                                    {idx + 1}
+                                    {studentNo !== '-' ? studentNo : idx + 1}
                                   </div>
                                   <div>
                                     <h4 className="text-sm font-black text-slate-800 group-hover:text-emerald-600 transition-colors">
@@ -1046,12 +1047,13 @@ function GradesPage(){
                           const percentage = score !== null ? calculatePercentage(score, maxScore) : null;
                           const gradeLetter = percentage !== null ? calculateGrade(percentage) : null;
                           const isInvalid = currentGrades[s.id] && Number(currentGrades[s.id]) > maxScore;
+                          const studentNo = s.student_number || s.classroom?.student_number || '-';
 
                           return (
                               <div key={s.id} className="p-4 flex flex-col gap-4">
                                   <div className="flex items-center gap-4">
                                     <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 font-black text-xs border-2 border-white">
-                                      {idx + 1}
+                                      {studentNo !== '-' ? studentNo : idx + 1}
                                     </div>
                                     <div>
                                       <h4 className="text-sm font-black text-slate-800">
@@ -1262,7 +1264,7 @@ function GradesPage(){
                 <table className="w-full border-collapse">
                   <thead>
                     <tr className="bg-slate-50">
-                      <th className="px-6 py-4 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest w-16">อันดับ</th>
+                      <th className="px-6 py-4 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest w-16">เลขที่</th>
                       <th className="px-6 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">รายชื่อนักเรียน</th>
                       {assignments.filter(a => a.title !== "คะแนนเก็บรวม" && a.title !== "คะแนนสอบรวม").map(a => (
                         <th key={a.id} className="px-6 py-4 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest min-w-[120px]">
@@ -1290,14 +1292,10 @@ function GradesPage(){
                       const withSummaries = visibleStudents.map(s => ({
                         ...s,
                         summary: calculateStudentSummary(s.id)
-                      })).sort((a, b) => b.summary.totalScore - a.summary.totalScore);
-                      
-                      let currentRank = 1;
-                      withSummaries.forEach((s, idx) => {
-                        if (idx > 0 && s.summary.totalScore < withSummaries[idx-1].summary.totalScore) {
-                          currentRank = idx + 1;
-                        }
-                        s.rank = currentRank;
+                      })).sort((a, b) => {
+                        const numA = a.student_number || a.classroom?.student_number || 999;
+                        const numB = b.student_number || b.classroom?.student_number || 999;
+                        return numA - numB;
                       });
                       
                       return withSummaries.map(student => {
@@ -1305,13 +1303,8 @@ function GradesPage(){
                         return (
                           <tr key={student.id} className="hover:bg-slate-50/50">
                             <td className="px-6 py-4 text-center">
-                              <span className={`inline-flex items-center justify-center w-8 h-8 rounded-lg font-black text-xs ${
-                                student.rank === 1 ? 'bg-amber-100 text-amber-600 border border-amber-200 shadow-sm shadow-amber-100' :
-                                student.rank === 2 ? 'bg-slate-100 text-slate-500 border border-slate-200 shadow-sm shadow-slate-100' :
-                                student.rank === 3 ? 'bg-orange-50 text-orange-600 border border-orange-100 shadow-sm shadow-orange-50' :
-                                'text-slate-400'
-                              }`}>
-                                {student.rank}
+                              <span className="text-xs font-black text-slate-400">
+                                {student.student_number || student.classroom?.student_number || '-'}
                               </span>
                             </td>
                             <td className="px-6 py-4">
@@ -1364,29 +1357,21 @@ function GradesPage(){
                     const withSummaries = visibleStudents.map(s => ({
                       ...s,
                       summary: calculateStudentSummary(s.id)
-                    })).sort((a, b) => b.summary.totalScore - a.summary.totalScore);
-                    
-                    let currentRank = 1;
-                    withSummaries.forEach((s, idx) => {
-                      if (idx > 0 && s.summary.totalScore < withSummaries[idx-1].summary.totalScore) {
-                        currentRank = idx + 1;
-                      }
-                      s.rank = currentRank;
+                    })).sort((a, b) => {
+                      const numA = a.student_number || a.classroom?.student_number || 999;
+                      const numB = b.student_number || b.classroom?.student_number || 999;
+                      return numA - numB;
                     });
                     
                     return withSummaries.map(student => {
                         const summary = student.summary;
+                        const studentNo = student.student_number || student.classroom?.student_number || '-';
                         return (
                             <div key={student.id} className="p-4">
                                 <div className="flex items-center justify-between mb-4 border-b border-slate-50 pb-4">
                                     <div className="flex items-center gap-3">
-                                       <div className={`w-8 h-8 flex items-center justify-center rounded-lg font-black text-xs shrink-0 ${
-                                         student.rank === 1 ? 'bg-amber-100 text-amber-600 border border-amber-200 shadow-sm' :
-                                         student.rank === 2 ? 'bg-slate-100 text-slate-500 border border-slate-200' :
-                                         student.rank === 3 ? 'bg-orange-50 text-orange-600 border border-orange-100' :
-                                         'bg-slate-50 text-slate-400'
-                                       }`}>
-                                         {student.rank}
+                                       <div className={`w-8 h-8 flex items-center justify-center rounded-lg font-black text-xs shrink-0 bg-slate-50 text-slate-400`}>
+                                         {studentNo !== '-' ? studentNo : '-'}
                                        </div>
                                        <div>
                                            <h5 className="text-sm font-black text-slate-800">{student.full_name || student.username}</h5>

@@ -23,6 +23,7 @@ class GradeResponse(BaseModel):
     title: Optional[str] = None
     max_score: Optional[float] = None
     grade: Optional[float] = None
+    student_number: Optional[int] = None
 
     class Config:
         from_attributes = True

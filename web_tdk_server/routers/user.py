@@ -482,7 +482,7 @@ def bulk_upload_users(file: UploadFile = File(...), db: Session = Depends(get_db
     header = [str(h).strip().lower() if h is not None else '' for h in rows[0]]
     # map header names to indexes
     idx = {name: i for i, name in enumerate(header)}
-    required_cols = ['username', 'email', 'full_name', 'password', 'role']
+    required_cols = ['full_name', 'role']  # Only full_name and role are truly required
     for col in required_cols:
         if col not in idx:
             raise HTTPException(status_code=400, detail=f'ขาดคอลัมน์ที่จำเป็น: {col}')
@@ -490,14 +490,54 @@ def bulk_upload_users(file: UploadFile = File(...), db: Session = Depends(get_db
     # PHASE 1: Validate ALL rows first (no database changes yet)
     validated_rows = []
     errors = []
+    used_usernames = set()  # Track generated usernames to avoid duplicates
+    
+    def generate_username(full_name: str, existing_usernames: set) -> str:
+        """Generate username from full_name if missing"""
+        import re
+        import unicodedata
+        # Try to transliterate or strip non-ASCII characters
+        # Normalize unicode (e.g., accented chars → base chars)
+        normalized = unicodedata.normalize('NFKD', full_name)
+        ascii_only = normalized.encode('ascii', 'ignore').decode('ascii')
+        # Keep only alphanumeric characters, lowercase
+        base_username = re.sub(r'[^a-z0-9]', '', ascii_only.replace(' ', '').lower())
+        
+        # If full_name is non-ASCII (Thai, Chinese, etc.) and nothing remains, use 'user' prefix
+        if not base_username:
+            base_username = 'user'
+        
+        # Check if username already exists, append random suffix for uniqueness
+        username = base_username
+        counter = 1
+        while username in existing_usernames or db.query(UserModel).filter(UserModel.username == username).first():
+            username = f"{base_username}{secrets.token_hex(3)}"
+            counter += 1
+            if counter > 10:  # Prevent infinite loop
+                username = f"{base_username}_{secrets.token_hex(4)}"
+                break
+        
+        return username
     
     for r_i, row in enumerate(rows[1:], start=2):
         try:
-            username = str(row[idx['username']]).strip() if row[idx['username']] is not None else ''
-            email = str(row[idx['email']]).strip() if row[idx['email']] is not None else ''
-            full_name = str(row[idx['full_name']]).strip() if row[idx['full_name']] is not None else ''
-            password = str(row[idx['password']]).strip() if row[idx['password']] is not None else ''
-            role = str(row[idx['role']]).strip() if row[idx['role']] is not None else ''
+            full_name = str(row[idx['full_name']]).strip() if 'full_name' in idx and row[idx['full_name']] is not None else ''
+            role = str(row[idx['role']]).strip() if 'role' in idx and row[idx['role']] is not None else ''
+
+            # Skip empty rows gracefully (common in Excel files)
+            if not full_name and not role:
+                continue
+
+            username = str(row[idx['username']]).strip() if 'username' in idx and row[idx['username']] is not None else ''
+            email = str(row[idx['email']]).strip() if 'email' in idx and row[idx['email']] is not None else ''
+            password = str(row[idx['password']]).strip() if 'password' in idx and row[idx['password']] is not None else ''
+            
+            # Validate full_name and role are provided
+            if not full_name:
+                raise ValueError('ชื่อเต็มชื่อ (full_name) ไม่ได้กำหนด')
+            if role not in ('teacher', 'student'):
+                raise ValueError('บทบาท (role) ต้องเป็น "teacher" หรือ "student"')
+            
             school_id = None
             if 'school_id' in idx and row[idx['school_id']] is not None:
                 try:
@@ -530,9 +570,20 @@ def bulk_upload_users(file: UploadFile = File(...), db: Session = Depends(get_db
                 except Exception:
                     student_number = None
 
-            # Validate required fields
-            if not username or not password or role not in ('teacher', 'student'):
-                raise ValueError('ข้อมูลไม่ถูกต้อง - ชื่อผู้ใช้, รหัสผ่าน หายไป หรือบทบาทไม่ถูกต้อง')
+            # Auto-generate missing username
+            if not username:
+                username = generate_username(full_name, used_usernames)
+            used_usernames.add(username)
+            
+            # Auto-generate missing email
+            if not email:
+                email = f'{username}@example.com'
+            
+            # Generate temporary password if missing
+            must_change_password = False
+            if not password:
+                password = secrets.token_urlsafe(12)
+                must_change_password = True  # Require password change on first login
 
             # default school_id to admin's school if not provided
             if school_id is None:
@@ -589,7 +640,8 @@ def bulk_upload_users(file: UploadFile = File(...), db: Session = Depends(get_db
                 'school_id': school_id,
                 'grade_level': grade_level,
                 'classroom_id': classroom_id,
-                'student_number': student_number
+                'student_number': student_number,
+                'must_change_password': must_change_password
             })
         except Exception as e:
             errors.append({'row': r_i, 'error': str(e)})
@@ -615,7 +667,8 @@ def bulk_upload_users(file: UploadFile = File(...), db: Session = Depends(get_db
                 hashed_password=hashed,
                 role=row_data['role'],
                 school_id=row_data['school_id'],
-                grade_level=row_data['grade_level']
+                grade_level=row_data['grade_level'],
+                must_change_password=row_data['must_change_password']
             )
             db.add(new_user)
             db.flush()
@@ -1197,6 +1250,11 @@ def bulk_delete_users(
             continue
         
         try:
+            # Delete related classroom_students records first (to avoid integrity errors)
+            from models.classroom import ClassroomStudent
+            db.query(ClassroomStudent).filter(ClassroomStudent.student_id == user_id).delete(synchronize_session=False)
+            
+            # Then delete the user
             db.delete(user_to_delete)
             results['success'].append({
                 'id': user_id,

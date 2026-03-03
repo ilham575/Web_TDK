@@ -92,7 +92,14 @@ function StudentEvaluationModal({ isOpen, subject, students, onClose, teacherId,
 
   // Filter students by classroom
   useEffect(() => {
+    const uniqueClassrooms = getUniqueClassrooms();
     if (students && students.length > 0) {
+      // If no classroom is selected but we have classrooms, select the first one by default
+      if (!selectedClassroom && uniqueClassrooms.length > 0) {
+        setSelectedClassroom(String(uniqueClassrooms[0].id));
+        return;
+      }
+
       if (selectedClassroom) {
         const filtered = students.filter(student => 
           student.classroom && student.classroom.id === parseInt(selectedClassroom)
@@ -236,7 +243,6 @@ function StudentEvaluationModal({ isOpen, subject, students, onClose, teacherId,
                     onChange={(e) => setSelectedClassroom(e.target.value)}
                     className="w-full appearance-none bg-white border border-slate-200 rounded-xl px-4 py-3 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   >
-                    <option value="">ทุกชั้นเรียน</option>
                     {getUniqueClassrooms().map(classroom => (
                       <option key={classroom.id} value={classroom.id}>
                         {classroom.name} ({classroom.grade_level})

@@ -30,9 +30,9 @@ async def lifespan(app: FastAPI):
         create_all_tables()
         print("✓ Database tables created successfully!")
     except Exception as e:
-        print(f"✗ Error creating tables: {e}")
-        # Re-raise in production to fail fast if database is not accessible
-        raise
+        print(f"⚠ Warning: Database initialization failed (server will still start): {e}")
+        # Don't re-raise - let server start even if DB is not ready
+        # This allows for graceful startup with pending database setup
     
     try:
         # Try to run schema updates if create_tables module exists
@@ -47,72 +47,13 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-# Convert ASGI to WSGI for Firebase Functions
-import functions_framework
-from asgiref.wsgi import WsgiToAsgi
-
-@functions_framework.http
-def api_server(request):
-    # Wrap the FastAPI ASGI app with WsgiToAsgi
-    from asgiref.sync import async_to_sync
-    from starlette.responses import Response
-    
-    # Create ASGI scope from request
-    scope = {
-        "type": "http",
-        "asgi": {"version": "3.0"},
-        "http_version": "1.1",
-        "method": request.method,
-        "scheme": request.scheme,
-        "path": request.path,
-        "query_string": request.query_string,
-        "root_path": "",
-        "headers": [(k.lower().encode(), v.encode()) for k, v in request.headers.items()],
-        "server": (request.host.split(":")[0], int(request.host.split(":")[1]) if ":" in request.host else 443),
-    }
-    
-    # Handle the request
-    async def receive():
-        return {
-            "type": "http.request",
-            "body": request.get_data(),
-            "more_body": False,
-        }
-    
-    response_started = False
-    response_status = 200
-    response_headers = []
-    response_body = []
-    
-    async def send(message):
-        nonlocal response_started, response_status, response_headers, response_body
-        if message["type"] == "http.response.start":
-            response_started = True
-            response_status = message["status"]
-            response_headers = message.get("headers", [])
-        elif message["type"] == "http.response.body":
-            response_body.append(message.get("body", b""))
-    
-    # Call the ASGI app
-    import asyncio
-    asyncio.run(app(scope, receive, send))
-    
-    # Build Flask response
-    from flask import Response as FlaskResponse
-    flask_response = FlaskResponse(
-        b"".join(response_body),
-        status=response_status,
-        headers=[(k.decode(), v.decode()) for k, v in response_headers]
-    )
-    return flask_response
-
 # เพิ่ม CORS middleware
 cors_origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://localhost:5173", # Vite default
-    "https://tdk-proj-487218.web.app",
-    "https://tdk-proj-487218.firebaseapp.com",
+    "https://tdk-proj-489111.web.app",
+    "https://tdk-proj-489111.firebaseapp.com",
 ]
 # If CORS_ORIGINS environment variable is set, add those too
 env_origins = os.getenv("CORS_ORIGINS")
@@ -162,3 +103,52 @@ def initialize_database():
     except Exception as e:
         import traceback
         return {"status": "error", "message": str(e), "traceback": traceback.format_exc()}
+
+@app.post("/create-owner-user", tags=["admin"])
+def create_owner_user():
+    """Create default owner user - run once after init-database"""
+    try:
+        from database.connection import SessionLocal
+        from models.user import User
+        from utils.security import hash_password, verify_password
+        
+        db = SessionLocal()
+        
+        # Check if owner already exists
+        existing = db.query(User).filter(User.username == "owner").first()
+        if existing:
+            return {
+                "status": "info",
+                "message": "Owner user already exists",
+                "username": existing.username,
+                "role": existing.role
+            }
+        
+        # Create owner user
+        hashed = hash_password("owner123")
+        owner = User(
+            username="owner",
+            email="owner@example.com",
+            full_name="System Owner",
+            hashed_password=hashed,
+            role="owner",
+            must_change_password=True
+        )
+        db.add(owner)
+        db.commit()
+        db.close()
+        
+        return {
+            "status": "success",
+            "message": "Owner user created successfully!",
+            "username": "owner",
+            "temporary_password": "owner123",
+            "warning": "IMPORTANT: Owner must change this temporary password on first login!"
+        }
+    except Exception as e:
+        import traceback
+        return {
+            "status": "error",
+            "message": str(e),
+            "traceback": traceback.format_exc()
+        }

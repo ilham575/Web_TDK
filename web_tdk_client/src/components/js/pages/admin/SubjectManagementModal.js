@@ -1,7 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
-import { X, BookOpen, Target, CreditCard, Percent, Save, Trash2, Info } from 'lucide-react';
+import { X, BookOpen, Target, CreditCard, Percent, Save, Trash2, Info, CalendarDays } from 'lucide-react';
 import { API_BASE_URL } from '../../../endpoints';
+
+// Helper: current Buddhist Era year
+const currentBEYear = () => new Date().getFullYear() + 543;
+const BE_YEAR_OPTIONS = Array.from({ length: 5 }, (_, i) => String(currentBEYear() + 1 - i));
 
 function SubjectManagementModal({ isOpen, onClose, onSave, subject, currentSchoolId }) {
   const [formData, setFormData] = useState({
@@ -11,7 +15,9 @@ function SubjectManagementModal({ isOpen, onClose, onSave, subject, currentSchoo
     credits: '',
     activity_percentage: '',
     max_collected_score: 100,
-    max_exam_score: 100
+    max_exam_score: 100,
+    academic_year: String(currentBEYear()),
+    semester: 1
   });
   const [saving, setSaving] = useState(false);
   const [currentSubject, setCurrentSubject] = useState(null);
@@ -29,7 +35,9 @@ function SubjectManagementModal({ isOpen, onClose, onSave, subject, currentSchoo
           credits: subject.credits || '',
           activity_percentage: subject.activity_percentage || '',
           max_collected_score: (subject.max_collected_score !== undefined && subject.max_collected_score !== null) ? subject.max_collected_score : 100,
-          max_exam_score: (subject.max_exam_score !== undefined && subject.max_exam_score !== null) ? subject.max_exam_score : 100
+          max_exam_score: (subject.max_exam_score !== undefined && subject.max_exam_score !== null) ? subject.max_exam_score : 100,
+          academic_year: subject.academic_year || String(currentBEYear()),
+          semester: subject.semester || 1
         });
       } else {
         // Creating new subject
@@ -40,7 +48,9 @@ function SubjectManagementModal({ isOpen, onClose, onSave, subject, currentSchoo
           credits: '',
           activity_percentage: '',
           max_collected_score: 100,
-          max_exam_score: 100
+          max_exam_score: 100,
+          academic_year: String(currentBEYear()),
+          semester: 1
         });
       }
     }
@@ -67,7 +77,9 @@ function SubjectManagementModal({ isOpen, onClose, onSave, subject, currentSchoo
         credits: formData.credits ? parseInt(formData.credits) : null,
         activity_percentage: formData.activity_percentage ? parseInt(formData.activity_percentage) : null,
         max_collected_score: formData.max_collected_score ? parseInt(formData.max_collected_score) : 100,
-        max_exam_score: formData.max_exam_score ? parseInt(formData.max_exam_score) : 100
+        max_exam_score: formData.max_exam_score ? parseInt(formData.max_exam_score) : 100,
+        academic_year: formData.academic_year || null,
+        semester: formData.semester ? parseInt(formData.semester) : null
       };
 
       const res = await fetch(url, {
@@ -218,6 +230,47 @@ function SubjectManagementModal({ isOpen, onClose, onSave, subject, currentSchoo
                     </div>
                   </div>
                 )}
+              </div>
+
+              {/* Academic Year & Semester */}
+              <div className="pt-4 border-t border-slate-50">
+                <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 px-1">
+                  <CalendarDays className="w-3.5 h-3.5" />
+                  ปีการศึกษา / เทอม
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest px-1">ปีการศึกษา</label>
+                    <div className="relative">
+                      <select
+                        className="w-full h-12 pl-5 pr-10 bg-slate-50 border-2 border-transparent focus:border-emerald-500 focus:bg-white rounded-2xl text-slate-700 font-bold text-sm outline-none transition-all appearance-none cursor-pointer"
+                        value={formData.academic_year}
+                        onChange={(e) => setFormData({...formData, academic_year: e.target.value})}
+                      >
+                        {BE_YEAR_OPTIONS.map(y => <option key={y} value={y}>{y}</option>)}
+                      </select>
+                      <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                        <CalendarDays className="w-4 h-4" />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest px-1">ภาคเรียน</label>
+                    <div className="relative">
+                      <select
+                        className="w-full h-12 pl-5 pr-10 bg-slate-50 border-2 border-transparent focus:border-emerald-500 focus:bg-white rounded-2xl text-slate-700 font-bold text-sm outline-none transition-all appearance-none cursor-pointer"
+                        value={formData.semester}
+                        onChange={(e) => setFormData({...formData, semester: parseInt(e.target.value)})}
+                      >
+                        <option value={1}>ภาคเรียนที่ 1</option>
+                        <option value={2}>ภาคเรียนที่ 2</option>
+                      </select>
+                      <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                        <Target className="w-4 h-4" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {/* Score Settings */}

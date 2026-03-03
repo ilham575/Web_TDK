@@ -110,6 +110,9 @@ function TeacherEvaluationsPage() {
       const data = await res.json();
       if (Array.isArray(data)) {
         setTeacherSubjects(data);
+        if (data.length > 0 && !selectedSubject && !subjectId) {
+          setSelectedSubject(String(data[0].id));
+        }
       } else {
         setTeacherSubjects([]);
       }
@@ -128,6 +131,9 @@ function TeacherEvaluationsPage() {
       const data = await res.json();
       if (Array.isArray(data)) {
         setTeacherClassrooms(data);
+        if (data.length > 0 && !selectedClassroom) {
+          setSelectedClassroom(String(data[0].id));
+        }
       } else {
         setTeacherClassrooms([]);
       }
@@ -393,27 +399,9 @@ function TeacherEvaluationsPage() {
                 onChange={(e) => setSelectedSubject(e.target.value)}
                 className="w-full appearance-none bg-white border border-slate-200 rounded-xl px-4 py-3 pr-10 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-sm"
               >
-                <option value="">ทุกวิชาที่สอน</option>
                 {teacherSubjects.map(subject => (
                   <option key={subject.id} value={subject.id}>
                     {subject.code} - {subject.name}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-            </div>
-
-            {/* Classroom Filter */}
-            <div className="relative lg:col-span-2">
-              <select
-                value={selectedClassroom}
-                onChange={(e) => setSelectedClassroom(e.target.value)}
-                className="w-full appearance-none bg-white border border-slate-200 rounded-xl px-4 py-3 pr-10 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-sm"
-              >
-                <option value="">ทุกชั้นเรียน</option>
-                {teacherClassrooms.map(classroom => (
-                  <option key={classroom.id} value={classroom.id}>
-                    {classroom.name} ({classroom.grade_level})
                   </option>
                 ))}
               </select>

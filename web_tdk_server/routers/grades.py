@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List, Dict
 from sqlalchemy import distinct, func
-from datetime import datetime
+from datetime import datetime, timezone
 
 from database.connection import get_db
 from routers.user import get_current_user
@@ -64,16 +64,17 @@ def calculate_activity_grades(db: Session, student_id: int, classroom_id: int = 
         if not grades:
             continue
         
-        # Calculate average score for this subject
+        # Aggregate all assignments for this subject correctly
         valid_grades = [g for g in grades if g.grade is not None and g.max_score]
         if not valid_grades:
             continue
         
-        avg_score = sum([g.grade for g in valid_grades]) / len(valid_grades)
-        max_score = valid_grades[0].max_score  # Assume all have same max_score
+        # Sum all raw scores and max scores across all assignments (supports multi-assignment subjects)
+        total_raw_score = sum(float(g.grade) for g in valid_grades)
+        total_max_score = sum(float(g.max_score) for g in valid_grades)
         
-        # Normalize to 100 scale
-        normalized_score = (avg_score / max_score) * 100 if max_score else 0
+        # Normalize to 100 scale based on total
+        normalized_score = (total_raw_score / total_max_score) * 100 if total_max_score else 0
         
         # Calculate contribution
         percent = activity_percent or 0
@@ -82,8 +83,8 @@ def calculate_activity_grades(db: Session, student_id: int, classroom_id: int = 
         activity_subjects.append({
             'subject_id': subject_id,
             'subject_name': subject_name,
-            'raw_score': round(avg_score, 2),
-            'max_score': round(max_score, 2),
+            'raw_score': round(total_raw_score, 2),
+            'max_score': round(total_max_score, 2),
             'normalized_score': round(normalized_score, 2),
             'percentage': percent,
             'contribution': round(contribution, 2),
@@ -174,7 +175,6 @@ def get_grades(subject_id: int = None, classroom_id: int = None, db: Session = D
                 school = db.query(SchoolModel).filter(SchoolModel.id == classroom.school_id).first()
                 if school and school.grade_announcement_date:
                     # Use UTC-aware datetime comparison (check if current time is before announcement date)
-                    from datetime import timezone
                     now = datetime.now(timezone.utc)
                     announcement_date = school.grade_announcement_date
                     # Ensure announcement_date is timezone-aware for proper comparison
@@ -183,7 +183,20 @@ def get_grades(subject_id: int = None, classroom_id: int = None, db: Session = D
                     if now < announcement_date:
                         raise HTTPException(status_code=403, detail='Grades have not been announced yet')
     
-    query = db.query(GradeModel)
+    query = db.query(
+        GradeModel.id,
+        GradeModel.subject_id,
+        GradeModel.student_id,
+        GradeModel.classroom_id,
+        GradeModel.title,
+        GradeModel.max_score,
+        GradeModel.grade,
+        ClassroomStudentModel.student_number
+    ).outerjoin(
+        ClassroomStudentModel,
+        (GradeModel.student_id == ClassroomStudentModel.student_id) & (GradeModel.classroom_id == ClassroomStudentModel.classroom_id)
+    )
+    
     if subject_id is not None:
         query = query.filter(GradeModel.subject_id == subject_id)
     if classroom_id is not None:
@@ -191,7 +204,21 @@ def get_grades(subject_id: int = None, classroom_id: int = None, db: Session = D
         query = query.filter(GradeModel.classroom_id == classroom_id)
     # When no classroom_id provided, return ALL grades (no additional filter)
     rows = query.all()
-    return rows
+    
+    # Map rows to dict for response model
+    result = []
+    for row in rows:
+        result.append({
+            'id': row.id,
+            'subject_id': row.subject_id,
+            'student_id': row.student_id,
+            'classroom_id': row.classroom_id,
+            'title': row.title,
+            'max_score': row.max_score,
+            'grade': row.grade,
+            'student_number': row.student_number
+        })
+    return result
 
 
 @router.get('/assignments/{subject_id}', response_model=List[AssignmentResponse])
@@ -499,12 +526,20 @@ def get_student_activity_breakdown(student_id: int, classroom_id: int = None, db
     return calculate_activity_grades(db, student_id, classroom_id)
 
 
-def _get_student_transcript_internal(student_id: int, classroom_id: int, db: Session):
+def _get_student_transcript_internal(student_id: int, classroom_id: int, db: Session, academic_year: str = None, semester: int = None):
     """Internal helper to calculate transcript using scaling logic consistent with UI."""
     # Get all subjects this student is enrolled in
-    subjects = db.query(SubjectModel).join(
+    subjects_query = db.query(SubjectModel).join(
         SubjectStudentModel, SubjectModel.id == SubjectStudentModel.subject_id
-    ).filter(SubjectStudentModel.student_id == student_id).all()
+    ).filter(SubjectStudentModel.student_id == student_id)
+
+    # Apply semester/year filters if provided
+    if academic_year is not None:
+        subjects_query = subjects_query.filter(SubjectModel.academic_year == academic_year)
+    if semester is not None:
+        subjects_query = subjects_query.filter(SubjectModel.semester == semester)
+
+    subjects = subjects_query.all()
     
     regular_subjects = []
     
@@ -580,9 +615,14 @@ def _get_student_transcript_internal(student_id: int, classroom_id: int, db: Ses
             final_exam = min(manual_exam, max_e)
         else:
             final_exam = (raw_exam_score / raw_exam_max * max_e) if raw_exam_max > 0 else raw_exam_score
-            
+
+        # Only include exam portion in denominator if exam data actually exists
+        # This prevents subjects with no exam from showing artificially low scores
+        has_exam_data = has_real_exam or (manual_exam is not None)
+        effective_max_e = max_e if has_exam_data else 0.0
+
         total_score = final_collected + final_exam
-        total_max = max_c + max_e
+        total_max = max_c + effective_max_e
         normalized = (total_score / total_max * 100) if total_max > 0 else 0
         
         # Get all teachers assigned to this subject (with is_ended status)
@@ -609,7 +649,9 @@ def _get_student_transcript_internal(student_id: int, classroom_id: int, db: Ses
             'score': round(total_score, 2),
             'max_score': round(total_max, 2),
             'normalized_score': round(normalized, 2),
-            'teachers': teachers_list
+            'teachers': teachers_list,
+            'academic_year': subject.academic_year,
+            'semester': subject.semester
         })
     
     # Calculate activity grades (Uses its own scaling logic to 100)
@@ -633,7 +675,7 @@ def _get_student_transcript_internal(student_id: int, classroom_id: int, db: Ses
 
 
 @router.get('/student/{student_id}/transcript')
-def get_student_transcript(student_id: int, classroom_id: int = None, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+def get_student_transcript(student_id: int, classroom_id: int = None, academic_year: str = None, semester: int = None, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     """
     Get student's full transcript with activity grades aggregated into a single "Activity" entry.
     Regular subjects show individual entries; activity subjects are combined.
@@ -683,7 +725,35 @@ def get_student_transcript(student_id: int, classroom_id: int = None, db: Sessio
                      # Let's keep transcript open for teachers but homeroom summary blocked.
                      pass 
     
-    return _get_student_transcript_internal(student_id, classroom_id, db)
+    return _get_student_transcript_internal(student_id, classroom_id, db, academic_year=academic_year, semester=semester)
+
+
+@router.get('/student/{student_id}/semester-list')
+def get_student_semester_list(student_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    """
+    Return a list of unique (academic_year, semester) combinations that the student has subjects in.
+    Useful for populating semester selector UI.
+    """
+    is_authorized = (
+        getattr(current_user, 'id', None) == student_id or
+        getattr(current_user, 'role', None) in ('admin', 'teacher')
+    )
+    if not is_authorized:
+        raise HTTPException(status_code=403, detail='Not authorized')
+
+    rows = db.query(SubjectModel.academic_year, SubjectModel.semester).join(
+        SubjectStudentModel, SubjectModel.id == SubjectStudentModel.subject_id
+    ).filter(
+        SubjectStudentModel.student_id == student_id,
+        SubjectModel.academic_year.isnot(None),
+        SubjectModel.semester.isnot(None)
+    ).distinct().all()
+
+    result = sorted(
+        [{'academic_year': r[0], 'semester': r[1]} for r in rows],
+        key=lambda x: (x['academic_year'], x['semester'])
+    )
+    return result
 
 
 @router.get('/classroom/{classroom_id}/ranking')

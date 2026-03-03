@@ -30,6 +30,11 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
     completedSubjects: 0
   });
 
+  // Semester filter state
+  const [availableSemesters, setAvailableSemesters] = useState([]);  // [{academic_year, semester}]
+  const [selectedAcademicYear, setSelectedAcademicYear] = useState(''); // '' = all
+  const [selectedSemester, setSelectedSemester] = useState('');          // '' = all
+
   // โหลดเกรดของนักเรียนจากทุกวิชา (with activity aggregation)
   useEffect(() => {
     if (!studentId) {
@@ -42,7 +47,11 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
         const token = localStorage.getItem('token');
         
         // Load full transcript with activity aggregation
-        const transcriptRes = await fetch(`${API_BASE_URL}/grades/student/${studentId}/transcript`, {
+        const params = new URLSearchParams();
+        if (selectedAcademicYear) params.set('academic_year', selectedAcademicYear);
+        if (selectedSemester) params.set('semester', selectedSemester);
+        const queryStr = params.toString() ? `?${params.toString()}` : '';
+        const transcriptRes = await fetch(`${API_BASE_URL}/grades/student/${studentId}/transcript${queryStr}`, {
           headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
         });
 
@@ -166,6 +175,24 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
     };
 
     loadGrades();
+  }, [studentId, selectedAcademicYear, selectedSemester]);
+
+  // Load available semesters
+  useEffect(() => {
+    if (!studentId) return;
+    const loadSemesters = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const res = await fetch(`${API_BASE_URL}/grades/student/${studentId}/semester-list`, {
+          headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data)) setAvailableSemesters(data);
+        }
+      } catch (err) {}
+    };
+    loadSemesters();
   }, [studentId]);
 
   // Load Ranking Information
@@ -421,10 +448,53 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
     <section className="bg-white rounded-2xl shadow-lg shadow-slate-100/50 border border-slate-100 overflow-hidden">
       {/* Header */}
       <div className="p-6 border-b border-slate-100">
-        <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-          <span>📊</span> ใบแสดงผลการเรียน
-        </h3>
-        <p className="text-sm text-slate-500 mt-1">ข้อมูลคะแนนและผลการเรียนของคุณ</p>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+              <span>📊</span> ใบแสดงผลการเรียน
+            </h3>
+            <p className="text-sm text-slate-500 mt-1">ข้อมูลคะแนนและผลการเรียนของคุณ</p>
+          </div>
+          {/* Semester filter */}
+          {availableSemesters.length > 0 && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <select
+                className="h-9 pl-3 pr-8 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 font-bold text-xs outline-none focus:border-emerald-500 appearance-none cursor-pointer"
+                value={selectedAcademicYear}
+                onChange={e => { setSelectedAcademicYear(e.target.value); setSelectedSemester(''); }}
+              >
+                <option value="">ทุกปี</option>
+                {[...new Set(availableSemesters.map(s => s.academic_year))].sort((a, b) => b - a).map(y => (
+                  <option key={y} value={y}>ปี {y}</option>
+                ))}
+              </select>
+              <select
+                className="h-9 pl-3 pr-8 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 font-bold text-xs outline-none focus:border-emerald-500 appearance-none cursor-pointer"
+                value={selectedSemester}
+                onChange={e => setSelectedSemester(e.target.value)}
+              >
+                <option value="">ทุกภาค</option>
+                {availableSemesters
+                  .filter(s => !selectedAcademicYear || s.academic_year === selectedAcademicYear)
+                  .map(s => s.semester)
+                  .filter((v, i, a) => a.indexOf(v) === i)
+                  .sort()
+                  .map(sem => (
+                    <option key={sem} value={sem}>ภาค {sem}</option>
+                  ))
+                }
+              </select>
+              {(selectedAcademicYear || selectedSemester) && (
+                <button
+                  onClick={() => { setSelectedAcademicYear(''); setSelectedSemester(''); }}
+                  className="h-9 px-3 bg-rose-50 text-rose-500 rounded-xl text-xs font-black hover:bg-rose-100 transition-colors border border-rose-100"
+                >
+                  ทั้งปี
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Summary Cards Grid */}
@@ -432,8 +502,8 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
         {/* Overall Score Card */}
         <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm hover:shadow-md transition-shadow">
           <p className="text-xs font-bold text-slate-500 uppercase mb-2">คะแนนรวม</p>
-          <p className="text-3xl font-bold text-emerald-600 mb-1">{transcriptSummary.scorePercentage}%</p>
-          <p className="text-xs text-slate-500 mb-3">{transcriptSummary.totalScore} / {transcriptSummary.totalMaxScore} คะแนน</p>
+          <p className="text-3xl font-bold text-emerald-600 mb-1">{Math.round(transcriptSummary.scorePercentage)}%</p>
+          <p className="text-xs text-slate-500 mb-3">{Math.round(transcriptSummary.totalScore)} / {Math.round(transcriptSummary.totalMaxScore)} คะแนน</p>
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold text-slate-600">เกรด:</span>
             <span 
@@ -477,7 +547,7 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
                 <p className="text-sm font-bold text-slate-400">/ {rankingInfo.total}</p>
               </div>
               <p className="text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wider">ห้อง {rankingInfo.classroomName || '-'}</p>
-              <p className="text-[10px] text-indigo-700 font-bold mb-3">{rankingInfo.totalScore} / {rankingInfo.totalMaxScore} คะแนน</p>
+              <p className="text-[10px] text-indigo-700 font-bold mb-3">{Math.round(rankingInfo.totalScore)} / {Math.round(rankingInfo.totalMaxScore)} คะแนน</p>
               <div className="flex items-center gap-1">
                 <span className="text-lg">🏆</span>
                 <span className="text-xs font-bold text-indigo-700">ลำดับคะแนนในห้อง</span>
@@ -501,7 +571,7 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
                 <p className="text-sm font-bold text-slate-400">/ {schoolRankingInfo.total}</p>
               </div>
               <p className="text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wider">นักเรียนทั้งโรงเรียน</p>
-              <p className="text-[10px] text-amber-700 font-bold mb-3">{schoolRankingInfo.totalScore} / {schoolRankingInfo.totalMaxScore} คะแนน</p>
+              <p className="text-[10px] text-amber-700 font-bold mb-3">{Math.round(schoolRankingInfo.totalScore)} / {Math.round(schoolRankingInfo.totalMaxScore)} คะแนน</p>
               <div className="flex items-center gap-1">
                 <span className="text-lg">🌍</span>
                 <span className="text-xs font-bold text-amber-700">ลำดับคะแนนทั้งโรงเรียน</span>
@@ -632,7 +702,7 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
                       </td>
                       <td className="px-4 py-3 text-center">
                         <div className="flex items-center justify-center gap-1">
-                          <span className="font-bold text-slate-700">{subjectData.scorePercentage}</span>
+                          <span className="font-bold text-slate-700">{Math.round(subjectData.scorePercentage)}</span>
                           <span className="text-slate-500 text-sm">%</span>
                         </div>
                       </td>
@@ -740,7 +810,7 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
                   <div className="grid grid-cols-4 gap-2 text-center py-2 border-t border-b border-slate-50/50">
                     <div>
                       <p className="text-xs text-slate-400 mb-1">คะแนน</p>
-                      <p className="font-bold text-slate-700">{subjectData.scorePercentage}%</p>
+                      <p className="font-bold text-slate-700">{Math.round(subjectData.scorePercentage)}%</p>
                     </div>
                     <div>
                       <p className="text-xs text-slate-400 mb-1">เกรด</p>
@@ -1025,7 +1095,8 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
       {/* Activity Modal */}
       {showActivityModal && selectedActivityData && (
         <ActivityDetailModal
-          data={selectedActivityData}
+          isOpen={showActivityModal}
+          activityData={selectedActivityData}
           onClose={() => {
             setShowActivityModal(false);
             setSelectedActivityData(null);

@@ -13,6 +13,8 @@ class SubjectBase(BaseModel):
     activity_percentage: Optional[int] = None
     max_collected_score: Optional[int] = 100
     max_exam_score: Optional[int] = 100
+    academic_year: Optional[str] = None   # ปีการศึกษา เช่น '2567'
+    semester: Optional[int] = None        # เทอม 1 หรือ 2
 
 class SubjectCreate(SubjectBase):
     pass
