@@ -131,7 +131,7 @@ export default function ClassroomDetailModal({ isOpen, classroomId, onClose, onS
         onClick={onClose}
       ></div>
 
-      <div className="relative w-full max-w-2xl bg-white rounded-3xl shadow-2xl overflow-hidden transform transition-all max-h-[90vh] flex flex-col animate-in zoom-in duration-300">
+      <div className="relative w-full max-w-2xl bg-white rounded-3xl shadow-2xl overflow-hidden transform transition-all max-h-[calc(100dvh-2rem)] flex flex-col animate-in zoom-in duration-300">
         {/* Header */}
         <div className="bg-gradient-to-r from-emerald-600 to-teal-600 p-6 text-white flex justify-between items-start shrink-0">
           <div className="flex gap-4">

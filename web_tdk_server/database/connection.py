@@ -42,5 +42,40 @@ def table_exists(table_name):
 
 def create_all_tables():
     # Import models to register them with Base
-    from models import user, school, announcement, document, subject, subject_student, attendance, grade, schedule, admin_request, evaluation
+    from models import user, school, announcement, document, subject, subject_student, attendance, grade, schedule, admin_request, evaluation, semester_period
     Base.metadata.create_all(bind=engine)
+
+def migrate_evaluation_schema():
+    """Update evaluations table schema"""
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("ALTER TABLE evaluations ADD COLUMN academic_year VARCHAR(10) NULL"))
+            conn.commit()
+            print("✓ Added column academic_year to evaluations")
+        except Exception:
+            pass # Likely already exists
+            
+        try:
+            conn.execute(text("ALTER TABLE evaluations ADD COLUMN semester INT NULL"))
+            conn.commit()
+            print("✓ Added column semester to evaluations")
+        except Exception:
+            pass
+
+        try:
+            # Try to drop old constraint
+            conn.execute(text("ALTER TABLE evaluations DROP INDEX uq_evaluation_student_subject"))
+            conn.commit()
+            print("✓ Dropped old constraint uq_evaluation_student_subject")
+        except Exception:
+            pass
+
+        try:
+            # Add new constraint involving year/semester
+            conn.execute(text("CREATE UNIQUE INDEX uq_evaluation_student_subject_term ON evaluations (student_id, subject_id, academic_year, semester)"))
+            conn.commit()
+            print("✓ Added new unique constraint uq_evaluation_student_subject_term")
+        except Exception:
+            pass
+

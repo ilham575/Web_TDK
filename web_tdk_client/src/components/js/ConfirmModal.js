@@ -36,13 +36,13 @@ function ConfirmModal({ isOpen, title, message, onConfirm, onCancel, confirmButt
       onClick={onCancel}
     >
       <div 
-        className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col animate-in zoom-in duration-300 border border-slate-100"
+        className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col animate-in zoom-in duration-300 border border-slate-100 max-h-[calc(100dvh-2rem)]"
         onClick={e => e.stopPropagation()}
       >
         {/* Decorative Top Bar */}
         <div className={`h-1.5 w-full ${isDanger ? 'bg-rose-500' : 'bg-emerald-500'}`} />
 
-        <div className="p-8 flex flex-col items-center text-center">
+          <div className="p-8 flex flex-col items-center text-center flex-1 overflow-y-auto">
           {/* Icon */}
           <div className={`w-20 h-20 rounded-full flex items-center justify-center mb-6 shadow-inner ${
             isDanger ? 'bg-rose-50 text-rose-500' : 'bg-emerald-50 text-emerald-500'
@@ -64,7 +64,7 @@ function ConfirmModal({ isOpen, title, message, onConfirm, onCancel, confirmButt
         </div>
 
         {/* Actions */}
-        <div className="px-6 pb-8 flex flex-col gap-3">
+          <div className="px-6 pb-8 flex flex-col gap-3 shrink-0">
           <button
             onClick={onConfirm}
             className={`w-full py-3.5 rounded-2xl font-black text-white shadow-lg transition-all active:scale-[0.98] ${

@@ -13,7 +13,8 @@ import {
   HelpCircle,
   Filter,
   UserCheck,
-  ChevronRight
+  ChevronRight,
+  ChevronDown
 } from 'lucide-react';
 
 function AttendancePage(){
@@ -189,83 +190,97 @@ function AttendancePage(){
   };
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] pb-20">
+    <div className="min-h-screen bg-slate-50 pb-20 font-sans selection:bg-emerald-100 selection:text-emerald-900">
       {/* Top Navigation Bar */}
-      <div className="bg-white border-b border-slate-200 sticky top-0 z-30">
+      <div className="bg-white/80 backdrop-blur-md border-b border-slate-200/60 sticky top-0 z-30 transition-all duration-300">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-20">
-            <div className="flex items-center gap-5">
+            <div className="flex items-center gap-6">
               <button 
                 onClick={() => navigate(-1)}
-                className="p-2.5 bg-slate-50 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-2xl transition-all active:scale-95 border border-slate-100"
+                className="group p-3 bg-white text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-2xl transition-all duration-300 active:scale-95 border border-slate-100 shadow-sm hover:shadow-md hover:border-emerald-100"
               >
-                <ArrowLeft className="w-5 h-5" />
+                <ArrowLeft className="w-5 h-5 group-hover:-translate-x-0.5 transition-transform" />
               </button>
               <div>
-                <h1 className="text-xl font-black text-slate-800 tracking-tight leading-none">
+                <h1 className="text-2xl font-black text-slate-800 tracking-tight leading-none">
                   เช็คชื่อเข้าเรียน
                 </h1>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1.5 flex items-center gap-1.5">
-                  <UserCheck className="w-3 h-3 text-emerald-500" />
-                  {subjectName || `วิชา #${id}`}
-                </p>
+                <div className="flex items-center gap-2 mt-2">
+                  <span className="bg-emerald-100 text-emerald-700 text-[10px] font-black px-2 py-0.5 rounded-lg uppercase tracking-wider">
+                    ATTENDANCE
+                  </span>
+                  <p className="text-xs font-bold text-slate-400 flex items-center gap-1.5 truncat max-w-[200px] sm:max-w-md">
+                    <span className="w-1 h-1 rounded-full bg-slate-300"></span>
+                    {subjectName || `วิชา #${id}`}
+                  </p>
+                </div>
               </div>
             </div>
             
             <button 
               onClick={save}
-              className="flex items-center gap-2 px-6 py-3.5 bg-emerald-600 text-white rounded-2xl font-black text-sm shadow-xl shadow-emerald-100 hover:bg-emerald-700 transition-all active:scale-95"
+              className="group flex items-center gap-2.5 px-6 py-3.5 bg-emerald-600 text-white rounded-2xl font-black text-sm shadow-lg shadow-emerald-200 hover:bg-emerald-700 hover:shadow-emerald-300 hover:-translate-y-0.5 transition-all duration-300 active:scale-95"
             >
-              <Save className="w-5 h-5" />
-              <span>บันทึกข้อมูล</span>
+              <Save className="w-5 h-5 group-hover:scale-110 transition-transform" />
+              <span className="hidden sm:inline">บันทึกข้อมูล</span>
             </button>
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           
           {/* Controls Sidebar */}
           <div className="lg:col-span-4 space-y-6">
             {/* Date Selection */}
-            <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 p-8">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600 shadow-sm">
-                  <Calendar className="w-5 h-5" />
+            <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100/60 p-6 md:p-8 hover:shadow-md transition-shadow duration-300">
+              <div className="flex items-center gap-4 mb-6">
+                <div className="w-12 h-12 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600 shadow-inner">
+                  <Calendar className="w-6 h-6" />
                 </div>
-                <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">วันที่เช็คชื่อ</h3>
+                <div>
+                  <h3 className="text-base font-black text-slate-800">วันที่เช็คชื่อ</h3>
+                  <p className="text-xs text-slate-400 font-medium">เลือกวันที่ต้องการบันทึก</p>
+                </div>
               </div>
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 text-sm font-bold transition-all outline-none"
-              />
+              <div className="relative group">
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-slate-700 font-bold text-sm focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all outline-none cursor-pointer"
+                />
+                <Calendar className="absolute right-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none group-hover:text-emerald-500 transition-colors" />
+              </div>
             </div>
 
             {/* Class Filter */}
             {classes.length > 1 && (
-              <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 p-8">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 shadow-sm">
-                    <Filter className="w-5 h-5" />
+              <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100/60 p-6 md:p-8 hover:shadow-md transition-shadow duration-300">
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600 shadow-inner">
+                    <Filter className="w-6 h-6" />
                   </div>
-                  <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">เลือกกลุ่ม/ชั้น</h3>
+                  <div>
+                    <h3 className="text-base font-black text-slate-800">คัดกรองห้องเรียน</h3>
+                    <p className="text-xs text-slate-400 font-medium">แสดงรายชื่อตามห้อง</p>
+                  </div>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2.5 max-h-[300px] overflow-y-auto pr-1 custom-scrollbar">
                   {classes.map(c => (
                     <button
                       key={c}
                       onClick={() => setSelectedClass(c)}
-                      className={`w-full flex items-center justify-between px-5 py-4 rounded-2xl font-bold text-sm transition-all ${
+                      className={`w-full flex items-center justify-between px-5 py-4 rounded-2xl font-bold text-sm transition-all duration-300 border-2 ${
                         selectedClass === c 
-                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-100 translate-x-1' 
-                        : 'bg-slate-50 text-slate-500 hover:bg-slate-100'
+                        ? 'bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-200 scale-[1.02]' 
+                        : 'bg-white text-slate-500 border-slate-100 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600'
                       }`}
                     >
-                      <span>{c}</span>
-                      {selectedClass === c && <ChevronRight className="w-4 h-4" />}
+                      <span className="truncate">{c}</span>
+                      {selectedClass === c && <CheckCircle2 className="w-4 h-4 ml-2 flex-shrink-0" />}
                     </button>
                   ))}
                 </div>
@@ -273,103 +288,142 @@ function AttendancePage(){
             )}
 
             {/* Summary Statistics */}
-            <div className="bg-slate-800 rounded-[2.5rem] shadow-xl p-8 text-white overflow-hidden relative">
+            <div className="relative bg-slate-900 rounded-[2.5rem] shadow-xl shadow-slate-200 p-8 text-white overflow-hidden group">
+              <div className="absolute inset-0 bg-gradient-to-br from-slate-800 to-slate-950"></div>
+              <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 group-hover:bg-emerald-500/20 transition-colors duration-700"></div>
+              
               <div className="relative z-10">
-                <div className="flex items-center gap-3 mb-6">
-                  <Users className="w-5 h-5 text-emerald-400" />
-                  <h3 className="text-sm font-black uppercase tracking-widest">สรุปการเข้าเรียน</h3>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10">
-                    <p className="text-[10px] font-black text-emerald-300 uppercase tracking-widest mb-1">นักเรียนทั้งหมด</p>
-                    <p className="text-2xl font-black">{filteredStudents.length}</p>
+                <div className="flex items-center gap-3 mb-8">
+                  <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center backdrop-blur-sm">
+                    <Users className="w-5 h-5 text-emerald-400" />
                   </div>
-                  <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10">
-                    <p className="text-[10px] font-black text-emerald-300 uppercase tracking-widest mb-1">มาเรียนวันนี้</p>
-                    <p className="text-2xl font-black">
-                      {Object.values(attendance).filter(st => st === 'present').length}
-                    </p>
+                  <div>
+                    <h3 className="text-sm font-black uppercase tracking-widest text-emerald-400">ภาพรวมวันนี้</h3>
+                    <p className="text-xs text-slate-400 font-medium">สถิติการเช็คชื่อปัจจุบัน</p>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="bg-white/5 backdrop-blur-md rounded-2xl p-5 border border-white/5 hover:bg-white/10 transition-colors">
+                    <div className="flex justify-between items-end">
+                      <div>
+                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">นักเรียนทั้งหมด</p>
+                         <p className="text-3xl font-black tracking-tight">{filteredStudents.length}</p>
+                      </div>
+                      <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-slate-400">
+                        <UserCheck className="w-4 h-4" />
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-gradient-to-r from-emerald-500/20 to-teal-500/20 backdrop-blur-md rounded-2xl p-5 border border-emerald-500/20 hover:border-emerald-500/40 transition-colors">
+                    <div className="flex justify-between items-end">
+                      <div>
+                        <p className="text-[10px] font-black text-emerald-300 uppercase tracking-widest mb-1">มาเรียนวันนี้</p>
+                        <div className="flex items-baseline gap-2">
+                          <p className="text-3xl font-black text-emerald-400">
+                            {Object.values(attendance).filter(st => st === 'present').length}
+                          </p>
+                          <span className="text-xs font-bold text-emerald-500/60">
+                            ({filteredStudents.length > 0 ? Math.round((Object.values(attendance).filter(st => st === 'present').length / filteredStudents.length) * 100) : 0}%)
+                          </span>
+                        </div>
+                      </div>
+                      <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400">
+                        <CheckCircle2 className="w-4 h-4" />
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
-              <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-emerald-500/20 rounded-full blur-3xl" />
             </div>
           </div>
 
           {/* Student List */}
           <div className="lg:col-span-8">
-            <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden">
-              <div className="p-8 border-b border-slate-50">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-slate-500 shadow-sm">
-                      <Users className="w-5 h-5" />
-                    </div>
+            <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100/60 overflow-hidden flex flex-col min-h-[600px]">
+              <div className="p-8 border-b border-slate-50 flex items-center justify-between bg-white sticky top-0 z-20">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-500 shadow-inner">
+                    <Users className="w-6 h-6" />
+                  </div>
+                  <div>
                     <h2 className="text-lg font-black text-slate-800 tracking-tight">รายชื่อนักเรียน</h2>
+                    <p className="text-xs text-slate-400 font-medium">จัดการสถานะการเข้าเรียนรายบุคคล</p>
                   </div>
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 rounded-full text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                    <span>{filteredStudents.length} Students</span>
-                  </div>
+                </div>
+                <div className="hidden sm:flex items-center gap-2 px-4 py-2 bg-slate-50 rounded-xl border border-slate-100">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span className="text-xs font-bold text-slate-600">{filteredStudents.length} คนในรายการ</span>
                 </div>
               </div>
 
               {/* Desktop View: Table */}
-              <div className="hidden md:block overflow-x-auto">
+              <div className="hidden md:block overflow-x-auto flex-grow">
                 <table className="w-full">
                   <thead>
-                    <tr className="bg-slate-50/50">
-                      <th className="px-8 py-5 text-left text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">ข้อมูลนักเรียน</th>
-                      <th className="px-8 py-5 text-right text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">การเข้าเรียน</th>
+                    <tr className="bg-slate-50/50 text-left">
+                      <th className="pl-8 py-4 w-20 text-[10px] font-black text-slate-400 uppercase tracking-widest">เลขที่</th>
+                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">ข้อมูลนักเรียน</th>
+                      <th className="px-8 py-4 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">สถานะ</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
                     {filteredStudents.length === 0 ? (
                       <tr>
-                        <td colSpan="2" className="px-8 py-20 text-center">
-                          <div className="flex flex-col items-center">
-                            <Users className="w-12 h-12 text-slate-200 mb-4" />
-                            <p className="text-slate-400 font-bold">ไม่พบรายชื่อนักเรียน</p>
+                        <td colSpan="3" className="px-8 py-32 text-center">
+                          <div className="flex flex-col items-center justify-center opacity-60">
+                            <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-6">
+                              <Users className="w-10 h-10 text-slate-300" />
+                            </div>
+                            <h4 className="text-lg font-bold text-slate-400">ไม่พบรายชื่อนักเรียน</h4>
+                            <p className="text-slate-400 text-sm mt-1">กรุณาเลือกกลุ่มเรียนอื่น หรือติดต่อฝ่ายทะเบียน</p>
                           </div>
                         </td>
                       </tr>
                     ) : (
                       filteredStudents.map((s, idx) => (
-                        <tr key={s.id} className="group hover:bg-slate-50 transition-colors">
-                          <td className="px-8 py-5">
-                            <div className="flex items-center gap-4">
-                              <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 font-black text-xs border-2 border-white group-hover:border-emerald-100 transition-all">
-                                {idx + 1}
-                              </div>
-                              <div>
-                                <h4 className="text-sm font-black text-slate-800 group-hover:text-emerald-600 transition-colors">
-                                  {s.full_name || s.username}
-                                </h4>
-                                <p className="text-[11px] font-bold text-slate-400 mt-0.5">{s.email || 'No email'}</p>
-                              </div>
+                        <tr key={s.id} className="group hover:bg-slate-50/80 transition-all duration-200">
+                          <td className="pl-8 py-4 align-middle">
+                            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-slate-400 font-black text-xs border border-slate-100 shadow-sm group-hover:border-emerald-200 group-hover:text-emerald-600 transition-colors">
+                              {idx + 1}
                             </div>
                           </td>
-                          <td className="px-8 py-5">
+                          <td className="px-6 py-4 align-middle">
+                            <div className="flex flex-col">
+                              <h4 className="text-sm font-black text-slate-800 group-hover:text-emerald-700 transition-colors flex items-center gap-2">
+                                {s.full_name || s.username}
+                                {attendance[s.id] === 'present' && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />}
+                              </h4>
+                              <p className="text-[11px] font-bold text-slate-400 mt-0.5">{s.student_number ? `รหัสนักเรียน: ${s.student_number}` : (s.email || '-')}</p>
+                            </div>
+                          </td>
+                          <td className="px-8 py-4 align-middle">
                             <div className="flex justify-end">
-                              <div className="relative inline-flex items-center">
-                                <span className="absolute left-4 z-10">
+                              <div className="relative inline-flex items-center group/select">
+                                <span className="absolute left-4 z-10 pointer-events-none">
                                   {getStatusIcon(attendance[s.id]) || <div className="w-4 h-4 bg-slate-200 rounded-full" />}
                                 </span>
                                 <select
                                   value={attendance[s.id] || ''}
                                   onChange={(e) => setStatus(s.id, e.target.value)}
-                                  className={`pl-11 pr-5 py-3 rounded-2xl text-[13px] font-black transition-all outline-none appearance-none border cursor-pointer min-w-[160px] ${
-                                    attendance[s.id] === 'present' ? 'bg-emerald-50 border-emerald-100 text-emerald-700 focus:ring-emerald-500/20' :
-                                    attendance[s.id] === 'absent' ? 'bg-rose-50 border-rose-100 text-rose-700 focus:ring-rose-500/20' :
-                                    attendance[s.id] === 'sick_leave' ? 'bg-amber-50 border-amber-100 text-amber-700 focus:ring-amber-500/20' :
-                                    'bg-slate-50 border-slate-100 text-slate-500 focus:ring-slate-500/10'
+                                  className={`pl-11 pr-10 py-3 rounded-xl text-xs font-bold transition-all outline-none appearance-none border-2 cursor-pointer w-[180px] shadow-sm hover:shadow-md ${
+                                    attendance[s.id] === 'present' 
+                                      ? 'bg-emerald-50 border-emerald-100 text-emerald-700 focus:border-emerald-500' 
+                                      : attendance[s.id] === 'absent' 
+                                      ? 'bg-rose-50 border-rose-100 text-rose-700 focus:border-rose-500' 
+                                      : attendance[s.id] === 'sick_leave' 
+                                      ? 'bg-amber-50 border-amber-100 text-amber-700 focus:border-amber-500' 
+                                      : 'bg-white border-slate-100 text-slate-500 focus:border-emerald-500'
                                   }`}
                                 >
                                   <option value="">เลือกสถานะ...</option>
-                                  <option value="present">✓ มาเรียน</option>
-                                  <option value="absent">✗ ขาดเรียน</option>
-                                  <option value="sick_leave">🏥 ลาป่วย</option>
-                                  <option value="other">❓ อื่นๆ</option>
+                                  <option value="present">มาเรียน</option>
+                                  <option value="absent">ขาดเรียน</option>
+                                  <option value="sick_leave">ลาป่วย</option>
+                                  <option value="other">อื่นๆ</option>
                                 </select>
+                                <ChevronDown className="absolute right-4 w-4 h-4 text-slate-400 pointer-events-none group-hover/select:text-slate-600 transition-colors" />
                               </div>
                             </div>
                           </td>
@@ -381,7 +435,7 @@ function AttendancePage(){
               </div>
 
               {/* Mobile View: Cards */}
-              <div className="md:hidden grid grid-cols-1 divide-y divide-slate-100">
+              <div className="md:hidden grid grid-cols-1 divide-y divide-slate-100 bg-slate-50/50">
                   {filteredStudents.length === 0 ? (
                       <div className="px-8 py-20 text-center">
                         <div className="flex flex-col items-center">
@@ -391,16 +445,18 @@ function AttendancePage(){
                       </div>
                   ) : (
                       filteredStudents.map((s, idx) => (
-                          <div key={s.id} className="p-4 flex flex-col gap-4">
+                          <div key={s.id} className="p-5 bg-white flex flex-col gap-4 active:bg-slate-50 transition-colors">
                               <div className="flex items-center gap-4">
-                                  <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 font-black text-xs border-2 border-white">
+                                  <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400 font-black text-xs border border-slate-100 shadow-sm">
                                     {idx + 1}
                                   </div>
                                   <div>
                                     <h4 className="text-sm font-black text-slate-800">
                                       {s.full_name || s.username}
                                     </h4>
-                                    <p className="text-[11px] font-bold text-slate-400 mt-0.5 uppercase tracking-tighter">{s.email || 'NO EMAIL'}</p>
+                                    <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-wider bg-slate-100 inline-block px-1.5 py-0.5 rounded-md">
+                                      {s.student_number ? `ID: ${s.student_number}` : 'NO ID'}
+                                    </p>
                                   </div>
                               </div>
 
@@ -411,22 +467,20 @@ function AttendancePage(){
                                 <select
                                   value={attendance[s.id] || ''}
                                   onChange={(e) => setStatus(s.id, e.target.value)}
-                                  className={`pl-11 pr-5 py-4 w-full rounded-2xl text-sm font-black transition-all outline-none appearance-none border cursor-pointer ${
-                                    attendance[s.id] === 'present' ? 'bg-emerald-50 border-emerald-100 text-emerald-700 focus:ring-emerald-500/20' :
-                                    attendance[s.id] === 'absent' ? 'bg-rose-50 border-rose-100 text-rose-700 focus:ring-rose-500/20' :
-                                    attendance[s.id] === 'sick_leave' ? 'bg-amber-50 border-amber-100 text-amber-700 focus:ring-amber-500/20' :
-                                    'bg-slate-50 border-slate-100 text-slate-500 focus:ring-slate-500/10'
+                                  className={`pl-11 pr-10 py-4 w-full rounded-2xl text-sm font-bold transition-all outline-none appearance-none border-2 cursor-pointer shadow-sm ${
+                                    attendance[s.id] === 'present' ? 'bg-emerald-50 border-emerald-100 text-emerald-700' :
+                                    attendance[s.id] === 'absent' ? 'bg-rose-50 border-rose-100 text-rose-700' :
+                                    attendance[s.id] === 'sick_leave' ? 'bg-amber-50 border-amber-100 text-amber-700' :
+                                    'bg-white border-slate-100 text-slate-500'
                                   }`}
                                 >
                                   <option value="">เลือกสถานะ...</option>
-                                  <option value="present">✓ มาเรียน</option>
-                                  <option value="absent">✗ ขาดเรียน</option>
-                                  <option value="sick_leave">🏥 ลาป่วย</option>
-                                  <option value="other">❓ อื่นๆ</option>
+                                  <option value="present">มาเรียน</option>
+                                  <option value="absent">ขาดเรียน</option>
+                                  <option value="sick_leave">ลาป่วย</option>
+                                  <option value="other">อื่นๆ</option>
                                 </select>
-                                <div className="absolute right-4 z-10 pointer-events-none text-slate-400">
-                                    <ChevronRight className="w-4 h-4 rotate-90" />
-                                </div>
+                                <ChevronDown className="absolute right-4 z-10 pointer-events-none text-slate-400 w-4 h-4" />
                               </div>
                           </div>
                       ))

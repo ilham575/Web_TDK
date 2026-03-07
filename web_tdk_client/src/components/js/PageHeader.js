@@ -94,7 +94,7 @@ function PageHeader({
   const isTeacher = role === 'teacher';
 
   return (
-    <div className={`relative mb-8 rounded-3xl bg-gradient-to-r ${currentTheme} p-6 sm:p-8 shadow-xl shadow-emerald-200/50 overflow-visible`}>
+    <div className={`relative mb-8 rounded-3xl bg-gradient-to-r ${currentTheme} p-6 sm:p-8 shadow-xl shadow-emerald-200/50 overflow-visible z-[100]`}>
       {/* Decorative Background Elements */}
       {/* <div className="absolute top-0 right-0 -mr-20 -mt-20 w-64 h-64 bg-white/10 rounded-full blur-3xl" /> */}
       <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-48 h-48 bg-black/5 rounded-full blur-2xl" />

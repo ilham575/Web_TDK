@@ -38,15 +38,15 @@ export default function ExpiryModal({ isOpen, initialValue, onClose, onSave, tit
       ></div>
 
       {/* Modal Content */}
-      <div className="relative w-full max-w-sm bg-white rounded-3xl shadow-2xl overflow-hidden transform transition-all animate-in fade-in zoom-in duration-200">
-        <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-6 text-white text-center">
+      <div className="relative w-full max-w-sm bg-white rounded-3xl shadow-2xl overflow-hidden transform transition-all animate-in fade-in zoom-in duration-200 max-h-[calc(100dvh-2rem)] flex flex-col">
+        <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-6 text-white text-center shrink-0">
             <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center text-xl mx-auto mb-3">
                 🕒
             </div>
             <h3 className="text-lg font-black">{title}</h3>
         </div>
 
-        <div className="p-8 space-y-6">
+        <div className="p-8 space-y-6 flex-1 overflow-y-auto">
             <div className="space-y-2">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">เลือกวันที่และเวลา</label>
                 <div className="relative group">

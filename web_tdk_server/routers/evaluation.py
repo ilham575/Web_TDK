@@ -28,13 +28,21 @@ async def create_evaluation(
     if not teacher_subject:
         raise HTTPException(status_code=404, detail="Subject not found")
 
-    # Prevent duplicate evaluation: one student per subject only
-    existing = db.query(EvaluationModel).filter(
+    # Prevent duplicate evaluation: one student per subject per term only
+    query_existing = db.query(EvaluationModel).filter(
         EvaluationModel.student_id == evaluation.student_id,
         EvaluationModel.subject_id == evaluation.subject_id
-    ).first()
+    )
+
+    if evaluation.academic_year:
+        query_existing = query_existing.filter(EvaluationModel.academic_year == evaluation.academic_year)
+    if evaluation.semester:
+        query_existing = query_existing.filter(EvaluationModel.semester == evaluation.semester)
+
+    existing = query_existing.first()
+
     if existing:
-        raise HTTPException(status_code=400, detail="การประเมินนี้มีอยู่แล้วสำหรับนักเรียนคนนี้ในวิชานี้")
+        raise HTTPException(status_code=400, detail="การประเมินนี้มีอยู่แล้วสำหรับนักเรียนคนนี้ในวิชาและปีการศึกษานี้")
 
     # Create evaluation
     eval_dict = evaluation.dict(exclude={'characteristic_scores'})
@@ -131,6 +139,8 @@ async def get_student_evaluations(
 @router.get("/subject/{subject_id}", response_model=List[EvaluationResponse])
 async def get_subject_evaluations(
     subject_id: int,
+    academic_year: Optional[str] = None,
+    semester: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: UserModel = Depends(get_current_user)
 ):
@@ -143,13 +153,33 @@ async def get_subject_evaluations(
         UserModel, EvaluationModel.student_id == UserModel.id
     ).join(
         SubjectModel, EvaluationModel.subject_id == SubjectModel.id
-    ).outerjoin(
-        ClassroomStudentModel, EvaluationModel.student_id == ClassroomStudentModel.student_id
-    ).outerjoin(
-        ClassroomModel, (ClassroomStudentModel.classroom_id == ClassroomModel.id) & (ClassroomStudentModel.is_active == True)
     ).filter(EvaluationModel.subject_id == subject_id)
-    
+
+    if academic_year:
+        query = query.filter(EvaluationModel.academic_year == academic_year)
+    if semester:
+        query = query.filter(EvaluationModel.semester == semester)
+        
+    query = query.order_by(EvaluationModel.created_at.desc())
     evaluations = query.all()
+    
+    # Enrich with classroom info
+    for eval in evaluations:
+        if eval.student:
+            c_student = db.query(ClassroomStudentModel).filter(
+                ClassroomStudentModel.student_id == eval.student_id,
+                ClassroomStudentModel.is_active == True
+            ).first()
+            if c_student:
+                classroom = db.query(ClassroomModel).filter(ClassroomModel.id == c_student.classroom_id).first()
+                if classroom:
+                    eval.classroom_id = classroom.id
+                    eval.classroom_name = classroom.name
+            else:
+                eval.classroom_id = None
+                eval.classroom_name = None
+    
+    return evaluations
     
     # Build response with classroom info
     result = []

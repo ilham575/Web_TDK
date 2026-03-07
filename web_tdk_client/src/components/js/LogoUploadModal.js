@@ -181,9 +181,9 @@ function LogoUploadModal({ isOpen, schoolId, onClose, onSuccess, school }) {
       />
 
       {/* Modal Content */}
-      <div className="relative w-full max-w-lg bg-white rounded-[2rem] shadow-2xl overflow-hidden transform transition-all animate-in fade-in zoom-in duration-200">
+      <div className="relative w-full max-w-lg bg-white rounded-[2rem] shadow-2xl overflow-hidden transform transition-all animate-in fade-in zoom-in duration-200 max-h-[calc(100dvh-2rem)] flex flex-col">
         {/* Header */}
-        <div className="bg-gradient-to-r from-slate-800 to-slate-900 p-8 text-white relative">
+        <div className="bg-gradient-to-r from-slate-800 to-slate-900 p-8 text-white relative shrink-0">
           <button 
                 onClick={onClose}
                 className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/20 transition-colors text-2xl leading-none"
@@ -203,7 +203,7 @@ function LogoUploadModal({ isOpen, schoolId, onClose, onSuccess, school }) {
         </div>
 
         {/* Body */}
-        <div className="p-8 space-y-8 bg-slate-50/50">
+        <div className="p-8 space-y-8 bg-slate-50/50 flex-1 overflow-y-auto">
           {/* Current Logo Section */}
           {school?.logo_url && !preview && (
             <div className="flex flex-col items-center gap-3">
@@ -264,7 +264,7 @@ function LogoUploadModal({ isOpen, schoolId, onClose, onSuccess, school }) {
         </div>
 
         {/* Footer */}
-        <div className="p-6 bg-white border-t border-slate-100 flex flex-wrap gap-3 items-center justify-between">
+        <div className="p-6 bg-white border-t border-slate-100 flex flex-wrap gap-3 items-center justify-between shrink-0">
             <div className="flex gap-2">
                 {school?.logo_url && (
                     <button

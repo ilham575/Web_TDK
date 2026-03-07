@@ -16,10 +16,16 @@ from routers.homeroom import router as homeroom_router
 from routers.classroom import router as classroom_router
 from routers.admin import router as admin_router
 from routers.evaluation import router as evaluation_router
+from routers.semester_period import router as semester_period_router
+from routers.school_access_control import router as school_access_control_router
 import os
 
 # import ฟังก์ชันสร้างตาราง
 from database.connection import create_all_tables
+
+# Scheduler
+from apscheduler.schedulers.background import BackgroundScheduler
+_scheduler = BackgroundScheduler(timezone='Asia/Bangkok')
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -38,12 +44,48 @@ async def lifespan(app: FastAPI):
         # Try to run schema updates if create_tables module exists
         from create_tables import ensure_schema
         ensure_schema()
+        
+        # New: Migrate Evaluation Schema Constraints
+        from database.connection import migrate_evaluation_schema
+        migrate_evaluation_schema()
+        
         print("✓ Database schema updated successfully!")
     except ImportError:
         print("⚠ create_tables module not found, skipping schema updates")
     except Exception as e:
         print(f"⚠ Warning: failed to ensure schema changes: {e}")
+
+    # Auto-close scheduler: run every 5 minutes
+    try:
+        from database.connection import SessionLocal
+        from routers.semester_period import run_auto_close_check
+
+        def scheduled_auto_close():
+            db = SessionLocal()
+            try:
+                run_auto_close_check(db)
+            except Exception as exc:
+                print(f"[Scheduler] auto-close error: {exc}")
+            finally:
+                db.close()
+
+        # Run once at startup
+        scheduled_auto_close()
+
+        _scheduler.add_job(scheduled_auto_close, 'interval', minutes=5, id='auto_close')
+        _scheduler.start()
+        print("✓ Auto-close scheduler started (every 5 minutes)")
+    except Exception as e:
+        print(f"⚠ Could not start scheduler: {e}")
+
     yield
+
+    # Shutdown scheduler
+    try:
+        if _scheduler.running:
+            _scheduler.shutdown(wait=False)
+    except Exception:
+        pass
 
 app = FastAPI(lifespan=lifespan)
 
@@ -52,6 +94,9 @@ cors_origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://localhost:5173", # Vite default
+    "http://127.0.0.1:5173",
+    "http://localhost:8080",
+    "http://127.0.0.1:8080",
     "https://tdk-proj-489111.web.app",
     "https://tdk-proj-489111.firebaseapp.com",
 ]
@@ -89,6 +134,8 @@ app.include_router(homeroom_router)
 app.include_router(classroom_router)
 app.include_router(admin_router)
 app.include_router(evaluation_router)
+app.include_router(semester_period_router)
+app.include_router(school_access_control_router)
 
 @app.get("/", tags=["root"])
 def read_root():

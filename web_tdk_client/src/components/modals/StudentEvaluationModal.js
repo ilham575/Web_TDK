@@ -4,7 +4,7 @@ import { X, BookOpen, PenTool, Brain, Send, User, Star, ChevronDown, AlertCircle
 import { API_BASE_URL } from '../endpoints';
 import { toast } from 'react-toastify';
 
-function StudentEvaluationModal({ isOpen, subject, students, onClose, teacherId, isEditing = false, existingEvaluation = null, onSuccess }) {
+function StudentEvaluationModal({ isOpen, subject, students, onClose, teacherId, isEditing = false, existingEvaluation = null, onSuccess, systemYear, systemSemester }) {
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [evaluation, setEvaluation] = useState({
     reading: '',
@@ -65,16 +65,32 @@ function StudentEvaluationModal({ isOpen, subject, students, onClose, teacherId,
       }
     };
     
+    const fetchEvaluatedIds = async () => {
+      if (!subject?.id) return;
+      try {
+          const params = new URLSearchParams();
+          // Use subject's year/semester if available, or fetch all?
+          // We want to block re-evaluation for the CURRENT target term.
+      const targetYear = subject.academic_year || systemYear || String(new Date().getFullYear() + 543);
+      const targetSem = subject.semester || systemSemester || 1;
+          params.append('semester', targetSem);
+          
+          const queryString = `?${params.toString()}`;
+
+          const res = await fetch(`${API_BASE_URL}/evaluations/subject/${subject.id}${queryString}`, {
+             headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+          });
+          if (res.ok) {
+             const data = await res.json();
+             setEvaluatedStudentIds(data.map(e => e.student_id));
+          }
+      } catch(e) {}
+    };
+    
     if (isOpen) {
       fetchTopics();
       loadExistingEvaluation();
-      // read evaluated ids passed by parent (set on window.__evaluatedIds)
-      try {
-        const ids = window.__evaluatedIds || [];
-        setEvaluatedStudentIds(Array.isArray(ids) ? ids : []);
-      } catch (e) {
-        setEvaluatedStudentIds([]);
-      }
+      fetchEvaluatedIds();
     }
   }, [isOpen, isEditing, existingEvaluation, students]);
 
@@ -90,19 +106,21 @@ function StudentEvaluationModal({ isOpen, subject, students, onClose, teacherId,
     return () => { document.body.style.overflow = 'unset'; };
   }, [isOpen]);
 
-  // Filter students by classroom
+  // Filter students by classroom (grade_level)
   useEffect(() => {
     const uniqueClassrooms = getUniqueClassrooms();
     if (students && students.length > 0) {
       // If no classroom is selected but we have classrooms, select the first one by default
       if (!selectedClassroom && uniqueClassrooms.length > 0) {
-        setSelectedClassroom(String(uniqueClassrooms[0].id));
+        setSelectedClassroom(uniqueClassrooms[0].grade_level || String(uniqueClassrooms[0].id));
         return;
       }
 
       if (selectedClassroom) {
         const filtered = students.filter(student => 
-          student.classroom && student.classroom.id === parseInt(selectedClassroom)
+          student.classroom &&
+          (student.classroom.grade_level === selectedClassroom ||
+           String(student.classroom.id) === selectedClassroom)
         );
         setFilteredStudents(filtered);
       } else {
@@ -164,7 +182,9 @@ function StudentEvaluationModal({ isOpen, subject, students, onClose, teacherId,
           reading: evaluation.reading,
           writing: evaluation.writing,
           analysis: evaluation.analysis,
-          characteristic_scores: scores
+          characteristic_scores: scores,
+          academic_year: subject.academic_year || systemYear || String(new Date().getFullYear() + 543),
+          semester: subject.semester || systemSemester || 1
         } : {
           student_id: selectedStudent.id,
           subject_id: subject.id,
@@ -172,7 +192,9 @@ function StudentEvaluationModal({ isOpen, subject, students, onClose, teacherId,
           reading: evaluation.reading,
           writing: evaluation.writing,
           analysis: evaluation.analysis,
-          characteristic_scores: scores
+          characteristic_scores: scores,
+          academic_year: subject.academic_year || systemYear || String(new Date().getFullYear() + 543),
+          semester: subject.semester || systemSemester || 1
         })
       });
 
@@ -197,17 +219,26 @@ function StudentEvaluationModal({ isOpen, subject, students, onClose, teacherId,
   const getUniqueClassrooms = () => {
     if (!students || students.length === 0) return [];
     
+    // Deduplicate by grade_level so classrooms split across semesters appear only once
     const classroomMap = new Map();
     students.forEach(student => {
       if (student.classroom) {
-        const key = student.classroom.id;
+        const key = student.classroom.grade_level || student.classroom.id;
         if (!classroomMap.has(key)) {
-          classroomMap.set(key, student.classroom);
+          classroomMap.set(key, {
+            ...student.classroom,
+            // Normalise display: show grade_level only, not the semester-specific name
+            displayName: student.classroom.grade_level || student.classroom.name
+          });
         }
       }
     });
     
-    return Array.from(classroomMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+    return Array.from(classroomMap.values()).sort((a, b) => {
+      const numA = parseInt(a.grade_level?.match(/\d+/)?.[0] || 0);
+      const numB = parseInt(b.grade_level?.match(/\d+/)?.[0] || 0);
+      return numA - numB;
+    });
   };
 
   if (!isOpen || !subject) return null;
@@ -244,8 +275,8 @@ function StudentEvaluationModal({ isOpen, subject, students, onClose, teacherId,
                     className="w-full appearance-none bg-white border border-slate-200 rounded-xl px-4 py-3 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   >
                     {getUniqueClassrooms().map(classroom => (
-                      <option key={classroom.id} value={classroom.id}>
-                        {classroom.name} ({classroom.grade_level})
+                      <option key={classroom.grade_level || classroom.id} value={classroom.grade_level || classroom.id}>
+                        {classroom.displayName || classroom.grade_level}
                       </option>
                     ))}
                   </select>
@@ -312,6 +343,21 @@ function StudentEvaluationModal({ isOpen, subject, students, onClose, teacherId,
                     เปลี่ยนนักเรียน
                   </button>
                 )}
+              </div>
+
+              {/* Check Period */}
+              <div className="flex items-center gap-3 px-4 py-3 mb-4 bg-slate-50 border border-slate-200 rounded-xl shadow-sm">
+                 <div className="p-2 rounded-lg bg-white border border-slate-100 shadow-sm">
+                    <span className="text-lg">🗓</span>
+                 </div>
+                 <div className="flex flex-col">
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-0.5">ประจำปีการศึกษา</p>
+                    <div className="flex items-center gap-3 text-sm font-bold text-slate-700">
+                      <span>ปี {subject?.academic_year || systemYear || (new Date().getFullYear() + 543)}</span>
+                      <span className="w-1 h-4 bg-slate-200 rounded-full"></span>
+                      <span>ภาคเรียนที่ {subject?.semester || systemSemester || 1}</span>
+                    </div>
+                 </div>
               </div>
 
               {/* Tabs */}

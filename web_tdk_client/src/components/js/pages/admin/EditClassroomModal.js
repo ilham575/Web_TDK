@@ -58,7 +58,7 @@ const EditClassroomModal = ({
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-6 backdrop-blur-sm bg-slate-900/40 animate-in fade-in duration-300">
-      <div className="bg-white w-full max-w-xl rounded-[2.5rem] shadow-2xl shadow-slate-900/20 overflow-hidden flex flex-col animate-in zoom-in-95 duration-300 max-h-[90vh]">
+      <div className="bg-white w-full max-w-xl rounded-[2.5rem] shadow-2xl shadow-slate-900/20 overflow-hidden flex flex-col animate-in zoom-in-95 duration-300 max-h-[calc(100dvh-2rem)]">
         {/* Header */}
         <div className="px-8 py-6 border-b border-slate-50 flex items-center justify-between bg-white sticky top-0 z-10">
           <div className="flex items-center gap-3">
@@ -83,7 +83,7 @@ const EditClassroomModal = ({
         </div>
 
         {/* Body */}
-        <div className="p-8 overflow-y-auto space-y-6">
+        <div className="p-8 overflow-y-auto space-y-6 flex-1">
           <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100/50">
             <p className="text-sm font-black text-blue-800 flex items-center gap-2">
               <ClipboardList className="w-4 h-4" />

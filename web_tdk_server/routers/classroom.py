@@ -78,6 +78,10 @@ async def create_classroom(
     """
     verify_admin_or_owner(current_user)
 
+    # Enforce academic year setup before creating classrooms
+    from routers.school import require_academic_year_setup
+    require_academic_year_setup(data.school_id, db)
+
     # ตรวจสอบว่ามีชั้นเรียนซ้ำหรือไม่ (ชื่อเดียวกัน กับเทอม ปี โรงเรียนเดียวกัน)
     existing = db.query(Classroom).filter(
         and_(
@@ -687,6 +691,12 @@ async def promote_classroom(
     grades_copied = 0
 
     for enrollment in students:
+        # ตรวจสอบว่านักเรียนยังมีอยู่ในระบบ
+        student = db.query(User).filter(User.id == enrollment.student_id).first()
+        if not student:
+            # ข้ามนักเรียนที่ไม่มีอยู่แล้ว
+            continue
+        
         # ตรวจสอบว่านักเรียนนี้ไม่มีอยู่ในชั้นเรียนเป้าหมายแล้ว
         existing_enrollment = db.query(ClassroomStudent).filter(
             ClassroomStudent.classroom_id == new_classroom.id,
@@ -695,16 +705,16 @@ async def promote_classroom(
         ).first()
         
         if not existing_enrollment:
-            # เพิ่มนักเรียนเข้าชั้นเรียนใหม่
+            # เพิ่มนักเรียนเข้าชั้นเรียนใหม่ พร้อมนำเลขที่มาด้วย
             new_enrollment = ClassroomStudent(
                 classroom_id=new_classroom.id,
-                student_id=enrollment.student_id
+                student_id=enrollment.student_id,
+                student_number=enrollment.student_number  # คัดลอกเลขที่จากชั้นเรียนเดิม
             )
             db.add(new_enrollment)
             promoted_students += 1
 
         # อัปเดต grade_level ของนักเรียน
-        student = db.query(User).filter(User.id == enrollment.student_id).first()
         if student:
             student.grade_level = new_grade_level
 
@@ -916,6 +926,8 @@ async def update_classroom_put(
             classroom.room_number = data.room_number
         if data.semester is not None:
             classroom.semester = data.semester
+        if data.academic_year is not None:
+            classroom.academic_year = data.academic_year
         if data.is_active is not None:
             classroom.is_active = data.is_active
 
@@ -968,10 +980,14 @@ async def update_classroom(
     try:
         if data.name is not None:
             classroom.name = data.name
+        if data.grade_level is not None:
+            classroom.grade_level = data.grade_level
         if data.room_number is not None:
             classroom.room_number = data.room_number
         if data.semester is not None:
             classroom.semester = data.semester
+        if data.academic_year is not None:
+            classroom.academic_year = data.academic_year
         if data.is_active is not None:
             classroom.is_active = data.is_active
 

@@ -21,6 +21,9 @@ function SigninPage() {
   const [students, setStudents] = useState([]);
   const [selectedStudentId, setSelectedStudentId] = useState('');
   const [studentPassword, setStudentPassword] = useState('');
+  // academic year options for student login
+  const [academicYears, setAcademicYears] = useState([]);
+  const [selectedAcademicYear, setSelectedAcademicYear] = useState('');
   
   // Common state
   const [error, setError] = useState('');
@@ -29,6 +32,17 @@ function SigninPage() {
   // Set page title
   useEffect(() => {
     document.title = 'เข้าสู่ระบบ - TDK Learning System';
+  }, []);
+  // ensure Mali font is loaded for this page
+  useEffect(() => {
+    const id = 'google-font-mali';
+    if (!document.getElementById(id)) {
+      const link = document.createElement('link');
+      link.id = id;
+      link.rel = 'stylesheet';
+      link.href = 'https://fonts.googleapis.com/css2?family=Mali:wght@300;400;700;800&display=swap';
+      document.head.appendChild(link);
+    }
   }, []);
   const navigate = useNavigate();
   const location = useLocation();
@@ -60,19 +74,64 @@ function SigninPage() {
     }
   }, [userType]);
 
-  // Load classrooms when school is selected
+  // Load school info when school is selected (to get current academic year)
   useEffect(() => {
     if (selectedSchoolId) {
+      // reset dependent state
+      setSelectedAcademicYear('');
+      setAcademicYears([]);
       setSelectedClassroomId('');
       setSelectedStudentId('');
       setClassrooms([]);
       setStudents([]);
-      
-      fetch(`${API_BASE_URL}/classrooms/?school_id=${selectedSchoolId}`)
+
+      // fetch school details for year info
+      fetch(`${API_BASE_URL}/schools/${selectedSchoolId}`)
+        .then(res => res.json())
+        .then(school => {
+          if (school && school.current_academic_year) {
+            const cur = String(school.current_academic_year);
+            // include next year as option (assume numeric)
+            let next = '';
+            const num = parseInt(cur, 10);
+            if (!isNaN(num)) {
+              next = String(num + 1);
+            }
+            const years = [cur];
+            if (next) years.push(next);
+            setAcademicYears(years);
+            setSelectedAcademicYear(cur);
+          }
+        })
+        .catch(err => {
+          console.error('Failed to load school info:', err);
+        });
+    }
+  }, [selectedSchoolId]);
+
+  // Load classrooms when school or academic year changes
+  useEffect(() => {
+    if (selectedSchoolId && selectedAcademicYear) {
+      setSelectedClassroomId('');
+      setSelectedStudentId('');
+      setClassrooms([]);
+      setStudents([]);
+
+      const url = new URL(`${API_BASE_URL}/classrooms/`);
+      url.searchParams.set('school_id', selectedSchoolId);
+      url.searchParams.set('academic_year', selectedAcademicYear);
+
+      fetch(url.toString())
         .then(res => res.json())
         .then(data => {
           if (Array.isArray(data)) {
-            setClassrooms(data);
+            // Filter out duplicate classrooms with same name and grade_level
+            const uniqueClassrooms = data.filter((classroom, index, self) =>
+              index === self.findIndex((c) => (
+                c.name === classroom.name && c.grade_level === classroom.grade_level
+              ))
+            );
+            setClassrooms(uniqueClassrooms);
           }
         })
         .catch(err => {
@@ -80,7 +139,7 @@ function SigninPage() {
           setClassrooms([]);
         });
     }
-  }, [selectedSchoolId]);
+  }, [selectedSchoolId, selectedAcademicYear]);
 
   // Load students when classroom is selected
   useEffect(() => {
@@ -121,7 +180,7 @@ function SigninPage() {
       loginUsername = username;
       loginPassword = password;
     } else {
-      if (!selectedSchoolId || !selectedClassroomId || !selectedStudentId || !studentPassword) {
+      if (!selectedSchoolId || !selectedAcademicYear || !selectedClassroomId || !selectedStudentId || !studentPassword) {
         setError('กรุณาเลือกข้อมูลให้ครบถ้วน');
         toast.error('กรุณาเลือกข้อมูลให้ครบถ้วน', {
           position: "top-center",
@@ -208,38 +267,41 @@ function SigninPage() {
 
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
+    <div
+      className="min-h-screen bg-gradient-to-br from-slate-50 to-emerald-50/30 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden"
+      style={{ fontFamily: 'Mali, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial' }}
+    >
       {/* Decorative Ornaments */}
-      <div className="absolute top-0 left-0 w-full h-2 bg-emerald-600"></div>
-      <div className="absolute -top-24 -left-24 w-96 h-96 bg-emerald-100 rounded-full opacity-50 blur-3xl"></div>
-      <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-indigo-100 rounded-full opacity-50 blur-3xl"></div>
+      <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-500"></div>
+      <div className="absolute -top-32 -left-32 w-96 h-96 bg-emerald-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30"></div>
+      <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-teal-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30"></div>
 
       <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10">
         <div className="flex justify-center mb-6">
-          <div className="w-20 h-20 bg-emerald-600 rounded-2xl flex items-center justify-center text-4xl shadow-xl shadow-emerald-200 text-white">
+          <div className="w-20 h-20 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl flex items-center justify-center text-4xl shadow-lg shadow-emerald-500/30 text-white transform rotate-3 hover:rotate-0 transition-transform duration-300">
             🕌
           </div>
         </div>
-        <h2 className="text-center text-3xl font-extrabold text-slate-900">
+        <h2 className="text-center text-3xl font-extrabold text-slate-900 tracking-tight">
           เข้าสู่ระบบ
         </h2>
-        <p className="mt-2 text-center text-sm text-slate-600 italic">
-          ยินดีต้อนรับกลับ — {userType === 'staff' ? 'ส่วนของบุคลากร' : 'ส่วนของนักเรียน'}
+        <p className="mt-2 text-center text-sm text-slate-500">
+          ยินดีต้อนรับกลับ — <span className="font-semibold text-emerald-600">{userType === 'staff' ? 'ส่วนของบุคลากร' : 'ส่วนของนักเรียน'}</span>
         </p>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md relative z-10 px-4 sm:px-0">
-        <div className="bg-white py-8 px-4 shadow-2xl shadow-slate-200 sm:rounded-3xl sm:px-10 border border-slate-100">
+        <div className="bg-white/90 backdrop-blur-xl py-8 px-4 shadow-2xl shadow-slate-200/50 sm:rounded-3xl sm:px-10 border border-white">
           
           {/* User Type Switcher */}
-          <div className="flex p-1 bg-slate-100 rounded-2xl mb-8">
+          <div className="flex p-1.5 bg-slate-100/80 rounded-2xl mb-8 border border-slate-200/50">
             <button
               type="button"
               onClick={() => { setUserType('staff'); setError(''); }}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-bold rounded-xl transition-all duration-200 ${
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-bold rounded-xl transition-all duration-300 ${
                 userType === 'staff' 
-                  ? 'bg-white text-emerald-600 shadow-sm' 
-                  : 'text-slate-500 hover:text-slate-700'
+                  ? 'bg-white text-emerald-600 shadow-sm border border-slate-100 scale-100' 
+                  : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50 scale-95'
               }`}
             >
               <span>👨‍💼</span> บุคลากร
@@ -247,10 +309,10 @@ function SigninPage() {
             <button
               type="button"
               onClick={() => { setUserType('student'); setError(''); }}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-bold rounded-xl transition-all duration-200 ${
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-bold rounded-xl transition-all duration-300 ${
                 userType === 'student' 
-                  ? 'bg-white text-emerald-600 shadow-sm' 
-                  : 'text-slate-500 hover:text-slate-700'
+                  ? 'bg-white text-emerald-600 shadow-sm border border-slate-100 scale-100' 
+                  : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50 scale-95'
               }`}
             >
               <span>👨‍🎓</span> นักเรียน
@@ -261,14 +323,16 @@ function SigninPage() {
             {userType === 'staff' ? (
               <>
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1.5 ml-1">
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
                     ชื่อผู้ใช้
                   </label>
-                  <div className="relative">
-                    <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">👤</span>
+                  <div className="relative group">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                      <span className="text-slate-400 group-focus-within:text-emerald-500 transition-colors">👤</span>
+                    </div>
                     <input
                       type="text"
-                      className="block w-full pl-10 pr-3 py-3 border border-slate-200 rounded-2xl leading-5 bg-slate-50 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all text-sm"
+                      className="block w-full pl-12 pr-4 py-3 border border-slate-200 rounded-xl bg-slate-50/50 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm shadow-sm"
                       placeholder="Username ของคุณ"
                       value={username}
                       onChange={e => setUsername(e.target.value)}
@@ -278,14 +342,16 @@ function SigninPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1.5 ml-1">
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
                     รหัสผ่าน
                   </label>
-                  <div className="relative">
-                    <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">🔒</span>
+                  <div className="relative group">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                      <span className="text-slate-400 group-focus-within:text-emerald-500 transition-colors">🔒</span>
+                    </div>
                     <input
                       type={showPassword ? 'text' : 'password'}
-                      className="block w-full pl-10 pr-12 py-3 border border-slate-200 rounded-2xl leading-5 bg-slate-50 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all text-sm"
+                      className="block w-full pl-12 pr-12 py-3 border border-slate-200 rounded-xl bg-slate-50/50 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm shadow-sm"
                       placeholder="Password"
                       value={password}
                       onChange={e => setPassword(e.target.value)}
@@ -294,7 +360,7 @@ function SigninPage() {
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-sm leading-5 text-slate-500 hover:text-emerald-600 transition-colors"
+                      className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-emerald-500 transition-colors focus:outline-none"
                     >
                       {showPassword ? '🙈' : '👁️'}
                     </button>
@@ -303,13 +369,13 @@ function SigninPage() {
               </>
             ) : (
               <>
-                <div className="space-y-4">
+                <div className="space-y-5">
                   {/* School Selection */}
                   <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-1.5 ml-1">🏫 โรงเรียน</label>
-                    <div className="relative">
+                    <label className="block text-sm font-medium text-slate-700 mb-2">🏫 โรงเรียน</label>
+                    <div className="relative group">
                       <select
-                        className="block w-full pl-4 pr-10 py-3 border border-slate-200 rounded-2xl bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all text-sm appearance-none cursor-pointer"
+                        className="block w-full pl-4 pr-10 py-3 border border-slate-200 rounded-xl bg-slate-50/50 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm appearance-none cursor-pointer shadow-sm"
                         value={selectedSchoolId}
                         onChange={e => setSelectedSchoolId(e.target.value)}
                         required
@@ -319,36 +385,57 @@ function SigninPage() {
                           <option key={school.id} value={school.id}>{school.name}</option>
                         ))}
                       </select>
-                      <div className="absolute inset-y-0 right-0 flex items-center px-3 pointer-events-none text-slate-400 italic text-xs">▼</div>
+                      <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-slate-400 group-focus-within:text-emerald-500 transition-colors">▼</div>
                     </div>
                   </div>
 
+                  {/* Academic Year Selection */}
+                  {academicYears.length > 0 && (
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">📅 ปีการศึกษา</label>
+                      <div className="relative group">
+                        <select
+                          className="block w-full pl-4 pr-10 py-3 border border-slate-200 rounded-xl bg-slate-50/50 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm appearance-none cursor-pointer shadow-sm"
+                          value={selectedAcademicYear}
+                          onChange={e => setSelectedAcademicYear(e.target.value)}
+                          required
+                        >
+                          <option value="">-- เลือกปีการศึกษา --</option>
+                          {academicYears.map(y => (
+                            <option key={y} value={y}>{y}</option>
+                          ))}
+                        </select>
+                        <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-slate-400 group-focus-within:text-emerald-500 transition-colors">▼</div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Classroom Selection */}
                   <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-1.5 ml-1">📚 ชั้นเรียน</label>
-                    <div className="relative">
+                    <label className="block text-sm font-medium text-slate-700 mb-2">📚 ชั้นเรียน</label>
+                    <div className="relative group">
                       <select
-                        className="block w-full pl-4 pr-10 py-3 border border-slate-200 rounded-2xl bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all text-sm appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="block w-full pl-4 pr-10 py-3 border border-slate-200 rounded-xl bg-slate-50/50 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm appearance-none disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
                         value={selectedClassroomId}
                         onChange={e => setSelectedClassroomId(e.target.value)}
                         required
-                        disabled={!selectedSchoolId || classrooms.length === 0}
+                        disabled={!selectedSchoolId || !selectedAcademicYear || classrooms.length === 0}
                       >
                         <option value="">-- เลือกชั้นเรียน --</option>
                         {classrooms.map(c => (
                           <option key={c.id} value={c.id}>{c.name} ({c.grade_level || 'N/A'})</option>
                         ))}
                       </select>
-                      <div className="absolute inset-y-0 right-0 flex items-center px-3 pointer-events-none text-slate-400 italic text-xs">▼</div>
+                      <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-slate-400 group-focus-within:text-emerald-500 transition-colors">▼</div>
                     </div>
                   </div>
 
                   {/* Student Selection */}
                   <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-1.5 ml-1">👤 ชื่อนักเรียน</label>
-                    <div className="relative">
+                    <label className="block text-sm font-medium text-slate-700 mb-2">👤 ชื่อนักเรียน</label>
+                    <div className="relative group">
                       <select
-                        className="block w-full pl-4 pr-10 py-3 border border-slate-200 rounded-2xl bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all text-sm appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="block w-full pl-4 pr-10 py-3 border border-slate-200 rounded-xl bg-slate-50/50 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm appearance-none disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
                         value={selectedStudentId}
                         onChange={e => setSelectedStudentId(e.target.value)}
                         required
@@ -359,63 +446,74 @@ function SigninPage() {
                           <option key={s.id} value={s.id}>{s.full_name || s.username}</option>
                         ))}
                       </select>
-                      <div className="absolute inset-y-0 right-0 flex items-center px-3 pointer-events-none text-slate-400 italic text-xs">▼</div>
+                      <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-slate-400 group-focus-within:text-emerald-500 transition-colors">▼</div>
                     </div>
                   </div>
 
                   {/* Student Password */}
                   <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-1.5 ml-1">🔒 รหัสผ่าน</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">🔒 รหัสผ่าน</label>
                     <input
                       type="password"
-                      className="block w-full px-4 py-3 border border-slate-200 rounded-2xl bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all text-sm disabled:opacity-50"
+                      className="block w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50/50 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                       placeholder="รหัสผ่านของคุณ"
                       value={studentPassword}
                       onChange={e => setStudentPassword(e.target.value)}
                       required
                       disabled={!selectedStudentId}
                     />
-                    <p className="mt-2 text-[10px] text-slate-400 italic ml-1 flex items-center gap-1">
-                      <span className="text-emerald-500">💡</span> ครั้งแรกใช้รหัสผ่านที่ผู้ดูแลระบบให้ไว้
-                    </p>
+                    <div className="mt-2.5 flex items-start gap-1.5">
+                      <span className="text-amber-500 text-xs mt-0.5">💡</span>
+                      <p className="text-[11px] text-slate-500 leading-tight">
+                        ครั้งแรกใช้รหัสผ่านที่ผู้ดูแลระบบให้ไว้
+                      </p>
+                    </div>
                   </div>
                 </div>
               </>
             )}
 
             {error && (
-              <div className="p-3 bg-red-50 border border-red-100 rounded-2xl text-red-600 text-xs font-medium animate-pulse text-center">
-                ⚠️ {error}
+              <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-xs font-medium animate-pulse text-center flex items-center justify-center gap-2">
+                <span>⚠️</span> {error}
               </div>
             )}
 
-          <button
+            <button
               type="submit"
               disabled={isLoading}
-              className="w-full flex justify-center py-4 px-4 border border-transparent rounded-2xl shadow-lg text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 transition-all transform active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed shadow-emerald-200"
+              className="w-full flex justify-center py-3.5 px-4 border border-transparent rounded-xl shadow-lg text-sm font-bold text-white bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 transition-all transform active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed shadow-emerald-500/25"
             >
-              {isLoading ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ'}
+              {isLoading ? (
+                <span className="flex items-center gap-2">
+                  <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                  กำลังเข้าสู่ระบบ...
+                </span>
+              ) : 'เข้าสู่ระบบ'}
             </button>
-        </form>
+          </form>
 
           <div className="mt-8">
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-slate-100"></div>
+                <div className="w-full border-t border-slate-200/60"></div>
               </div>
               <div className="relative flex justify-center text-xs">
-                <span className="px-2 bg-white text-slate-400 uppercase tracking-widest font-bold">หรือ</span>
+                <span className="px-3 bg-none text-slate-400 uppercase tracking-widest font-semibold backdrop-blur-xl">หรือ</span>
               </div>
             </div>
 
-            <div className="mt-6 flex flex-wrap justify-center gap-6 text-sm">
-              <button type="button" onClick={() => navigate('/forgot')} className="text-slate-500 hover:text-emerald-600 font-medium transition-colors underline decoration-slate-200 underline-offset-4 decoration-dashed hover:decoration-solid">
+            <div className="mt-6 flex flex-wrap justify-center gap-x-6 gap-y-3 text-sm">
+              <button type="button" onClick={() => navigate('/forgot')} className="text-slate-500 hover:text-emerald-600 font-medium transition-all hover:underline underline-offset-4 decoration-emerald-200">
                 ลืมรหัสผ่าน?
               </button>
               <button type="button" onClick={() => navigate('/signup')} className="text-emerald-600 hover:text-emerald-700 font-bold transition-colors">
                 สร้างบัญชีใหม่
               </button>
-              <button type="button" onClick={() => navigate('/')} className="text-slate-400 hover:text-slate-600 transition-colors">
+              <button type="button" onClick={() => navigate('/aboutme')} className="text-blue-500 hover:text-blue-600 font-bold transition-colors">
+                เกี่ยวกับผู้พัฒนา
+              </button>
+              <button type="button" onClick={() => navigate('/')} className="text-slate-400 hover:text-slate-600 font-medium transition-colors">
                 กลับหน้าหลัก
               </button>
             </div>
@@ -423,7 +521,7 @@ function SigninPage() {
         </div>
       </div>
 
-      <p className="mt-8 text-center text-[10px] text-slate-400 italic">
+      <p className="mt-12 text-center text-xs text-slate-400 font-medium z-10">
         © {new Date().getFullYear()} TDK Mosque Learning Center.
       </p>
     </div>

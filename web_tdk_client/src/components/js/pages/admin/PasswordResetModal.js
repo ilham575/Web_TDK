@@ -25,7 +25,7 @@ function PasswordResetModal({ isOpen, selectedRequest, onClose, onApprove }) {
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-6 backdrop-blur-sm bg-slate-900/40 animate-in fade-in duration-300">
-      <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl shadow-slate-900/20 overflow-hidden flex flex-col animate-in zoom-in-95 duration-300">
+      <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl shadow-slate-900/20 overflow-hidden flex flex-col animate-in zoom-in-95 duration-300 max-h-[calc(100dvh-2rem)]">
         {/* Header */}
         <div className="px-8 py-6 border-b border-slate-50 flex items-center justify-between bg-white sticky top-0 z-10">
           <div className="flex items-center gap-3">
@@ -50,7 +50,7 @@ function PasswordResetModal({ isOpen, selectedRequest, onClose, onApprove }) {
         </div>
 
         {/* Body */}
-        <div className="p-8 space-y-6">
+        <div className="p-8 space-y-6 flex-1 overflow-y-auto">
           {/* User Info Card */}
           <div className="bg-slate-50 p-5 rounded-3xl border border-slate-100 space-y-3">
             <div className="flex items-center gap-3">
@@ -108,7 +108,7 @@ function PasswordResetModal({ isOpen, selectedRequest, onClose, onApprove }) {
         </div>
 
         {/* Footer */}
-        <div className="px-8 py-6 bg-slate-50/50 flex gap-3">
+        <div className="px-8 py-6 bg-slate-50/50 flex gap-3 shrink-0">
           <button 
             type="button" 
             className="flex-1 h-12 bg-white hover:bg-slate-100 text-slate-600 rounded-xl font-black text-sm transition-all active:scale-95 border border-slate-100 shadow-sm"

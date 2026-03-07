@@ -1,13 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
-import { X, BookOpen, Target, CreditCard, Percent, Save, Trash2, Info, CalendarDays } from 'lucide-react';
+import { X, BookOpen, Target, CreditCard, Percent, Save, Trash2, Info } from 'lucide-react';
 import { API_BASE_URL } from '../../../endpoints';
 
-// Helper: current Buddhist Era year
-const currentBEYear = () => new Date().getFullYear() + 543;
-const BE_YEAR_OPTIONS = Array.from({ length: 5 }, (_, i) => String(currentBEYear() + 1 - i));
+function SubjectManagementModal({ isOpen, onClose, onSave, subject, currentSchoolId, defaultYear, defaultSemester }) {
 
-function SubjectManagementModal({ isOpen, onClose, onSave, subject, currentSchoolId }) {
   const [formData, setFormData] = useState({
     name: '',
     code: '',
@@ -15,9 +12,7 @@ function SubjectManagementModal({ isOpen, onClose, onSave, subject, currentSchoo
     credits: '',
     activity_percentage: '',
     max_collected_score: 100,
-    max_exam_score: 100,
-    academic_year: String(currentBEYear()),
-    semester: 1
+    max_exam_score: 100
   });
   const [saving, setSaving] = useState(false);
   const [currentSubject, setCurrentSubject] = useState(null);
@@ -25,9 +20,10 @@ function SubjectManagementModal({ isOpen, onClose, onSave, subject, currentSchoo
   // Reset form when modal opens/closes or subject changes
   useEffect(() => {
     if (isOpen) {
-      setCurrentSubject(subject);
+      // Only treat as edit if the subject has an actual id (copy mode passes subject without id)
+      setCurrentSubject(subject?.id ? subject : null);
       if (subject) {
-        // Editing existing subject
+        // Editing or copying an existing subject — pre-fill form either way
         setFormData({
           name: subject.name || '',
           code: subject.code || '',
@@ -35,12 +31,10 @@ function SubjectManagementModal({ isOpen, onClose, onSave, subject, currentSchoo
           credits: subject.credits || '',
           activity_percentage: subject.activity_percentage || '',
           max_collected_score: (subject.max_collected_score !== undefined && subject.max_collected_score !== null) ? subject.max_collected_score : 100,
-          max_exam_score: (subject.max_exam_score !== undefined && subject.max_exam_score !== null) ? subject.max_exam_score : 100,
-          academic_year: subject.academic_year || String(currentBEYear()),
-          semester: subject.semester || 1
+          max_exam_score: (subject.max_exam_score !== undefined && subject.max_exam_score !== null) ? subject.max_exam_score : 100
         });
       } else {
-        // Creating new subject
+        // Creating new subject — set default year/semester
         setFormData({
           name: '',
           code: '',
@@ -49,8 +43,8 @@ function SubjectManagementModal({ isOpen, onClose, onSave, subject, currentSchoo
           activity_percentage: '',
           max_collected_score: 100,
           max_exam_score: 100,
-          academic_year: String(currentBEYear()),
-          semester: 1
+          academic_year: defaultYear,
+          semester: defaultSemester || 1
         });
       }
     }
@@ -74,12 +68,14 @@ function SubjectManagementModal({ isOpen, onClose, onSave, subject, currentSchoo
       const submitData = {
         ...formData,
         school_id: currentSchoolId,
+        // For creates: already in formData (from defaultYear/defaultSemester). For copies/edits: override from subject prop
+        ...(subject?.academic_year ? { academic_year: subject.academic_year } : {}),
+        ...(subject?.semester ? { semester: subject.semester } : {}),
+        ...(subject?.linked_subject_id ? { linked_subject_id: subject.linked_subject_id } : {}),
         credits: formData.credits ? parseInt(formData.credits) : null,
         activity_percentage: formData.activity_percentage ? parseInt(formData.activity_percentage) : null,
         max_collected_score: formData.max_collected_score ? parseInt(formData.max_collected_score) : 100,
-        max_exam_score: formData.max_exam_score ? parseInt(formData.max_exam_score) : 100,
-        academic_year: formData.academic_year || null,
-        semester: formData.semester ? parseInt(formData.semester) : null
+        max_exam_score: formData.max_exam_score ? parseInt(formData.max_exam_score) : 100
       };
 
       const res = await fetch(url, {
@@ -112,7 +108,7 @@ function SubjectManagementModal({ isOpen, onClose, onSave, subject, currentSchoo
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-6 backdrop-blur-sm bg-slate-900/40 animate-in fade-in duration-300">
-      <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl shadow-slate-900/20 overflow-hidden flex flex-col animate-in zoom-in-95 duration-300">
+      <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl shadow-slate-900/20 overflow-hidden flex flex-col animate-in zoom-in-95 duration-300 max-h-[calc(100dvh-2rem)]">
         {/* Header */}
         <div className="px-8 py-6 border-b border-slate-50 flex items-center justify-between bg-white sticky top-0 z-10">
           <div className="flex items-center gap-3">
@@ -121,7 +117,7 @@ function SubjectManagementModal({ isOpen, onClose, onSave, subject, currentSchoo
             </div>
             <div>
               <h3 className="text-lg font-black text-slate-800 tracking-tight leading-none">
-                {currentSubject ? 'แก้ไขรายวิชา' : 'สร้างรายวิชาใหม่'}
+                {currentSubject ? 'แก้ไขรายวิชา' : (subject && !subject.id ? '📋 คัดลอกรายวิชา' : 'สร้างรายวิชาใหม่')}
               </h3>
               <p className="text-[11px] font-bold text-slate-400 mt-1 uppercase tracking-widest leading-none">
                 SUBJECT MANAGEMENT
@@ -136,9 +132,9 @@ function SubjectManagementModal({ isOpen, onClose, onSave, subject, currentSchoo
           </button>
         </div>
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
           {/* Body */}
-          <div className="p-8 space-y-6">
+          <div className="p-8 space-y-6 flex-1 overflow-y-auto">
             <div className="space-y-4">
               <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1 px-1">
                 <Info className="w-3.5 h-3.5" />
@@ -232,47 +228,6 @@ function SubjectManagementModal({ isOpen, onClose, onSave, subject, currentSchoo
                 )}
               </div>
 
-              {/* Academic Year & Semester */}
-              <div className="pt-4 border-t border-slate-50">
-                <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 px-1">
-                  <CalendarDays className="w-3.5 h-3.5" />
-                  ปีการศึกษา / เทอม
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest px-1">ปีการศึกษา</label>
-                    <div className="relative">
-                      <select
-                        className="w-full h-12 pl-5 pr-10 bg-slate-50 border-2 border-transparent focus:border-emerald-500 focus:bg-white rounded-2xl text-slate-700 font-bold text-sm outline-none transition-all appearance-none cursor-pointer"
-                        value={formData.academic_year}
-                        onChange={(e) => setFormData({...formData, academic_year: e.target.value})}
-                      >
-                        {BE_YEAR_OPTIONS.map(y => <option key={y} value={y}>{y}</option>)}
-                      </select>
-                      <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-                        <CalendarDays className="w-4 h-4" />
-                      </div>
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest px-1">ภาคเรียน</label>
-                    <div className="relative">
-                      <select
-                        className="w-full h-12 pl-5 pr-10 bg-slate-50 border-2 border-transparent focus:border-emerald-500 focus:bg-white rounded-2xl text-slate-700 font-bold text-sm outline-none transition-all appearance-none cursor-pointer"
-                        value={formData.semester}
-                        onChange={(e) => setFormData({...formData, semester: parseInt(e.target.value)})}
-                      >
-                        <option value={1}>ภาคเรียนที่ 1</option>
-                        <option value={2}>ภาคเรียนที่ 2</option>
-                      </select>
-                      <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-                        <Target className="w-4 h-4" />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
               {/* Score Settings */}
               <div className="pt-4 border-t border-slate-50">
                 <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 px-1">
@@ -338,7 +293,7 @@ function SubjectManagementModal({ isOpen, onClose, onSave, subject, currentSchoo
           </div>
 
           {/* Footer */}
-          <div className="px-8 py-6 bg-slate-50/50 border-t border-slate-50 flex gap-3">
+          <div className="px-8 py-6 bg-slate-50/50 border-t border-slate-50 flex gap-3 shrink-0">
             <button 
               type="button" 
               className="flex-1 h-12 bg-white hover:bg-slate-100 text-slate-600 rounded-xl font-black text-sm transition-all active:scale-95 border border-slate-100 shadow-sm"

@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { X, Book, Award, Target, TrendingUp, Info } from 'lucide-react';
 
-function StudentGradeModal({ isOpen, student, onClose, calculateMainSubjectsScore, calculateDetailedSubjectScore, calculateGPA, getLetterGrade, initials, origin, semesterLabel }) {
+function StudentGradeModal({ isOpen, student, onClose, calculateMainSubjectsScore, calculateDetailedSubjectScore, calculateGPA, getLetterGrade, initials, origin, semesterLabel, isCombinedMode }) {
   useEffect(() => {
     if (isOpen) document.body.style.overflow = 'hidden';
     else document.body.style.overflow = 'unset';
@@ -49,7 +49,11 @@ function StudentGradeModal({ isOpen, student, onClose, calculateMainSubjectsScor
                     <Info className="w-3 h-3" /> แหล่งที่มา: {origin === 'attendance' ? 'สรุปการเข้าเรียน' : 'สรุปผลการเรียน'}
                   </div>
                 )}
-                {semesterLabel && (
+                {isCombinedMode ? (
+                  <div className="mt-1.5 flex items-center gap-2 text-[10px] font-black text-purple-700 bg-purple-50 px-3 py-1 rounded-full w-fit border border-purple-200 shadow-sm">
+                    ⭐ รวม 2 ภาคเรียน
+                  </div>
+                ) : semesterLabel && (
                   <div className="mt-1.5 flex items-center gap-2 text-[10px] font-black text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full w-fit border border-emerald-100">
                     📅 {semesterLabel}
                   </div>
@@ -90,68 +94,146 @@ function StudentGradeModal({ isOpen, student, onClose, calculateMainSubjectsScor
                 <div className="space-y-6">
                   {academic.length > 0 && (
                     <div>
-                      <div className="flex items-center justify-between mb-3">
-                        <h4 className="text-sm font-black text-slate-700">วิชาการ</h4>
-                      </div>
-                      <div className="space-y-3">
-                        {academic.map(subject => {
-                          const isActivity = false;
-                          const detail = calculateDetailedSubjectScore(subject);
-                          const totalWeightedScore = detail.totalScore;
-                          const totalWeightedMax = detail.totalMax;
-                          const percent = totalWeightedMax > 0 ? (totalWeightedScore / totalWeightedMax) * 100 : 0;
+                      {isCombinedMode ? (
+                        // Group by: merged subjects, then sem1-only, then sem2-only
+                        (() => {
+                          const mergedSubjects = academic.filter(s => s._isMerged);
+                          const sem1OnlySubjects = academic.filter(s => s._semester === 1);
+                          const sem2OnlySubjects = academic.filter(s => s._semester === 2);
                           
-                          // Get grade data using percentage
-                          const subGrade = getLetterGrade(percent);
+                          const renderSubjectCard = (subject, label = null) => {
+                            const detail = calculateDetailedSubjectScore(subject);
+                            const totalWeightedScore = detail.totalScore;
+                            const totalWeightedMax = detail.totalMax;
+                            const percent = totalWeightedMax > 0 ? (totalWeightedScore / totalWeightedMax) * 100 : 0;
+                            const subGrade = getLetterGrade(percent);
+                            // Use gpaValue from getLetterGrade (which returns {grade, gpaValue, color, bg})
+                            const numericGrade = subGrade?.gpaValue !== undefined ? subGrade.gpaValue : 0.0;
+                            
+                            return (
+                              <div key={subject.subject_id} className="relative bg-white border border-slate-100 rounded-[2rem] p-6 shadow-sm hover:shadow-md transition-shadow">
+                                <div className="flex justify-between items-start mb-6">
+                                  <div className="space-y-1">
+                                    <div className={`text-[10px] font-black uppercase tracking-[0.2em] px-2.5 py-1 rounded-lg w-fit ${label?.color || 'bg-blue-50 text-blue-600 border-blue-100'} border mb-2`}>
+                                      {label?.text || 'วิชาการ'}
+                                    </div>
+                                    <h5 className="text-lg font-black text-slate-800 leading-tight">{subject.subject_name}</h5>
+                                  </div>
+                                  <div className="flex flex-col items-end gap-2">
+                                    <div className={`px-4 py-2 rounded-2xl text-base font-black shadow-sm ${subGrade.bg} ${subGrade.color} border border-current/10`}>
+                                      เกรด {subGrade.grade}
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                  <div className="bg-slate-50/80 rounded-[1.5rem] p-4 border border-slate-100">
+                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">คะแนนรวม</p>
+                                    <div className="flex items-baseline gap-1">
+                                      <span className="text-2xl font-black text-slate-800">{totalWeightedScore}</span>
+                                      <span className="text-xs font-bold text-slate-400">/ {totalWeightedMax}</span>
+                                    </div>
+                                  </div>
+                                  <div className="bg-emerald-50/50 rounded-[1.5rem] p-4 border border-emerald-100/50 flex flex-col justify-center">
+                                    <p className="text-[10px] font-black text-emerald-600 uppercase tracking-wider mb-1">เกรด</p>
+                                    <div className="text-2xl font-black text-emerald-700">
+                                      {Number(numericGrade).toFixed(1)}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          };
                           
-                          // Determine numeric grade manually if point is missing but percentage exists
-                          let numericGrade = 0.0;
-                          if (subGrade && typeof subGrade.point === 'number') {
-                            numericGrade = subGrade.point;
-                          } else if (percent >= 80) numericGrade = 4.0;
-                          else if (percent >= 75) numericGrade = 3.5;
-                          else if (percent >= 70) numericGrade = 3.0;
-                          else if (percent >= 65) numericGrade = 2.5;
-                          else if (percent >= 60) numericGrade = 2.0;
-                          else if (percent >= 55) numericGrade = 1.5;
-                          else if (percent >= 50) numericGrade = 1.0;
-                          else numericGrade = 0.0;
-
                           return (
-                            <div key={subject.subject_id} className="relative bg-white border border-slate-100 rounded-[2rem] p-6 shadow-sm hover:shadow-md transition-shadow">
-                              <div className="flex justify-between items-start mb-6">
-                                <div className="space-y-1">
-                                  <div className={`text-[10px] font-black uppercase tracking-[0.2em] px-2.5 py-1 rounded-lg w-fit bg-blue-50 text-blue-600 border border-blue-100/50 mb-2`}>
-                                    วิชาการ
+                            <div className="space-y-6">
+                              {mergedSubjects.length > 0 && (
+                                <div>
+                                  <div className="flex items-center gap-2 mb-4 px-2 pb-2 border-b-2 border-purple-200">
+                                    <h4 className="text-sm font-black text-purple-700">วิชารวม 2 ภาคเรียน</h4>
+                                    <span className="text-xs font-bold text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full">{mergedSubjects.length} วิชา</span>
                                   </div>
-                                  <h5 className="text-lg font-black text-slate-800 leading-tight">{subject.subject_name}</h5>
-                                </div>
-                                <div className="flex flex-col items-end gap-2">
-                                  <div className={`px-4 py-2 rounded-2xl text-base font-black shadow-sm ${subGrade.bg} ${subGrade.color} border border-current/10`}>
-                                    เกรด {subGrade.grade}
+                                  <div className="space-y-3">
+                                    {mergedSubjects.map(subject => renderSubjectCard(subject, { text: '✓ รวม 2 เทอม', color: 'bg-purple-50 text-purple-600 border-purple-100' }))}
                                   </div>
                                 </div>
-                              </div>
-
-                              <div className="grid grid-cols-2 gap-4">
-                                <div className="bg-slate-50/80 rounded-[1.5rem] p-4 border border-slate-100">
-                                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">คะแนนรวม</p>
-                                  <div className="flex items-baseline gap-1">
-                                    <span className="text-2xl font-black text-slate-800">{totalWeightedScore}</span>
-                                    <span className="text-xs font-bold text-slate-400">/ {totalWeightedMax}</span>
+                              )}
+                              
+                              {sem1OnlySubjects.length > 0 && (
+                                <div>
+                                  <div className="flex items-center gap-2 mb-4 px-2 pb-2 border-b-2 border-emerald-100">
+                                    <h4 className="text-sm font-black text-emerald-700">เฉพาะเทอมที่ 1</h4>
+                                    <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">{sem1OnlySubjects.length} วิชา</span>
+                                  </div>
+                                  <div className="space-y-3">
+                                    {sem1OnlySubjects.map(subject => renderSubjectCard(subject, { text: 'เฉพาะเทอมที่ 1', color: 'bg-emerald-50 text-emerald-600 border-emerald-100' }))}
                                   </div>
                                 </div>
-                                <div className="bg-emerald-50/50 rounded-[1.5rem] p-4 border border-emerald-100/50 flex flex-col justify-center">
-                                  <p className="text-[10px] font-black text-emerald-600 uppercase tracking-wider mb-1">เกรด</p>
-                                  <div className="text-2xl font-black text-emerald-700">
-                                    {Math.round(numericGrade)}
+                              )}
+                              
+                              {sem2OnlySubjects.length > 0 && (
+                                <div>
+                                  <div className="flex items-center gap-2 mb-4 px-2 pb-2 border-b-2 border-blue-100">
+                                    <h4 className="text-sm font-black text-blue-700">เฉพาะเทอมที่ 2</h4>
+                                    <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">{sem2OnlySubjects.length} วิชา</span>
+                                  </div>
+                                  <div className="space-y-3">
+                                    {sem2OnlySubjects.map(subject => renderSubjectCard(subject, { text: 'เฉพาะเทอมที่ 2', color: 'bg-blue-50 text-blue-600 border-blue-100' }))}
                                   </div>
                                 </div>
-                              </div>
+                              )}
                             </div>
                           );
-                        })}
-                      </div>
+                        })()
+                      ) : (
+                        <>
+                          <div className="flex items-center justify-between mb-3">
+                            <h4 className="text-sm font-black text-slate-700">วิชาการ</h4>
+                          </div>
+                          <div className="space-y-3">
+                            {academic.map(subject => {
+                              const detail = calculateDetailedSubjectScore(subject);
+                              const totalWeightedScore = detail.totalScore;
+                              const totalWeightedMax = detail.totalMax;
+                              const percent = totalWeightedMax > 0 ? (totalWeightedScore / totalWeightedMax) * 100 : 0;
+                              const subGrade = getLetterGrade(percent);
+                              // Use gpaValue from getLetterGrade
+                              const numericGrade = subGrade?.gpaValue !== undefined ? subGrade.gpaValue : 0.0;
+                              return (
+                                <div key={subject.subject_id} className="relative bg-white border border-slate-100 rounded-[2rem] p-6 shadow-sm hover:shadow-md transition-shadow">
+                                  <div className="flex justify-between items-start mb-6">
+                                    <div className="space-y-1">
+                                      <div className={`text-[10px] font-black uppercase tracking-[0.2em] px-2.5 py-1 rounded-lg w-fit bg-blue-50 text-blue-600 border border-blue-100/50 mb-2`}>
+                                        วิชาการ
+                                      </div>
+                                      <h5 className="text-lg font-black text-slate-800 leading-tight">{subject.subject_name}</h5>
+                                    </div>
+                                    <div className="flex flex-col items-end gap-2">
+                                      <div className={`px-4 py-2 rounded-2xl text-base font-black shadow-sm ${subGrade.bg} ${subGrade.color} border border-current/10`}>
+                                        เกรด {subGrade.grade}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-4">
+                                    <div className="bg-slate-50/80 rounded-[1.5rem] p-4 border border-slate-100">
+                                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">คะแนนรวม</p>
+                                      <div className="flex items-baseline gap-1">
+                                        <span className="text-2xl font-black text-slate-800">{totalWeightedScore}</span>
+                                        <span className="text-xs font-bold text-slate-400">/ {totalWeightedMax}</span>
+                                      </div>
+                                    </div>
+                                    <div className="bg-emerald-50/50 rounded-[1.5rem] p-4 border border-emerald-100/50 flex flex-col justify-center">
+                                      <p className="text-[10px] font-black text-emerald-600 uppercase tracking-wider mb-1">เกรด</p>
+                                      <div className="text-2xl font-black text-emerald-700">
+                                        {Number(numericGrade).toFixed(1)}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </>
+                      )}
                     </div>
                   )}
 

@@ -6,7 +6,7 @@ from database.connection import Base
 class Evaluation(Base):
     __tablename__ = "evaluations"
     __table_args__ = (
-        UniqueConstraint('student_id', 'subject_id', name='uq_evaluation_student_subject'),
+        UniqueConstraint('student_id', 'subject_id', 'academic_year', 'semester', name='uq_evaluation_student_subject_term'),
     )
 
     id = Column(Integer, primary_key=True, index=True)
@@ -16,6 +16,8 @@ class Evaluation(Base):
     reading = Column(String(50), nullable=False)  # excellent, good, pass, fail
     writing = Column(String(50), nullable=False)
     analysis = Column(String(50), nullable=False)
+    academic_year = Column(String(10), nullable=True)
+    semester = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships

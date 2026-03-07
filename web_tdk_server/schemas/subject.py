@@ -13,8 +13,9 @@ class SubjectBase(BaseModel):
     activity_percentage: Optional[int] = None
     max_collected_score: Optional[int] = 100
     max_exam_score: Optional[int] = 100
-    academic_year: Optional[str] = None   # ปีการศึกษา เช่น '2567'
-    semester: Optional[int] = None        # เทอม 1 หรือ 2
+    academic_year: Optional[str] = None
+    semester: Optional[int] = None
+    linked_subject_id: Optional[int] = None  # ID of the source subject this was copied from
 
 class SubjectCreate(SubjectBase):
     pass

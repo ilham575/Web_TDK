@@ -60,9 +60,9 @@ export default function ScheduleDetailModal({ isOpen, item, onClose, role = 'stu
       ></div>
 
       {/* Modal Content */}
-      <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden transform transition-all animate-in fade-in zoom-in duration-200">
+      <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden transform transition-all animate-in fade-in zoom-in duration-200 max-h-[calc(100dvh-2rem)] flex flex-col">
         {/* Header */}
-        <div className={`bg-gradient-to-r ${dayColors[Number(day)] || 'from-emerald-500 to-teal-600'} p-8 text-white relative`}>
+        <div className={`bg-gradient-to-r ${dayColors[Number(day)] || 'from-emerald-500 to-teal-600'} p-8 text-white relative shrink-0`}>
           <button 
                 onClick={onClose}
                 className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/20 transition-colors text-2xl leading-none"
@@ -86,7 +86,7 @@ export default function ScheduleDetailModal({ isOpen, item, onClose, role = 'stu
         </div>
 
         {/* Body */}
-        <div className="p-8 space-y-6 bg-slate-50/50">
+        <div className="p-8 space-y-6 bg-slate-50/50 flex-1 overflow-y-auto">
           {/* Time & Day Grid */}
           <div className="grid grid-cols-2 gap-4">
             <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between">
@@ -155,7 +155,7 @@ export default function ScheduleDetailModal({ isOpen, item, onClose, role = 'stu
         </div>
 
         {/* Footer */}
-        <div className="p-6 bg-white border-t border-slate-100 flex flex-wrap gap-3 justify-end items-center">
+        <div className="p-6 bg-white border-t border-slate-100 flex flex-wrap gap-3 justify-end items-center shrink-0">
             {(role === 'teacher' || role === 'admin') && onDelete && (
                 <button 
                     className="px-6 py-2.5 bg-rose-50 text-rose-600 rounded-xl font-bold hover:bg-rose-100 transition-all active:scale-95 flex items-center gap-2 mr-auto"

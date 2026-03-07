@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List, Dict
-from sqlalchemy import distinct, func
+from sqlalchemy import distinct, func, or_, and_
 from datetime import datetime, timezone
 
 from database.connection import get_db
@@ -19,7 +19,7 @@ from schemas.grade import GradesBulk, GradeResponse, AssignmentCreate, Assignmen
 router = APIRouter(prefix="/grades", tags=["grades"])
 
 
-def calculate_activity_grades(db: Session, student_id: int, classroom_id: int = None):
+def calculate_activity_grades(db: Session, student_id: int, classroom_id: int = None, academic_year: str = None, semester: int = None):
     """
     Aggregate grades for all activity-type subjects for a student.
     Returns: {
@@ -29,14 +29,28 @@ def calculate_activity_grades(db: Session, student_id: int, classroom_id: int = 
     }
     """
     # Find all activity subjects that have grades for this student
-    activity_data = db.query(
+    activity_query = db.query(
         SubjectModel.id,
         SubjectModel.name,
-        SubjectModel.activity_percentage
+        SubjectModel.activity_percentage,
+        SubjectModel.academic_year,
+        SubjectModel.semester
     ).filter(
         SubjectModel.subject_type == 'activity',
         SubjectModel.is_ended == False
-    ).all()
+    )
+    if academic_year is not None:
+        q_year = str(academic_year).strip()
+        if len(q_year) <= 2:
+            activity_query = activity_query.filter(or_(
+                SubjectModel.academic_year == academic_year,
+                func.right(SubjectModel.academic_year, len(q_year)) == q_year
+            ))
+        else:
+            activity_query = activity_query.filter(SubjectModel.academic_year == academic_year)
+    if semester is not None:
+        activity_query = activity_query.filter(SubjectModel.semester == semester)
+    activity_data = activity_query.all()
     
     if not activity_data:
         return {
@@ -49,7 +63,7 @@ def calculate_activity_grades(db: Session, student_id: int, classroom_id: int = 
     total_score = 0
     total_percent = 0
     
-    for subject_id, subject_name, activity_percent in activity_data:
+    for subject_id, subject_name, activity_percent, academic_year, semester in activity_data:
         # Get all grades for this student in this subject
         grades = db.query(GradeModel).filter(
             GradeModel.subject_id == subject_id,
@@ -88,7 +102,9 @@ def calculate_activity_grades(db: Session, student_id: int, classroom_id: int = 
             'normalized_score': round(normalized_score, 2),
             'percentage': percent,
             'contribution': round(contribution, 2),
-            'grade_count': len(valid_grades)
+            'grade_count': len(valid_grades),
+            'academic_year': academic_year,
+            'semester': semester
         })
         
         total_score += contribution
@@ -98,6 +114,7 @@ def calculate_activity_grades(db: Session, student_id: int, classroom_id: int = 
         'activity_subjects': activity_subjects,
         'total_activity_score': min(round(total_score, 2), 100),  # Cap at 100
         'total_activity_percent': total_percent
+
     }
 
 
@@ -533,9 +550,16 @@ def _get_student_transcript_internal(student_id: int, classroom_id: int, db: Ses
         SubjectStudentModel, SubjectModel.id == SubjectStudentModel.subject_id
     ).filter(SubjectStudentModel.student_id == student_id)
 
-    # Apply semester/year filters if provided
+    # Apply semester/year filters if provided (support short-year like '69')
     if academic_year is not None:
-        subjects_query = subjects_query.filter(SubjectModel.academic_year == academic_year)
+        q_year = str(academic_year).strip()
+        if len(q_year) <= 2:
+            subjects_query = subjects_query.filter(or_(
+                SubjectModel.academic_year == academic_year,
+                func.right(SubjectModel.academic_year, len(q_year)) == q_year
+            ))
+        else:
+            subjects_query = subjects_query.filter(SubjectModel.academic_year == academic_year)
     if semester is not None:
         subjects_query = subjects_query.filter(SubjectModel.semester == semester)
 
@@ -655,7 +679,7 @@ def _get_student_transcript_internal(student_id: int, classroom_id: int, db: Ses
         })
     
     # Calculate activity grades (Uses its own scaling logic to 100)
-    activity_breakdown = calculate_activity_grades(db, student_id, classroom_id)
+    activity_breakdown = calculate_activity_grades(db, student_id, classroom_id, academic_year=academic_year, semester=semester)
     
     # Build transcript
     transcript = regular_subjects
@@ -700,30 +724,44 @@ def get_student_transcript(student_id: int, classroom_id: int = None, academic_y
     if not student:
         raise HTTPException(status_code=404, detail='Student not found')
 
-    # Manual Toggle / Phase Release Logic for Students/Teachers
-    if not getattr(current_user, 'role', None) == 'admin':
-        school = db.query(SchoolModel).filter(SchoolModel.id == student.school_id).first()
-        if school:
-            # Check if student is blocked from seeing grades
-            if is_student:
-                # 1. Manual Toggle
-                if hasattr(school, 'is_grade_announced') and school.is_grade_announced == 0:
-                    raise HTTPException(status_code=403, detail="ทางโรงเรียนยังไม่เปิดให้เข้าดูผลการเรียน")
-                # 2. Date-based (Auto)
-                if school.grade_announcement_date:
-                    now = datetime.now(timezone.utc)
-                    ann_date = school.grade_announcement_date.replace(tzinfo=timezone.utc) if school.grade_announcement_date.tzinfo is None else school.grade_announcement_date
-                    if now < ann_date:
-                        raise HTTPException(status_code=403, detail="ยังไม่ถึงกําหนดวันประกาศผลการเรียน")
+    # Load school for access control and default year/semester
+    from models.school import School as SchoolModel
+    school = db.query(SchoolModel).filter(SchoolModel.id == student.school_id).first()
+    if not school:
+        raise HTTPException(status_code=404, detail='School not found')
 
-            # Check if teacher is blocked from summary/detail views (optional, depending on policy)
-            # For transcript, usually teacher can see but if we want strictly manual:
-            if is_teacher:
-                if hasattr(school, 'can_teacher_view_summary') and school.can_teacher_view_summary == 0:
-                     # For transcript specifically, we might allow teacher to see indvidual student but 
-                     # if it's considered "Summary" context, we block. 
-                     # Let's keep transcript open for teachers but homeroom summary blocked.
-                     pass 
+    # Access Control Logic per Year/Semester (Students/Teachers)
+    if not getattr(current_user, 'role', None) == 'admin':
+        from models.school_access_control import SchoolAccessControl as SchoolAccessControlModel
+        
+        # Determine which year/semester to check
+        check_year = academic_year if academic_year else school.current_academic_year
+        check_semester = int(semester) if semester else school.current_semester
+        
+        if not check_year or not check_semester:
+            raise HTTPException(status_code=400, detail="Academic year and semester must be specified")
+        
+        # Get access control record for this year/semester
+        access_control = db.query(SchoolAccessControlModel).filter(
+            and_(
+                SchoolAccessControlModel.school_id == student.school_id,
+                SchoolAccessControlModel.academic_year == check_year,
+                SchoolAccessControlModel.semester == check_semester
+            )
+        ).first()
+        
+        if is_student:
+            if not access_control or not access_control.allow_student_view_grades:
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"ทางโรงเรียนยังไม่เปิดให้เข้าดูผลการเรียนสำหรับปี {check_year} ภาคเรียนที่ {check_semester}"
+                )
+        elif is_teacher:
+            if not access_control or not access_control.allow_teacher_view_summary:
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"ทางโรงเรียนยังไม่อนุญาตให้ครูดูสรุปคะแนนสำหรับปี {check_year} ภาคเรียนที่ {check_semester}"
+                ) 
     
     return _get_student_transcript_internal(student_id, classroom_id, db, academic_year=academic_year, semester=semester)
 
@@ -757,24 +795,35 @@ def get_student_semester_list(student_id: int, db: Session = Depends(get_db), cu
 
 
 @router.get('/classroom/{classroom_id}/ranking')
-def get_classroom_ranking(classroom_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
-    """Calculate ranking for all students in a classroom based on weighted average of scores."""
-    # Check authorization (Admin or Teacher or Student in this class)
+def get_classroom_ranking(classroom_id: int, academic_year: str = None, semester: int = None, grade_level: str = None, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    """Calculate ranking for all students in a classroom or grade level based on weighted average of scores."""
+    # Check authorization (Admin or Teacher or Student)
     user_role = getattr(current_user, 'role', None)
     if user_role not in ['admin', 'teacher', 'student']:
         raise HTTPException(status_code=403, detail='Not authorized')
 
-    # Get students in classroom
-    students = db.query(UserModel).join(
+    # Get students in classroom or grade level
+    query = db.query(UserModel).join(
         ClassroomStudentModel, UserModel.id == ClassroomStudentModel.student_id
-    ).filter(ClassroomStudentModel.classroom_id == classroom_id).all()
+    )
+    
+    if grade_level:
+        # If grade_level is provided, find all students in any classroom of that grade level
+        query = query.join(ClassroomModel, ClassroomStudentModel.classroom_id == ClassroomModel.id)
+        query = query.filter(ClassroomModel.grade_level == grade_level)
+    else:
+        query = query.filter(ClassroomStudentModel.classroom_id == classroom_id)
+        
+    students = query.all()
 
     if not students:
         return []
 
     results = []
     for student in students:
-        transcript = _get_student_transcript_internal(student.id, classroom_id, db)
+        # If grade_level is used, we pass classroom_id=None to get overall performance for that period
+        cid_for_transcript = None if grade_level else classroom_id
+        transcript = _get_student_transcript_internal(student.id, cid_for_transcript, db, academic_year=academic_year, semester=semester)
         
         total_score = 0.0
         total_max = 0.0

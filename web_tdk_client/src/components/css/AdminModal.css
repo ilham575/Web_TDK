@@ -16,11 +16,16 @@
   color: #0f172a;
   border-radius: 10px;
   box-shadow: 0 12px 30px rgba(2, 6, 23, 0.18);
+  max-height: calc(100dvh - 2rem);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 /* Header / footer small helpers (modal uses inline styles in component) */
-.admin-modal-header { padding: 16px 20px; display:flex; align-items:center; gap:10px; }
-.admin-modal-footer { padding: 16px 20px; display:flex; gap:10px; justify-content:flex-end; }
+.admin-modal-header { padding: 16px 20px; display:flex; align-items:center; gap:10px; flex-shrink: 0; }
+.admin-modal-body { flex: 1 1 auto; overflow-y: auto; }
+.admin-modal-footer { padding: 16px 20px; display:flex; gap:10px; justify-content:flex-end; flex-shrink: 0; }
 
 /* ===================== Checkbox styles ===================== */
 /* Custom checkbox for lists in admin modal */
@@ -88,4 +93,18 @@
 /* small responsive tweak */
 @media (max-width: 480px) {
   .admin-modal-body input[type="checkbox"] { width:16px; height:16px; }
+}
+
+/* Mobile: slide up as bottom sheet */
+@media (max-width: 540px) {
+  .admin-modal-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+  .modal {
+    border-radius: 20px 20px 0 0 !important;
+    max-height: 92dvh;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
 }

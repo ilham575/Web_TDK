@@ -36,6 +36,8 @@ class EvaluationBase(BaseModel):
     reading: str
     writing: str
     analysis: str
+    academic_year: Optional[str] = None
+    semester: Optional[int] = None
 
 class EvaluationCreate(EvaluationBase):
     characteristic_scores: List[CharacteristicScoreCreate] = []

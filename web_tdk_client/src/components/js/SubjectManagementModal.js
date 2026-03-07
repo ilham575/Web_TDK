@@ -247,7 +247,7 @@ function SubjectManagementModal({ isOpen, onClose, onSave, subject, teachers, cl
       onClick={onClose}
     >
       <div 
-        className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col animate-in zoom-in duration-300"
+        className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col animate-in zoom-in duration-300 max-h-[calc(100dvh-2rem)]"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
@@ -272,7 +272,7 @@ function SubjectManagementModal({ isOpen, onClose, onSave, subject, teachers, cl
         </div>
         
         <form onSubmit={handleSave} className="flex flex-col">
-          <div className="p-6 space-y-5 overflow-y-auto max-h-[70vh] scrollbar-hide">
+          <div className="p-6 space-y-5 overflow-y-auto flex-1 scrollbar-hide">
             {/* Subject Name */}
             <div className="space-y-2">
               <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">

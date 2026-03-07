@@ -9,6 +9,7 @@ import SignupPage from './components/js/pages/default/signup';
 import ForgotPage from './components/js/pages/default/forgot';
 import ResetPasswordPage from './components/js/pages/default/reset-password';
 import ChangePasswordPage from './components/js/pages/default/change-password';
+import AboutMePage from './components/js/pages/default/aboutme';
 import StudentPage from './components/js/pages/student/home';
 import StudentSubjectDetails from './components/js/pages/student/studentSubjectDetails';
 import TeacherPage from './components/js/pages/teacher/home';
@@ -193,6 +194,7 @@ function App() {
         <Route path="/signin" element={<SigninPage />} />
         <Route path="/signup" element={<SignupPage />} />
         <Route path="/forgot" element={<ForgotPage />} />
+        <Route path="/aboutme" element={<AboutMePage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/change-password" element={<RequireAuth><ChangePasswordPage /></RequireAuth>} />
         <Route path="/profile" element={<RequireAuth><ProfilePage /></RequireAuth>} />

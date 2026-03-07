@@ -288,9 +288,16 @@ function TeacherDetail() {
                       <h4 className="text-xl font-black text-slate-800 mb-2 truncate group-hover:text-blue-600 transition-colors">
                         {s.name}
                       </h4>
-                      <div className="flex items-center gap-2 text-slate-400 font-bold text-xs uppercase tracking-tighter">
-                        <Clock className="w-3.5 h-3.5" />
-                        {s.is_ended ? 'จบหลักสูตรแล้ว' : 'กำลังทำการสอน'}
+                      <div className="flex items-center gap-3 text-slate-400 font-bold text-xs uppercase tracking-tighter">
+                        <div className="flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5" />
+                          {s.is_ended ? 'จบหลักสูตรแล้ว' : 'กำลังทำการสอน'}
+                        </div>
+                        {s.semester && (
+                          <div className="px-2.5 py-1 bg-amber-50 text-amber-600 rounded-lg border border-amber-100">
+                            เทอม {s.semester}
+                          </div>
+                        )}
                       </div>
                     </div>
 

@@ -55,9 +55,9 @@ export default function AnnouncementModal({ isOpen, initialData = {}, apiBaseUrl
       ></div>
 
       {/* Modal Content */}
-      <div className="relative w-full max-w-xl bg-white rounded-3xl shadow-2xl overflow-hidden transform transition-all animate-in fade-in zoom-in duration-200">
+      <div className="relative w-full max-w-xl bg-white rounded-3xl shadow-2xl overflow-hidden transform transition-all animate-in fade-in zoom-in duration-200 max-h-[calc(100dvh-2rem)] flex flex-col">
         {/* Header */}
-        <div className="bg-gradient-to-r from-emerald-500 to-teal-600 p-8 text-white relative">
+        <div className="bg-gradient-to-r from-emerald-500 to-teal-600 p-8 text-white relative shrink-0">
           <button 
                 onClick={onClose}
                 className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/20 transition-colors text-2xl leading-none"
@@ -77,7 +77,7 @@ export default function AnnouncementModal({ isOpen, initialData = {}, apiBaseUrl
         </div>
 
         {/* Body */}
-        <div className="p-8 space-y-6 bg-slate-50/50">
+        <div className="p-8 space-y-6 bg-slate-50/50 flex-1 overflow-y-auto">
           {/* Title Input */}
           <div className="space-y-2">
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">หัวข้อประกาศ</label>
@@ -185,7 +185,7 @@ export default function AnnouncementModal({ isOpen, initialData = {}, apiBaseUrl
         </div>
 
         {/* Footer */}
-        <div className="p-6 bg-white border-t border-slate-100 flex gap-3 justify-end items-center">
+        <div className="p-6 bg-white border-t border-slate-100 flex gap-3 justify-end items-center shrink-0">
             <button 
                 onClick={onClose}
                 className="px-8 py-3 text-slate-500 font-bold hover:bg-slate-50 rounded-2xl transition-all active:scale-95"

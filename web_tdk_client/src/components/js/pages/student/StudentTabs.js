@@ -1,32 +1,54 @@
 import React from 'react';
+import { 
+  BookOpen, 
+  Megaphone, 
+  CalendarDays, 
+  ClipboardCheck, 
+  BarChart3 
+} from 'lucide-react';
 
 function StudentTabs({ activeTab, setActiveTab }) {
   const tabs = [
-    { id: 'subjects', label: '📚 รายวิชา' },
-    { id: 'announcements', label: '📢 ข่าวสาร' },
-    { id: 'schedule', label: '📅 ตารางเรียน' },
-    { id: 'absences', label: '✋ การลา' },
-    { id: 'transcript', label: '📊 ผลการเรียน' },
+    { id: 'subjects', label: 'รายวิชา', icon: BookOpen },
+    { id: 'announcements', label: 'ข่าวสาร', icon: Megaphone },
+    { id: 'schedule', label: 'ตารางเรียน', icon: CalendarDays },
+    { id: 'absences', label: 'การลา', icon: ClipboardCheck },
+    { id: 'transcript', label: 'ผลการเรียน', icon: BarChart3 },
   ];
 
   return (
-    <div className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-slate-200 shadow-sm">
-      <div className="flex overflow-x-auto no-scrollbar">
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`flex-1 px-4 py-4 font-bold text-sm whitespace-nowrap transition-all duration-200 border-b-2 relative
-              ${
-                activeTab === tab.id
-                  ? 'text-emerald-600 border-emerald-600 bg-emerald-50'
-                  : 'text-slate-600 border-transparent hover:text-emerald-600 hover:bg-slate-50'
-              }
-            `}
-          >
-            {tab.label}
-          </button>
-        ))}
+    <div className="bg-white border-b border-slate-100 px-4 mb-6">
+      <div className="max-w-7xl mx-auto flex overflow-x-auto no-scrollbar scroll-smooth">
+        <div className="flex gap-4">
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-2.5 px-6 py-5 relative transition-all whitespace-nowrap group ${
+                  isActive 
+                    ? 'text-emerald-600' 
+                    : 'text-slate-400 hover:text-slate-600'
+                }`}
+              >
+                <Icon className={`w-5 h-5 transition-transform duration-300 ${
+                  isActive ? 'scale-110' : 'group-hover:scale-110'
+                }`} />
+                <span className={`text-sm font-black transition-colors ${
+                  isActive ? 'text-emerald-600' : 'text-slate-500'
+                }`}>
+                  {tab.label}
+                </span>
+                
+                {isActive && (
+                  <div className="absolute bottom-0 left-0 right-0 h-1 bg-emerald-600 rounded-t-full shadow-lg shadow-emerald-100" />
+                )}
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

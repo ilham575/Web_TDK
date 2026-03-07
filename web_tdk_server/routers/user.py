@@ -115,6 +115,11 @@ def get_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
 @router.post("/", response_model=User, status_code=status.HTTP_201_CREATED)
 def create_user(user: UserCreate, db: Session = Depends(get_db)):
     """เพิ่มผู้ใช้งานใหม่"""
+    # Enforce academic year setup before adding users
+    if user.school_id:
+        from routers.school import require_academic_year_setup
+        require_academic_year_setup(user.school_id, db)
+
     # Check if username already exists
     db_user = db.query(UserModel).filter(UserModel.username == user.username).first()
     if db_user:
@@ -464,6 +469,10 @@ def bulk_upload_users(file: UploadFile = File(...), db: Session = Depends(get_db
     if getattr(current_user, 'role', None) != 'admin':
         raise HTTPException(status_code=403, detail='Not authorized')
 
+    # Enforce academic year setup before bulk adding users
+    from routers.school import require_academic_year_setup
+    require_academic_year_setup(getattr(current_user, 'school_id', None), db)
+
     if openpyxl is None:
         raise HTTPException(status_code=500, detail='Server missing openpyxl dependency')
 
@@ -684,7 +693,7 @@ def bulk_upload_users(file: UploadFile = File(...), db: Session = Depends(get_db
                 )
                 db.add(enrollment)
             
-            created.append({'row': row_data['row'], 'username': row_data['username'], 'id': new_user.id})
+            created.append({'row': row_data['row'], 'username': row_data['username'], 'id': new_user.id, 'role': row_data['role']})
         
         db.commit()
     except Exception as e:
@@ -1524,7 +1533,8 @@ def promote_students(
                 enrollment_data = db.query(
                     ClassroomStudent.id,
                     ClassroomStudent.classroom_id,
-                    Classroom.semester
+                    Classroom.semester,
+                    ClassroomStudent.student_number
                 ).join(
                     Classroom, ClassroomStudent.classroom_id == Classroom.id
                 ).filter(
@@ -1539,8 +1549,8 @@ def promote_students(
                         errors.append(f'⚠️ นักเรียน ID {student_id} ไม่อยู่ในชั้นเรียนใด')
                         continue
 
-                    # enrollment_data is (enrollment_id, classroom_id, semester)
-                    enrollment_id, classroom_id, current_semester = enrollment_data
+                    # enrollment_data is (enrollment_id, classroom_id, semester, student_number)
+                    enrollment_id, classroom_id, current_semester, src_student_number = enrollment_data
                     if current_semester == 2:
                         failed_count += 1
                         errors.append(f'⚠️ นักเรียน ID {student_id} อยู่เทอม 2 แล้ว')
@@ -1561,8 +1571,8 @@ def promote_students(
                         errors.append(f'⚠️ นักเรียน ID {student_id} ไม่อยู่ในชั้นเรียนใด')
                         continue
                     
-                    # enrollment_data is (enrollment_id, classroom_id, semester)
-                    enrollment_id, classroom_id, current_semester = enrollment_data
+                    # enrollment_data is (enrollment_id, classroom_id, semester, student_number)
+                    enrollment_id, classroom_id, current_semester, src_student_number = enrollment_data
                     
                     if promotion_type == 'mid_term_with_promotion':
                         if current_semester == 2:
@@ -1585,10 +1595,14 @@ def promote_students(
                     if existing_target:
                         if not existing_target.is_active:
                             existing_target.is_active = True
+                            # อัปเดตเลขที่ถ้ายังไม่มี
+                            if not existing_target.student_number and src_student_number:
+                                existing_target.student_number = src_student_number
                     else:
                         db.add(ClassroomStudent(
                             classroom_id=target.id,
-                            student_id=student_id
+                            student_id=student_id,
+                            student_number=src_student_number  # คัดลอกเลขที่จากชั้นเรียนเดิม
                         ))
 
                 db.add(student)

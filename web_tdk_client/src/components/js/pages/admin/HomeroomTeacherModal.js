@@ -7,6 +7,7 @@ function HomeroomTeacherModal({ isOpen, editingHomeroom, teachers, availableGrad
   const [newHomeroomTeacherId, setNewHomeroomTeacherId] = useState('');
   const [newHomeroomGradeLevel, setNewHomeroomGradeLevel] = useState('');
   const [newHomeroomAcademicYear, setNewHomeroomAcademicYear] = useState('');
+  const [selectedClassroomId, setSelectedClassroomId] = useState('');
 
   // When grade level is selected, derive academic year from existing classrooms
   useEffect(() => {
@@ -39,10 +40,12 @@ function HomeroomTeacherModal({ isOpen, editingHomeroom, teachers, availableGrad
       setNewHomeroomTeacherId(editingHomeroom.teacher_id);
       setNewHomeroomGradeLevel(editingHomeroom.grade_level);
       setNewHomeroomAcademicYear(editingHomeroom.academic_year || '');
+      setSelectedClassroomId(editingHomeroom.classroom_id || '');
     } else {
       setNewHomeroomTeacherId('');
       setNewHomeroomGradeLevel('');
       setNewHomeroomAcademicYear('');
+      setSelectedClassroomId('');
     }
   }, [editingHomeroom, isOpen]);
 
@@ -58,18 +61,49 @@ function HomeroomTeacherModal({ isOpen, editingHomeroom, teachers, availableGrad
   };
 
   const handleSave = () => {
-    if (!newHomeroomTeacherId || (!editingHomeroom && !newHomeroomGradeLevel)) {
+    if (!newHomeroomTeacherId || (!editingHomeroom && !selectedClassroomId)) {
       return;
     }
-    onSave(newHomeroomTeacherId, newHomeroomGradeLevel, newHomeroomAcademicYear);
+    onSave(newHomeroomTeacherId, selectedClassroomId, newHomeroomAcademicYear, newHomeroomGradeLevel);
     handleClose();
   };
+
+  // Deduplicate classrooms: remove term-split duplicates (same grade+name+year) but keep different academic years
+  const dedupedClassrooms = (() => {
+    if (!Array.isArray(classrooms) || classrooms.length === 0) return [];
+    const seen = new Set();
+    const picks = [];
+
+    // Group by (grade_level, name, academic_year) to collapse term-split duplicates
+    classrooms.forEach(c => {
+      // If classroom has parent_classroom_id, it's part of a split → use that as key for dedup
+      // Otherwise, use (grade_level, name, academic_year) as key
+      const dedupKey = c.parent_classroom_id 
+        ? `P:${c.parent_classroom_id}:${c.academic_year}`
+        : `N:${c.grade_level}::${c.name}::${c.academic_year}`;
+      
+      if (!seen.has(dedupKey)) {
+        seen.add(dedupKey);
+        picks.push(c);
+      }
+    });
+
+    // Sort by grade level then name for stable order
+    picks.sort((a, b) => {
+      const numA = parseInt(a.grade_level?.match(/\d+/)?.[0] || 0, 10);
+      const numB = parseInt(b.grade_level?.match(/\d+/)?.[0] || 0, 10);
+      if (numA !== numB) return numA - numB;
+      return (a.name || '').localeCompare(b.name || '', 'th');
+    });
+
+    return picks;
+  })();
 
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-6 backdrop-blur-sm bg-slate-900/40 animate-in fade-in duration-300">
-      <div className="bg-white w-full max-w-xl rounded-[2.5rem] shadow-2xl shadow-slate-900/20 overflow-hidden flex flex-col animate-in zoom-in-95 duration-300 max-h-[90vh]">
+      <div className="bg-white w-full max-w-xl rounded-[2.5rem] shadow-2xl shadow-slate-900/20 overflow-hidden flex flex-col animate-in zoom-in-95 duration-300 max-h-[calc(100dvh-2rem)]">
         {/* Header */}
         <div className="px-8 py-6 border-b border-slate-50 flex items-center justify-between bg-white sticky top-0 z-10">
           <div className="flex items-center gap-3">
@@ -94,7 +128,7 @@ function HomeroomTeacherModal({ isOpen, editingHomeroom, teachers, availableGrad
         </div>
 
         {/* Body */}
-        <div className="p-8 overflow-y-auto space-y-6">
+        <div className="p-8 overflow-y-auto space-y-6 flex-1">
           {editingHomeroom && (
             <div className="bg-blue-50/50 p-5 rounded-3xl border border-blue-100 flex items-center gap-4">
               <div className="w-12 h-12 bg-white rounded-2xl shadow-sm flex items-center justify-center text-blue-500">
@@ -122,30 +156,38 @@ function HomeroomTeacherModal({ isOpen, editingHomeroom, teachers, availableGrad
                 <GraduationCap className="w-3.5 h-3.5" />
                 {t('admin.classroom')}
               </label>
-              {editingHomeroom ? (
-                <div className="w-full h-14 px-6 bg-slate-50 border-2 border-transparent rounded-2xl flex items-center text-slate-400 font-bold text-sm">
-                  {newHomeroomGradeLevel}
-                </div>
-              ) : (
-                <div className="relative">
-                  <select 
-                    className="w-full h-14 px-6 bg-slate-50 border-2 border-transparent focus:border-emerald-500 focus:bg-white rounded-2xl text-slate-700 font-bold text-sm outline-none transition-all appearance-none cursor-pointer"
-                    value={newHomeroomGradeLevel}
-                    onChange={e => setNewHomeroomGradeLevel(e.target.value)}
-                    required
-                  >
-                    <option value="">{t('admin.pleaseSelectClassroom')}</option>
-                    {availableGradeLevels.map((grade, idx) => (
-                      <option key={idx} value={grade}>
-                        {grade}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-                    <GraduationCap className="w-4 h-4" />
-                  </div>
-                </div>
-              )}
+                      {editingHomeroom ? (
+                        <div className="w-full h-14 px-6 bg-slate-50 border-2 border-transparent rounded-2xl flex items-center text-slate-400 font-bold text-sm">
+                          {editingHomeroom.classroom_name || newHomeroomGradeLevel}
+                        </div>
+                      ) : (
+                        <div className="relative">
+                          <select
+                            className="w-full h-14 px-6 bg-slate-50 border-2 border-transparent focus:border-emerald-500 focus:bg-white rounded-2xl text-slate-700 font-bold text-sm outline-none transition-all appearance-none cursor-pointer"
+                            value={selectedClassroomId}
+                            onChange={e => {
+                              setSelectedClassroomId(e.target.value);
+                              setNewHomeroomTeacherId(''); // Reset teacher selection
+                              const c = dedupedClassrooms.find(x => String(x.id) === String(e.target.value));
+                              if (c) {
+                                setNewHomeroomAcademicYear(c.academic_year || '');
+                                setNewHomeroomGradeLevel(c.grade_level || '');
+                              }
+                            }}
+                            required
+                          >
+                            <option value="">{t('admin.pleaseSelectClassroom')}</option>
+                            {dedupedClassrooms.map((c) => (
+                              <option key={c.id} value={c.id}>
+                                {`${c.grade_level || '-'} • ${c.name || c.id} ${c.academic_year ? `(${c.academic_year})` : ''}`}
+                              </option>
+                            ))}
+                          </select>
+                          <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                            <GraduationCap className="w-4 h-4" />
+                          </div>
+                        </div>
+                      )}
               {!editingHomeroom && availableGradeLevels.length === 0 && (
                 <p className="px-1 text-[10px] font-bold text-rose-500 flex items-center gap-1">
                   <AlertCircle className="w-3 h-3" />
@@ -168,10 +210,15 @@ function HomeroomTeacherModal({ isOpen, editingHomeroom, teachers, availableGrad
                 >
                   <option value="">เลือกครู...</option>
                   {teachers.filter(t => t.is_active).map((teacher) => {
-                    const alreadyAssigned = homeroomTeachers.some(hr => hr.teacher_id === teacher.id && (!editingHomeroom || editingHomeroom.id !== hr.id));
+                    // Only lock teacher if already assigned in the SAME academic year (or when editing)
+                    const assignedInSameYear = homeroomTeachers.some(hr => 
+                      hr.teacher_id === teacher.id && 
+                      String(hr.academic_year) === String(newHomeroomAcademicYear) &&
+                      (!editingHomeroom || editingHomeroom.id !== hr.id)
+                    );
                     return (
-                      <option key={teacher.id} value={teacher.id} disabled={alreadyAssigned}>
-                        {teacher.full_name || teacher.username} ({teacher.email}){alreadyAssigned ? ` - ${t('admin.alreadyAssigned')} ${homeroomTeachers.find(hr => hr.teacher_id === teacher.id)?.grade_level}` : ''}
+                      <option key={teacher.id} value={teacher.id} disabled={assignedInSameYear}>
+                        {teacher.full_name || teacher.username} ({teacher.email}){assignedInSameYear ? ` - ${t('admin.alreadyAssigned')} ${homeroomTeachers.find(hr => hr.teacher_id === teacher.id)?.grade_level}` : ''}
                       </option>
                     );
                   })}
@@ -222,11 +269,11 @@ function HomeroomTeacherModal({ isOpen, editingHomeroom, teachers, availableGrad
             >
               {t('common.cancel')}
             </button>
-            <button 
-              type="button" 
+            <button
+              type="button"
               className={`px-8 h-12 text-white rounded-xl font-black text-sm transition-all active:scale-95 shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 ${editingHomeroom ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-200' : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200'}`}
               onClick={handleSave}
-              disabled={!newHomeroomTeacherId || (!editingHomeroom && !newHomeroomGradeLevel)}
+              disabled={!newHomeroomTeacherId || (!editingHomeroom && !selectedClassroomId)}
             >
               {editingHomeroom ? <CheckCircle className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
               {editingHomeroom ? t('common.save') : t('admin.tabHomeroomLong')}

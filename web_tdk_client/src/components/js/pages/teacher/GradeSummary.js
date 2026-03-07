@@ -53,6 +53,10 @@ function GradeSummary() {
     a.title !== "คะแนนสอบรวม" &&
     (!selectedClass || !a.classroom_id || a.classroom_id === selectedClass.id)
   );
+  const hasRealActivityAssignments = assignments.some(a => 
+    a.title !== "คะแนนเก็บรวม" &&
+    (!selectedClass || !a.classroom_id || a.classroom_id === selectedClass.id)
+  );
 
   useEffect(() => {
     const schoolName = localStorage.getItem('school_name');
@@ -112,13 +116,13 @@ function GradeSummary() {
       const token = localStorage.getItem('token');
       const requests = [];
 
-      // If no real collected assignments, save manual as "คะแนนเก็บรวม"
-      if (!hasRealCollectedAssignments) {
-        const collectedGrades = Object.entries(manualGrades)
-          .filter(([_, data]) => data.collected !== undefined)
+      // For activity subjects with no real assignments, save manual as \"คะแนนเก็บรวม\"
+      if (subjectType === 'activity' && !hasRealActivityAssignments) {
+        const activityGrades = Object.entries(manualGrades)
+          .filter(([_, data]) => data.collected !== undefined && data.collected !== '')
           .map(([sid, data]) => ({ student_id: Number(sid), grade: Number(data.collected) }));
         
-        if (collectedGrades.length > 0) {
+        if (activityGrades.length > 0) {
           requests.push(fetch(`${API_BASE_URL}/grades/bulk`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
@@ -127,31 +131,58 @@ function GradeSummary() {
               title: "คะแนนเก็บรวม",
               max_score: maxCollectedScore,
               classroom_id: selectedClass?.id || null,
-              grades: collectedGrades
+              grades: activityGrades
             })
           }));
+        }
+      } else {
+        // For regular subjects, save collected and exam separately
+        // If no real collected assignments, save manual as "คะแนนเก็บรวม"
+        if (!hasRealCollectedAssignments) {
+          const collectedGrades = Object.entries(manualGrades)
+            .filter(([_, data]) => data.collected !== undefined && data.collected !== '')
+            .map(([sid, data]) => ({ student_id: Number(sid), grade: Number(data.collected) }));
+          
+          if (collectedGrades.length > 0) {
+            requests.push(fetch(`${API_BASE_URL}/grades/bulk`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+              body: JSON.stringify({
+                subject_id: Number(id),
+                title: "คะแนนเก็บรวม",
+                max_score: maxCollectedScore,
+                classroom_id: selectedClass?.id || null,
+                grades: collectedGrades
+              })
+            }));
+          }
+        }
+
+        // If no real exam assignments, save manual as "คะแนนสอบรวม"
+        if (!hasRealExamAssignments) {
+          const examGrades = Object.entries(manualGrades)
+            .filter(([_, data]) => data.exam !== undefined && data.exam !== '')
+            .map(([sid, data]) => ({ student_id: Number(sid), grade: Number(data.exam) }));
+          
+          if (examGrades.length > 0) {
+            requests.push(fetch(`${API_BASE_URL}/grades/bulk`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+              body: JSON.stringify({
+                subject_id: Number(id),
+                title: "คะแนนสอบรวม",
+                max_score: maxExamScore,
+                classroom_id: selectedClass?.id || null,
+                grades: examGrades
+              })
+            }));
+          }
         }
       }
 
-      // If no real exam assignments, save manual as "คะแนนสอบรวม"
-      if (!hasRealExamAssignments) {
-        const examGrades = Object.entries(manualGrades)
-          .filter(([_, data]) => data.exam !== undefined)
-          .map(([sid, data]) => ({ student_id: Number(sid), grade: Number(data.exam) }));
-        
-        if (examGrades.length > 0) {
-          requests.push(fetch(`${API_BASE_URL}/grades/bulk`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-            body: JSON.stringify({
-              subject_id: Number(id),
-              title: "คะแนนสอบรวม",
-              max_score: maxExamScore,
-              classroom_id: selectedClass?.id || null,
-              grades: examGrades
-            })
-          }));
-        }
+      if (requests.length === 0) {
+        toast.info('ไม่มีคะแนนที่ต้องบันทึก');
+        return;
       }
 
       await Promise.all(requests);
@@ -302,11 +333,12 @@ function GradeSummary() {
     const manual = manualGrades[studentId] || {};
 
     if (subjectType === 'activity') {
-      if (!assignments.some(a => !selectedClass || !a.classroom_id || a.classroom_id === selectedClass.id)) {
-        totalScore = Number(manual.collected || 0);
+      // Priority: manual grades > real assignments > default
+      if (manual.collected !== undefined && manual.collected !== '') {
+        totalScore = Number(manual.collected);
+      } else if (!hasRealActivityAssignments) {
+        totalScore = 0;
       } else {
-        // Scale activity score to admin max if there are assignments, 
-        // or just use raw sum if that's preferred. Usually scaling is safer for "Total Max".
         totalScore = activityMax > 0 ? Math.round((activityScore / activityMax) * maxCollectedScore) : activityScore;
       }
     } else {
@@ -353,50 +385,54 @@ function GradeSummary() {
   });
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] pb-20">
+    <div className="min-h-screen bg-[#f8fafc] pb-20 selection:bg-emerald-100 selection:text-emerald-900">
       {/* Header */}
-      <div className="bg-white border-b border-slate-200 sticky top-0 z-30">
+      <div className="bg-white/80 backdrop-blur-md border-b border-slate-200/60 sticky top-0 z-30 transition-all duration-300">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-20">
-            <div className="flex items-center gap-5">
+            <div className="flex items-center gap-6">
               <button 
                 onClick={() => navigate(-1)}
-                className="p-2.5 bg-slate-50 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-2xl transition-all active:scale-95 border border-slate-100"
+                className="group p-3 bg-white text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-2xl transition-all duration-300 active:scale-95 border border-slate-100 shadow-sm hover:shadow-md hover:border-emerald-100"
               >
-                <ArrowLeft className="w-5 h-5" />
+                <ArrowLeft className="w-5 h-5 group-hover:-translate-x-0.5 transition-transform" />
               </button>
               <div>
-                <h1 className="text-xl font-black text-slate-800 tracking-tight leading-none">สรุปคะแนนรายวิชา</h1>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1.5 flex items-center gap-1.5">
-                  <BookOpen className="w-3 h-3 text-emerald-500" />
-                  {subjectName || `วิชา #${id}`}
-                </p>
+                <h1 className="text-2xl font-black text-slate-800 tracking-tight leading-none">สรุปคะแนนรายวิชา</h1>
+                <div className="flex items-center gap-2 mt-2">
+                  <span className="bg-emerald-100 text-emerald-700 text-[10px] font-black px-2 py-0.5 rounded-lg uppercase tracking-wider">
+                    SUMMARY
+                  </span>
+                  <p className="text-xs font-bold text-slate-400 flex items-center gap-1.5 overflow-hidden text-ellipsis whitespace-nowrap max-w-[200px] sm:max-w-md">
+                    <span className="w-1 h-1 rounded-full bg-slate-300"></span>
+                    {subjectName || `วิชา #${id}`}
+                  </p>
+                </div>
               </div>
             </div>
             
-            <div className="flex items-center gap-3">
-              {(!hasRealCollectedAssignments || !hasRealExamAssignments) && subjectType !== 'activity' && (
+            <div className="flex items-center gap-4">
+              {((subjectType === 'activity' && !hasRealActivityAssignments) || (!hasRealCollectedAssignments || !hasRealExamAssignments)) && (
                 <button 
                   onClick={saveManualChanges}
-                  className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 text-white rounded-xl font-bold text-xs hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100"
+                  className="hidden sm:flex items-center gap-2 px-5 py-3 bg-emerald-600 text-white rounded-2xl font-black text-sm shadow-lg shadow-emerald-200 hover:bg-emerald-700 hover:shadow-emerald-300 hover:-translate-y-0.5 transition-all duration-300 active:scale-95"
                 >
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>บันทึกคะแนนกรอกมือ</span>
+                  <CheckCircle2 className="w-5 h-5" />
+                  <span>บันทึกคะแนน</span>
                 </button>
               )}
               <button 
                 onClick={() => window.print()}
-                className="hidden sm:flex items-center gap-2 px-4 py-2.5 bg-slate-100 text-slate-600 rounded-xl font-bold text-xs hover:bg-slate-200 transition-all"
+                className="group p-3 bg-white text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-2xl transition-all duration-300 active:scale-95 border border-slate-100 shadow-sm hover:shadow-md hover:border-emerald-100"
               >
-                <Printer className="w-4 h-4" />
-                <span>พิมพ์รายงาน</span>
+                <Printer className="w-5 h-5 group-hover:scale-110 transition-transform" />
               </button>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
         
         {/* Class Filter Tabs */}
         {classes.length > 1 && (
@@ -405,10 +441,10 @@ function GradeSummary() {
                     <button
                         key={c.key}
                         onClick={() => setSelectedClass(c)}
-                        className={`px-6 py-3 rounded-2xl font-black text-sm whitespace-nowrap transition-all ${
+                        className={`px-5 py-3 rounded-2xl font-black text-sm whitespace-nowrap transition-all duration-300 active:scale-95 ${
                             selectedClass?.key === c.key
-                            ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-100'
-                            : 'bg-white text-slate-500 border border-slate-100 hover:bg-slate-50'
+                            ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200'
+                            : 'bg-white text-slate-500 border border-slate-100 hover:bg-slate-50 hover:text-emerald-600'
                         }`}
                     >
                         {c.label}
@@ -417,37 +453,56 @@ function GradeSummary() {
             </div>
         )}
 
+        {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <div className="bg-white rounded-[2rem] p-8 border border-slate-100 shadow-sm">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">หัวข้องานทั้งหมด</p>
-                <div className="flex items-end justify-between">
-                    <h3 className="text-3xl font-black text-slate-800">{assignments.length}</h3>
-                    <BarChart3 className="w-8 h-8 text-slate-100" />
+            <div className="bg-white rounded-[2rem] p-8 border border-slate-100/60 shadow-sm hover:shadow-md transition-all group">
+                <div className="flex items-center justify-between mb-4">
+                   <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400 group-hover:scale-110 transition-transform">
+                      <BarChart3 className="w-6 h-6" />
+                   </div>
+                   <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest bg-slate-50 px-2 py-1 rounded-lg">Jobs</span>
+                </div>
+                <div>
+                   <p className="text-4xl font-black text-slate-800 tracking-tight">{assignments.length}</p>
+                   <p className="text-xs font-bold text-slate-400 mt-1">หัวข้องานทั้งหมด</p>
                 </div>
             </div>
-            <div className="bg-white rounded-[2rem] p-8 border border-slate-100 shadow-sm">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">นักเรียนในกลุ่ม</p>
-                <div className="flex items-end justify-between">
-                    <h3 className="text-3xl font-black text-emerald-600">{visibleStudents.length}</h3>
-                    <User className="w-8 h-8 text-emerald-50" />
+
+            <div className="bg-white rounded-[2rem] p-8 border border-slate-100/60 shadow-sm hover:shadow-md transition-all group">
+                <div className="flex items-center justify-between mb-4">
+                   <div className="w-12 h-12 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform">
+                      <User className="w-6 h-6" />
+                   </div>
+                   <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest bg-slate-50 px-2 py-1 rounded-lg">Total</span>
+                </div>
+                <div>
+                   <p className="text-4xl font-black text-slate-800 tracking-tight">{visibleStudents.length}</p>
+                   <p className="text-xs font-bold text-slate-400 mt-1">นักเรียนในกลุ่ม</p>
                 </div>
             </div>
-            <div className="bg-white rounded-[2rem] p-8 border border-slate-100 shadow-sm">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">ประเภทวิชา</p>
-                <div className="flex items-center gap-2 mt-2">
-                    <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase ${
-                        subjectType === 'activity' ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-blue-600'
-                    }`}>
-                        {subjectType === 'activity' ? 'กิจกรรม' : 'วิชาการ'}
-                    </span>
+
+            <div className="bg-white rounded-[2rem] p-8 border border-slate-100/60 shadow-sm hover:shadow-md transition-all group">
+                <div className="flex items-center justify-between mb-4">
+                   <div className={`w-12 h-12 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform ${subjectType === 'activity' ? 'bg-amber-50 text-amber-600' : 'bg-blue-50 text-blue-600'}`}>
+                      <BookOpen className="w-6 h-6" />
+                   </div>
+                   <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest bg-slate-50 px-2 py-1 rounded-lg">Type</span>
+                </div>
+                <div>
+                   <p className="text-lg font-black text-slate-800 tracking-tight">{subjectType === 'activity' ? 'กิจกรรม' : 'วิชาการ'}</p>
+                   <p className="text-xs font-bold text-slate-400 mt-1">ประเภทวิชา</p>
                 </div>
             </div>
+            
+            {/* Additional info card could go here */}
         </div>
 
         <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden">
-            <div className="p-8 border-b border-slate-50">
+            <div className="p-8 border-b border-slate-50 bg-slate-50/30">
                 <h3 className="text-lg font-black text-slate-800 flex items-center gap-3">
-                    <LayoutGrid className="w-5 h-5 text-emerald-500" />
+                    <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center shadow-lg shadow-emerald-200">
+                      <LayoutGrid className="w-5 h-5" />
+                    </span>
                     ตารางสรุปผลการเรียน
                 </h3>
             </div>
@@ -456,31 +511,31 @@ function GradeSummary() {
             <div className="hidden md:block overflow-x-auto">
                 <table className="w-full border-collapse">
                     <thead>
-                        <tr className="bg-slate-50/50">
-                            <th className="px-6 py-5 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest w-16">เลขที่</th>
-                            <th className="px-8 py-5 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap sticky left-0 bg-slate-50/50 z-10 border-r border-slate-100">รายชื่อนักเรียน</th>
+                        <tr className="bg-slate-50/80">
+                            <th className="px-6 py-5 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest w-16">No.</th>
+                            <th className="px-8 py-5 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap sticky left-0 bg-slate-50/95 backdrop-blur-sm z-10 border-r border-slate-100 shadow-[4px_0_24px_-10px_rgba(0,0,0,0.05)]">Student Name</th>
                             {assignments.filter(a => 
                                 (!selectedClass || !a.classroom_id || a.classroom_id === selectedClass.id) &&
                                 a.title !== "คะแนนเก็บรวม" && a.title !== "คะแนนสอบรวม"
                             ).map(a => (
                                 <th key={a.id} className="px-6 py-5 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest min-w-[120px]">
-                                    {a.title}<br/>
-                                    <span className="text-emerald-600">(/{a.max_score})</span>
+                                    <span className="block truncate max-w-[100px] mx-auto" title={a.title}>{a.title}</span>
+                                    <span className="text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg ml-1">/{a.max_score}</span>
                                 </th>
                             ))}
                             {subjectType === 'activity' ? (
-                                <th className="px-8 py-5 text-center text-[10px] font-black text-emerald-800 uppercase tracking-widest bg-emerald-50 whitespace-nowrap">คะแนนทั้งหมด</th>
+                                <th className="px-8 py-5 text-center text-[10px] font-black text-emerald-800 uppercase tracking-widest bg-emerald-50 whitespace-nowrap">Total Score</th>
                             ) : (
                                 <>
                                     <th className="px-8 py-5 text-center text-[10px] font-black text-blue-700 uppercase tracking-widest bg-blue-50 whitespace-nowrap border-l border-white">
-                                        คะแนนเก็บ<br/><span className="text-blue-400 font-bold">(/{maxCollectedScore})</span>
+                                        Collected<br/><span className="text-blue-400/80 font-bold bg-white/50 px-1 rounded ml-1">/{maxCollectedScore}</span>
                                     </th>
                                     <th className="px-8 py-5 text-center text-[10px] font-black text-amber-700 uppercase tracking-widest bg-amber-50 whitespace-nowrap border-l border-white">
-                                        คะแนนสอบ<br/><span className="text-amber-400 font-bold">(/{maxExamScore})</span>
+                                        Exam<br/><span className="text-amber-400/80 font-bold bg-white/50 px-1 rounded ml-1">/{maxExamScore}</span>
                                     </th>
                                 </>
                             )}
-                            <th className="px-8 py-5 text-center text-[10px] font-black text-slate-800 uppercase tracking-widest bg-slate-100 sticky right-0 z-10">รวม / เกรด</th>
+                            <th className="px-8 py-5 text-center text-[10px] font-black text-slate-800 uppercase tracking-widest bg-slate-100 sticky right-0 z-10 shadow-[-10px_0_20px_-15px_rgba(0,0,0,0.1)]">Summary</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
@@ -488,25 +543,44 @@ function GradeSummary() {
                             const summary = student.summary; // Use pre-calculated summary
                             const studentNo = student.student_number || student.classroom?.student_number || '-';
                             return (
-                                <tr key={student.id} className="hover:bg-slate-50/20 group">
+                                <tr key={student.id} className="hover:bg-slate-50/80 group transition-colors">
                                     <td className="px-6 py-5 text-center">
-                                       <span className="text-xs font-black text-slate-400">
+                                       <span className="text-xs font-black text-slate-400 bg-slate-100 w-8 h-8 flex items-center justify-center rounded-lg mx-auto">
                                          {studentNo !== '-' ? studentNo : idx + 1}
                                        </span>
                                     </td>
-                                    <td className="px-8 py-5 sticky left-0 bg-white group-hover:bg-slate-50 transition-colors z-10 border-r border-slate-50">
+                                    <td className="px-8 py-5 sticky left-0 bg-white group-hover:bg-slate-50/80 transition-colors z-10 border-r border-slate-50 shadow-[4px_0_24px_-10px_rgba(0,0,0,0.05)]">
                                         <h5 className="text-sm font-black text-slate-800">{student.full_name || student.username}</h5>
-                                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">ID: {student.id}</p>
+                                        <div className="flex items-center gap-2 mt-1">
+                                            <span className="text-[10px] font-bold text-slate-400 bg-slate-50 px-2 py-0.5 rounded-md border border-slate-100">
+                                              ID: {student.id}
+                                            </span>
+                                        </div>
                                     </td>
                                     {summary.assignmentDetails.filter(d => d.title !== "คะแนนเก็บรวม" && d.title !== "คะแนนสอบรวม").map((detail) => (
                                         <td key={detail.id} className="px-6 py-5 text-center">
-                                            <span className="text-sm font-black text-slate-600">{detail.score}</span>
-                                            <div className="text-[10px] font-bold text-slate-300 mt-0.5">{detail.percentage}%</div>
+                                            <div className="flex flex-col items-center">
+                                              <span className="text-sm font-black text-slate-600">{detail.score}</span>
+                                              <div className="w-12 h-1 bg-slate-100 rounded-full mt-1 overflow-hidden">
+                                                <div className="h-full bg-emerald-400/50" style={{ width: `${detail.percentage}%` }}></div>
+                                              </div>
+                                            </div>
                                         </td>
                                     ))}
                                     {subjectType === 'activity' ? (
-                                        <td className="px-8 py-5 text-center bg-emerald-50/20 font-black text-emerald-700">
-                                            {summary.totalScore}
+                                        <td className="px-8 py-5 text-center bg-emerald-50/30 font-black text-emerald-700">
+                                            {!hasRealActivityAssignments ? (
+                                                <input 
+                                                    type="number" 
+                                                    className="w-16 px-2 py-1 bg-white border border-emerald-100 rounded text-center text-sm font-black focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-300 outline-none transition-all"
+                                                    value={manualGrades[student.id]?.collected ?? ''}
+                                                    onChange={(e) => handleManualGradeChange(student.id, 'collected', e.target.value)}
+                                                    placeholder={maxCollectedScore}
+                                                    max={maxCollectedScore}
+                                                />
+                                            ) : (
+                                                <span className="text-lg">{summary.totalScore}</span>
+                                            )}
                                         </td>
                                     ) : (
                                         <>
@@ -514,38 +588,41 @@ function GradeSummary() {
                                                 {!hasRealCollectedAssignments ? (
                                                     <input 
                                                         type="number" 
-                                                        className="w-16 px-2 py-1 bg-white border border-blue-100 rounded text-center text-sm font-black focus:ring-2 focus:ring-blue-500/20 outline-none"
+                                                        className="w-16 px-2 py-1 bg-white border border-blue-100 rounded text-center text-sm font-black focus:ring-4 focus:ring-blue-500/10 focus:border-blue-300 outline-none transition-all"
                                                         value={manualGrades[student.id]?.collected ?? ''}
                                                         onChange={(e) => handleManualGradeChange(student.id, 'collected', e.target.value)}
                                                         placeholder={maxCollectedScore}
                                                         max={maxCollectedScore}
                                                     />
                                                 ) : (
-                                                    summary.collectedScore
+                                                    <span className="text-lg">{summary.collectedScore}</span>
                                                 )}
                                             </td>
                                             <td className="px-8 py-5 text-center bg-amber-50/20 font-black text-amber-700 border-l border-white">
                                                 {!hasRealExamAssignments ? (
                                                     <input 
                                                         type="number" 
-                                                        className="w-16 px-2 py-1 bg-white border border-amber-100 rounded text-center text-sm font-black focus:ring-2 focus:ring-amber-500/20 outline-none"
+                                                        className="w-16 px-2 py-1 bg-white border border-amber-100 rounded text-center text-sm font-black focus:ring-4 focus:ring-amber-500/10 focus:border-amber-300 outline-none transition-all"
                                                         value={manualGrades[student.id]?.exam ?? ''}
                                                         onChange={(e) => handleManualGradeChange(student.id, 'exam', e.target.value)}
                                                         placeholder={maxExamScore}
                                                         max={maxExamScore}
                                                     />
                                                 ) : (
-                                                    summary.examScore
+                                                    <span className="text-lg">{summary.examScore}</span>
                                                 )}
                                             </td>
                                         </>
                                     )}
-                                    <td className="px-8 py-5 text-center bg-slate-50 sticky right-0 z-10 shadow-[-10px_0_15px_-10px_rgba(0,0,0,0.05)]">
+                                    <td className="px-8 py-5 text-center bg-slate-100/50 sticky right-0 z-10 shadow-[-10px_0_15px_-10px_rgba(0,0,0,0.05)] backdrop-blur-sm">
                                         <div className="flex items-center justify-center gap-3">
-                                            <span className="text-sm font-black text-slate-800">{summary.totalScore}/{summary.totalMaxScore}</span>
-                                            <span className={`w-10 h-10 flex items-center justify-center rounded-xl text-xs font-black border uppercase shadow-sm ${
-                                                summary.overallGrade === 'A' ? 'bg-emerald-600 text-white border-emerald-600' :
-                                                summary.overallGrade.includes('B') ? 'bg-blue-500 text-white border-blue-500' :
+                                            <div className="text-right">
+                                              <div className="text-sm font-black text-slate-800">{summary.totalScore}</div>
+                                              <div className="text-[10px] font-bold text-slate-400">/ {summary.totalMaxScore}</div>
+                                            </div>
+                                            <span className={`w-10 h-10 flex items-center justify-center rounded-xl text-xs font-black border-2 shadow-sm ${
+                                                summary.overallGrade === 'A' ? 'bg-emerald-100 text-emerald-600 border-emerald-200' :
+                                                summary.overallGrade.includes('B') ? 'bg-blue-100 text-blue-600 border-blue-200' :
                                                 summary.overallGrade.includes('C') ? 'bg-amber-100 text-amber-600 border-amber-200' :
                                                 'bg-rose-100 text-rose-600 border-rose-200'
                                             }`}>
@@ -569,17 +646,17 @@ function GradeSummary() {
                         <div key={student.id} className="p-6">
                             <div className="flex items-start justify-between mb-4">
                                 <div className="flex items-center gap-3">
-                                   <div className={`w-8 h-8 flex items-center justify-center rounded-lg font-black text-xs shrink-0 bg-slate-50 text-slate-400`}>
+                                   <div className={`w-10 h-10 flex items-center justify-center rounded-xl font-black text-sm shrink-0 bg-slate-100 text-slate-500 border border-slate-200`}>
                                      {studentNo !== '-' ? studentNo : idx + 1}
                                    </div>
                                    <div>
                                        <h5 className="text-sm font-black text-slate-800">{student.full_name || student.username}</h5>
-                                       <p className="text-[10px] font-bold text-slate-400 uppercase">ID: {student.id}</p>
+                                       <p className="text-[10px] font-bold text-slate-400 uppercase bg-slate-50 px-2 py-0.5 rounded-md inline-block mt-0.5">ID: {student.id}</p>
                                    </div>
                                 </div>
-                                <div className={`w-12 h-12 flex items-center justify-center rounded-2xl text-lg font-black border uppercase shadow-sm ${
-                                    summary.overallGrade === 'A' ? 'bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-100' :
-                                    summary.overallGrade.includes('B') ? 'bg-blue-500 text-white border-blue-500' :
+                                <div className={`w-12 h-12 flex items-center justify-center rounded-2xl text-lg font-black border-2 uppercase shadow-sm ${
+                                    summary.overallGrade === 'A' ? 'bg-emerald-100 text-emerald-600 border-emerald-200 shadow-emerald-100' :
+                                    summary.overallGrade.includes('B') ? 'bg-blue-100 text-blue-600 border-blue-200' :
                                     summary.overallGrade.includes('C') ? 'bg-amber-100 text-amber-600 border-amber-200' :
                                     'bg-rose-100 text-rose-600 border-rose-200'
                                 }`}>
@@ -590,13 +667,24 @@ function GradeSummary() {
                             <div className="grid grid-cols-2 gap-3 mb-4">
                                 {subjectType === 'activity' ? (
                                     <div className="col-span-2 px-4 py-3 bg-emerald-50 rounded-2xl border border-emerald-100 flex justify-between items-center">
-                                        <span className="text-[10px] font-black text-emerald-600 uppercase">คะแนนรวมทั้งหมด</span>
-                                        <span className="text-lg font-black text-emerald-700">{summary.totalScore}</span>
+                                        <span className="text-[10px] font-black text-emerald-600 uppercase">Total Score (/{maxCollectedScore})</span>
+                                        {!hasRealActivityAssignments ? (
+                                            <input 
+                                                type="number" 
+                                                className="w-20 bg-transparent text-lg font-black text-emerald-700 outline-none placeholder:text-emerald-200 text-right"
+                                                value={manualGrades[student.id]?.collected ?? ''}
+                                                onChange={(e) => handleManualGradeChange(student.id, 'collected', e.target.value)}
+                                                placeholder={maxCollectedScore}
+                                                max={maxCollectedScore}
+                                            />
+                                        ) : (
+                                            <span className="text-lg font-black text-emerald-700">{summary.totalScore}</span>
+                                        )}
                                     </div>
                                 ) : (
                                     <>
-                                        <div className="px-4 py-3 bg-blue-50 rounded-2xl border border-blue-100">
-                                            <span className="text-[9px] font-black text-blue-500 uppercase block mb-1">คะแนนเก็บ (/{maxCollectedScore})</span>
+                                        <div className="px-4 py-3 bg-blue-50/50 rounded-2xl border border-blue-100">
+                                            <span className="text-[9px] font-black text-blue-500 uppercase block mb-1">Collected (/{maxCollectedScore})</span>
                                             {!hasRealCollectedAssignments ? (
                                                 <input 
                                                     type="number" 
@@ -610,8 +698,8 @@ function GradeSummary() {
                                                 <span className="text-lg font-black text-blue-700">{summary.collectedScore}</span>
                                             )}
                                         </div>
-                                        <div className="px-4 py-3 bg-amber-50 rounded-2xl border border-amber-100">
-                                            <span className="text-[9px] font-black text-amber-500 uppercase block mb-1">คะแนนสอบ (/{maxExamScore})</span>
+                                        <div className="px-4 py-3 bg-amber-50/50 rounded-2xl border border-amber-100">
+                                            <span className="text-[9px] font-black text-amber-500 uppercase block mb-1">Exam (/{maxExamScore})</span>
                                             {!hasRealExamAssignments ? (
                                                 <input 
                                                     type="number" 
@@ -629,18 +717,18 @@ function GradeSummary() {
                                 )}
                             </div>
 
-                            <div className="flex justify-between items-center py-3 px-4 bg-slate-50 rounded-2xl">
-                                <span className="text-[10px] font-black text-slate-400 uppercase">สรุปพลังงาน</span>
+                            <div className="flex justify-between items-center py-3 px-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                <span className="text-[10px] font-black text-slate-400 uppercase">Total Summary</span>
                                 <span className="text-sm font-black text-slate-700">{summary.totalScore} / {summary.totalMaxScore} ({summary.overallPercentage}%)</span>
                             </div>
 
                             <details className="mt-4 group">
-                                <summary className="flex items-center justify-center gap-2 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer group-open:mb-2 hover:text-slate-600 transition-colors">
-                                    ดูรายละเอียดรายหัวข้องาน <ChevronRight className="w-3 h-3 transition-transform group-open:rotate-90" />
+                                <summary className="flex items-center justify-center gap-2 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer group-open:mb-2 hover:text-slate-600 transition-colors bg-white rounded-xl border border-dashed border-slate-200">
+                                    Show Assignment Details <ChevronRight className="w-3 h-3 transition-transform group-open:rotate-90" />
                                 </summary>
                                 <div className="space-y-2 pt-2">
                                     {summary.assignmentDetails.filter(d => d.title !== "คะแนนเก็บรวม" && d.title !== "คะแนนสอบรวม").map(detail => (
-                                        <div key={detail.id} className="flex justify-between items-center p-3 bg-white border border-slate-100 rounded-xl">
+                                        <div key={detail.id} className="flex justify-between items-center p-3 bg-white border border-slate-100 rounded-xl shadow-sm">
                                             <span className="text-xs font-bold text-slate-500 truncate max-w-[60%]">{detail.title}</span>
                                             <div className="flex items-center gap-2">
                                                 <span className="text-xs font-black text-slate-700">{detail.score}</span>
@@ -656,6 +744,38 @@ function GradeSummary() {
             </div>
         </div>
       </div>
+      
+      {/* Print Styles */}
+      <style>{`
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+            .max-w-7xl, .max-w-7xl * {
+                visibility: visible;
+            }
+            .max-w-7xl {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                margin: 0;
+                padding: 0;
+            }
+            .sticky, button, .no-print, nav, header {
+                display: none !important;
+            }
+            .bg-white, .bg-slate-50 {
+                background: white !important;
+            }
+            .text-white {
+                color: black !important;
+            }
+            td, th {
+                border: 1px solid #ddd !important;
+            }
+        }
+      `}</style>
     </div>
   );
 }
