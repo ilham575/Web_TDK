@@ -385,7 +385,7 @@ export default function ScheduleManagementModal({ isOpen, onClose, teachers, sub
       ></div>
 
       {/* Modal Content */}
-      <div className="relative w-full max-w-2xl bg-white rounded-[2.5rem] shadow-2xl overflow-hidden transform transition-all animate-in fade-in zoom-in duration-200 flex flex-col max-h-[90vh]">
+      <div className="relative w-full max-w-2xl bg-white rounded-[2.5rem] shadow-2xl overflow-hidden transform transition-all animate-in fade-in zoom-in duration-200 flex flex-col max-h-[calc(100dvh-2rem)]">
         {/* Header */}
         <div className="bg-gradient-to-r from-emerald-600 to-teal-700 p-8 text-white relative shrink-0">
           <button 

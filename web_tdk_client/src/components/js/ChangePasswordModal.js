@@ -90,9 +90,9 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
         onClick={handleClose}
       ></div>
       
-      <div className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden transform transition-all">
+      <div className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden transform transition-all max-h-[calc(100dvh-2rem)] flex flex-col">
         {/* Header */}
-        <div className="bg-gradient-to-r from-emerald-600 to-teal-600 p-6 text-white text-center sm:text-left flex justify-between items-center">
+        <div className="bg-gradient-to-r from-emerald-600 to-teal-600 p-6 text-white text-center sm:text-left flex justify-between items-center shrink-0">
           <div>
             <h3 className="text-xl font-bold flex items-center gap-2">
               <span className="text-2xl">🔐</span> เปลี่ยนรหัสผ่าน
@@ -107,7 +107,7 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-6 space-y-4 flex-1 overflow-y-auto">
           {/* Current Password */}
           <div>
             <label className="block text-sm font-bold text-slate-700 mb-1 ml-1">

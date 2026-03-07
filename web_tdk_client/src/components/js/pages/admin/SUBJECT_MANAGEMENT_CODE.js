@@ -76,7 +76,9 @@ const handleDeleteSubject = async (subjectId) => {
 };
 
 const handleEditSubject = (subject) => {
-  setSelectedSubject(subject);
+  // Find the latest subject data from the current subjects list
+  const latestSubject = subjects.find(s => s.id === subject.id);
+  setSelectedSubject(latestSubject || subject);
   setShowSubjectModal(true);
 };
 

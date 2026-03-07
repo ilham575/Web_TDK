@@ -3,13 +3,28 @@ import { useNavigate } from 'react-router-dom';
 import ScheduleGrid from '../../ScheduleGrid';
 import AbsenceManager from './AbsenceManager';
 import AcademicTranscript from './AcademicTranscript';
+import StudentTabs from './StudentTabs';
 import PageHeader from '../../PageHeader';
 import { toast } from 'react-toastify';
 import { API_BASE_URL } from '../../../endpoints';
 import { setSchoolFavicon } from '../../../../utils/faviconUtils';
 import { logout } from '../../../../utils/authUtils';
+import { 
+  BookOpen, 
+  Megaphone, 
+  User, 
+  CalendarDays, 
+  Clock, 
+  MapPin, 
+  ChevronRight, 
+  AlertCircle,
+  FileText,
+  CheckCircle2,
+  XCircle,
+  X,
+  School
+} from 'lucide-react';
 
-// Modernized single-file UI for the Student home page.
 function StudentPage() {
   const navigate = useNavigate();
   const [announcements, setAnnouncements] = useState([]);
@@ -17,7 +32,12 @@ function StudentPage() {
   const [currentUser, setCurrentUser] = useState(null);
   const [expandedAnnouncement, setExpandedAnnouncement] = useState(null);
   const [activeTab, setActiveTab] = useState('subjects');
-  // นักเรียนไม่สามารถแก้ไขชั้นเรียนจากหน้านี้ (disabled)
+  
+  // Semester filter state
+  const [availableSemesters, setAvailableSemesters] = useState([]);
+  const [selectedAcademicYear, setSelectedAcademicYear] = useState('');
+  const [selectedSemester, setSelectedSemester] = useState('');
+  const [academicYearInitialized, setAcademicYearInitialized] = useState(false);
   
   // Schedule state
   const [studentSchedule, setStudentSchedule] = useState([]);
@@ -43,15 +63,11 @@ function StudentPage() {
           navigate('/change-password');
         } else {
           setCurrentUser(data);
-          // ไม่ต้องตั้งค่า editingGradeLevel เพราะเอาส่วนแก้ไขออก
-          // persist school name when available so other parts of the app can read it
           const schoolName = data?.school_name || data?.school?.name || data?.school?.school_name || '';
           if (schoolName) localStorage.setItem('school_name', schoolName);
-          // persist school id (try multiple possible field names) so school-scoped endpoints work
           const sid = data?.school_id || data?.school?.id || data?.school?.school_id || data?.schoolId || null;
           if (sid) {
             localStorage.setItem('school_id', String(sid));
-            // ตั้งค่า favicon เป็นโลโก้โรงเรียน
             setSchoolFavicon(sid);
           }
         }
@@ -69,7 +85,11 @@ function StudentPage() {
     const load = async () => {
       try {
         const token = localStorage.getItem('token');
-        const res = await fetch(`${API_BASE_URL}/subjects/student/${currentUser.id}`, { headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+        const params = new URLSearchParams();
+        if (selectedAcademicYear) params.set('academic_year', selectedAcademicYear);
+        if (selectedSemester) params.set('semester', selectedSemester);
+        const queryStr = params.toString() ? `?${params.toString()}` : '';
+        const res = await fetch(`${API_BASE_URL}/subjects/student/${currentUser.id}${queryStr}`, { headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
         const data = await res.json();
         if (res.ok && Array.isArray(data)) setStudentSubjects(data);
         else setStudentSubjects([]);
@@ -78,6 +98,32 @@ function StudentPage() {
       }
     };
     load();
+  }, [currentUser, selectedAcademicYear, selectedSemester]);
+
+  // Load available semesters for the student
+  useEffect(() => {
+    if (!currentUser) return;
+    const loadSemesters = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const res = await fetch(`${API_BASE_URL}/grades/student/${currentUser.id}/semester-list`, {
+          headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data)) {
+            setAvailableSemesters(data);
+            // Auto-select the latest academic year
+            if (data.length > 0 && !academicYearInitialized) {
+              const latestYear = [...new Set(data.map(s => s.academic_year))].sort((a, b) => b - a)[0];
+              setSelectedAcademicYear(latestYear);
+              setAcademicYearInitialized(true);
+            }
+          }
+        }
+      } catch (err) {}
+    };
+    loadSemesters();
   }, [currentUser]);
 
   // fetch student schedule
@@ -86,7 +132,11 @@ function StudentPage() {
     const loadSchedule = async () => {
       try {
         const token = localStorage.getItem('token');
-        const res = await fetch(`${API_BASE_URL}/schedule/student`, { headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+        const params = new URLSearchParams();
+        if (selectedAcademicYear) params.set('academic_year', selectedAcademicYear);
+        if (selectedSemester) params.set('semester', selectedSemester);
+        const queryStr = params.toString() ? `?${params.toString()}` : '';
+        const res = await fetch(`${API_BASE_URL}/schedule/student${queryStr}`, { headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
         const data = await res.json();
         if (res.ok && Array.isArray(data)) setStudentSchedule(data);
         else setStudentSchedule([]);
@@ -95,7 +145,7 @@ function StudentPage() {
       }
     };
     loadSchedule();
-  }, [currentUser]);
+  }, [currentUser, selectedAcademicYear, selectedSemester]);
 
   // fetch operating hours
   useEffect(() => {
@@ -141,11 +191,6 @@ function StudentPage() {
       setTimeout(() => navigate('/signin'), 1000);
   };
 
-  // ปิดการใช้งานการแก้ไขชั้นเรียนจากนักเรียน (handler ถูกลบ)
-
-  // Helpers
-  // Parse server-provided datetime strings into a local Date object.
-  // This preserves the wall-clock time for naive datetimes like "YYYY-MM-DD HH:MM:SS"
   const parseLocalDatetime = (s) => {
     if (!s) return null;
     if (s instanceof Date) return s;
@@ -180,40 +225,41 @@ function StudentPage() {
     return false;
   };
 
-  // Announcements visible to this user: exclude expired announcements unless the user is the owner
   const visibleAnnouncements = Array.isArray(announcements) ? announcements.filter(item => !isExpired(item) || ownedBy(item)) : [];
 
   const toggleAnnouncement = (id) => {
     setExpandedAnnouncement(prev => prev === id ? null : id);
   };
 
-  // Render weekly schedule table
   const renderScheduleTable = () => {
-    // Create days array from operating hours
     const dayNames = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
     const days = operatingHours.map(slot => ({
       key: parseInt(slot.day_of_week),
       label: dayNames[parseInt(slot.day_of_week)] || 'ไม่ระบุ',
       operatingStart: slot.start_time,
       operatingEnd: slot.end_time
-    })).sort((a, b) => a.key - b.key); // Sort by day of week
+    })).sort((a, b) => a.key - b.key);
 
     if (days.length === 0) {
       return (
-        <div className="text-center py-12">
-          <div className="text-5xl mb-4 opacity-50">📅</div>
-          <p className="text-slate-600 font-medium">ยังไม่ได้กำหนดเวลาเปิดเรียน</p>
-          <p className="text-sm text-slate-500 mt-2">กรุณาติดต่อผู้ดูแลระบบ</p>
+        <div className="text-center py-20 bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200">
+          <div className="w-20 h-20 bg-white rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-sm border border-slate-100">
+             <CalendarDays className="w-10 h-10 text-slate-300" />
+          </div>
+          <p className="text-slate-500 font-bold text-lg">ยังไม่ได้กำหนดเวลาเปิดเรียน</p>
+          <p className="text-sm text-slate-400 mt-2 font-medium">กรุณาติดต่อผู้ดูแลระบบ</p>
         </div>
       );
     }
 
     if (studentSchedule.length === 0) {
       return (
-        <div className="text-center py-12">
-          <div className="text-5xl mb-4 opacity-50">📅</div>
-          <p className="text-slate-600 font-medium">ยังไม่มีตารางเรียน</p>
-          <p className="text-sm text-slate-500 mt-2">ติดต่อครูผู้สอนเพื่อดูตารางเรียน</p>
+        <div className="text-center py-20 bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200">
+          <div className="w-20 h-20 bg-white rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-sm border border-slate-100">
+             <Clock className="w-10 h-10 text-slate-300" />
+          </div>
+          <p className="text-slate-500 font-bold text-lg">ยังไม่มีตารางเรียน</p>
+          <p className="text-sm text-slate-400 mt-2 font-medium">ติดต่อครูผู้สอนเพื่อดูตารางเรียน</p>
         </div>
       );
     }
@@ -223,14 +269,11 @@ function StudentPage() {
     );
   };
 
-  // Determine school name from multiple possible sources (API shape may vary)
   const displaySchool = currentUser?.school_name || currentUser?.school?.name || localStorage.getItem('school_name') || '-';
 
-  // If backend only returns school_id (not name), try to load school name from /schools/
   useEffect(() => {
     const tryResolveSchoolName = async () => {
       if (!currentUser) return;
-      // already have a name
       if (currentUser?.school_name || currentUser?.school?.name) return;
       const sid = currentUser?.school_id || localStorage.getItem('school_id');
       if (!sid) return;
@@ -240,26 +283,22 @@ function StudentPage() {
         if (Array.isArray(data)) {
           const found = data.find(s => String(s.id) === String(sid));
           if (found) {
-            // persist and update currentUser so UI updates
             localStorage.setItem('school_name', found.name);
             setCurrentUser(prev => prev ? ({...prev, school_name: found.name}) : prev);
           }
         }
-      } catch (err) {
-        // ignore quietly
-      }
+      } catch (err) {}
     };
     tryResolveSchoolName();
   }, [currentUser]);
 
-  // Update document title with school name
   useEffect(() => {
     const baseTitle = 'ระบบโรงเรียน';
     document.title = (displaySchool && displaySchool !== '-') ? `${baseTitle} - ${displaySchool}` : baseTitle;
   }, [displaySchool]);
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans">
+    <div className="min-h-screen bg-slate-50 font-sans selection:bg-emerald-100 selection:text-emerald-900 pb-20">
       <PageHeader 
         currentUser={currentUser}
         role="student"
@@ -267,188 +306,330 @@ function StudentPage() {
         onLogout={handleSignout}
       />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+        
+        {/* Welcome Section */}
+        <div className="mb-8">
+           <h1 className="text-3xl font-black text-slate-800 tracking-tight">สวัสดี, {currentUser?.username || 'นักเรียน'} 👋</h1>
+           <p className="text-slate-500 font-medium mt-2">ยินดีต้อนรับสู่ระบบการเรียนการสอน</p>
+        </div>
+
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white rounded-2xl p-6 shadow-lg shadow-slate-100/50 border border-slate-100 hover:shadow-xl transition-all">
+          <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-100/60 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-4xl font-black text-emerald-600">{studentSubjects.length}</p>
-                <p className="text-sm text-slate-600 font-semibold mt-2">รายวิชาที่ลงทะเบียน</p>
+                <p className="text-4xl font-black text-slate-800 group-hover:text-emerald-600 transition-colors">{studentSubjects.length}</p>
+                <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-2">รายวิชาที่ลงทะเบียน</p>
               </div>
-              <div className="text-5xl opacity-70">📚</div>
+              <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-500 group-hover:scale-110 transition-transform">
+                <BookOpen className="w-8 h-8" />
+              </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl p-6 shadow-lg shadow-slate-100/50 border border-slate-100 hover:shadow-xl transition-all">
+          <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-100/60 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-4xl font-black text-emerald-600">{visibleAnnouncements.length}</p>
-                <p className="text-sm text-slate-600 font-semibold mt-2">ข่าวสาร</p>
+                <p className="text-4xl font-black text-slate-800 group-hover:text-emerald-600 transition-colors">{visibleAnnouncements.length}</p>
+                <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-2">ข่าวสารทั้งหมด</p>
               </div>
-              <div className="text-5xl opacity-70">📢</div>
+              <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-500 group-hover:scale-110 transition-transform">
+                <Megaphone className="w-8 h-8" />
+              </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl p-6 shadow-lg shadow-slate-100/50 border border-slate-100 hover:shadow-xl transition-all">
+          <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-100/60 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-lg font-bold text-emerald-600">{currentUser?.username || '-'}</p>
-                <p className="text-xs text-slate-500 mt-1">#{currentUser?.id || '-'}</p>
-                <p className="text-sm text-slate-600 font-semibold mt-2">ผู้ใช้</p>
+                <p className="text-xl font-bold text-slate-800 group-hover:text-emerald-600 transition-colors truncate max-w-[150px]">{currentUser?.username || '-'}</p>
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider bg-slate-100 px-2 py-0.5 rounded-md inline-block mt-1">ID: {currentUser?.id || '-'}</p>
+                <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-3">ข้อมูลผู้ใช้</p>
               </div>
-              <div className="text-5xl opacity-70">🆔</div>
+              <div className="w-16 h-16 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-500 group-hover:scale-110 transition-transform">
+                <User className="w-8 h-8" />
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Tabs Navigation */}
-        <div className="sticky top-16 z-30 bg-white/80 backdrop-blur-md border-b border-slate-200 shadow-sm rounded-t-2xl -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 mb-6">
-          <div className="flex overflow-x-auto no-scrollbar">
-            {[
-              { id: 'subjects', label: '📚 รายวิชา' },
-              { id: 'announcements', label: '📢 ข่าวสาร' },
-              { id: 'schedule', label: '📅 ตารางเรียน' },
-              { id: 'absences', label: '✋ การลา' },
-              { id: 'transcript', label: '📊 ผลการเรียน' },
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex-1 px-4 py-4 font-bold text-sm whitespace-nowrap transition-all duration-200 border-b-2 relative
-                  ${
-                    activeTab === tab.id
-                      ? 'text-emerald-600 border-emerald-600 bg-emerald-50'
-                      : 'text-slate-600 border-transparent hover:text-emerald-600 hover:bg-slate-50'
-                  }
-                `}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        </div>
+        <StudentTabs activeTab={activeTab} setActiveTab={setActiveTab} />
 
         {/* Tab Content */}
-        <div>
+        <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
+        
         {activeTab === 'subjects' && (
-          <section className="bg-white rounded-2xl shadow-lg shadow-slate-100/50 border border-slate-100 overflow-hidden">
-            <div className="p-6 border-b border-slate-100">
-              <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-                <span>📚</span> รายวิชาของฉัน
-              </h3>
+          <section className="space-y-6">
+            <div className="flex flex-col md:flex-row md:items-center gap-4 mb-6">
+               <div className="flex items-center gap-3">
+                 <div className="p-2 bg-emerald-100 text-emerald-600 rounded-xl">
+                   <BookOpen className="w-6 h-6" />
+                 </div>
+                 <h3 className="text-xl font-black text-slate-800 tracking-tight">รายวิชาของฉัน</h3>
+               </div>
+               
+               {/* Semester Filter */}
+               {availableSemesters.length > 0 && (
+                  <div className="flex items-center gap-2 bg-white p-1.5 rounded-2xl shadow-sm border border-slate-100/60 ml-auto">
+                      <div className="relative">
+                          <select
+                              className="py-2 pl-4 pr-10 bg-slate-50 hover:bg-slate-100 border border-transparent rounded-xl text-slate-700 font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 appearance-none cursor-pointer transition-all"
+                              value={selectedAcademicYear}
+                              onChange={e => { setSelectedAcademicYear(e.target.value); setSelectedSemester(''); }}
+                          >
+                              {[...new Set(availableSemesters.map(s => s.academic_year))].sort((a, b) => b - a).map(y => (
+                              <option key={y} value={y}>ปี {y}</option>
+                              ))}
+                          </select>
+                      </div>
+                      
+                      {selectedAcademicYear && (
+                          <div className="relative">
+                              <select
+                                  className="py-2 pl-4 pr-10 bg-slate-50 hover:bg-slate-100 border border-transparent rounded-xl text-slate-700 font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 appearance-none cursor-pointer transition-all"
+                                  value={selectedSemester}
+                                  onChange={e => setSelectedSemester(e.target.value)}
+                              >
+                                  <option value="">รวม 2 ภาค</option>
+                                  {availableSemesters
+                                      .filter(s => s.academic_year === selectedAcademicYear)
+                                      .map(s => s.semester)
+                                      .filter((v, i, a) => a.indexOf(v) === i)
+                                      .sort()
+                                      .map(sem => (
+                                          <option key={sem} value={sem}>ภาค {sem} เท่านั้น</option>
+                                      ))
+                                  }
+                              </select>
+                          </div>
+                      )}
+
+                      {selectedSemester && (
+                          <button
+                              onClick={() => setSelectedSemester('')}
+                              className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-all"
+                              title="ล้างตัวกรอง"
+                          >
+                              <X className="w-5 h-5" />
+                          </button>
+                      )}
+                  </div>
+               )}
             </div>
+            
             {studentSubjects.length === 0 ? (
-              <div className="p-12 text-center">
-                <div className="text-5xl mb-4 opacity-50">🚫</div>
-                <p className="text-slate-500 font-medium">ยังไม่มีรายวิชาที่ลงทะเบียน</p>
+              <div className="p-12 text-center bg-white rounded-[2rem] border border-slate-100 shadow-sm">
+                <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                   <AlertCircle className="w-10 h-10 text-slate-300" />
+                </div>
+                <p className="text-slate-400 font-bold text-lg">ยังไม่มีรายวิชาที่ลงทะเบียน</p>
               </div>
             ) : (
-              <>
-              {/* Desktop View: Table */}
-              <div className="hidden md:block overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-slate-50 border-b border-slate-200">
-                    <tr>
-                      <th className="px-6 py-4 text-left text-sm font-bold text-slate-700">ข้อมูลรายวิชา</th>
-                      <th className="px-6 py-4 text-center text-sm font-bold text-slate-700">สถานะการเรียน</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {studentSubjects.map(sub => {
-                      const isAllEnded = sub.teachers?.length > 0 && sub.teachers.every(t => t.is_ended);
+              <div className="grid grid-cols-1 gap-4">
+                {(() => {
+                  // Only group by code when showing merged view (no semester selected)
+                  const shouldGroup = !selectedSemester;
+                  
+                  if (shouldGroup) {
+                    // Group subjects by code - show only one subject per code
+                    const groupedByCode = {};
+                    studentSubjects.forEach(sub => {
+                      const code = sub.code || `unknown-${sub.id}`;
+                      if (!groupedByCode[code]) {
+                        groupedByCode[code] = [];
+                      }
+                      groupedByCode[code].push(sub);
+                    });
+
+                    return Object.values(groupedByCode).map(subjectGroup => {
+                      // Take first subject from group as representative
+                      const displaySubject = subjectGroup[0];
+                      const isMerged = subjectGroup.length > 1;
+                      const isAllEnded = displaySubject.teachers?.length > 0 && displaySubject.teachers.every(t => t.is_ended);
+                      
                       return (
-                        <tr key={sub.id} className="hover:bg-slate-50 transition-colors">
-                          <td className="px-6 py-4">
-                            <div className="flex items-center gap-3">
-                              <span className="text-2xl">📖</span>
+                        <div 
+                          key={displaySubject.code || displaySubject.id} 
+                          className="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-100/60 hover:shadow-lg hover:border-emerald-100 transition-all duration-300 group cursor-pointer relative overflow-hidden"
+                        >
+                          <div className="absolute top-0 right-0 w-32 h-32 bg-slate-50 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 group-hover:bg-emerald-50 transition-colors duration-500"></div>
+                          
+                          <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                            <div className="flex items-start gap-5">
+                              <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400 font-black text-xl shadow-inner group-hover:text-emerald-500 group-hover:bg-white group-hover:shadow-lg transition-all">
+                                 {displaySubject.code ? displaySubject.code.charAt(0) : 'S'}
+                              </div>
                               <div>
-                                <p className="font-bold text-slate-800">{sub.name}</p>
-                                <p className="text-xs text-slate-500 mt-1">รหัสวิชา: {sub.code || 'ไม่มีรหัส'}</p>
+                                <div className="flex items-center gap-2 mb-1">
+                                   <h4 className="text-xl font-black text-slate-800 group-hover:text-emerald-700 transition-colors">{displaySubject.name}</h4>
+                                   {isMerged && (
+                                     <span className="text-[10px] font-black bg-emerald-100 text-emerald-600 px-2 py-0.5 rounded-full uppercase tracking-wider">(รวม 2 ภาค)</span>
+                                   )}
+                                   {isAllEnded && (
+                                     <span className="text-[10px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full uppercase tracking-wider">Ended</span>
+                                   )}
+                                </div>
+                                <p className="text-xs font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded-lg inline-block group-hover:bg-emerald-50/50 group-hover:text-emerald-600/70 transition-colors">
+                                   CODE: {displaySubject.code || 'N/A'}
+                                </p>
+                                
+                                <div className="flex items-center gap-4 mt-4 text-xs font-medium text-slate-400">
+                                    {displaySubject.teachers?.length > 0 && (
+                                       <div className="flex items-center gap-1.5">
+                                          <User className="w-3.5 h-3.5" />
+                                          {displaySubject.teachers.map(t => t.username).join(', ')}
+                                       </div>
+                                    )}
+                                    {displaySubject.classroom && (
+                                       <div className="flex items-center gap-1.5">
+                                          <School className="w-3.5 h-3.5" />
+                                          {displaySubject.classroom.name}
+                                       </div>
+                                    )}
+                                </div>
                               </div>
                             </div>
-                          </td>
-                          <td className="px-6 py-4 text-center">
-                            <span className={`inline-flex items-center gap-2 px-3 py-2 rounded-full text-sm font-bold
-                              ${isAllEnded 
-                                ? 'bg-slate-100 text-slate-600'
-                                : 'bg-emerald-100 text-emerald-600'
-                              }
-                            `}>
-                              <span className={`w-2 h-2 rounded-full ${isAllEnded ? 'bg-slate-400' : 'bg-emerald-500'}`}></span>
-                              {isAllEnded ? 'จบการเรียนแล้ว' : 'กำลังเรียน'}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
 
-              {/* Mobile View: Cards */}
-              <div className="md:hidden grid grid-cols-1 gap-4 p-4">
-                  {studentSubjects.map(sub => {
-                      const isAllEnded = sub.teachers?.length > 0 && sub.teachers.every(t => t.is_ended);
-                      return (
-                        <div key={sub.id} className="bg-white rounded-xl p-4 shadow-sm border border-slate-100 flex flex-col gap-3">
-                            <div className="flex items-start justify-between">
-                                <div className="flex items-start gap-3">
-                                    <span className="text-2xl mt-1">📖</span>
-                                    <div>
-                                        <h4 className="font-bold text-slate-800 text-lg leading-tight">{sub.name}</h4>
-                                        <div className="text-xs text-slate-500 font-medium bg-slate-100 px-2 py-1 rounded-md inline-block mt-1">
-                                            {sub.code || 'ไม่มีรหัส'}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="pt-2 border-t border-slate-50">
-                                <span className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-bold
+                            <div className="flex flex-col items-end gap-3">
+                               <span className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider shadow-sm border
                                   ${isAllEnded 
-                                    ? 'bg-slate-100 text-slate-600'
-                                    : 'bg-emerald-50 text-emerald-600'
+                                    ? 'bg-slate-100 text-slate-500 border-slate-200'
+                                    : 'bg-emerald-50 text-emerald-600 border-emerald-100'
                                   }
                                 `}>
-                                  <span className={`w-2 h-2 rounded-full ${isAllEnded ? 'bg-slate-400' : 'bg-emerald-500'}`}></span>
-                                  {isAllEnded ? 'จบการเรียนแล้ว' : 'กำลังเรียน'}
+                                  {isAllEnded ? <XCircle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
+                                  {isAllEnded ? 'จบการเรียนแล้ว' : 'กำลังทำการเรียนการสอน'}
                                 </span>
                             </div>
+                          </div>
                         </div>
                       );
-                  })}
+                    });
+                  } else {
+                    // Show individual subjects when semester is selected
+                    return studentSubjects.map(sub => {
+                      const isAllEnded = sub.teachers?.length > 0 && sub.teachers.every(t => t.is_ended);
+                      return (
+                        <div 
+                          key={sub.id} 
+                          className="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-100/60 hover:shadow-lg hover:border-emerald-100 transition-all duration-300 group cursor-pointer relative overflow-hidden"
+                        >
+                          <div className="absolute top-0 right-0 w-32 h-32 bg-slate-50 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 group-hover:bg-emerald-50 transition-colors duration-500"></div>
+                          
+                          <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                            <div className="flex items-start gap-5">
+                              <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400 font-black text-xl shadow-inner group-hover:text-emerald-500 group-hover:bg-white group-hover:shadow-lg transition-all">
+                                 {sub.code ? sub.code.charAt(0) : 'S'}
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2 mb-1">
+                                   <h4 className="text-xl font-black text-slate-800 group-hover:text-emerald-700 transition-colors">{sub.name}</h4>
+                                   {isAllEnded && (
+                                     <span className="text-[10px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full uppercase tracking-wider">Ended</span>
+                                   )}
+                                </div>
+                                <p className="text-xs font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded-lg inline-block group-hover:bg-emerald-50/50 group-hover:text-emerald-600/70 transition-colors">
+                                   CODE: {sub.code || 'N/A'}
+                                </p>
+                                
+                                <div className="flex items-center gap-4 mt-4 text-xs font-medium text-slate-400">
+                                    {sub.teachers?.length > 0 && (
+                                       <div className="flex items-center gap-1.5">
+                                          <User className="w-3.5 h-3.5" />
+                                          {sub.teachers.map(t => t.username).join(', ')}
+                                       </div>
+                                    )}
+                                    {sub.classroom && (
+                                       <div className="flex items-center gap-1.5">
+                                          <School className="w-3.5 h-3.5" />
+                                          {sub.classroom.name}
+                                       </div>
+                                    )}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex flex-col items-end gap-3">
+                               <span className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider shadow-sm border
+                                  ${isAllEnded 
+                                    ? 'bg-slate-100 text-slate-500 border-slate-200'
+                                    : 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                                  }
+                                `}>
+                                  {isAllEnded ? <XCircle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
+                                  {isAllEnded ? 'จบการเรียนแล้ว' : 'กำลังทำการเรียนการสอน'}
+                                </span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    });
+                  }
+                })()}
               </div>
-              </>
             )}
           </section>
         )}
+        
         {activeTab === 'announcements' && (
-          <section className="bg-white rounded-2xl shadow-lg shadow-slate-100/50 border border-slate-100 overflow-hidden">
-            <div className="p-6 border-b border-slate-100">
-              <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-                <span>📢</span> ข่าวสารโรงเรียน
-              </h3>
+          <section className="space-y-6">
+            <div className="flex items-center gap-3 mb-6 px-2">
+               <div className="p-2 bg-amber-100 text-amber-600 rounded-xl">
+                 <Megaphone className="w-6 h-6" />
+               </div>
+               <h3 className="text-xl font-black text-slate-800 tracking-tight">ข่าวสารประชาสัมพันธ์</h3>
             </div>
+
             {visibleAnnouncements.length === 0 ? (
-              <div className="p-12 text-center">
-                <div className="text-5xl mb-4 opacity-50">🚫</div>
-                <p className="text-slate-500 font-medium">ไม่มีข้อมูลข่าวสาร</p>
+              <div className="p-12 text-center bg-white rounded-[2rem] border border-slate-100 shadow-sm">
+                <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                   <AlertCircle className="w-10 h-10 text-slate-300" />
+                </div>
+                <p className="text-slate-400 font-bold text-lg">ไม่มีข่าวสารใหม่</p>
               </div>
             ) : (
-              <div className="divide-y divide-slate-100">
+              <div className="grid grid-cols-1 gap-4">
                 {visibleAnnouncements.map(item => (
-                  <div key={item.id} className="p-6 hover:bg-slate-50 transition-colors cursor-pointer" onClick={() => toggleAnnouncement(item.id)}>
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <h4 className="font-bold text-slate-800 text-lg">{item.title}</h4>
-                        <p className="text-xs text-slate-500 mt-2">
-                          {item.created_at ? parseLocalDatetime(item.created_at).toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' }) : ''}
-                        </p>
-                      </div>
-                      <span className="text-2xl flex-shrink-0">{expandedAnnouncement === item.id ? '▼' : '▶'}</span>
+                  <div 
+                    key={item.id} 
+                    className={`bg-white rounded-[2rem] overflow-hidden shadow-sm border transition-all duration-300 ${
+                        expandedAnnouncement === item.id 
+                        ? 'border-emerald-200 shadow-md ring-4 ring-emerald-50' 
+                        : 'border-slate-100/60 hover:shadow-lg hover:border-emerald-100'
+                    }`}
+                  >
+                    <div 
+                        className="p-6 cursor-pointer flex items-start gap-4"
+                        onClick={() => toggleAnnouncement(item.id)}
+                    >
+                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 transition-colors ${
+                            expandedAnnouncement === item.id ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-50 text-slate-400 group-hover:text-emerald-500'
+                        }`}>
+                            <Megaphone className="w-6 h-6" />
+                        </div>
+                        <div className="flex-1">
+                            <div className="flex items-center justify-between mb-1">
+                                <h4 className={`text-lg font-black transition-colors ${
+                                    expandedAnnouncement === item.id ? 'text-emerald-700' : 'text-slate-800'
+                                }`}>{item.title}</h4>
+                                <ChevronRight className={`w-5 h-5 text-slate-300 transition-transform duration-300 ${
+                                    expandedAnnouncement === item.id ? 'rotate-90 text-emerald-500' : ''
+                                }`} />
+                            </div>
+                            <p className="text-xs font-bold text-slate-400 flex items-center gap-1.5 uppercase tracking-wide">
+                              <CalendarDays className="w-3.5 h-3.5" />
+                              {item.created_at ? parseLocalDatetime(item.created_at).toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' }) : '-'}
+                            </p>
+                        </div>
                     </div>
+                    
                     {expandedAnnouncement === item.id && (
-                      <p className="mt-4 text-slate-700 leading-relaxed whitespace-pre-wrap">{item.content}</p>
+                      <div className="px-6 pb-8 pt-2 animate-in fade-in slide-in-from-top-2">
+                        <div className="bg-slate-50/50 rounded-2xl p-6 border border-slate-100">
+                           <p className="text-slate-600 text-sm leading-relaxed whitespace-pre-wrap font-medium">{item.content}</p>
+                        </div>
+                      </div>
                     )}
                   </div>
                 ))}
@@ -456,23 +637,81 @@ function StudentPage() {
             )}
           </section>
         )}
+        
         {activeTab === 'schedule' && (
-          <section className="bg-white rounded-2xl shadow-lg shadow-slate-100/50 border border-slate-100 overflow-hidden">
-            <div className="p-6 border-b border-slate-100">
-              <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-                <span>📅</span> ตารางเรียนของฉัน
-              </h3>
+          <section className="space-y-6">
+            <div className="flex flex-col md:flex-row md:items-center gap-4 mb-6">
+               <div className="flex items-center gap-3">
+                 <div className="p-2 bg-blue-100 text-blue-600 rounded-xl">
+                   <CalendarDays className="w-6 h-6" />
+                 </div>
+                 <h3 className="text-xl font-black text-slate-800 tracking-tight">ตารางเรียนของฉัน</h3>
+               </div>
+               
+               {/* Semester Filter */}
+               {availableSemesters.length > 0 && (
+                  <div className="flex items-center gap-2 bg-white p-1.5 rounded-2xl shadow-sm border border-slate-100/60 ml-auto">
+                      <div className="relative">
+                          <select
+                              className="py-2 pl-4 pr-10 bg-slate-50 hover:bg-slate-100 border border-transparent rounded-xl text-slate-700 font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500/20 appearance-none cursor-pointer transition-all"
+                              value={selectedAcademicYear}
+                              onChange={e => { setSelectedAcademicYear(e.target.value); setSelectedSemester(''); }}
+                          >
+                              {[...new Set(availableSemesters.map(s => s.academic_year))].sort((a, b) => b - a).map(y => (
+                              <option key={y} value={y}>ปี {y}</option>
+                              ))}
+                          </select>
+                      </div>
+                      
+                      {selectedAcademicYear && (
+                          <div className="relative">
+                              <select
+                                  className="py-2 pl-4 pr-10 bg-slate-50 hover:bg-slate-100 border border-transparent rounded-xl text-slate-700 font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500/20 appearance-none cursor-pointer transition-all"
+                                  value={selectedSemester}
+                                  onChange={e => setSelectedSemester(e.target.value)}
+                              >
+                                  <option value="">รวม 2 ภาค</option>
+                                  {availableSemesters
+                                      .filter(s => s.academic_year === selectedAcademicYear)
+                                      .map(s => s.semester)
+                                      .filter((v, i, a) => a.indexOf(v) === i)
+                                      .sort()
+                                      .map(sem => (
+                                          <option key={sem} value={sem}>ภาค {sem} เท่านั้น</option>
+                                      ))
+                                  }
+                              </select>
+                          </div>
+                      )}
+
+                      {selectedSemester && (
+                          <button
+                              onClick={() => setSelectedSemester('')}
+                              className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-all"
+                              title="ล้างตัวกรอง"
+                          >
+                              <X className="w-5 h-5" />
+                          </button>
+                      )}
+                  </div>
+               )}
             </div>
-            <div className="p-6">
+            <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100/60 p-1 md:p-6 overflow-hidden">
               {renderScheduleTable()}
             </div>
           </section>
         )}
+        
         {activeTab === 'absences' && (
           <AbsenceManager studentId={currentUser?.id} operatingHours={operatingHours} studentSubjects={studentSubjects} />
         )}
+        
         {activeTab === 'transcript' && (
-          <AcademicTranscript studentId={currentUser?.id} studentSubjects={studentSubjects} />
+          <AcademicTranscript 
+            studentId={currentUser?.id} 
+            studentSubjects={studentSubjects}
+            onGradesNotAnnounced={() => setActiveTab('subjects')}
+          />
         )}
         </div>
       </div>

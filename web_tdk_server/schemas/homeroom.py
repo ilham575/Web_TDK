@@ -4,7 +4,8 @@ from datetime import datetime
 
 class HomeroomTeacherBase(BaseModel):
     teacher_id: int
-    grade_level: str
+    grade_level: Optional[str] = None
+    classroom_id: Optional[int] = None
     school_id: int
     academic_year: Optional[str] = None
 
@@ -14,6 +15,7 @@ class HomeroomTeacherCreate(HomeroomTeacherBase):
 class HomeroomTeacherUpdate(BaseModel):
     teacher_id: Optional[int] = None
     grade_level: Optional[str] = None
+    classroom_id: Optional[int] = None
     academic_year: Optional[str] = None
 
 class HomeroomTeacher(HomeroomTeacherBase):
@@ -29,3 +31,10 @@ class HomeroomTeacherWithDetails(HomeroomTeacher):
     teacher_name: Optional[str] = None
     teacher_email: Optional[str] = None
     student_count: Optional[int] = 0
+    classroom_name: Optional[str] = None
+
+
+class HomeroomCopyRequest(BaseModel):
+    school_id: Optional[int] = None
+    from_year: str
+    to_year: str

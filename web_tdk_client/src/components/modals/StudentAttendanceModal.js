@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { X, CheckCircle2, AlertCircle, Clock, HeartPulse, PieChart, Info } from 'lucide-react';
 
-function StudentAttendanceModal({ isOpen, student, onClose, initials, origin }) {
+function StudentAttendanceModal({ isOpen, student, onClose, initials, origin, semesterLabel }) {
   useEffect(() => {
     if (isOpen) document.body.style.overflow = 'hidden';
     else document.body.style.overflow = 'unset';
@@ -44,7 +44,12 @@ function StudentAttendanceModal({ isOpen, student, onClose, initials, origin }) 
                 </p>
                 {origin && (
                   <div className="mt-2 flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50 px-3 py-1 rounded-full w-fit">
-                    <Info className="w-3 h-3" /> Context: {origin === 'attendance' ? 'Attendance' : 'Grade'} Report
+                    <Info className="w-3 h-3" /> สรุป: {origin === 'attendance' ? 'การเข้าเรียน' : 'ผลการเรียน'}
+                  </div>
+                )}
+                {semesterLabel && (
+                  <div className="mt-1.5 flex items-center gap-2 text-[10px] font-black text-teal-700 bg-teal-50 px-3 py-1 rounded-full w-fit border border-teal-100">
+                    📅 {semesterLabel}
                   </div>
                 )}
               </div>
@@ -150,7 +155,7 @@ function StudentAttendanceModal({ isOpen, student, onClose, initials, origin }) 
           ) : (
             <div className="text-center py-24 bg-slate-50 rounded-[2.5rem] border-2 border-dashed border-slate-200">
               <PieChart className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-              <p className="text-slate-400 font-bold uppercase tracking-widest text-sm font-black">Attendance records not found</p>
+              <p className="text-slate-400 font-bold uppercase tracking-widest text-sm font-black">ไม่พบข้อมูลการเข้าเรียน</p>
             </div>
           )}
         </div>
@@ -161,7 +166,7 @@ function StudentAttendanceModal({ isOpen, student, onClose, initials, origin }) 
             onClick={onClose}
             className="w-full py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl font-black text-sm hover:bg-slate-100 transition-all active:scale-[0.98]"
           >
-            CLOSE REPORT
+            ปิดรายงานการเข้าเรียน
           </button>
         </div>
       </div>

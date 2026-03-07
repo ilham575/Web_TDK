@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, HTTPException, Depends, status, UploadFile, File
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from schemas.announcement import Announcement, AnnouncementCreate, AnnouncementUpdate
@@ -10,8 +10,14 @@ from fastapi.security import OAuth2PasswordBearer
 from utils.security import decode_access_token
 from sqlalchemy import or_
 from datetime import datetime
+import os
+import shutil
+import uuid
 
 router = APIRouter(prefix="/announcements", tags=["announcements"])
+
+PDF_UPLOAD_DIR = "uploads/pdfs"
+os.makedirs(PDF_UPLOAD_DIR, exist_ok=True)
 
 # optional oauth2 scheme (no auto_error) for endpoints that accept anonymous access
 oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="/users/login", auto_error=False)
@@ -114,3 +120,67 @@ def update_announcement(
     db.commit()
     db.refresh(announcement)
     return announcement
+
+
+@router.post("/{announcement_id}/upload-pdf", response_model=Announcement)
+def upload_announcement_pdf(
+    announcement_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    announcement = db.query(AnnouncementModel).filter(AnnouncementModel.id == announcement_id).first()
+    if not announcement:
+        raise HTTPException(status_code=404, detail="Announcement not found")
+    if (announcement.author_id != current_user.id) and (getattr(current_user, "role", None) not in ("admin", "owner")):
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    # Validate file type
+    if not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are allowed")
+
+    # Delete old PDF if exists
+    if announcement.pdf_file_path:
+        old_path = announcement.pdf_file_path.lstrip("/")
+        if os.path.exists(old_path):
+            try:
+                os.remove(old_path)
+            except Exception:
+                pass
+
+    # Save new PDF
+    safe_name = f"{uuid.uuid4().hex}_{file.filename.replace(' ', '_')}"
+    dest = os.path.join(PDF_UPLOAD_DIR, safe_name)
+    with open(dest, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    announcement.pdf_file_path = f"/uploads/pdfs/{safe_name}"
+    announcement.pdf_file_name = file.filename
+    db.commit()
+    db.refresh(announcement)
+    return announcement
+
+
+@router.delete("/{announcement_id}/pdf", status_code=status.HTTP_204_NO_CONTENT)
+def delete_announcement_pdf(
+    announcement_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    announcement = db.query(AnnouncementModel).filter(AnnouncementModel.id == announcement_id).first()
+    if not announcement:
+        raise HTTPException(status_code=404, detail="Announcement not found")
+    if (announcement.author_id != current_user.id) and (getattr(current_user, "role", None) not in ("admin", "owner")):
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    if announcement.pdf_file_path:
+        old_path = announcement.pdf_file_path.lstrip("/")
+        if os.path.exists(old_path):
+            try:
+                os.remove(old_path)
+            except Exception:
+                pass
+        announcement.pdf_file_path = None
+        announcement.pdf_file_name = None
+        db.commit()
+    return

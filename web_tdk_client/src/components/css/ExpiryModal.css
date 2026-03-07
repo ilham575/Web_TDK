@@ -30,11 +30,12 @@
     0 0 60px rgba(102, 126, 234, 0.1);
   max-width: 450px;
   width: 90%;
-  max-height: 70vh;
-  overflow-y: auto;
+  max-height: calc(100dvh - 2rem);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   animation: expiryModalSlideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
   position: relative;
-  overflow: hidden;
 }
 
 .expiry-modal::before {
@@ -62,6 +63,7 @@
   background: rgba(255, 255, 255, 0.1);
   border-radius: 20px 20px 0 0;
   position: relative;
+  flex-shrink: 0;
 }
 
 .expiry-modal-header h3 {
@@ -105,6 +107,8 @@
   flex-direction: column;
   gap: 1.5rem;
   background: rgba(255, 255, 255, 0.05);
+  flex: 1 1 auto;
+  overflow-y: auto;
 }
 
 .expiry-modal-body .expiry-form-label {
@@ -152,6 +156,7 @@
   border-top: 1px solid rgba(255, 255, 255, 0.3);
   background: rgba(255, 255, 255, 0.1);
   border-radius: 0 0 20px 20px;
+  flex-shrink: 0;
 }
 
 .expiry-modal-btn {
@@ -297,9 +302,17 @@
 }
 
 @media (max-width: 480px) {
+  .expiry-modal-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+
   .expiry-modal {
-    width: 98%;
-    margin: 0.5rem;
+    width: 100%;
+    max-width: 100%;
+    border-radius: 20px 20px 0 0;
+    margin: 0;
+    max-height: 90dvh;
   }
 
   .expiry-modal-header {

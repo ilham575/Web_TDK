@@ -16,9 +16,9 @@ from schemas.user import User as UserSchema
 
 router = APIRouter(prefix="/subjects", tags=["subjects"])
 
-def validate_activity_percentage(db: Session, subject_id: int = None, new_percentage: int = None, school_id: int = None):
+def validate_activity_percentage(db: Session, subject_id: int = None, new_percentage: int = None, school_id: int = None, academic_year: int = None, semester: int = None):
     """
-    Validate that activity subjects' total percentage does not exceed 100%
+    Validate that activity subjects' total percentage does not exceed 100% within the same semester
     If subject_id is provided, exclude it from the check (for updates)
     """
     if not new_percentage or new_percentage <= 0:
@@ -27,14 +27,21 @@ def validate_activity_percentage(db: Session, subject_id: int = None, new_percen
     if new_percentage > 100:
         raise HTTPException(status_code=400, detail="Activity percentage cannot exceed 100%")
     
-    # Check total percentage across all activity subjects in the school
-    # (since activity subjects are defined per subject, not per classroom)
+    # Check total percentage across all activity subjects in the school for the same semester
     if school_id:
-        activity_subjects = db.query(SubjectModel).filter(
+        query = db.query(SubjectModel).filter(
             SubjectModel.school_id == school_id,
             SubjectModel.subject_type == 'activity',
             SubjectModel.is_ended == False
-        ).all()
+        )
+        
+        # Filter by academic year and semester if provided
+        if academic_year is not None:
+            query = query.filter(SubjectModel.academic_year == academic_year)
+        if semester is not None:
+            query = query.filter(SubjectModel.semester == semester)
+        
+        activity_subjects = query.all()
         
         # Calculate total percentage excluding current subject
         total_percent = sum([
@@ -59,13 +66,24 @@ def create_subject(subject: SubjectCreate, db: Session = Depends(get_db), curren
         raise HTTPException(status_code=403, detail="Not authorized to create subjects")
 
     school_id = subject.school_id or getattr(current_user, 'school_id', None)
+
+    # Enforce academic year setup before creating subjects
+    from routers.school import require_academic_year_setup
+    require_academic_year_setup(school_id, db)
+
     # if provided school_id and doesn't match current_user's school, reject
     if getattr(current_user, 'school_id', None) is not None and school_id is not None and int(school_id) != int(current_user.school_id):
         raise HTTPException(status_code=403, detail="Cannot create subject for different school")
 
     # Validate activity_percentage if subject_type is 'activity'
     if subject.subject_type == 'activity' and getattr(subject, 'activity_percentage', None):
-        validate_activity_percentage(db, new_percentage=subject.activity_percentage, school_id=school_id)
+        validate_activity_percentage(
+            db, 
+            new_percentage=subject.activity_percentage, 
+            school_id=school_id,
+            academic_year=getattr(subject, 'academic_year', None),
+            semester=getattr(subject, 'semester', None)
+        )
 
     new_sub = SubjectModel(
         name=subject.name,
@@ -76,7 +94,10 @@ def create_subject(subject: SubjectCreate, db: Session = Depends(get_db), curren
         credits=getattr(subject, 'credits', None),
         activity_percentage=getattr(subject, 'activity_percentage', None),
         max_collected_score=getattr(subject, 'max_collected_score', 100),
-        max_exam_score=getattr(subject, 'max_exam_score', 100)
+        max_exam_score=getattr(subject, 'max_exam_score', 100),
+        academic_year=getattr(subject, 'academic_year', None),
+        semester=getattr(subject, 'semester', None),
+        linked_subject_id=getattr(subject, 'linked_subject_id', None)
     )
     db.add(new_sub)
     db.commit()
@@ -104,7 +125,14 @@ def update_subject(subject_id: int, subject: SubjectCreate, db: Session = Depend
     new_type = subject.subject_type or subj.subject_type
     new_percent = getattr(subject, 'activity_percentage', None) or subj.activity_percentage
     if new_type == 'activity' and new_percent:
-        validate_activity_percentage(db, subject_id=subject_id, new_percentage=new_percent, school_id=subj.school_id)
+        validate_activity_percentage(
+            db, 
+            subject_id=subject_id, 
+            new_percentage=new_percent, 
+            school_id=subj.school_id,
+            academic_year=subj.academic_year,
+            semester=subj.semester
+        )
     
     # Update fields
     if subject.name:
@@ -124,6 +152,10 @@ def update_subject(subject_id: int, subject: SubjectCreate, db: Session = Depend
         subj.max_collected_score = subject.max_collected_score
     if getattr(subject, 'max_exam_score', None) is not None:
         subj.max_exam_score = subject.max_exam_score
+    if getattr(subject, 'academic_year', None) is not None:
+        subj.academic_year = subject.academic_year
+    if getattr(subject, 'semester', None) is not None:
+        subj.semester = subject.semester
     
     db.commit()
     db.refresh(subj)
@@ -132,10 +164,14 @@ def update_subject(subject_id: int, subject: SubjectCreate, db: Session = Depend
 
 @router.get("", response_model=List[Subject])
 @router.get("/", response_model=List[Subject])
-def list_subjects(db: Session = Depends(get_db), school_id: int = None):
+def list_subjects(db: Session = Depends(get_db), school_id: int = None, academic_year: str = None, semester: int = None):
     query = db.query(SubjectModel)
     if school_id is not None:
         query = query.filter(SubjectModel.school_id == school_id)
+    if academic_year is not None:
+        query = query.filter(SubjectModel.academic_year == academic_year)
+    if semester is not None:
+        query = query.filter(SubjectModel.semester == semester)
     return query.order_by(SubjectModel.created_at.desc()).all()
 
 
@@ -149,13 +185,18 @@ def get_subject(subject_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/teacher/{teacher_id}", response_model=List[dict])
-def subjects_by_teacher(teacher_id: int, db: Session = Depends(get_db)):
+def subjects_by_teacher(teacher_id: int, academic_year: str = None, semester: int = None, db: Session = Depends(get_db)):
     # Get all subjects where the teacher is assigned via SubjectSchedule (both active and ended)
-    subjects = db.query(SubjectModel).join(
+    query = db.query(SubjectModel).join(
         SubjectScheduleModel, SubjectModel.id == SubjectScheduleModel.subject_id
     ).filter(
         SubjectScheduleModel.teacher_id == teacher_id
-    ).distinct().all()
+    )
+    if academic_year is not None:
+        query = query.filter(SubjectModel.academic_year == academic_year)
+    if semester is not None:
+        query = query.filter(SubjectModel.semester == semester)
+    subjects = query.distinct().all()
     
     result = []
     for subject in subjects:
@@ -214,6 +255,8 @@ def subjects_by_teacher(teacher_id: int, db: Session = Depends(get_db)):
             'school_id': subject.school_id,
             'credits': subject.credits,
             'activity_percentage': subject.activity_percentage,
+            'max_collected_score': subject.max_collected_score,
+            'max_exam_score': subject.max_exam_score,
             'is_ended': subject.is_ended,
             'created_at': subject.created_at,
             'updated_at': subject.updated_at,
@@ -221,24 +264,35 @@ def subjects_by_teacher(teacher_id: int, db: Session = Depends(get_db)):
             'teacher_count': len(teachers_list),
             'classroom_count': classroom_count,
             'student_count': student_count,
-            'teacher_is_ended': schedule.is_ended if schedule else False
+            'teacher_is_ended': schedule.is_ended if schedule else False,
+            'academic_year': subject.academic_year,
+            'semester': subject.semester,
+            'linked_subject_id': subject.linked_subject_id
         })
     
     return result
 
 
 @router.get('/student/{student_id}', response_model=List[dict])
-def subjects_by_student(student_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+def subjects_by_student(student_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user), academic_year: int = None, semester: int = None):
     # allow student to fetch their own subjects, or admin to fetch any
     if getattr(current_user, 'role', None) != 'admin' and getattr(current_user, 'id', None) != int(student_id):
         raise HTTPException(status_code=403, detail='Not authorized to view subjects for this student')
     
     # join SubjectStudent -> Subject
-    subs = db.query(SubjectModel).join(
+    query = db.query(SubjectModel).join(
         SubjectStudentModel, SubjectStudentModel.subject_id == SubjectModel.id
     ).filter(
         SubjectStudentModel.student_id == student_id
-    ).all()
+    )
+    
+    # Apply optional filters
+    if academic_year is not None:
+        query = query.filter(SubjectModel.academic_year == academic_year)
+    if semester is not None:
+        query = query.filter(SubjectModel.semester == semester)
+    
+    subs = query.all()
     
     result = []
     for subject in subs:
@@ -277,6 +331,8 @@ def subjects_by_student(student_id: int, db: Session = Depends(get_db), current_
             'school_id': subject.school_id,
             'credits': subject.credits,
             'activity_percentage': subject.activity_percentage,
+            'max_collected_score': subject.max_collected_score,
+            'max_exam_score': subject.max_exam_score,
             'is_ended': subject.is_ended,
             'created_at': subject.created_at,
             'updated_at': subject.updated_at,
@@ -379,7 +435,11 @@ def get_subject_students(subject_id: int, db: Session = Depends(get_db), current
         if classroom_student:
             classroom = db.query(ClassroomModel).filter(ClassroomModel.id == classroom_student.classroom_id).first()
             if classroom:
-                classroom_info = {'id': classroom.id, 'name': classroom.name}
+                classroom_info = {
+                    'id': classroom.id, 
+                    'name': classroom.name,
+                    'student_number': classroom_student.student_number
+                }
 
         result.append({
             'id': student.id,
@@ -390,7 +450,8 @@ def get_subject_students(subject_id: int, db: Session = Depends(get_db), current
             'school_id': student.school_id,
             'grade_level': student.grade_level,
             'is_active': student.is_active,
-            'classroom': classroom_info
+            'classroom': classroom_info,
+            'student_number': classroom_student.student_number if classroom_student else None
         })
 
     return result
@@ -608,14 +669,15 @@ def delete_subject(subject_id: int, db: Session = Depends(get_db), current_user=
     if getattr(current_user, 'school_id', None) and subj.school_id != current_user.school_id:
         raise HTTPException(status_code=403, detail="Cannot delete subject for different school")
     
-    # Check if there are any teachers not finished (is_ended = False)
-    unfinished_teachers = db.query(SubjectScheduleModel).filter(
-        SubjectScheduleModel.subject_id == subject_id,
-        SubjectScheduleModel.is_ended == False
-    ).first()
-    
-    if unfinished_teachers:
-        raise HTTPException(status_code=400, detail="ไม่สามารถลบได้ เนื่องจากยังมีครูที่ยังไม่ได้จบคอร์ส ต้องให้ครูทั้งหมดกดจบคอร์สก่อน")
+    # If subject is not yet ended by the auto-close system, check for unfinished teachers
+    if not subj.is_ended:
+        unfinished_teachers = db.query(SubjectScheduleModel).filter(
+            SubjectScheduleModel.subject_id == subject_id,
+            SubjectScheduleModel.is_ended == False
+        ).first()
+        
+        if unfinished_teachers:
+            raise HTTPException(status_code=400, detail="ไม่สามารถลบได้ เนื่องจากรายวิชายังไม่ถูกปิด หรือยังมีครูที่สอนอยู่")
 
     # Delete related records first to avoid foreign key constraint errors
     from models.attendance import Attendance as AttendanceModel
@@ -726,6 +788,11 @@ def assign_classroom_to_subject(subject_id: int, classroom_id: int = Body(..., e
     
     enrolled_count = 0
     for cs in students:
+        # Verify student exists in User table to avoid FK IntegrityError
+        student_exists = db.query(UserModel).filter(UserModel.id == cs.student_id).first()
+        if not student_exists:
+            continue
+            
         # Check if already enrolled in subject
         existing_enrollment = db.query(SubjectStudentModel).filter(
             SubjectStudentModel.subject_id == subject_id,
@@ -825,7 +892,8 @@ def get_all_subjects_by_school(school_id: int, db: Session = Depends(get_db), cu
                 'id': schedule.teacher_id,
                 'name': teacher_name,
                 'classroom_id': schedule.classroom_id,
-                'classroom_name': classroom_name
+                'classroom_name': classroom_name,
+                'is_ended': schedule.is_ended
             })
         
         # For backward compatibility, keep teacher_name as the first teacher or empty
@@ -838,6 +906,10 @@ def get_all_subjects_by_school(school_id: int, db: Session = Depends(get_db), cu
             'subject_type': subj.subject_type,
             'credits': getattr(subj, 'credits', None),
             'activity_percentage': getattr(subj, 'activity_percentage', None),
+            'max_collected_score': subj.max_collected_score,
+            'max_exam_score': subj.max_exam_score,
+            'academic_year': getattr(subj, 'academic_year', None),
+            'semester': getattr(subj, 'semester', None),
             'teacher_id': subj.teacher_id,  # Keep for backward compatibility
             'teacher_name': teacher_name,  # Keep for backward compatibility
             'teachers': teachers_info,  # New field with all teachers
@@ -1089,7 +1161,7 @@ def get_teacher_schedule(teacher_id: int, db: Session = Depends(get_db), current
 
 
 @router.get('/schedules/student/{student_id}', response_model=List[StudentScheduleResponse])
-def get_student_schedule(student_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+def get_student_schedule(student_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user), academic_year: int = None, semester: int = None):
     """Return schedule entries for a student based on their enrollments and classroom assignments.
     Admins may fetch any student; students may fetch their own schedule. Teachers are allowed if they teach the student's classroom."""
     # Authorization
@@ -1135,9 +1207,21 @@ def get_student_schedule(student_id: int, db: Session = Depends(get_db), current
     if not subject_ids:
         return []
 
+    # Build base query for subjects with optional filters
+    subject_query = db.query(SubjectModel).filter(SubjectModel.id.in_(list(subject_ids)))
+    if academic_year is not None:
+        subject_query = subject_query.filter(SubjectModel.academic_year == academic_year)
+    if semester is not None:
+        subject_query = subject_query.filter(SubjectModel.semester == semester)
+    
+    filtered_subject_ids = [s.id for s in subject_query.all()]
+    
+    if not filtered_subject_ids:
+        return []
+
     # Find schedules for these subjects that either are global (classroom_id is NULL) or target the student's classroom
     schedules = db.query(SubjectScheduleModel).filter(
-        SubjectScheduleModel.subject_id.in_(list(subject_ids)),
+        SubjectScheduleModel.subject_id.in_(filtered_subject_ids),
         ((SubjectScheduleModel.classroom_id == None) | (SubjectScheduleModel.classroom_id == classroom_id))
     ).all()
 

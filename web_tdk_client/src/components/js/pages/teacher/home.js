@@ -1,16 +1,16 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ScheduleGrid from '../../ScheduleGrid';
 import AbsenceApproval from '../admin/AbsenceApproval';
 import PageHeader, { getInitials } from '../../PageHeader';
-import { ToastContainer, toast } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
+import { toast } from 'react-toastify';
 import ExpiryModal from '../../ExpiryModal';
 import AnnouncementModal from '../../AnnouncementModal';
 import ConfirmModal from '../../ConfirmModal';
 import StudentGradeModal from '../../../modals/StudentGradeModal';
 import StudentAttendanceModal from '../../../modals/StudentAttendanceModal';
 import ScheduleModal from '../../../modals/ScheduleModal';
+import StudentEvaluationModal from '../../../modals/StudentEvaluationModal';
 import { API_BASE_URL } from '../../../endpoints';
 import { setSchoolFavicon } from '../../../../utils/faviconUtils';
 import { logout } from '../../../../utils/authUtils';
@@ -32,7 +32,9 @@ import {
   Award,
   Users,
   Settings,
-  Trash2
+  Trash2,
+  Brain,
+  BarChart3
 } from 'lucide-react';
 
 function TeacherPage() {
@@ -44,9 +46,14 @@ function TeacherPage() {
   const [gradeAnnouncementDate, setGradeAnnouncementDate] = useState(null);
   const [countdown, setCountdown] = useState('');
   
+  // Default academic year & semester for subjects (if not set by admin)
+  const currentBEYear = new Date().getFullYear() + 543;
+  
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [expiry, setExpiry] = useState('');
+  const [announcementPdfFile, setAnnouncementPdfFile] = useState(null);
+  const announcementPdfInputRef = useRef(null);
   const [announcements, setAnnouncements] = useState([]);
   const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
   const [modalAnnouncement, setModalAnnouncement] = useState(null);
@@ -55,6 +62,13 @@ function TeacherPage() {
   const [expiryModalValue, setExpiryModalValue] = useState('');
   const [expiryModalId, setExpiryModalId] = useState(null);
   const [activeTab, setActiveTab] = useState('subjects');
+
+  // Subject semester/year filter removed — admin sets these per subject
+
+  // Evaluation state
+  const [showStudentEvaluationModal, setShowStudentEvaluationModal] = useState(false);
+  const [selectedSubjectForEvaluation, setSelectedSubjectForEvaluation] = useState(null);
+  const [studentsForEvaluation, setStudentsForEvaluation] = useState([]);
 
   // Schedule state
   const [scheduleSlots, setScheduleSlots] = useState([]);
@@ -78,6 +92,78 @@ function TeacherPage() {
   const [selectedStudentDetail, setSelectedStudentDetail] = useState(null);
   const [teacherHomerooms, setTeacherHomerooms] = useState([]);
   const [homeroomRanking, setHomeroomRanking] = useState([]); // Array of { student_id, rank, average_score }
+
+  // Homeroom semester/year filter - default to current active semester (will be set when periods load)
+  const [homeroomYear, setHomeroomYear] = useState(String(currentBEYear));
+  const [homeroomSemester, setHomeroomSemester] = useState('');
+  // Combined 2-semester view
+  const [homeroomCombinedMode, setHomeroomCombinedMode] = useState(false);
+  const [homeroomSem2Summary, setHomeroomSem2Summary] = useState(null);
+
+  // Semester period filtering
+  const [semesterPeriods, setSemesterPeriods] = useState([]);
+  const [showInactivePeriods, setShowInactivePeriods] = useState(false);
+  
+  // Access control settings (from admin)
+  const [accessControls, setAccessControls] = useState([]);
+  const [loadingAccessControls, setLoadingAccessControls] = useState(false);
+
+  // Use active period if available, fallback to current Year
+  const getActivePeriod = useCallback(() => {
+    if (!semesterPeriods || semesterPeriods.length === 0) return null;
+    const now = new Date();
+    const active = semesterPeriods.find(p => {
+      if (!p.start_date) return false;
+      const start = new Date(p.start_date);
+      const end = p.end_date ? new Date(p.end_date) : new Date(8640000000000000);
+      return now >= start && now <= end;
+    });
+    return active || semesterPeriods[0];
+  }, [semesterPeriods]);
+
+  const activePeriod = getActivePeriod();
+  const systemYear = activePeriod ? activePeriod.academic_year : String(currentBEYear);
+  const systemSemester = activePeriod ? activePeriod.semester : 1;
+
+  // PERIOD COUNTDOWN LOGIC
+  const [remainingTime, setRemainingTime] = useState(null);
+
+  useEffect(() => {
+    if (!activePeriod || !activePeriod.end_date) {
+      setRemainingTime(null);
+      return;
+    }
+
+    const calculateTime = () => {
+      const now = new Date();
+      const end = new Date(activePeriod.end_date);
+      const diff = end - now;
+
+      if (diff <= 0) {
+        setRemainingTime({ status: 'ended', text: 'สิ้นสุดภาคเรียน' });
+      } else {
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        setRemainingTime({ status: 'active', days, hours });
+      }
+    };
+
+    calculateTime();
+    const timer = setInterval(calculateTime, 60000); // Update every minute
+    return () => clearInterval(timer);
+  }, [activePeriod]);
+
+  const getAcademicYear = useCallback((subject) => subject?.academic_year || systemYear, [systemYear]);
+  const getSemester = useCallback((subject) => subject?.semester || systemSemester, [systemSemester]);
+  const BE_YEAR_OPTIONS = Array.from({ length: 5 }, (_, i) => String(Number(systemYear) + 1 - i));
+  
+  // Update homeroom year/semester when period loads and to sync with active period
+  useEffect(() => {
+    if (activePeriod) {
+      setHomeroomYear(activePeriod.academic_year);
+      setHomeroomSemester(String(activePeriod.semester));
+    }
+  }, [activePeriod]);
 
   // Confirm Modal State
   const [confirmState, setConfirmState] = useState({
@@ -151,10 +237,12 @@ function TeacherPage() {
       const res = await fetch(`${API_BASE_URL}/subjects/teacher/${currentUser.id}`);
       const data = await res.json();
       if (Array.isArray(data)) {
-        const mappedData = data.map(sub => {
+      const mappedData = data.map(sub => {
           const teachers = sub.teachers || [];
           return {
             ...sub,
+            academic_year: sub.academic_year,
+            semester: sub.semester,
             subject_teachers: teachers.map(t => ({
               id: t.id || t.schedule_id,
               schedule_id: t.schedule_id || t.id,
@@ -171,6 +259,7 @@ function TeacherPage() {
         const teachersMap = {};
         for (const subject of mappedData) {
           try {
+            // Load teachers
             const teachersRes = await fetch(`${API_BASE_URL}/subjects/${subject.id}/teachers`, {
               headers: { Authorization: `Bearer ${token}` }
             });
@@ -188,8 +277,103 @@ function TeacherPage() {
     } catch (err) { setTeacherSubjects([]); }
   };
 
+  const fetchSemesterPeriods = async () => {
+    if (!currentUser?.school_id) return;
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE_URL}/semester-periods?school_id=${currentUser.school_id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) setSemesterPeriods(await res.json());
+    } catch (err) { setSemesterPeriods([]); }
+  };
+
+  const fetchAccessControls = async () => {
+    if (!currentUser?.school_id) return;
+    setLoadingAccessControls(true);
+    try {
+      const token = localStorage.getItem('token');
+      console.log('[fetchAccessControls] Starting fetch for school_id:', currentUser.school_id);
+      const res = await fetch(`${API_BASE_URL}/schools/access-control/${currentUser.school_id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      console.log('[fetchAccessControls] Response status:', res.status);
+      if (res.ok) {
+        const data = await res.json();
+        console.log('[fetchAccessControls] Data received:', data);
+        setAccessControls(data);
+      } else {
+        console.error('[fetchAccessControls] API error status:', res.status, res.statusText);
+      }
+    } catch (err) {
+      console.error('Error fetching access controls:', err);
+      setAccessControls([]);
+    } finally {
+      setLoadingAccessControls(false);
+    }
+  };
+
+  const checkTeacherAccess = (year, semester) => {
+    // Check if teacher has permission to view summary for this year/semester
+    // If semester is empty, check if there's ANY semester allowed for this year
+    
+    console.log('[checkTeacherAccess] year:', year, 'semester:', semester, 'accessControls:', accessControls);
+    
+    if (!year) return false;
+    
+    if (!semester || semester === '') {
+      // Check if at least one semester is allowed for this year
+      const result = accessControls.some(
+        ac => ac.academic_year === String(year) && ac.allow_teacher_view_summary
+      );
+      console.log('[checkTeacherAccess] ทุกภาค result:', result);
+      return result;
+    }
+    
+    // Ensure semester is number for comparison
+    const semesterNum = typeof semester === 'string' ? parseInt(semester) : semester;
+    
+    const control = accessControls.find(
+      ac => ac.academic_year === String(year) && ac.semester === semesterNum
+    );
+    const result = control ? control.allow_teacher_view_summary : false;
+    console.log('[checkTeacherAccess] ภาคเรียนใดเรียนหนึ่ง control:', control, 'result:', result);
+    return result;
+  };
+
+  const isPeriodActive = (subject) => {
+    const year = String(subject?.academic_year || systemYear);
+    const semester = Number(subject?.semester || systemSemester);
+    const period = semesterPeriods.find(p => 
+      p.academic_year === year && p.semester === semester
+    );
+    if (!period) return true; // If no period set, assume active
+    if (!period.start_date) return true;
+    const now = new Date();
+    const start = new Date(period.start_date);
+    const end = period.end_date ? new Date(period.end_date) : new Date(8640000000000000);
+    return now >= start && now <= end;
+  };
+
+  const getPeriodStatus = (subject) => {
+    const year = String(subject?.academic_year || systemYear);
+    const semester = Number(subject?.semester || systemSemester);
+    const period = semesterPeriods.find(p => 
+      p.academic_year === year && p.semester === semester
+    );
+    if (!period || !period.start_date || !period.end_date) return 'active'; // No period = active
+    const now = new Date();
+    const start = new Date(period.start_date);
+    const end = new Date(period.end_date);
+    if (now < start) return 'not-started';
+    if (now > end) return 'expired';
+    return 'active';
+  };
+
   useEffect(() => {
     fetchTeacherSubjects();
+    fetchSemesterPeriods();
+    fetchAccessControls();
   }, [currentUser]);
 
   const handleEndSubject = async (id) => {
@@ -238,6 +422,10 @@ function TeacherPage() {
     } catch { 
       toast.error('เกิดข้อผิดพลาด'); 
     }
+  };
+
+  const handleOpenEvaluationModal = async (subject) => {
+    navigate(`/teacher/evaluations/${subject.id}`);
   };
 
   const displaySchool = currentUser?.school_name || currentUser?.school?.name || localStorage.getItem('school_name') || '-';
@@ -324,6 +512,24 @@ function TeacherPage() {
     setTimeout(() => navigate('/signin'), 1000);
   };
 
+  const uploadAnnouncementPdf = async (announcementId, pdfFile) => {
+    if (!pdfFile || !announcementId) return null;
+    const token = localStorage.getItem('token');
+    const formData = new FormData();
+    formData.append('file', pdfFile);
+    try {
+      const res = await fetch(`${API_BASE_URL}/announcements/${announcementId}/upload-pdf`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData
+      });
+      if (res.ok) return await res.json();
+      const err = await res.json();
+      toast.error(err.detail || 'อัปโหลด PDF ไม่สำเร็จ');
+    } catch { toast.error('เกิดข้อผิดพลาดในการอัปโหลด PDF'); }
+    return null;
+  };
+
   const handleAnnouncement = async (e) => {
     e.preventDefault();
     const token = localStorage.getItem('token');
@@ -341,12 +547,17 @@ function TeacherPage() {
         body: JSON.stringify(body)
       });
       const data = await res.json();
-      if (!res.ok) toast.error(data.detail || 'ประกาศข่าวไม่สำเร็จ');
-      else { 
-        toast.success('ประกาศข่าวสำเร็จ!'); 
-        setTitle(''); setContent(''); setExpiry(''); 
-        if (data && data.id) setAnnouncements(prev => [data, ...prev]); 
+      if (!res.ok) { toast.error(data.detail || 'ประกาศข่าวไม่สำเร็จ'); return; }
+      toast.success('ประกาศข่าวสำเร็จ!');
+      setTitle(''); setContent(''); setExpiry('');
+      let finalAnnouncement = data;
+      if (announcementPdfFile && data.id) {
+        const updated = await uploadAnnouncementPdf(data.id, announcementPdfFile);
+        if (updated) { finalAnnouncement = updated; toast.success('อัปโหลด PDF สำเร็จ!'); }
+        setAnnouncementPdfFile(null);
+        if (announcementPdfInputRef.current) announcementPdfInputRef.current.value = '';
       }
+      if (finalAnnouncement?.id) setAnnouncements(prev => [finalAnnouncement, ...prev]);
     } catch { toast.error('เกิดข้อผิดพลาดในการประกาศข่าว'); }
   };
 
@@ -364,27 +575,54 @@ function TeacherPage() {
 
   const loadHomeroomSummary = useCallback(async () => {
     if (!currentUser) return;
+    
+    console.log('[loadHomeroomSummary] Called with homeroomYear:', homeroomYear, 'homeroomSemester:', homeroomSemester, 'accessControls:', accessControls);
+    
+    // Check if teacher has permission to view summary for this year/semester
+    if (!checkTeacherAccess(homeroomYear, homeroomSemester)) {
+      console.log('[loadHomeroomSummary] Access denied by checkTeacherAccess');
+      setHomeroomSummary({ classrooms: [] });
+      setLoadingHomeroomSummary(false);
+      return;
+    }
+    
+    console.log('[loadHomeroomSummary] Access granted, proceeding to fetch');
+
     setLoadingHomeroomSummary(true);
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE_URL}/homeroom/my-classrooms/summary`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setHomeroomSummary(data);
-        if (data.classrooms && data.classrooms.length > 0 && !selectedHomeroomClassroom) {
-          setSelectedHomeroomClassroom(data.classrooms[0]);
-        }
+      const headers = { Authorization: `Bearer ${token}` };
+
+      // Helper to fetch one semester's summary
+      const fetchSummary = async (semOverride) => {
+        const params = new URLSearchParams();
+        if (homeroomYear) params.set('academic_year', homeroomYear);
+        if (semOverride) params.set('semester', semOverride);
+        const qs = params.toString() ? `?${params.toString()}` : '';
+        const res = await fetch(`${API_BASE_URL}/homeroom/my-classrooms/summary${qs}`, { headers });
+        return res.ok ? await res.json() : { classrooms: [] };
+      };
+
+      if (homeroomCombinedMode) {
+        // Fetch semester 1 as main, semester 2 as secondary
+        const [data1, data2] = await Promise.all([fetchSummary('1'), fetchSummary('2')]);
+        setHomeroomSummary(data1);
+        setHomeroomSem2Summary(data2);
+        setSelectedHomeroomClassroom(data1.classrooms?.[0] || null);
       } else {
-        setHomeroomSummary({ classrooms: [] });
+        const data = await fetchSummary(homeroomSemester);
+        setHomeroomSummary(data);
+        setHomeroomSem2Summary(null);
+        setSelectedHomeroomClassroom(data.classrooms?.[0] || null);
       }
     } catch (err) {
+      console.error('[loadHomeroomSummary] Error:', err);
       setHomeroomSummary({ classrooms: [] });
+      setHomeroomSem2Summary(null);
     } finally {
       setLoadingHomeroomSummary(false);
     }
-  }, [currentUser, selectedHomeroomClassroom]);
+  }, [currentUser, homeroomYear, homeroomSemester, homeroomCombinedMode, accessControls]);
 
   useEffect(() => {
     const loadTeacherHomerooms = async () => {
@@ -405,20 +643,24 @@ function TeacherPage() {
 
   useEffect(() => {
     if (activeTab === 'homeroom') loadHomeroomSummary();
-  }, [activeTab, loadHomeroomSummary]);
+  }, [activeTab, loadHomeroomSummary, homeroomYear, homeroomSemester]);
 
   // Load ranking for selected homeroom
   useEffect(() => {
     const loadRanking = async () => {
       if (!selectedHomeroomClassroom?.classroom_id) return;
+      // In combined mode we compute ranking client-side; skip API call
+      if (homeroomCombinedMode) { setHomeroomRanking([]); return; }
       try {
         const token = localStorage.getItem('token');
-        const res = await fetch(`${API_BASE_URL}/grades/classroom/${selectedHomeroomClassroom.classroom_id}/ranking`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        const params = new URLSearchParams();
+        if (homeroomYear) params.append('academic_year', homeroomYear);
+        if (homeroomSemester) params.append('semester', String(parseInt(homeroomSemester)));
+        const queryString = params.toString();
+        const url = `${API_BASE_URL}/grades/classroom/${selectedHomeroomClassroom.classroom_id}/ranking${queryString ? '?' + queryString : ''}`;
+        const res = await fetch(url, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
         if (res.ok) {
-          const data = await res.json();
-          setHomeroomRanking(data);
+          setHomeroomRanking(await res.json());
         } else {
           setHomeroomRanking([]);
         }
@@ -427,11 +669,61 @@ function TeacherPage() {
       }
     };
     loadRanking();
-  }, [selectedHomeroomClassroom]);
+  }, [selectedHomeroomClassroom, homeroomYear, homeroomSemester, homeroomCombinedMode]);
 
-  const viewStudentDetail = async (student, origin) => {
-    if (!selectedHomeroomClassroom) return;
-    setSelectedStudentDetail(student);
+  const viewStudentDetail = (student, origin) => {
+    // In combined mode, merge grades from both semesters, combining same subjects
+    let studentToShow = student;
+    if (homeroomCombinedMode && homeroomSem2Summary) {
+      const sem2Classroom = homeroomSem2Summary.classrooms?.find(
+        c => c.grade_level === selectedHomeroomClassroom?.grade_level
+      );
+      const sem2Student = sem2Classroom?.students?.find(s => s.id === student.id);
+      
+      if (sem2Student?.grades_by_subject?.length) {
+        const sem1Subjects = student.grades_by_subject || [];
+        const sem2Subjects = sem2Student.grades_by_subject || [];
+        
+        // Two subjects are "the same" if they share a linked_subject_id, or one links to the other
+        const isSameSubject = (s1, s2) => {
+          if (s1.subject_id === s2.subject_id) return true;
+          if (s1.linked_subject_id && s1.linked_subject_id === s2.subject_id) return true;
+          if (s2.linked_subject_id && s2.linked_subject_id === s1.subject_id) return true;
+          if (s1.linked_subject_id && s2.linked_subject_id && s1.linked_subject_id === s2.linked_subject_id) return true;
+          return false;
+        };
+        
+        const mergedSubjects = [];
+        const processedSem2Ids = new Set();
+        
+        for (const subj of sem1Subjects) {
+          const sem2Match = sem2Subjects.find(s => isSameSubject(subj, s));
+          if (sem2Match) {
+            // Merge assignments from both semesters
+            mergedSubjects.push({
+              ...subj,
+              assignments: [...(subj.assignments || []), ...(sem2Match.assignments || [])],
+              _isMerged: true,
+              _sem1Component: subj,
+              _sem2Component: sem2Match
+            });
+            processedSem2Ids.add(sem2Match.subject_id);
+          } else {
+            mergedSubjects.push({ ...subj, _semester: 1 });
+          }
+        }
+        
+        // Add sem2-only subjects (not matched with any sem1 subject)
+        for (const subj of sem2Subjects) {
+          if (!processedSem2Ids.has(subj.subject_id)) {
+            mergedSubjects.push({ ...subj, _semester: 2 });
+          }
+        }
+        
+        studentToShow = { ...student, grades_by_subject: mergedSubjects, _isCombined: true };
+      }
+    }
+    setSelectedStudentDetail(studentToShow);
     if (origin === 'attendance') setShowStudentAttendanceModal(true);
     else setShowStudentGradeModal(true);
   };
@@ -498,8 +790,8 @@ function TeacherPage() {
       return t.includes('กลางภาค') || t.includes('ปลายภาค') || t.includes('final') || t.includes('midterm') || t.includes('คะแนนสอบ');
     };
 
-    const maxCollected = subject.max_collected_score || 100;
-    const maxExam = subject.max_exam_score || 100;
+    const maxCollected = (subject.max_collected_score !== undefined && subject.max_collected_score !== null) ? subject.max_collected_score : 100;
+    const maxExam = (subject.max_exam_score !== undefined && subject.max_exam_score !== null) ? subject.max_exam_score : 100;
 
     const collectedList = assignments.filter(a => !checkIsExam(a.title));
     const examList = assignments.filter(a => checkIsExam(a.title));
@@ -525,9 +817,13 @@ function TeacherPage() {
       finalExamScore = rawExamMax > 0 ? Math.round((rawExamScore / rawExamMax) * maxExam) : rawExamScore;
     }
 
+    // Only include exam max in denominator if exam data actually exists
+    const hasExamData = systemExam !== undefined || examList.length > 0;
+    const effectiveMaxExam = hasExamData ? maxExam : 0;
+
     return { 
       score: finalCollectedScore + finalExamScore, 
-      max: maxCollected + maxExam 
+      max: maxCollected + effectiveMaxExam 
     };
   };
 
@@ -553,6 +849,27 @@ function TeacherPage() {
       return { collectedScore: 0, examScore: 0, totalScore: 0, totalMax: 0, collectedMax: 0, examMax: 0 };
     }
     
+    // SPECIAL CASE: If this is a merged subject (appears in both semesters), average the scores
+    if (subject._isMerged && subject._sem1Component && subject._sem2Component) {
+      const sem1Detail = calculateDetailedSubjectScore(subject._sem1Component);
+      const sem2Detail = calculateDetailedSubjectScore(subject._sem2Component);
+      
+      // Average the scores and percentages across semesters
+      const avgCollectedScore = (sem1Detail.collectedScore + sem2Detail.collectedScore) / 2;
+      const avgExamScore = (sem1Detail.examScore + sem2Detail.examScore) / 2;
+      const avgTotalScore = avgCollectedScore + avgExamScore;
+      const avgTotalMax = (sem1Detail.totalMax + sem2Detail.totalMax) / 2;
+      
+      return {
+        collectedScore: Math.round(avgCollectedScore),
+        examScore: Math.round(avgExamScore),
+        totalScore: Math.round(avgTotalScore),
+        totalMax: avgTotalMax,
+        collectedMax: (sem1Detail.collectedMax + sem2Detail.collectedMax) / 2,
+        examMax: (sem1Detail.examMax + sem2Detail.examMax) / 2
+      };
+    }
+    
     const assignments = subject.assignments || [];
     if (assignments.length === 0) {
       return { 
@@ -571,8 +888,8 @@ function TeacherPage() {
       return t.includes('กลางภาค') || t.includes('ปลายภาค') || t.includes('final') || t.includes('midterm') || t.includes('คะแนนสอบ');
     };
 
-    const maxCollected = subject.max_collected_score || 100;
-    const maxExam = subject.max_exam_score || 100;
+    const maxCollected = (subject.max_collected_score !== undefined && subject.max_collected_score !== null) ? subject.max_collected_score : 100;
+    const maxExam = (subject.max_exam_score !== undefined && subject.max_exam_score !== null) ? subject.max_exam_score : 100;
 
     const collectedList = assignments.filter(a => !checkIsExam(a.title));
     const examList = assignments.filter(a => checkIsExam(a.title));
@@ -598,13 +915,17 @@ function TeacherPage() {
       finalExamScore = rawExamMax > 0 ? Math.round((rawExamScore / rawExamMax) * maxExam) : rawExamScore;
     }
 
+    // Only include exam max in denominator if exam data actually exists
+    const hasExamData = systemExam !== undefined || examList.length > 0;
+    const effectiveMaxExam = hasExamData ? maxExam : 0;
+
     return { 
       collectedScore: finalCollectedScore,
       examScore: finalExamScore,
       totalScore: finalCollectedScore + finalExamScore, 
-      totalMax: maxCollected + maxExam,
+      totalMax: maxCollected + effectiveMaxExam,
       collectedMax: maxCollected,
-      examMax: maxExam
+      examMax: effectiveMaxExam
     };
   };
 
@@ -638,10 +959,30 @@ function TeacherPage() {
     };
   };
 
+  // Combined-mode: compute a student's merged score across semester 1 + 2
+  const getCombinedStudentScore = (student) => {
+    const sem1Score = calculateMainSubjectsScore(student.grades_by_subject || []);
+    // Find same student in semester-2 summary
+    const sem2Classroom = homeroomSem2Summary?.classrooms?.find(
+      c => c.grade_level === selectedHomeroomClassroom?.grade_level
+    );
+    const sem2Student = sem2Classroom?.students?.find(s => s.id === student.id);
+    const sem2Score = calculateMainSubjectsScore(sem2Student?.grades_by_subject || []);
+    const combinedTotal = sem1Score.totalScore + sem2Score.totalScore;
+    const combinedMax = sem1Score.totalMaxScore + sem2Score.totalMaxScore;
+    return {
+      totalScore: combinedTotal,
+      totalMaxScore: combinedMax,
+      percentage: combinedMax > 0 ? (combinedTotal / combinedMax) * 100 : 0,
+      sem1Score,
+      sem2Score,
+    };
+  };
+
   const openAnnouncementModal = (item) => { setModalAnnouncement(item || null); setShowAnnouncementModal(true); };
   const closeAnnouncementModal = () => { setShowAnnouncementModal(false); setModalAnnouncement(null); };
 
-  const saveAnnouncementFromModal = async ({ title: t, content: c, expiry: ex }) => {
+  const saveAnnouncementFromModal = async ({ title: t, content: c, expiry: ex, pdfFile: pdf }) => {
     if (!modalAnnouncement?.id) return;
     const token = localStorage.getItem('token');
     try {
@@ -653,8 +994,13 @@ function TeacherPage() {
       });
       const data = await res.json();
       if (!res.ok) { toast.error(data.detail || 'แก้ไขไม่สำเร็จ'); return; }
+      let finalData = data;
+      if (pdf) {
+        const updated = await uploadAnnouncementPdf(modalAnnouncement.id, pdf);
+        if (updated) { finalData = updated; toast.success('อัปโหลด PDF สำเร็จ!'); }
+      }
       toast.success('แก้ไขข่าวสำเร็จ!');
-      setAnnouncements(prev => prev.map(a => (a.id === data.id ? data : a)));
+      setAnnouncements(prev => prev.map(a => (a.id === finalData.id ? finalData : a)));
       closeAnnouncementModal();
     } catch { toast.error('เกิดข้อผิดพลาด'); }
   };
@@ -683,7 +1029,16 @@ function TeacherPage() {
     } catch { toast.error('เกิดข้อผิดพลาด'); }
   };
 
-  const loadScheduleSlots = async () => {
+  const sortSlotsMondayFirst = useCallback((slots) => {
+    return [...slots].sort((a, b) => {
+      const map = (d) => { const n = Number(d); return n === 0 ? 7 : n; };
+      const da = map(a.day_of_week), db = map(b.day_of_week);
+      if (da !== db) return da - db;
+      return (a.start_time || '').localeCompare(b.start_time || '');
+    });
+  }, []);
+
+  const loadScheduleSlots = useCallback(async () => {
     const schoolId = localStorage.getItem('school_id');
     if (!schoolId) return;
     try {
@@ -694,18 +1049,9 @@ function TeacherPage() {
         setScheduleSlots(Array.isArray(data) ? sortSlotsMondayFirst(data) : []);
       }
     } catch (err) { setScheduleSlots([]); }
-  };
+  }, [sortSlotsMondayFirst]);
 
-  const sortSlotsMondayFirst = (slots) => {
-    return [...slots].sort((a, b) => {
-      const map = (d) => { const n = Number(d); return n === 0 ? 7 : n; };
-      const da = map(a.day_of_week), db = map(b.day_of_week);
-      if (da !== db) return da - db;
-      return (a.start_time || '').localeCompare(b.start_time || '');
-    });
-  };
-
-  const loadClassrooms = async () => {
+  const loadClassrooms = useCallback(async () => {
     const schoolId = localStorage.getItem('school_id');
     if (!schoolId) return;
     try {
@@ -716,7 +1062,7 @@ function TeacherPage() {
         setClassrooms(Array.isArray(data) ? data : []);
       }
     } catch (err) { setClassrooms([]); }
-  };
+  }, []);
 
   const loadSubjectSchedules = useCallback(async () => {
     if (!currentUser) return;
@@ -730,7 +1076,7 @@ function TeacherPage() {
     } catch (err) { setSubjectSchedules([]); }
   }, [currentUser]);
 
-  const assignSubjectToSchedule = async () => {
+  const assignSubjectToSchedule = useCallback(async () => {
     if (!selectedSubjectId || !scheduleDay || !scheduleStartTime || !scheduleEndTime) { toast.error('กรุณากรอกข้อมูลให้ครบถ้วน'); return; }
     if (scheduleStartTime >= scheduleEndTime) { toast.error('เวลาเริ่มต้นต้องน้อยกว่าเวลาสิ้นสุด'); return; }
     try {
@@ -755,9 +1101,9 @@ function TeacherPage() {
         toast.error(data.detail || 'กำหนดเวลาเรียนไม่สำเร็จ');
       }
     } catch { toast.error('เกิดข้อผิดพลาด'); }
-  };
+  }, [selectedSubjectId, scheduleDay, scheduleStartTime, scheduleEndTime, selectedClassroomId, setShowScheduleModal, loadSubjectSchedules]);
 
-  const updateSubjectSchedule = async () => {
+  const updateSubjectSchedule = useCallback(async () => {
     if (!selectedSubjectId || !scheduleDay || !scheduleStartTime || !scheduleEndTime || !editingAssignment?.id) { toast.error('ข้อมูลไม่ครบ'); return; }
     try {
       const token = localStorage.getItem('token');
@@ -781,16 +1127,16 @@ function TeacherPage() {
         toast.error(data.detail || 'อัปเดตไม่สำเร็จ');
       }
     } catch { toast.error('เกิดข้อผิดพลาด'); }
-  };
+  }, [selectedSubjectId, scheduleDay, scheduleStartTime, scheduleEndTime, editingAssignment, selectedClassroomId, setShowScheduleModal, loadSubjectSchedules]);
 
-  const deleteSubjectSchedule = async (scheduleId) => {
+  const deleteSubjectSchedule = useCallback(async (scheduleId) => {
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(`${API_BASE_URL}/schedule/assign/${scheduleId}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) { toast.success('ยกเลิกเวลาเรียนเรียบร้อย'); loadSubjectSchedules(); }
       else { const data = await res.json(); toast.error(data.detail || 'ยกเลิกไม่สำเร็จ'); }
     } catch { toast.error('เกิดข้อผิดพลาด'); }
-  };
+  }, [loadSubjectSchedules]);
 
   const getDayName = (dayNumber) => {
     const days = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
@@ -803,10 +1149,11 @@ function TeacherPage() {
       loadSubjectSchedules();
       loadClassrooms();
     }
-  }, [activeTab, currentUser, loadSubjectSchedules]);
+  }, [activeTab, currentUser, loadSubjectSchedules, loadScheduleSlots, loadClassrooms]);
 
   const tabs = [
     { id: 'subjects', label: 'รายวิชา', icon: BookOpen },
+    { id: 'evaluations', label: 'การประเมิน', icon: Brain },
     { id: 'homeroom', label: 'ประจำชั้น', icon: Home },
     { id: 'announcements', label: 'ประกาศข่าว', icon: Bell },
     { id: 'absences', label: 'อนุมัติการลา', icon: ClipboardList },
@@ -815,27 +1162,89 @@ function TeacherPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 pb-20">
-      <ToastContainer />
       <div className="max-w-7xl mx-auto px-4 py-8">
-        <PageHeader 
-          currentUser={currentUser}
-          role="teacher"
-          displaySchool={displaySchool}
-          stats={{
-            subjects: teacherSubjects.length,
-            announcements: announcements.length
-          }}
-          onLogout={handleSignout}
-        />
+        <div className="mb-8">
+          <PageHeader 
+            currentUser={currentUser}
+            role="teacher"
+            displaySchool={displaySchool}
+            stats={{
+              subjects: teacherSubjects.length,
+              announcements: announcements.length
+            }}
+            onLogout={handleSignout}
+          />
+
+          {/* Active Period Status Card */}
+          {activePeriod && (
+            <div className="mt-6 bg-white rounded-3xl p-6 shadow-sm border border-slate-100 relative overflow-hidden group hover:shadow-md transition-all duration-500 z-10">
+               <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-br from-emerald-50 to-teal-50 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 opacity-60 pointer-events-none group-hover:scale-110 transition-transform duration-700"></div>
+               
+               <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
+                  <div>
+                    <div className="flex items-center gap-3 mb-2">
+                       <span className={`px-3 py-1 text-[10px] font-black uppercase tracking-widest rounded-full flex items-center gap-1.5 ${
+                          remainingTime?.status === 'ended' 
+                          ? 'bg-red-100 text-red-700' 
+                          : 'bg-emerald-100 text-emerald-700'
+                       }`}>
+                          <Calendar className="w-3 h-3" />
+                          {remainingTime?.status === 'ended' ? 'Closed Term' : 'Current Term'}
+                       </span>
+                       <span className="text-sm font-bold text-slate-400">
+                          {new Date(activePeriod.start_date).toLocaleDateString('th-TH', { dateStyle: 'long' })} - {activePeriod.end_date ? new Date(activePeriod.end_date).toLocaleDateString('th-TH', { dateStyle: 'long' }) : 'ไม่กำหนด'}
+                       </span>
+                    </div>
+                    <div className="flex items-baseline gap-2">
+                      <h2 className="text-4xl font-black text-slate-800 tracking-tight">
+                         ปีการศึกษา {activePeriod.academic_year}
+                      </h2>
+                      <span className="text-2xl font-bold text-slate-300">/</span>
+                      <h3 className="text-2xl font-bold text-slate-600">ภาคเรียนที่ {activePeriod.semester}</h3>
+                    </div>
+                  </div>
+                  
+                  <div className="flex gap-3 md:gap-4">
+                     {remainingTime && remainingTime.status === 'active' ? (
+                        <>
+                           <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-3 md:p-5 text-center min-w-[90px] md:min-w-[110px] border border-slate-100 shadow-sm flex flex-col justify-center items-center group-hover:-translate-y-1 transition-transform duration-300">
+                              <div className="text-3xl md:text-4xl font-black text-emerald-600 leading-none mb-1 tabular-nums">{remainingTime.days}</div>
+                              <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">วัน</div>
+                           </div>
+                           <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-3 md:p-5 text-center min-w-[90px] md:min-w-[110px] border border-slate-100 shadow-sm flex flex-col justify-center items-center group-hover:-translate-y-1 transition-transform duration-300 delay-75">
+                              <div className="text-3xl md:text-4xl font-black text-emerald-600 leading-none mb-1 tabular-nums">{remainingTime.hours}</div>
+                              <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">ชั่วโมง</div>
+                           </div>
+                           <div className="flex flex-col justify-center pl-2">
+                              <div className="text-sm font-black text-slate-700 mb-0.5">เหลือเวลาอีก</div>
+                              <div className="text-xs text-slate-400 font-medium">ก่อนปิดภาคเรียน</div>
+                           </div>
+                        </>
+                     ) : (
+                        <div className="flex items-center gap-5 bg-red-50/80 backdrop-blur-sm px-8 py-6 rounded-2xl border border-red-100 w-full md:w-auto">
+                           <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-inner">
+                              <Clock className="w-6 h-6 text-red-500" />
+                           </div>
+                           <div>
+                              <div className="font-black text-red-700 text-xl">สิ้นสุดภาคเรียนแล้ว</div>
+                              <div className="text-xs text-red-500 font-bold mt-1 opacity-80">กรุณาตรวจสอบกำหนดการใหม่</div>
+                           </div>
+                        </div>
+                     )}
+                  </div>
+               </div>
+            </div>
+          )}
+        </div>
 
         {/* Tab Navigation */}
         <div className="flex flex-wrap gap-2 mb-8 bg-white p-2 rounded-2xl shadow-sm border border-slate-100">
           {tabs.map(tab => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => tab.id === 'evaluations' ? navigate('/teacher/evaluations') : setActiveTab(tab.id)}
               className={`flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-sm transition-all active:scale-95 ${
-                activeTab === tab.id 
+                (activeTab === tab.id && tab.id !== 'evaluations')
                   ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200' 
                   : 'text-slate-500 hover:bg-slate-50 hover:text-emerald-600'
               }`}
@@ -849,106 +1258,216 @@ function TeacherPage() {
         {/* Tab Content */}
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
           {activeTab === 'subjects' && (
-            <div className="space-y-6">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-700">
+              <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
                 <div>
-                  <h3 className="text-2xl font-black text-slate-800 tracking-tight">📚 รายวิชาของฉัน</h3>
-                  <p className="text-slate-500 font-medium">จัดการคอร์สเรียนและการวัดผลนักเรียน</p>
+                  <h3 className="text-3xl font-black text-slate-800 tracking-tight flex items-center gap-3">
+                    <span className="w-12 h-12 rounded-2xl bg-gradient-to-br from-slate-800 to-slate-700 text-white flex items-center justify-center text-xl shadow-lg shadow-slate-200/50">📚</span>
+                    รายวิชาของฉัน
+                  </h3>
+                  <p className="text-slate-500 font-bold mt-2 ml-1">จัดการคอร์สเรียนและการวัดผลนักเรียนประจำภาคเรียน</p>
                 </div>
               </div>
 
               {teacherSubjects.length === 0 ? (
-                <div className="bg-white rounded-3xl p-12 text-center border-2 border-dashed border-slate-200">
-                  <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 grayscale opacity-50">
-                    <BookOpen className="w-10 h-10 text-slate-400" />
+                <div className="bg-white rounded-[2.5rem] p-16 text-center border border-slate-100 shadow-sm relative overflow-hidden group">
+                  <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px] opacity-20 pointer-events-none"></div>
+                  <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform duration-500 shadow-inner">
+                    <BookOpen className="w-10 h-10 text-slate-300 group-hover:text-emerald-500 transition-colors duration-500" />
                   </div>
-                  <h4 className="text-xl font-bold text-slate-400">ยังไม่มีรายวิชาที่ถูกมอบหมาย</h4>
-                  <p className="text-slate-400 mt-1 italic font-medium">กรุณาติดต่อฝ่ายวิชาการเพื่อเพิ่มรายวิชา</p>
+                  <h4 className="text-2xl font-black text-slate-400 mb-2">ยังไม่มีรายวิชาที่ถูกมอบหมาย</h4>
+                  <p className="text-slate-400 font-medium">กรุณาติดต่อฝ่ายวิชาการเพื่อเพิ่มรายวิชาในระบบ</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {teacherSubjects.map(sub => {
-                    const isAllEnded = sub.subject_teachers?.length > 0 && sub.subject_teachers.every(t => t.is_ended);
-                    return (
-                      <div key={sub.id} className="group bg-white rounded-3xl p-6 border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
-                        <div className="flex justify-between items-start mb-4">
-                          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl shadow-inner ${
-                            isAllEnded ? 'bg-slate-100 text-slate-400' : 'bg-emerald-100 text-emerald-600'
-                          }`}>
-                            {sub.subject_type === 'main' ? <BookOpen className="w-6 h-6" /> : <Award className="w-6 h-6" />}
-                          </div>
-                          <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                            isAllEnded ? 'bg-slate-100 text-slate-400' : 'bg-emerald-50 text-emerald-600'
-                          }`}>
-                            {sub.subject_type === 'main' ? 'หลักสูตร' : 'กิจกรรม'}
-                          </span>
-                        </div>
-
-                        <h4 className="text-lg font-black text-slate-800 mb-1 line-clamp-1 group-hover:text-emerald-600 transition-colors">
-                          {sub.name}
-                        </h4>
-                        <div className="flex items-center gap-2 text-slate-400 text-xs font-bold mb-4 uppercase">
-                          <span className="bg-slate-50 px-2 py-0.5 rounded-md border border-slate-100">ID: {sub.id}</span>
-                          {sub.subject_type === 'main' ? (
-                            sub.credits !== null && <span>• {sub.credits} หน่วยกิต</span>
-                          ) : (
-                            sub.activity_percentage !== null && <span>• {sub.activity_percentage}%</span>
-                          )}
-                        </div>
-
-                        <div className="space-y-4 pt-4 border-t border-slate-50">
-                          {sub.subject_teachers?.length > 0 && (
-                            <div className="space-y-2">
-                              {subjectTeachersMap[sub.id]?.map(t => (
-                                <div key={t.id} className="flex items-center justify-between text-[11px] font-bold">
-                                  <div className="flex items-center gap-2 text-slate-500">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                                    {t.teacher_name}
-                                  </div>
-                                  <span className={t.is_ended ? 'text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md' : 'text-amber-500'}>
-                                    {t.is_ended ? 'จบแล้ว' : 'กำลังสอน'}
-                                  </span>
-                                </div>
-                              ))}
+                <>
+                  <div className="flex items-center gap-4 mb-6">
+                    {teacherSubjects.some(s => !isPeriodActive(s)) && (
+                      <div className="flex items-center gap-3 flex-wrap">
+                        {teacherSubjects.some(s => getPeriodStatus(s) === 'expired') && (
+                          <label className="group flex items-center gap-3 px-5 py-2.5 bg-white rounded-2xl border border-red-100 cursor-pointer hover:border-red-200 shadow-sm hover:shadow-md transition-all">
+                            <div className="relative flex items-center">
+                              <input
+                                type="checkbox"
+                                checked={showInactivePeriods}
+                                onChange={(e) => setShowInactivePeriods(e.target.checked)}
+                                className="peer appearance-none w-5 h-5 border-2 border-slate-300 rounded-md checked:bg-red-500 checked:border-red-500 transition-colors"
+                              />
+                              <CheckCircle2 className="w-3.5 h-3.5 text-white absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 peer-checked:opacity-100 pointer-events-none" />
                             </div>
-                          )}
-
-                          <div className="grid grid-cols-2 gap-2">
-                            {isAllEnded ? (
-                              <button 
-                                onClick={() => handleUnendSubject(sub.id)}
-                                className="col-span-2 py-2.5 bg-slate-100 text-slate-600 rounded-xl text-xs font-black hover:bg-slate-200 transition-colors flex items-center justify-center gap-2"
-                              >
-                                <CheckCircle2 className="w-3.5 h-3.5" /> ยกเลิกจบคอร์ส
-                              </button>
-                            ) : (
-                              <>
-                                <button 
-                                  onClick={() => navigate(`/teacher/subject/${sub.id}/attendance`)}
-                                  className="py-2.5 bg-emerald-600 text-white rounded-xl text-xs font-black hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-100"
-                                >
-                                  <CheckCircle2 className="w-3.5 h-3.5" /> เช็คชื่อ
-                                </button>
-                                <button 
-                                  onClick={() => navigate(`/teacher/subject/${sub.id}/grades`)}
-                                  className="py-2.5 bg-white text-emerald-600 border border-emerald-100 rounded-xl text-xs font-black hover:bg-emerald-50 transition-all flex items-center justify-center gap-2"
-                                >
-                                  <Award className="w-3.5 h-3.5" /> ให้คะแนน
-                                </button>
-                                <button 
-                                  onClick={() => openConfirm('จบคอร์ส', 'ต้องการจบคอร์สนี้ใช่หรือไม่? ข้อมูลจะถูกล็อคหลังดำเนินการ', () => handleEndSubject(sub.id))}
-                                  className="col-span-2 mt-1 py-2 bg-slate-50 text-slate-400 rounded-lg text-[10px] font-black uppercase hover:bg-rose-50 hover:text-rose-500 transition-colors border border-transparent hover:border-rose-100"
-                                >
-                                  ปิดคอร์สเรียน (Finish)
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </div>
+                            <span className="text-sm font-bold text-red-600 group-hover:text-red-700">
+                              แสดงวิชาที่ปิดคอร์สแล้ว ({teacherSubjects.filter(s => getPeriodStatus(s) === 'expired' && !s.subject_teachers?.every(t => t.is_ended)).length})
+                            </span>
+                          </label>
+                        )}
+                        {teacherSubjects.some(s => getPeriodStatus(s) === 'not-started') && (
+                          <label className="group flex items-center gap-3 px-5 py-2.5 bg-white rounded-2xl border border-blue-100 cursor-pointer hover:border-blue-200 shadow-sm hover:shadow-md transition-all">
+                            <div className="relative flex items-center">
+                              <input
+                                type="checkbox"
+                                checked={showInactivePeriods}
+                                onChange={(e) => setShowInactivePeriods(e.target.checked)}
+                                className="peer appearance-none w-5 h-5 border-2 border-slate-300 rounded-md checked:bg-blue-500 checked:border-blue-500 transition-colors"
+                              />
+                              <CheckCircle2 className="w-3.5 h-3.5 text-white absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 peer-checked:opacity-100 pointer-events-none" />
+                            </div>
+                            <span className="text-sm font-bold text-blue-600 group-hover:text-blue-700">
+                              แสดงวิชายังไม่เริ่ม ({teacherSubjects.filter(s => getPeriodStatus(s) === 'not-started' && !s.subject_teachers?.every(t => t.is_ended)).length})
+                            </span>
+                          </label>
+                        )}
                       </div>
-                    );
-                  })}
-                </div>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-8">
+                    {teacherSubjects
+                      .filter(sub => showInactivePeriods || isPeriodActive(sub))
+                      .map(sub => {
+                        const isAllEnded = sub.subject_teachers?.length > 0 && sub.subject_teachers.every(t => t.is_ended);
+                        const periodStatus = getPeriodStatus(sub);
+                        const isInactivePeriod = periodStatus !== 'active';
+                        const isExpired = periodStatus === 'expired';
+                        const isNotStarted = periodStatus === 'not-started';
+                        
+                        return (
+                          <div key={sub.id} className={`group relative bg-white rounded-[2rem] p-1 border transition-all duration-300 flex flex-col ${
+                            isInactivePeriod 
+                              ? `border-${isExpired ? 'red' : 'blue'}-100 opacity-80 hover:opacity-100` 
+                              : 'border-slate-100 hover:border-emerald-100/50 hover:shadow-2xl hover:shadow-emerald-100/40 hover:-translate-y-2'
+                          }`}>
+                            <div className="bg-white rounded-[1.8rem] p-6 h-full flex flex-col relative z-10">
+                                {/* Header */}
+                                <div className="flex justify-between items-start mb-6">
+                                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl shadow-sm border border-slate-50 transition-colors ${
+                                        isAllEnded ? 'bg-slate-100 text-slate-400' : isInactivePeriod ? 'bg-slate-50 text-slate-400' : 'bg-emerald-50 text-emerald-600 group-hover:bg-emerald-100'
+                                    }`}>
+                                        {sub.subject_type === 'main' ? <BookOpen className="w-7 h-7" /> : <Award className="w-7 h-7" />}
+                                    </div>
+                                    
+                                    <div className="flex flex-col items-end gap-1">
+                                        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${
+                                            isAllEnded ? 'bg-slate-50 text-slate-400 border-slate-100' : 
+                                            isExpired ? 'bg-red-50 text-red-600 border-red-100' : 
+                                            isNotStarted ? 'bg-blue-50 text-blue-600 border-blue-100' : 
+                                            'bg-emerald-50 text-emerald-600 border-emerald-100'
+                                        }`}>
+                                            {isExpired ? 'หมดเวลา' : isNotStarted ? 'ยังไม่เริ่ม' : (sub.subject_type === 'main' ? 'วิชาหลัก' : 'กิจกรรม')}
+                                        </span>
+                                        <div className="text-[10px] font-bold text-slate-400">
+                                            รหัส {sub.code}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Content */}
+                                <div className="mb-6 flex-grow">
+                                    <h4 className={`text-xl font-black mb-2 line-clamp-2 leading-tight transition-colors ${
+                                        isAllEnded || isInactivePeriod 
+                                            ? 'text-slate-400' 
+                                            : 'text-slate-800 group-hover:text-emerald-700'
+                                    }`}>
+                                        {sub.name}
+                                    </h4>
+                                    
+                                    <div className="flex items-center gap-3 text-sm font-bold text-slate-500 mt-4">
+                                        <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100">
+                                            <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                                            <span>ปี {getAcademicYear(sub)}</span>
+                                        </div>
+                                        <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100">
+                                            <div className="w-3.5 h-3.5 rounded-full border-2 border-slate-300 flex items-center justify-center">
+                                                <div className="w-1.5 h-1.5 bg-slate-300 rounded-full"></div>
+                                            </div>
+                                            <span>เทอม {getSemester(sub)}</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-4 pt-4 border-t border-slate-50">
+                                      <div className="flex items-center justify-between text-[11px] font-bold text-slate-400">
+                                        {sub.subject_type === 'main' ? (
+                                           <span>{sub.credits !== null ? `${sub.credits} หน่วยกิต` : '-'}</span>
+                                        ) : (
+                                           <span>{sub.activity_percentage !== null ? `${sub.activity_percentage}%` : '-'}</span>
+                                        )}
+                                        <div className="flex -space-x-1.5">
+                                          {subjectTeachersMap[sub.id]?.slice(0, 3).map((t, idx) => (
+                                              <div key={idx} className="w-6 h-6 rounded-full bg-slate-200 border-2 border-white flex items-center justify-center text-[8px] text-slate-500">
+                                                {t.teacher_name?.[0]}
+                                              </div> 
+                                          ))}
+                                          {subjectTeachersMap[sub.id]?.length > 3 && (
+                                            <div className="w-6 h-6 rounded-full bg-slate-100 border-2 border-white flex items-center justify-center text-[8px] text-slate-500">
+                                              +{subjectTeachersMap[sub.id]?.length - 3}
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                </div>
+
+                                {/* Footer / Actions */}
+                                <div className="space-y-3 pt-4">
+                                    <div className="grid grid-cols-3 gap-3">
+                                        {!isInactivePeriod && !isAllEnded ? (
+                                            <>
+                                                <button 
+                                                    onClick={() => navigate(`/teacher/subject/${sub.id}/attendance`)}
+                                                    className="col-span-1 py-3 bg-emerald-600 text-white rounded-xl text-xs font-black hover:bg-emerald-700 transition-all active:scale-95 flex items-center justify-center gap-2 shadow-lg shadow-emerald-200 hover:shadow-emerald-300 hover:-translate-y-0.5"
+                                                >
+                                                    <CheckCircle2 className="w-4 h-4" /> เช็คชื่อ
+                                                </button>
+                                                <button 
+                                                    onClick={() => navigate(`/teacher/subject/${sub.id}/grades`)}
+                                                    className="col-span-1 py-3 bg-white text-emerald-700 border border-emerald-100 rounded-xl text-xs font-black hover:bg-emerald-50 transition-all active:scale-95 flex items-center justify-center gap-2 hover:-translate-y-0.5"
+                                                >
+                                                    <Award className="w-4 h-4" /> ให้คะแนน
+                                                </button>
+                                                <button 
+                                                    onClick={() => navigate(`/teacher/subject/${sub.id}/summary`)}
+                                                    className="col-span-1 py-3 bg-blue-50 text-blue-600 border border-blue-100 rounded-xl text-xs font-black hover:bg-blue-100 transition-all active:scale-95 flex items-center justify-center gap-2 hover:-translate-y-0.5"
+                                                >
+                                                    <BarChart3 className="w-4 h-4" /> สรุปคะแนน
+                                                </button>
+                                                {sub.subject_type === 'main' && (
+                                                    <button 
+                                                        onClick={() => handleOpenEvaluationModal(sub)}
+                                                        className="col-span-3 py-3 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-xl text-xs font-black hover:bg-indigo-100 transition-all active:scale-95 flex items-center justify-center gap-2 hover:-translate-y-0.5"
+                                                    >
+                                                        <Brain className="w-4 h-4" /> แบบประเมินคุณลักษณะ
+                                                    </button>
+                                                )}
+                                            </>
+                                        ) : (
+                                          <button 
+                                            onClick={() => {
+                                              if (isInactivePeriod) {
+                                                if (isExpired) {
+                                                  toast.error('รายวิชานี้หมดเวลาแล้ว ไม่สามารถจัดการได้');
+                                                } else if (isNotStarted) {
+                                                  toast.error('รายวิชานี้ยังไม่เริ่มในเวลาที่กำหนด');
+                                                }
+                                                return;
+                                              }
+                                              handleUnendSubject(sub.id);
+                                            }}
+                                            disabled={isInactivePeriod}
+                                            className={`col-span-3 py-3 rounded-xl text-xs font-black flex items-center justify-center gap-2 transition-colors ${
+                                              isInactivePeriod
+                                                ? 'bg-slate-50 text-slate-400 cursor-not-allowed border border-slate-100'
+                                                : 'bg-amber-50 text-amber-600 hover:bg-amber-100 border border-amber-100'
+                                            }`}
+                                          >
+                                            {isInactivePeriod ? (isExpired ? 'สิ้นสุดภาคเรียน' : 'ยังไม่เริ่มภาคเรียน') : 'ยกเลิกการจบคอร์ส'}
+                                          </button>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                </>
               )}
             </div>
           )}
@@ -960,6 +1479,49 @@ function TeacherPage() {
                   <h3 className="text-2xl font-black text-slate-800 tracking-tight">🏫 ชั้นที่ได้รับมอบหมาย</h3>
                   <p className="text-slate-500 font-medium italic">ครูประจำชั้น: สรุปภาพรวมและติดตามความก้าวหน้า</p>
                 </div>
+                {/* Homeroom semester/year filter */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <select
+                    className={`h-10 pl-4 pr-8 bg-white border rounded-xl text-slate-700 font-bold text-xs outline-none appearance-none cursor-pointer shadow-sm transition-colors ${homeroomCombinedMode ? 'border-purple-300 focus:border-purple-500' : 'border-slate-200 focus:border-emerald-500'}`}
+                    value={homeroomYear}
+                    disabled={homeroomCombinedMode}
+                    onChange={e => { 
+                      const newYear = e.target.value;
+                      setHomeroomYear(newYear);
+                      const semestersForYear = [...new Set(semesterPeriods.filter(p => p.academic_year === newYear).map(p => p.semester))].sort();
+                      setHomeroomSemester(String(semestersForYear[0] || ''));
+                    }}
+                  >
+                    {[...new Set(semesterPeriods.map(p => p.academic_year))].sort((a, b) => parseInt(b) - parseInt(a)).map(y => <option key={y} value={y}>ปี {y}</option>)}
+                  </select>
+                  {!homeroomCombinedMode && (
+                    <select
+                      className="h-10 pl-4 pr-8 bg-white border border-slate-200 rounded-xl text-slate-700 font-bold text-xs outline-none focus:border-emerald-500 appearance-none cursor-pointer shadow-sm"
+                      value={homeroomSemester}
+                      onChange={e => setHomeroomSemester(e.target.value)}
+                    >
+                      {[...new Set(semesterPeriods.filter(p => p.academic_year === homeroomYear).map(p => p.semester))].sort().map(s => <option key={s} value={s}>ภาคเรียนที่ {s}</option>)}
+                    </select>
+                  )}
+                  <button
+                    onClick={() => setHomeroomCombinedMode(prev => !prev)}
+                    className={`h-10 px-3 rounded-xl text-xs font-black transition-colors border ${
+                      homeroomCombinedMode
+                        ? 'bg-purple-600 text-white border-purple-600 shadow-lg shadow-purple-200'
+                        : 'bg-purple-50 text-purple-600 border-purple-200 hover:bg-purple-100'
+                    }`}
+                  >
+                    {homeroomCombinedMode ? '✓ รวม 2 ภาคเรียน' : '+ รวม 2 ภาค'}
+                  </button>
+                  {!homeroomCombinedMode && (homeroomYear !== activePeriod?.academic_year || homeroomSemester !== String(activePeriod?.semester)) && (
+                    <button
+                      onClick={() => { if (activePeriod) { setHomeroomYear(activePeriod.academic_year); setHomeroomSemester(String(activePeriod.semester)); } }}
+                      className="h-10 px-3 bg-rose-50 text-rose-500 rounded-xl text-xs font-black hover:bg-rose-100 transition-colors border border-rose-100"
+                    >
+                      ปีปัจจุบัน
+                    </button>
+                  )}
+                </div>
               </div>
 
               {!gradesAnnounced ? (
@@ -970,6 +1532,15 @@ function TeacherPage() {
                   <h4 className="text-xl font-black text-amber-800 mb-2">ยังไม่ถึงเวลาประกาศผลคะแนน</h4>
                   <p className="text-amber-700 font-medium">ผลคะแนนจะเปิดดูได้ในวันที่: {gradeAnnouncementDate?.toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
                   {countdown && <div className="mt-4 text-3xl font-black text-amber-900 tracking-tighter">{countdown}</div>}
+                </div>
+              ) : !checkTeacherAccess(homeroomYear, homeroomSemester) ? (
+                <div className="bg-red-50 border-2 border-red-200 rounded-3xl p-8 text-center">
+                  <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <AlertCircle className="w-8 h-8 text-red-600" />
+                  </div>
+                  <h4 className="text-xl font-black text-red-800 mb-2">ไม่มีสิทธิ์ดูข้อมูล</h4>
+                  <p className="text-red-700 font-medium">ทางโรงเรียนยังไม่อนุญาตให้ดูสรุปคะแนนสำหรับปี {homeroomYear} ภาคเรียนที่ {homeroomSemester || '1'} </p>
+                  <p className="text-red-600 text-sm mt-2">กรุณาติดต่อผู้ดูแลระบบสำหรับข้อมูลเพิ่มเติม</p>
                 </div>
               ) : (
                 <>
@@ -1040,7 +1611,7 @@ function TeacherPage() {
                               </div>
                               <div>
                                 <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">นักเรียนทั้งหมด</div>
-                                <div className="text-3xl font-black text-slate-800">{selectedHomeroomClassroom.student_count} <span className="text-xs text-slate-400">คน</span></div>
+                                <div className="text-3xl font-black text-slate-800">{selectedHomeroomClassroom.students?.length || 0} <span className="text-xs text-slate-400">คน</span></div>
                               </div>
                             </div>
 
@@ -1052,16 +1623,22 @@ function TeacherPage() {
                                 <div>
                                   <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">คะแนนเฉลี่ยห้อง</div>
                                   <div className="text-3xl font-black text-slate-800">
-                                    {homeroomRanking.length > 0 ? (
-                                      (homeroomRanking.reduce((sum, r) => sum + r.average_score, 0) / homeroomRanking.length).toFixed(1)
-                                    ) : (
-                                      (() => {
-                                        const studentsWithGrades = selectedHomeroomClassroom.students.filter(s => calculateMainSubjectsScore(s.grades_by_subject || []).totalMaxScore > 0);
-                                        if (!studentsWithGrades.length) return '0.0';
-                                        const avg = studentsWithGrades.reduce((sum, s) => sum + calculateMainSubjectsScore(s.grades_by_subject || []).percentage, 0) / studentsWithGrades.length;
+                                    {(() => {
+                                      if (homeroomCombinedMode) {
+                                        const students = selectedHomeroomClassroom.students || [];
+                                        const withGrades = students.filter(s => getCombinedStudentScore(s).totalMaxScore > 0);
+                                        if (!withGrades.length) return '-';
+                                        const avg = withGrades.reduce((sum, s) => sum + getCombinedStudentScore(s).percentage, 0) / withGrades.length;
                                         return avg.toFixed(1);
-                                      })()
-                                    )}%
+                                      }
+                                      // Don't use homeroomRanking, calculate directly from students data
+                                      const studentsWithGrades = (selectedHomeroomClassroom.students || []).filter(s =>
+                                        calculateMainSubjectsScore(s.grades_by_subject || []).totalMaxScore > 0
+                                      );
+                                      if (!studentsWithGrades.length) return '-';
+                                      const avg = studentsWithGrades.reduce((sum, s) => sum + calculateMainSubjectsScore(s.grades_by_subject || []).percentage, 0) / studentsWithGrades.length;
+                                      return avg.toFixed(1);
+                                    })()}%
                                   </div>
                                 </div>
                               </div>
@@ -1087,19 +1664,9 @@ function TeacherPage() {
                               <table className="w-full text-left">
                                 <thead>
                                   <tr className="bg-slate-50/50 text-slate-400 text-[10px] font-black uppercase tracking-widest border-b border-slate-100">
-                                    {homeroomSubTab === 'grades' && <th className="px-6 py-4 text-center">ลำดับ</th>}
+                                    <th className="px-6 py-4 text-center">เลขที่</th>
                                     <th className="px-6 py-4">ข้อมูลนักเรียน</th>
-                                    {homeroomSubTab === 'grades' ? (
-                                      <>
-                                        <th className="px-6 py-4 text-center bg-blue-50/30">
-                                          คะแนนเก็บ
-                                        </th>
-                                        <th className="px-6 py-4 text-center bg-amber-50/30">
-                                          คะแนนสอบ
-                                        </th>
-                                        <th className="px-6 py-4 text-center bg-slate-50">รวม / เกรด</th>
-                                      </>
-                                    ) : <th className="px-6 py-4">อัตราการมาเรียน</th>}
+                                    {homeroomSubTab === 'grades' && <th className="px-6 py-4 text-center">ลำดับ</th>}
                                     <th className="px-6 py-4 text-center">จัดการ</th>
                                   </tr>
                                 </thead>
@@ -1107,24 +1674,42 @@ function TeacherPage() {
                                   {(() => {
                                     const studentsWithScores = [...selectedHomeroomClassroom.students].map(s => ({
                                       ...s,
-                                      recalculatedScore: calculateMainSubjectsScore(s.grades_by_subject || [])
-                                    })).sort((a, b) => b.recalculatedScore.totalScore - a.recalculatedScore.totalScore);
+                                      recalculatedScore: homeroomCombinedMode
+                                        ? getCombinedStudentScore(s)
+                                        : calculateMainSubjectsScore(s.grades_by_subject || [])
+                                    })).sort((a, b) => (a.student_number || 999) - (b.student_number || 999));
 
+                                    const sortedForRanking = [...studentsWithScores].sort((a, b) => b.recalculatedScore.totalScore - a.recalculatedScore.totalScore);
                                     let currentRank = 1;
-                                    studentsWithScores.forEach((s, idx) => {
-                                      if (idx > 0 && s.recalculatedScore.totalScore < studentsWithScores[idx-1].recalculatedScore.totalScore) {
+                                    sortedForRanking.forEach((s, idx) => {
+                                      if (idx > 0 && s.recalculatedScore.totalScore < sortedForRanking[idx-1].recalculatedScore.totalScore) {
                                         currentRank = idx + 1;
                                       }
-                                      s.localRank = currentRank;
+                                      const originalStudent = studentsWithScores.find(st => st.id === s.id);
+                                      if (originalStudent) originalStudent.localRank = currentRank;
                                     });
 
                                     return studentsWithScores.map(student => {
-                                      const score = student.recalculatedScore;
-                                      const grade = getLetterGrade(score.percentage);
                                       const rank = student.localRank;
                                       
                                       return (
                                         <tr key={student.id} className="hover:bg-slate-50 transition-colors group">
+                                          <td className="px-6 py-4 text-center">
+                                            <span className="text-sm font-black text-slate-600">
+                                              {student.student_number || '-'}
+                                            </span>
+                                          </td>
+                                          <td className="px-6 py-4">
+                                            <div className="flex items-center gap-3">
+                                              <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-xs font-black text-slate-400 group-hover:bg-emerald-600 group-hover:text-white transition-all duration-300">
+                                                {getInitials(student.full_name, 'S')}
+                                              </div>
+                                              <div>
+                                                <div className="text-sm font-black text-slate-800 group-hover:text-emerald-600 transition-colors">{student.full_name}</div>
+                                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">@{student.username}</div>
+                                              </div>
+                                            </div>
+                                          </td>
                                           {homeroomSubTab === 'grades' && (
                                             <td className="px-6 py-4 text-center">
                                               <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-xs mx-auto ${
@@ -1137,67 +1722,12 @@ function TeacherPage() {
                                               </div>
                                             </td>
                                           )}
-                                          <td className="px-6 py-4">
-                                            <div className="flex items-center gap-3">
-                                              <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-xs font-black text-slate-400 group-hover:bg-emerald-600 group-hover:text-white transition-all duration-300">
-                                                {getInitials(student.full_name, 'S')}
-                                              </div>
-                                              <div>
-                                                <div className="text-sm font-black text-slate-800 group-hover:text-emerald-600 transition-colors">{student.full_name}</div>
-                                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">@{student.username}</div>
-                                              </div>
-                                            </div>
-                                          </td>
-                                          {homeroomSubTab === 'grades' ? (
-                                            score.totalMaxScore > 0 ? (
-                                              <>
-                                                <td className="px-6 py-4 text-center bg-blue-50/10">
-                                                  <div className="flex flex-col items-center gap-1">
-                                                    <span className="text-sm font-black text-blue-700">{score.collectedScore.toFixed(0)}</span>
-                                                    <span className="text-[9px] text-blue-400 font-bold">/{score.collectedMaxScore}</span>
-                                                  </div>
-                                                </td>
-                                                <td className="px-6 py-4 text-center bg-amber-50/10">
-                                                  <div className="flex flex-col items-center gap-1">
-                                                    <span className="text-sm font-black text-amber-700">{score.examScore.toFixed(0)}</span>
-                                                    <span className="text-[9px] text-amber-400 font-bold">/{score.examMaxScore}</span>
-                                                  </div>
-                                                </td>
-                                                <td className="px-6 py-4 text-center bg-slate-50/50">
-                                                  <div className="flex items-center justify-center gap-2">
-                                                    <span className="text-xs font-black text-slate-800">{score.totalScore.toFixed(0)}/{score.totalMaxScore}</span>
-                                                    <span className={`w-8 h-8 flex items-center justify-center rounded-lg text-[10px] font-black border uppercase ${grade.bg} ${grade.color} border-current`}>
-                                                      {grade.grade}
-                                                    </span>
-                                                  </div>
-                                                </td>
-                                              </>
-                                            ) : (
-                                              <>
-                                                <td className="px-6 py-4 text-center" colSpan="3">
-                                                  <span className="text-[10px] font-bold text-slate-300 italic uppercase">No graded subjects</span>
-                                                </td>
-                                              </>
-                                            )
-                                          ) : (
-                                            <td className="px-6 py-4">
-                                              <div className="flex items-center gap-3">
-                                                <div className="flex-1 max-w-[100px] h-2 bg-slate-100 rounded-full overflow-hidden">
-                                                  <div 
-                                                    className={`h-full rounded-full ${student.attendance?.attendance_rate >= 80 ? 'bg-emerald-500' : 'bg-amber-500'}`} 
-                                                    style={{ width: `${student.attendance?.attendance_rate || 0}%` }}
-                                                  />
-                                                </div>
-                                                <span className="text-xs font-black text-slate-700">{(student.attendance?.attendance_rate || 0).toFixed(0)}%</span>
-                                              </div>
-                                            </td>
-                                          )}
                                           <td className="px-6 py-4 text-center">
                                             <button 
                                               onClick={() => viewStudentDetail(student, homeroomSubTab)}
                                               className="px-4 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg text-xs font-black hover:border-emerald-500 hover:text-emerald-700 transition-all hover:bg-emerald-50 flex items-center justify-center gap-2 mx-auto"
                                             >
-                                              RECORDS <ChevronRight className="w-3 h-3" />
+                                              ดูรีพอร์ต <ChevronRight className="w-3 h-3" />
                                             </button>
                                           </td>
                                         </tr>
@@ -1213,15 +1743,19 @@ function TeacherPage() {
                                 {(() => {
                                     const studentsWithScores = [...selectedHomeroomClassroom.students].map(s => ({
                                       ...s,
-                                      recalculatedScore: calculateMainSubjectsScore(s.grades_by_subject || [])
-                                    })).sort((a, b) => b.recalculatedScore.totalScore - a.recalculatedScore.totalScore);
+                                      recalculatedScore: homeroomCombinedMode
+                                        ? getCombinedStudentScore(s)
+                                        : calculateMainSubjectsScore(s.grades_by_subject || [])
+                                    })).sort((a, b) => (a.student_number || 999) - (b.student_number || 999));
 
+                                    const sortedForRanking = [...studentsWithScores].sort((a, b) => b.recalculatedScore.totalScore - a.recalculatedScore.totalScore);
                                     let currentRank = 1;
-                                    studentsWithScores.forEach((s, idx) => {
-                                      if (idx > 0 && s.recalculatedScore.totalScore < studentsWithScores[idx-1].recalculatedScore.totalScore) {
+                                    sortedForRanking.forEach((s, idx) => {
+                                      if (idx > 0 && s.recalculatedScore.totalScore < sortedForRanking[idx-1].recalculatedScore.totalScore) {
                                         currentRank = idx + 1;
                                       }
-                                      s.localRank = currentRank;
+                                      const originalStudent = studentsWithScores.find(st => st.id === s.id);
+                                      if (originalStudent) originalStudent.localRank = currentRank;
                                     });
 
                                     return studentsWithScores.map(student => {
@@ -1233,8 +1767,13 @@ function TeacherPage() {
                                             <div key={student.id} className="p-4 flex flex-col gap-4">
                                                 <div className="flex items-center justify-between">
                                                     <div className="flex items-center gap-3">
-                                                        <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-sm font-black text-slate-400">
+                                                        <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-sm font-black text-slate-400 relative">
                                                           {getInitials(student.full_name, 'S')}
+                                                          {student.student_number && (
+                                                            <div className="absolute -top-1 -right-1 w-6 h-6 bg-emerald-600 text-white text-[10px] rounded-lg flex items-center justify-center border-2 border-white shadow-sm">
+                                                              {student.student_number}
+                                                            </div>
+                                                          )}
                                                         </div>
                                                         <div>
                                                           <div className="text-sm font-black text-slate-800">{student.full_name}</div>
@@ -1254,58 +1793,11 @@ function TeacherPage() {
                                                 </div>
 
                                                 <div className="pl-[3.75rem]">
-                                                    {homeroomSubTab === 'grades' ? (
-                                                        score.totalMaxScore > 0 ? (
-                                                          <div className="space-y-2 mb-2">
-                                                            <div className="flex items-center justify-between gap-2 p-2 bg-blue-50/30 rounded-lg">
-                                                              <span className="text-[10px] font-bold text-slate-600 uppercase">คะแนนเก็บ:</span>
-                                                              <div className="flex flex-col items-end">
-                                                                <span className="text-sm font-black text-blue-700">{score.collectedScore.toFixed(0)}</span>
-                                                                <span className="text-[9px] text-blue-400 font-bold">/{score.collectedMaxScore}</span>
-                                                              </div>
-                                                            </div>
-                                                            <div className="flex items-center justify-between gap-2 p-2 bg-amber-50/30 rounded-lg">
-                                                              <span className="text-[10px] font-bold text-slate-600 uppercase">คะแนนสอบ:</span>
-                                                              <div className="flex flex-col items-end">
-                                                                <span className="text-sm font-black text-amber-700">{score.examScore.toFixed(0)}</span>
-                                                                <span className="text-[9px] text-amber-400 font-bold">/{score.examMaxScore}</span>
-                                                              </div>
-                                                            </div>
-                                                            <div className="flex items-center justify-between gap-2 pt-2 border-t-2 border-slate-200">
-                                                              <span className="text-xs font-bold text-slate-700 uppercase">รวม:</span>
-                                                              <div className="flex items-center gap-2">
-                                                                <span className="text-base font-black text-slate-800">{score.totalScore.toFixed(0)}/{score.totalMaxScore}</span>
-                                                                <span className={`px-2 py-1 rounded text-xs font-black uppercase ${grade.bg} ${grade.color}`}>
-                                                                  {grade.grade}
-                                                                </span>
-                                                              </div>
-                                                            </div>
-                                                            <div className="text-[9px] font-bold text-slate-400 text-center pt-1 mt-2 border-t border-slate-100">
-                                                              ลำดับที่ {rank} / {studentsWithScores.length} ({score.percentage.toFixed(1)}%)
-                                                            </div>
-                                                          </div>
-                                                        ) : (
-                                                          <div className="mb-2">
-                                                              <span className="text-[10px] font-bold text-slate-300 italic uppercase">No graded subjects</span>
-                                                          </div>
-                                                        )
-                                                      ) : (
-                                                        <div className="flex items-center gap-3 mb-2">
-                                                          <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
-                                                            <div 
-                                                              className={`h-full rounded-full ${student.attendance?.attendance_rate >= 80 ? 'bg-emerald-500' : 'bg-amber-500'}`} 
-                                                              style={{ width: `${student.attendance?.attendance_rate || 0}%` }}
-                                                            />
-                                                          </div>
-                                                          <span className="text-xs font-black text-slate-700">{(student.attendance?.attendance_rate || 0).toFixed(0)}%</span>
-                                                        </div>
-                                                      )}
-
                                                   <button 
                                                     onClick={() => viewStudentDetail(student, homeroomSubTab)}
                                                     className="w-full py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-black hover:border-emerald-500 hover:text-emerald-700 transition-all hover:bg-emerald-50 flex items-center justify-center gap-2"
                                                   >
-                                                    VIEW RECORDS <ChevronRight className="w-3 h-3" />
+                                                    ดูรีพอร์ต <ChevronRight className="w-3 h-3" />
                                                   </button>
                                             </div>
                                         </div>
@@ -1365,6 +1857,43 @@ function TeacherPage() {
                           className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm font-bold transition-all outline-none"
                         />
                       </div>
+                      {/* PDF Attachment */}
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">แนบไฟล์ PDF (ถ้ามี)</label>
+                        <div
+                          className="border-2 border-dashed border-slate-200 rounded-2xl p-4 text-center cursor-pointer hover:border-emerald-400 hover:bg-slate-50 transition-all"
+                          onClick={() => announcementPdfInputRef.current && announcementPdfInputRef.current.click()}
+                        >
+                          <input
+                            ref={announcementPdfInputRef}
+                            type="file"
+                            accept="application/pdf"
+                            className="hidden"
+                            onChange={e => {
+                              const f = e.target.files[0];
+                              if (f && f.name.toLowerCase().endsWith('.pdf')) setAnnouncementPdfFile(f);
+                              else if (f) toast.error('รองรับเฉพาะไฟล์ PDF เท่านั้น');
+                            }}
+                          />
+                          {announcementPdfFile ? (
+                            <div className="flex items-center justify-center gap-2">
+                              <span className="text-red-500">📄</span>
+                              <span className="text-xs font-bold text-slate-700 truncate max-w-[140px]">{announcementPdfFile.name}</span>
+                              <button
+                                type="button"
+                                onClick={e => { e.stopPropagation(); setAnnouncementPdfFile(null); if (announcementPdfInputRef.current) announcementPdfInputRef.current.value = ''; }}
+                                className="text-slate-400 hover:text-rose-500 transition-colors text-sm leading-none"
+                              >✕</button>
+                            </div>
+                          ) : (
+                            <div className="flex flex-col items-center gap-0.5 text-slate-400">
+                              <span className="text-xl">📎</span>
+                              <p className="text-[10px] font-bold">คลิกเพื่อแนบ PDF</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
                       <button 
                         type="submit" 
                         className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-black text-sm shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-all active:scale-[0.98] flex items-center justify-center gap-2 mt-4"
@@ -1413,6 +1942,18 @@ function TeacherPage() {
                               <p className="text-slate-600 text-sm leading-relaxed whitespace-pre-wrap">
                                 {item.content}
                               </p>
+                              {item.pdf_file_path && (
+                                <a
+                                  href={`${API_BASE_URL}${item.pdf_file_path}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center gap-1.5 mt-3 px-3 py-1.5 bg-red-50 text-red-600 text-xs font-black rounded-xl hover:bg-red-100 transition-all"
+                                  onClick={e => e.stopPropagation()}
+                                >
+                                  <span>📄</span>
+                                  {item.pdf_file_name || 'ดาวน์โหลด PDF'}
+                                </a>
+                              )}
                             </div>
 
                             {ownedBy(item) && (
@@ -1508,6 +2049,7 @@ function TeacherPage() {
       <AnnouncementModal 
         isOpen={showAnnouncementModal} 
         initialData={modalAnnouncement} 
+        apiBaseUrl={API_BASE_URL}
         onClose={closeAnnouncementModal} 
         onSave={saveAnnouncementFromModal} 
       />
@@ -1545,10 +2087,13 @@ function TeacherPage() {
         student={selectedStudentDetail}
         onClose={() => setShowStudentGradeModal(false)}
         calculateMainSubjectsScore={calculateMainSubjectsScore}
+        calculateDetailedSubjectScore={calculateDetailedSubjectScore}
         calculateGPA={calculateGPA}
         getLetterGrade={getLetterGrade}
         initials={getInitials}
         origin={homeroomSubTab}
+        isCombinedMode={homeroomCombinedMode}
+        semesterLabel={homeroomCombinedMode ? 'รวม 2 ภาคเรียน' : (homeroomYear ? `ปีการศึกษา ${homeroomYear}${homeroomSemester ? ` ภาคเรียนที่ ${homeroomSemester}` : ''}` : 'สรุปทั้งปีการศึกษา')}
       />
 
       <StudentAttendanceModal
@@ -1557,6 +2102,7 @@ function TeacherPage() {
         onClose={() => setShowStudentAttendanceModal(false)}
         initials={getInitials}
         origin={homeroomSubTab}
+        semesterLabel={homeroomYear ? `ปีการศึกษา ${homeroomYear}${homeroomSemester ? ` ภาคเรียนที่ ${homeroomSemester}` : ''}` : 'สรุปทั้งปีการศึกษา'}
       />
 
       <ConfirmModal
@@ -1566,6 +2112,16 @@ function TeacherPage() {
         onConfirm={confirmState.onConfirm}
         onCancel={() => setConfirmState(prev => ({ ...prev, isOpen: false }))}
         variant={confirmState.variant}
+      />
+
+      <StudentEvaluationModal
+        isOpen={showStudentEvaluationModal}
+        subject={selectedSubjectForEvaluation}
+        students={studentsForEvaluation}
+        onClose={() => setShowStudentEvaluationModal(false)}
+        teacherId={currentUser?.id}
+        systemYear={systemYear}
+        systemSemester={systemSemester}
       />
     </div>
   );

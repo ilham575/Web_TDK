@@ -15,6 +15,8 @@ function AdminTabs({ isMobile: propIsMobile, activeTab, setActiveTab, loadSubjec
     { id: 'subjects', icon: '📚', label: t('admin.tabSubjects'), longLabel: t('admin.tabSubjectsLong'), section: 'basic' },
     { id: 'announcements', icon: '📢', label: t('admin.tabAnnouncements'), longLabel: t('admin.tabAnnouncementsLong'), section: 'comm' },
     { id: 'absences', icon: '✋', label: t('admin.tabAbsences'), longLabel: t('admin.tabAbsencesLong'), section: 'comm' },
+    { id: 'evaluations', icon: '🧠', label: 'การประเมิน', longLabel: 'จัดการหัวข้อการประเมิน', section: 'mgmt' },
+    { id: 'rankings', icon: '🏆', label: 'อันดับ', longLabel: 'อันดับนักเรียน', section: 'mgmt' },
     { id: 'promotions', icon: '📈', label: t('admin.tabPromotions'), longLabel: t('admin.tabPromotionsLong'), section: 'mgmt' },
     { id: 'schedule', icon: '🕐', label: t('admin.tabSchedule'), longLabel: t('admin.tabScheduleLong'), section: 'mgmt' },
     { id: 'schedules', icon: '📅', label: t('admin.tabSchedules'), longLabel: t('admin.tabSchedulesLong'), section: 'mgmt', onClick: loadSubjects },

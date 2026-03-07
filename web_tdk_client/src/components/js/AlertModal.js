@@ -21,8 +21,8 @@ function AlertModal({ isOpen, title, message, onClose }) {
       ></div>
 
       {/* Modal Content */}
-      <div className="relative w-full max-w-sm bg-white rounded-[2rem] shadow-2xl overflow-hidden transform transition-all animate-in fade-in zoom-in duration-200">
-        <div className="p-8">
+      <div className="relative w-full max-w-sm bg-white rounded-[2rem] shadow-2xl overflow-hidden transform transition-all animate-in fade-in zoom-in duration-200 max-h-[calc(100dvh-2rem)] flex flex-col">
+        <div className="p-8 overflow-y-auto flex-1">
             <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center text-3xl mb-6 mx-auto shadow-inner">
                 ℹ️
             </div>

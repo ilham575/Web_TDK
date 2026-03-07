@@ -3,7 +3,8 @@ import { toast } from 'react-toastify';
 import { X, BookOpen, Target, CreditCard, Percent, Save, Trash2, Info } from 'lucide-react';
 import { API_BASE_URL } from '../../../endpoints';
 
-function SubjectManagementModal({ isOpen, onClose, onSave, subject, currentSchoolId }) {
+function SubjectManagementModal({ isOpen, onClose, onSave, subject, currentSchoolId, defaultYear, defaultSemester }) {
+
   const [formData, setFormData] = useState({
     name: '',
     code: '',
@@ -19,20 +20,21 @@ function SubjectManagementModal({ isOpen, onClose, onSave, subject, currentSchoo
   // Reset form when modal opens/closes or subject changes
   useEffect(() => {
     if (isOpen) {
-      setCurrentSubject(subject);
+      // Only treat as edit if the subject has an actual id (copy mode passes subject without id)
+      setCurrentSubject(subject?.id ? subject : null);
       if (subject) {
-        // Editing existing subject
+        // Editing or copying an existing subject — pre-fill form either way
         setFormData({
           name: subject.name || '',
           code: subject.code || '',
           subject_type: subject.subject_type || 'main',
           credits: subject.credits || '',
           activity_percentage: subject.activity_percentage || '',
-          max_collected_score: subject.max_collected_score || 100,
-          max_exam_score: subject.max_exam_score || 100
+          max_collected_score: (subject.max_collected_score !== undefined && subject.max_collected_score !== null) ? subject.max_collected_score : 100,
+          max_exam_score: (subject.max_exam_score !== undefined && subject.max_exam_score !== null) ? subject.max_exam_score : 100
         });
       } else {
-        // Creating new subject
+        // Creating new subject — set default year/semester
         setFormData({
           name: '',
           code: '',
@@ -40,7 +42,9 @@ function SubjectManagementModal({ isOpen, onClose, onSave, subject, currentSchoo
           credits: '',
           activity_percentage: '',
           max_collected_score: 100,
-          max_exam_score: 100
+          max_exam_score: 100,
+          academic_year: defaultYear,
+          semester: defaultSemester || 1
         });
       }
     }
@@ -64,6 +68,10 @@ function SubjectManagementModal({ isOpen, onClose, onSave, subject, currentSchoo
       const submitData = {
         ...formData,
         school_id: currentSchoolId,
+        // For creates: already in formData (from defaultYear/defaultSemester). For copies/edits: override from subject prop
+        ...(subject?.academic_year ? { academic_year: subject.academic_year } : {}),
+        ...(subject?.semester ? { semester: subject.semester } : {}),
+        ...(subject?.linked_subject_id ? { linked_subject_id: subject.linked_subject_id } : {}),
         credits: formData.credits ? parseInt(formData.credits) : null,
         activity_percentage: formData.activity_percentage ? parseInt(formData.activity_percentage) : null,
         max_collected_score: formData.max_collected_score ? parseInt(formData.max_collected_score) : 100,
@@ -100,7 +108,7 @@ function SubjectManagementModal({ isOpen, onClose, onSave, subject, currentSchoo
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-6 backdrop-blur-sm bg-slate-900/40 animate-in fade-in duration-300">
-      <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl shadow-slate-900/20 overflow-hidden flex flex-col animate-in zoom-in-95 duration-300">
+      <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl shadow-slate-900/20 overflow-hidden flex flex-col animate-in zoom-in-95 duration-300 max-h-[calc(100dvh-2rem)]">
         {/* Header */}
         <div className="px-8 py-6 border-b border-slate-50 flex items-center justify-between bg-white sticky top-0 z-10">
           <div className="flex items-center gap-3">
@@ -109,7 +117,7 @@ function SubjectManagementModal({ isOpen, onClose, onSave, subject, currentSchoo
             </div>
             <div>
               <h3 className="text-lg font-black text-slate-800 tracking-tight leading-none">
-                {currentSubject ? 'แก้ไขรายวิชา' : 'สร้างรายวิชาใหม่'}
+                {currentSubject ? 'แก้ไขรายวิชา' : (subject && !subject.id ? '📋 คัดลอกรายวิชา' : 'สร้างรายวิชาใหม่')}
               </h3>
               <p className="text-[11px] font-bold text-slate-400 mt-1 uppercase tracking-widest leading-none">
                 SUBJECT MANAGEMENT
@@ -124,9 +132,9 @@ function SubjectManagementModal({ isOpen, onClose, onSave, subject, currentSchoo
           </button>
         </div>
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
           {/* Body */}
-          <div className="p-8 space-y-6">
+          <div className="p-8 space-y-6 flex-1 overflow-y-auto">
             <div className="space-y-4">
               <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1 px-1">
                 <Info className="w-3.5 h-3.5" />
@@ -285,7 +293,7 @@ function SubjectManagementModal({ isOpen, onClose, onSave, subject, currentSchoo
           </div>
 
           {/* Footer */}
-          <div className="px-8 py-6 bg-slate-50/50 border-t border-slate-50 flex gap-3">
+          <div className="px-8 py-6 bg-slate-50/50 border-t border-slate-50 flex gap-3 shrink-0">
             <button 
               type="button" 
               className="flex-1 h-12 bg-white hover:bg-slate-100 text-slate-600 rounded-xl font-black text-sm transition-all active:scale-95 border border-slate-100 shadow-sm"

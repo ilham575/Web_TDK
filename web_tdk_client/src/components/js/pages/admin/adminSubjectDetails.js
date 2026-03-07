@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ToastContainer, toast } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
+import { toast } from 'react-toastify';
 import { 
   BookOpen, 
   ArrowLeft, 
@@ -17,7 +16,8 @@ import {
   XCircle,
   FileText,
   Mail,
-  MoreHorizontal
+  MoreHorizontal,
+  Brain
 } from 'lucide-react';
 
 import Loading from '../../Loading';
@@ -32,6 +32,7 @@ function AdminSubjectDetails() {
   const [attendanceRecords, setAttendanceRecords] = useState([]);
   const [grades, setGrades] = useState([]);
   const [assignments, setAssignments] = useState([]);
+  const [evaluations, setEvaluations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState(null);
   const [activeTab, setActiveTab] = useState('attendance');
@@ -83,24 +84,27 @@ function AdminSubjectDetails() {
         }
         setSubject(subj);
 
-        const [studentsRes, attendanceRes, gradesRes, assignmentsRes] = await Promise.all([
+        const [studentsRes, attendanceRes, gradesRes, assignmentsRes, evaluationsRes] = await Promise.all([
           fetch(`${API_BASE_URL}/subjects/${subjectId}/students`, { headers }),
           fetch(`${API_BASE_URL}/attendance/?subject_id=${subjectId}`, { headers }),
           fetch(`${API_BASE_URL}/grades/?subject_id=${subjectId}`, { headers }),
-          fetch(`${API_BASE_URL}/grades/assignments/${subjectId}`, { headers })
+          fetch(`${API_BASE_URL}/grades/assignments/${subjectId}`, { headers }),
+          fetch(`${API_BASE_URL}/evaluations/subject/${subjectId}`, { headers })
         ]);
 
-        const [studs, att, grds, ass] = await Promise.all([
+        const [studs, att, grds, ass, evals] = await Promise.all([
           studentsRes.json(),
           attendanceRes.json(),
           gradesRes.json(),
-          assignmentsRes.json()
+          assignmentsRes.json(),
+          evaluationsRes.json()
         ]);
 
         setStudents(Array.isArray(studs) ? studs : []);
         setAttendanceRecords(Array.isArray(att) ? att : []);
         setGrades(Array.isArray(grds) ? grds : []);
         setAssignments(Array.isArray(ass) ? ass : []);
+        setEvaluations(Array.isArray(evals) ? evals : []);
 
       } catch (err) {
         console.error('fetch data error', err);
@@ -262,7 +266,7 @@ function AdminSubjectDetails() {
       totalScore = collectedScore + examScore;
     }
 
-    const gradePercentage = totalMaxScore > 0 ? Math.round((totalScore / totalMaxScore) * 100) : 0;
+    const gradePercentage = totalMaxScore > 0 ? (totalScore / totalMaxScore) * 100 : 0;
 
     let letterGrade = 'F';
     if (gradePercentage >= 80) letterGrade = 'A';
@@ -304,10 +308,60 @@ function AdminSubjectDetails() {
   // Decide display order (Keep ranked for better reporting)
   const studentSummaries = rankedSummaries;
 
+  // Calculate classroom statistics
+  const computeClassroomStats = () => {
+    const classroomMap = {};
+
+    // Group students by classroom
+    studentSummaries.forEach(student => {
+      const classroomId = student.classroom?.id || 'unknown';
+      const classroomName = student.classroom?.name || 'ไม่ระบุห้อง';
+      const gradeLevel = student.classroom?.grade_level || student.grade_level || '-';
+
+      if (!classroomMap[classroomId]) {
+        classroomMap[classroomId] = {
+          id: classroomId,
+          name: classroomName,
+          gradeLevel,
+          students: [],
+          totalScore: 0,
+          totalMaxScore: 0,
+          averageScore: 0,
+          averagePercentage: 0,
+          gradeDistribution: {}
+        };
+      }
+
+      classroomMap[classroomId].students.push(student);
+      classroomMap[classroomId].totalScore += student.grade.totalScore;
+      classroomMap[classroomId].totalMaxScore += student.grade.totalMaxScore;
+
+      // Count grade distribution
+      const letter = student.grade.letter;
+      classroomMap[classroomId].gradeDistribution[letter] = (classroomMap[classroomId].gradeDistribution[letter] || 0) + 1;
+    });
+
+    // Calculate averages (keep floats, format in UI)
+    Object.values(classroomMap).forEach(classroom => {
+      if (classroom.students.length > 0) {
+        classroom.averageScore = classroom.totalScore / classroom.students.length;
+        classroom.averagePercentage = classroom.totalMaxScore > 0 
+          ? (classroom.totalScore / classroom.totalMaxScore) * 100
+          : 0;
+      }
+    });
+
+    return Object.values(classroomMap).sort((a, b) => {
+      // Sort by grade level first, then by name
+      if (a.gradeLevel !== b.gradeLevel) return String(a.gradeLevel).localeCompare(String(b.gradeLevel));
+      return String(a.name).localeCompare(String(b.name));
+    });
+  };
+
+  const classroomStats = computeClassroomStats();
+
   return (
     <div className="min-h-screen bg-slate-50/50 pb-20">
-      <ToastContainer />
-      
       {/* Header section */}
       <div className="bg-white border-b border-slate-100 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -374,11 +428,101 @@ function AdminSubjectDetails() {
             <div className="text-center">
               <p className="text-[10px] font-black text-emerald-50/60 uppercase tracking-widest mb-0.5">คะแนนเฉลี่ยรวม</p>
               <h4 className="text-3xl font-black text-white tracking-tighter">
-                {studentSummaries.length > 0 ? (studentSummaries.reduce((acc, s) => acc + s.grade.percentage, 0) / studentSummaries.length).toFixed(1) : 0}%
+                {studentSummaries.length > 0 ? (studentSummaries.reduce((acc, s) => acc + s.grade.percentage, 0) / studentSummaries.length).toFixed(2) : '0.00'}%
               </h4>
             </div>
           </div>
         </div>
+
+        {/* Classroom Statistics Section */}
+        <section className="bg-white rounded-[2.5rem] border border-slate-100 shadow-lg shadow-slate-200/50 overflow-hidden">
+          <div className="px-8 pt-8 pb-6 border-b border-slate-50">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-purple-50 text-purple-500 rounded-xl flex items-center justify-center">
+                <BarChart3 className="w-5 h-5" />
+              </div>
+              <h3 className="text-lg font-black text-slate-800 tracking-tight">ผลการเรียนแยกตามห้อง</h3>
+            </div>
+          </div>
+
+          {classroomStats.length === 0 ? (
+            <div className="py-20 flex flex-col items-center justify-center gap-4 text-slate-300 px-8">
+              <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center">
+                <BarChart3 className="w-10 h-10" />
+              </div>
+              <p className="text-lg font-black tracking-tight text-slate-400 text-center">ยังไม่มีข้อมูลนักเรียนในห้องต่างๆ</p>
+            </div>
+          ) : (
+            <div className="p-8">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {classroomStats.map((classroom, idx) => (
+                  <div key={classroom.id} className="bg-slate-50 rounded-[1.5rem] p-6 border border-slate-100 hover:border-purple-200 transition-colors">
+                    {/* Classroom Header */}
+                    <div className="flex items-start justify-between mb-6 pb-4 border-b border-slate-200">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black text-white ${
+                            idx % 4 === 0 ? 'bg-blue-500' :
+                            idx % 4 === 1 ? 'bg-emerald-500' :
+                            idx % 4 === 2 ? 'bg-amber-500' : 'bg-rose-500'
+                          }`}>
+                            {idx + 1}
+                          </div>
+                          <h4 className="text-base font-black text-slate-800">{classroom.name}</h4>
+                        </div>
+                        <p className="text-xs text-slate-400 font-medium">ชั้นประถมศึกษาปีที่ {classroom.gradeLevel} • นักเรียน {classroom.students.length} คน</p>
+                      </div>
+                    </div>
+
+                    {/* Classroom Stats Cards */}
+                    <div className="grid grid-cols-2 gap-3 mb-5">
+                      {/* Total Score */}
+                      <div className="bg-white rounded-2xl p-4 border border-slate-100">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">คะแนนรวม</p>
+                        <div className="flex items-end gap-1">
+                          <span className="text-2xl font-black text-blue-600">{(classroom.totalScore ?? 0).toFixed(2)}</span>
+                          <span className="text-xs font-bold text-slate-400 mb-1">/ {(classroom.totalMaxScore ?? 0).toFixed(2)}</span>
+                        </div>
+                      </div>
+
+                      {/* Average Score */}
+                      <div className="bg-white rounded-2xl p-4 border border-slate-100">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">ค่าเฉลี่ย</p>
+                        <div className="flex items-end gap-1">
+                          <span className="text-2xl font-black text-emerald-600">{(classroom.averageScore ?? 0).toFixed(2)}</span>
+                          <span className="text-xs font-bold text-slate-400 mb-1">({(classroom.averagePercentage ?? 0).toFixed(2)}%)</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Grade Distribution */}
+                    <div className="bg-white rounded-2xl p-4 border border-slate-100">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">การแจกแจงเกรด</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {['A', 'B+', 'B', 'C+', 'C', 'D+', 'D', 'F'].map(grade => (
+                          <div key={grade} className="flex items-center justify-between text-sm">
+                            <span className={`inline-flex items-center justify-center w-6 h-6 rounded-lg text-[10px] font-black border ${
+                              grade === 'A' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
+                              grade.startsWith('B') ? 'bg-blue-50 text-blue-600 border-blue-100' :
+                              grade.startsWith('C') ? 'bg-amber-50 text-amber-600 border-amber-100' :
+                              grade.startsWith('D') ? 'bg-orange-50 text-orange-600 border-orange-100' :
+                              'bg-rose-50 text-rose-600 border-rose-100'
+                            }`}>
+                              {grade}
+                            </span>
+                            <span className="font-black text-slate-700">
+                              {classroom.gradeDistribution[grade] || 0}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
 
         {/* Student Summary Table Section */}
         <section className="bg-white rounded-[2.5rem] border border-slate-100 shadow-lg shadow-slate-200/50 overflow-hidden">
@@ -462,7 +606,7 @@ function AdminSubjectDetails() {
                         }`}>
                           {student.grade.letter}
                         </div>
-                        <span className="text-[10px] font-bold text-slate-400 mt-1">{student.grade.percentage}%</span>
+                        <span className="text-[10px] font-bold text-slate-400 mt-1">{(student.grade.percentage ?? 0).toFixed(2)}%</span>
                       </div>
                     </td>
                     <td className="px-8 py-5 text-right">
@@ -490,7 +634,8 @@ function AdminSubjectDetails() {
             <div className="flex gap-2">
               {[
                 { id: 'attendance', label: 'บันทึกการเข้าเรียน', icon: Calendar },
-                { id: 'grades', label: 'บันทึกคะแนน/เกรด', icon: BadgeCheck }
+                { id: 'grades', label: 'บันทึกคะแนน/เกรด', icon: BadgeCheck },
+                { id: 'evaluations', label: 'การประเมินการอ่าน/เขียน/คิด', icon: Brain }
               ].map(tab => (
                 <button
                   key={tab.id}
@@ -663,6 +808,66 @@ function AdminSubjectDetails() {
                             </td>
                           </tr>
                         ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'evaluations' && (
+              <div>
+                {students.length === 0 ? (
+                  <div className="py-20 flex flex-col items-center justify-center gap-4 text-slate-300">
+                    <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center">
+                      <Brain className="w-10 h-10" />
+                    </div>
+                    <p className="text-lg font-black tracking-tight text-slate-400 text-center">ยังไม่มีข้อมูลการประเมิน</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto rounded-[2rem] border border-slate-100">
+                    <table className="w-full text-left">
+                      <thead>
+                        <tr className="bg-slate-50/50">
+                          <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest z-10 border-r border-slate-100 min-w-[200px]">รายชื่อนักเรียน</th>
+                          <th className="px-6 py-5 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest">การอ่าน</th>
+                          <th className="px-6 py-5 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest">การเขียน</th>
+                          <th className="px-6 py-5 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest">คิดวิเคราะห์</th>
+                          <th className="px-6 py-5 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest">วันที่ประเมิน</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50">
+                        {students.map(student => {
+                          const evaluation = evaluations.find(e => e.student_id === student.id);
+                          const getResultBadge = (result) => {
+                            switch(result) {
+                              case 'excellent': return <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full font-bold text-xs">ดีเยี่ยม</span>;
+                              case 'good': return <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full font-bold text-xs">ดี</span>;
+                              case 'pass': return <span className="px-3 py-1 bg-amber-100 text-amber-700 rounded-full font-bold text-xs">ผ่าน</span>;
+                              case 'fail': return <span className="px-3 py-1 bg-rose-100 text-rose-700 rounded-full font-bold text-xs">ไม่ผ่าน</span>;
+                              default: return <span className="text-slate-300">-</span>;
+                            }
+                          };
+                          return (
+                            <tr key={student.id} className="hover:bg-slate-50/30 transition-colors group">
+                              <td className="px-6 py-5 text-sm font-bold text-slate-700 border-r border-slate-100">
+                                {student.full_name || student.username}
+                              </td>
+                              <td className="px-6 py-5 text-center">
+                                {evaluation ? getResultBadge(evaluation.reading) : <span className="text-slate-200">-</span>}
+                              </td>
+                              <td className="px-6 py-5 text-center">
+                                {evaluation ? getResultBadge(evaluation.writing) : <span className="text-slate-200">-</span>}
+                              </td>
+                              <td className="px-6 py-5 text-center">
+                                {evaluation ? getResultBadge(evaluation.analysis) : <span className="text-slate-200">-</span>}
+                              </td>
+                              <td className="px-6 py-5 text-center text-xs text-slate-400">
+                                {evaluation ? new Date(evaluation.created_at).toLocaleDateString('th-TH') : '-'}
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>

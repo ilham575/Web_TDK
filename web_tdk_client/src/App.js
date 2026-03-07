@@ -3,11 +3,13 @@ import './App.css';
 import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import { I18nextProvider } from 'react-i18next';
 import i18n from './i18n';
+import InstallPrompt from './components/js/InstallPrompt';
 import SigninPage from './components/js/pages/default/signin';
 import SignupPage from './components/js/pages/default/signup';
 import ForgotPage from './components/js/pages/default/forgot';
 import ResetPasswordPage from './components/js/pages/default/reset-password';
 import ChangePasswordPage from './components/js/pages/default/change-password';
+import AboutMePage from './components/js/pages/default/aboutme';
 import StudentPage from './components/js/pages/student/home';
 import StudentSubjectDetails from './components/js/pages/student/studentSubjectDetails';
 import TeacherPage from './components/js/pages/teacher/home';
@@ -18,10 +20,13 @@ import DefaultHome from './components/js/pages/default/home';
 import AttendancePage from './components/js/pages/teacher/attendance';
 import GradesPage from './components/js/pages/teacher/grades';
 import GradeSummary from './components/js/pages/teacher/GradeSummary';
+import EvaluationsPage from './components/js/pages/teacher/evaluations';
 import ProfilePage from './components/js/pages/profile';
 import OwnerPage from './components/js/pages/owner/home';
 import Footer from './components/js/Footer';
 import { setSchoolFavicon, resetFavicon } from './utils/faviconUtils';
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 // ฟังก์ชั่นตรวจสอบ login
 function isLoggedIn() {
@@ -45,11 +50,11 @@ function RequireAuth({ children }) {
   return children;
 }
 
-if (process.env.NODE_ENV === 'production') {
-  console.log = function () {};
-} else {
-  // console.log = function () {};
-}
+// if (process.env.NODE_ENV === 'production') {
+//   console.log = function () {};
+// } else {
+//   // console.log = function () {};
+// }
 
 // Component สำหรับจัดการ favicon เมื่อเข้าสู่ระบบ
 function FaviconHandler() {
@@ -92,6 +97,8 @@ function App() {
     <I18nextProvider i18n={i18n}>
       <BrowserRouter>
         <FaviconHandler />
+        <InstallPrompt />
+        <div className="pb-14">
         <Routes>
           <Route path="/" element={<DefaultHome />} />
           <Route path="/home" element={<DefaultHome />} />
@@ -132,6 +139,14 @@ function App() {
           element={
             <RequireAuth>
               <GradeSummary />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/teacher/evaluations/:subjectId?"
+          element={
+            <RequireAuth>
+              <EvaluationsPage />
             </RequireAuth>
           }
         />
@@ -179,11 +194,14 @@ function App() {
         <Route path="/signin" element={<SigninPage />} />
         <Route path="/signup" element={<SignupPage />} />
         <Route path="/forgot" element={<ForgotPage />} />
+        <Route path="/aboutme" element={<AboutMePage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/change-password" element={<RequireAuth><ChangePasswordPage /></RequireAuth>} />
         <Route path="/profile" element={<RequireAuth><ProfilePage /></RequireAuth>} />
       </Routes>
+      </div>
       {/* Global footer (shows remaining JWT expiry) */}
+      <ToastContainer position="top-right" autoClose={3000} />
       <Footer />
     </BrowserRouter>
     </I18nextProvider>

@@ -22,6 +22,7 @@ class ClassroomUpdate(BaseModel):
     grade_level: Optional[str] = None
     room_number: Optional[str] = None
     semester: Optional[int] = None
+    academic_year: Optional[str] = None
     is_active: Optional[bool] = None
 
 
@@ -76,7 +77,8 @@ class StudentInClassroom(BaseModel):
     student_id: int
     full_name: str
     username: str
-    email: str
+    email: Optional[str] = None
+    student_number: Optional[int] = None  # เลขที่
     is_active: bool
 
 
@@ -85,7 +87,7 @@ class AvailableStudent(BaseModel):
     id: int
     full_name: str
     username: str
-    email: str
+    email: Optional[str] = None
     grade_level: Optional[str] = None
 
 

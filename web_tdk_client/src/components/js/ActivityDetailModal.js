@@ -22,7 +22,7 @@ function ActivityDetailModal({ isOpen, onClose, activityData, studentName }) {
       ></div>
 
       {/* Modal Content */}
-      <div className="relative w-full max-w-3xl bg-white rounded-3xl shadow-2xl overflow-hidden transform transition-all animate-in fade-in zoom-in duration-200 max-h-[90vh] flex flex-col">
+      <div className="relative w-full max-w-3xl bg-white rounded-3xl shadow-2xl overflow-hidden transform transition-all animate-in fade-in zoom-in duration-200 max-h-[calc(100dvh-2rem)] flex flex-col">
         {/* Header */}
         <div className="bg-gradient-to-r from-indigo-500 to-violet-600 p-6 text-white shrink-0">
           <div className="flex items-center justify-between">
@@ -63,7 +63,8 @@ function ActivityDetailModal({ isOpen, onClose, activityData, studentName }) {
                         <th className="px-6 py-4">ชื่อวิชากิจกรรม</th>
                         <th className="px-4 py-4 text-center">คะแนนดิบ</th>
                         <th className="px-4 py-4 text-center">คะแนนเต็ม</th>
-                        <th className="px-4 py-4 text-center">เปอร์เซ็นต์</th>
+                        <th className="px-4 py-4 text-center">ร้อยละ</th>
+                        <th className="px-4 py-4 text-center">น้ำหนัก</th>
                         <th className="px-6 py-4 text-right">คะแนนที่ได้</th>
                       </tr>
                     </thead>
@@ -71,18 +72,28 @@ function ActivityDetailModal({ isOpen, onClose, activityData, studentName }) {
                       {activity_subjects.map((subject, idx) => (
                         <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
                           <td className="px-6 py-4">
-                            <div className="font-bold text-slate-700">{subject.subject_name}</div>
+                            <div className="font-bold text-slate-700 flex items-center gap-2">
+                              {subject.subject_name}
+                              {subject._isMerged && (
+                                <span className="text-[10px] font-black bg-emerald-100 text-emerald-600 px-2 py-0.5 rounded-full">รวม {subject._mergedCount} ภาค</span>
+                              )}
+                            </div>
                           </td>
-                          <td className="px-4 py-4 text-center font-medium text-slate-600">{subject.raw_score}</td>
-                          <td className="px-4 py-4 text-center font-medium text-slate-400">{subject.max_score}</td>
+                          <td className="px-4 py-4 text-center font-medium text-slate-600">{Math.round(subject.raw_score)}</td>
+                          <td className="px-4 py-4 text-center font-medium text-slate-400">{Math.round(subject.max_score)}</td>
                           <td className="px-4 py-4 text-center">
                             <span className="inline-flex items-center px-2 py-1 rounded-md bg-indigo-50 text-indigo-600 text-[10px] font-black">
-                              {subject.percentage}%
+                              {Math.round(subject.normalized_score || ((subject.raw_score / subject.max_score) * 100))}%
+                            </span>
+                          </td>
+                          <td className="px-4 py-4 text-center">
+                            <span className="inline-flex items-center px-2 py-1 rounded-md bg-purple-50 text-purple-600 text-[10px] font-black">
+                              {Math.round(subject.percentage)}%
                             </span>
                           </td>
                           <td className="px-6 py-4 text-right">
                             <span className="text-base font-black text-indigo-600">
-                              {subject.contribution}
+                              {Number(subject.contribution || 0).toFixed(1)}
                             </span>
                           </td>
                         </tr>
@@ -97,15 +108,15 @@ function ActivityDetailModal({ isOpen, onClose, activityData, studentName }) {
                 <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between">
                     <div>
                         <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">รวมเปอร์เซ็นต์</div>
-                        <div className="text-2xl font-black text-slate-700">{total_activity_percent}%</div>
+                        <div className="text-2xl font-black text-slate-700">{Math.round(total_activity_percent)}%</div>
                     </div>
                     <div className="w-12 h-12 bg-slate-50 rounded-xl flex items-center justify-center text-xl text-slate-400">📈</div>
                 </div>
 
                 <div className="bg-indigo-600 p-5 rounded-2xl shadow-lg shadow-indigo-100 flex items-center justify-between text-white">
                     <div>
-                        <div className="text-[10px] font-black text-indigo-100 uppercase tracking-widest mb-1">รวมคะแนนกิจกรรมคั้นเสร็จ</div>
-                        <div className="text-3xl font-black">{total_activity_score}</div>
+                        <div className="text-[10px] font-black text-indigo-100 uppercase tracking-widest mb-1">รวมคะแนนกิจกรรม</div>
+                        <div className="text-3xl font-black">{Math.round(total_activity_score)}</div>
                     </div>
                     <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center text-xl">🏆</div>
                 </div>
@@ -138,4 +149,3 @@ function ActivityDetailModal({ isOpen, onClose, activityData, studentName }) {
 }
 
 export default ActivityDetailModal;
-

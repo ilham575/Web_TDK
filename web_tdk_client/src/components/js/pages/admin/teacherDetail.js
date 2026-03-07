@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ToastContainer, toast } from 'react-toastify';
+import { toast } from 'react-toastify';
 import { 
   ArrowLeft, 
   User, 
@@ -163,8 +163,6 @@ function TeacherDetail() {
 
   return (
     <div className="min-h-screen bg-[#f8fafc] p-4 sm:p-8 lg:p-12">
-      <ToastContainer position="top-right" autoClose={3000} theme="light" />
-      
       <div className="max-w-6xl mx-auto space-y-8">
         {/* Navigation & Actions */}
         <div className="flex items-center justify-between animate-in fade-in slide-in-from-top-4 duration-500">
@@ -229,7 +227,7 @@ function TeacherDetail() {
                 </div>
                 <div className="space-y-1">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-center md:text-left">สถานะสมาชิก</p>
-                  <p className="text-2xl font-black text-emerald-600 flex items-center gap-2">Active <div className="w-3 h-3 bg-emerald-500 rounded-full animate-pulse"></div></p>
+                  <div className="text-2xl font-black text-emerald-600 flex items-center gap-2">Active <div className="w-3 h-3 bg-emerald-500 rounded-full animate-pulse"></div></div>
                 </div>
               </div>
             </div>
@@ -290,9 +288,16 @@ function TeacherDetail() {
                       <h4 className="text-xl font-black text-slate-800 mb-2 truncate group-hover:text-blue-600 transition-colors">
                         {s.name}
                       </h4>
-                      <div className="flex items-center gap-2 text-slate-400 font-bold text-xs uppercase tracking-tighter">
-                        <Clock className="w-3.5 h-3.5" />
-                        {s.is_ended ? 'จบหลักสูตรแล้ว' : 'กำลังทำการสอน'}
+                      <div className="flex items-center gap-3 text-slate-400 font-bold text-xs uppercase tracking-tighter">
+                        <div className="flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5" />
+                          {s.is_ended ? 'จบหลักสูตรแล้ว' : 'กำลังทำการสอน'}
+                        </div>
+                        {s.semester && (
+                          <div className="px-2.5 py-1 bg-amber-50 text-amber-600 rounded-lg border border-amber-100">
+                            เทอม {s.semester}
+                          </div>
+                        )}
                       </div>
                     </div>
 

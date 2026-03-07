@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X, GraduationCap, Calendar, Hash, ClipboardList, Plus, Loader2 } from 'lucide-react';
+import { API_BASE_URL } from '../../../endpoints';
 
 const CreateClassroomModal = ({
   isOpen,
@@ -8,12 +9,16 @@ const CreateClassroomModal = ({
   creatingClassroom,
   onCreateClassroom,
   onClose,
+  defaultYear,
+  defaultSemester,
 }) => {
   const { t } = useTranslation();
   const [gradeLevel, setGradeLevel] = useState('');
   const [roomNumber, setRoomNumber] = useState('');
-  const [semester, setSemester] = useState(1);
-  const [academicYear, setAcademicYear] = useState('');
+  const [semester, setSemester] = useState(defaultSemester || 1);
+  const [academicYear, setAcademicYear] = useState(defaultYear || '');
+  const [academicYears, setAcademicYears] = useState([]);
+  const [loadingYears, setLoadingYears] = useState(false);
 
   const generateClassName = () => {
     if (!gradeLevel) return '';
@@ -21,14 +26,44 @@ const CreateClassroomModal = ({
     return gradeLevel;
   };
 
+  const loadAcademicYears = async () => {
+    const schoolId = localStorage.getItem('school_id');
+    if (!schoolId) return;
+
+    setLoadingYears(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE_URL}/semester-periods?school_id=${schoolId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const periods = await res.json();
+        // Extract unique academic years and sort them descending
+        const years = [...new Set(periods.map(p => p.academic_year))].sort((a, b) => Number(b) - Number(a));
+        setAcademicYears(years);
+        // If no default year is set and we have years, set the first one as default
+        if (!academicYear && years.length > 0) {
+          setAcademicYear(years[0]);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load academic years:', e);
+    } finally {
+      setLoadingYears(false);
+    }
+  };
+
   useEffect(() => {
     if (!isOpen) {
       setGradeLevel('');
       setRoomNumber('');
-      setSemester(1);
-      setAcademicYear('');
+      setSemester(defaultSemester || 1);
+      setAcademicYear(defaultYear || '');
+    } else {
+      // Load academic years when modal opens
+      loadAcademicYears();
     }
-  }, [isOpen]);
+  }, [isOpen, defaultYear, defaultSemester]);
 
   const handleSubmit = async () => {
     await onCreateClassroom({
@@ -40,15 +75,15 @@ const CreateClassroomModal = ({
     });
     setGradeLevel('');
     setRoomNumber('');
-    setSemester(1);
-    setAcademicYear('');
+    setSemester(defaultSemester || 1);
+    setAcademicYear(defaultYear || '');
   };
 
   if (!isOpen || classroomStep !== 'select') return null;
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-6 backdrop-blur-sm bg-slate-900/40 animate-in fade-in duration-300">
-      <div className="bg-white w-full max-w-xl rounded-[2.5rem] shadow-2xl shadow-slate-900/20 overflow-hidden flex flex-col animate-in zoom-in-95 duration-300 max-h-[90vh]">
+      <div className="bg-white w-full max-w-xl rounded-[2.5rem] shadow-2xl shadow-slate-900/20 overflow-hidden flex flex-col animate-in zoom-in-95 duration-300 max-h-[calc(100dvh-2rem)]">
         {/* Header */}
         <div className="px-8 py-6 border-b border-slate-50 flex items-center justify-between bg-white sticky top-0 z-10">
           <div className="flex items-center gap-3">
@@ -73,7 +108,7 @@ const CreateClassroomModal = ({
         </div>
 
         {/* Body */}
-        <div className="p-8 overflow-y-auto space-y-6">
+        <div className="p-8 overflow-y-auto space-y-6 flex-1">
           <div className="bg-emerald-50/50 p-4 rounded-2xl border border-emerald-100/50">
             <p className="text-sm font-black text-emerald-800 flex items-center gap-2">
               <ClipboardList className="w-4 h-4" />
@@ -121,13 +156,27 @@ const CreateClassroomModal = ({
                   <Calendar className="w-3.5 h-3.5" />
                   {t('admin.academicYear')}
                 </label>
-                <input 
-                  className="w-full h-14 px-6 bg-slate-50 border-2 border-transparent focus:border-emerald-500 focus:bg-white rounded-2xl text-slate-700 font-bold text-sm outline-none transition-all placeholder:text-slate-300"
-                  type="text"
+                <select 
+                  className="w-full h-14 px-6 bg-slate-50 border-2 border-transparent focus:border-emerald-500 focus:bg-white rounded-2xl text-slate-700 font-bold text-sm outline-none transition-all appearance-none cursor-pointer disabled:opacity-50"
                   value={academicYear}
                   onChange={e => setAcademicYear(e.target.value)}
-                  placeholder={t('admin.academicYearExample')}
-                />
+                  disabled={loadingYears}
+                >
+                  {loadingYears ? (
+                    <option value="">{t('common.loading')}...</option>
+                  ) : academicYears.length === 0 ? (
+                    <option value="">{t('admin.noAcademicYears')}</option>
+                  ) : (
+                    academicYears.map(year => (
+                      <option key={year} value={year}>{year}</option>
+                    ))
+                  )}
+                </select>
+                {academicYears.length === 0 && !loadingYears && (
+                  <p className="px-1 text-[10px] font-bold text-amber-600 italic">
+                    {t('admin.setupAcademicYearFirst')}
+                  </p>
+                )}
               </div>
             </div>
 

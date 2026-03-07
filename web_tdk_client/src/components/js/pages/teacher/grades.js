@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ToastContainer, toast } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
+import { toast } from 'react-toastify';
 import { API_BASE_URL } from '../../../endpoints';
 import { 
   ArrowLeft, 
@@ -20,7 +19,9 @@ import {
   CheckCircle2,
   ChevronRight,
   Info,
-  ChevronDown
+  ChevronDown,
+  Award,
+  Table
 } from 'lucide-react';
 
 // Modal Component for Portability and Cleanliness
@@ -35,15 +36,15 @@ const Modal = ({ isOpen, onClose, title, children, footer, type = 'default' }) =
 
   return ReactDOM.createPortal(
     <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-300" onClick={onClose} />
-      <div className={`relative w-full ${type === 'summary' ? 'max-w-6xl' : 'max-w-lg'} bg-white rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300`}>
+      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={onClose} />
+      <div className={`relative w-full ${type === 'summary' ? 'max-w-6xl' : 'max-w-md'} bg-white rounded-[2rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 border border-white/20`}>
         <div className="p-8 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
           <h3 className="text-xl font-black text-slate-800 tracking-tight">{title}</h3>
           <button onClick={onClose} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all">
             <X className="w-6 h-6" />
           </button>
         </div>
-        <div className={`p-8 ${type === 'summary' ? 'max-h-[80vh] overflow-y-auto' : ''}`}>
+        <div className={`p-8 ${type === 'summary' ? 'max-h-[80vh] overflow-y-auto custom-scrollbar' : ''}`}>
           {children}
         </div>
         {footer && (
@@ -191,8 +192,8 @@ function GradesPage(){
           const name = data.name || data.title || data.subject_name || '';
           if (name) setSubjectName(name);
           if (data.subject_type) setSubjectType(data.subject_type);
-          setMaxCollectedScore(data.max_collected_score || 100);
-          setMaxExamScore(data.max_exam_score || 100);
+          setMaxCollectedScore((data.max_collected_score !== undefined && data.max_collected_score !== null) ? data.max_collected_score : 100);
+          setMaxExamScore((data.max_exam_score !== undefined && data.max_exam_score !== null) ? data.max_exam_score : 100);
         } else {
           if (students && students.length > 0) {
             const s = students[0];
@@ -340,7 +341,7 @@ function GradesPage(){
     }));
   };
 
-  const save = async ()=>{
+  const saveGrades = async ()=>{
     if (!title.trim()) {
       toast.error('กรุณาใส่หัวข้องาน');
       return;
@@ -603,9 +604,8 @@ function GradesPage(){
         }
       }
       
-      setDeletingAssignment(null);
       setShowDeleteModal(false);
-      await refreshAssignmentsAndGrades();
+      setDeletingAssignment(null);
       toast.success('ลบหัวข้องานเรียบร้อยแล้ว');
     } catch (err) {
       console.error('Failed to delete assignment:', err);
@@ -613,264 +613,217 @@ function GradesPage(){
     }
   };
 
+  // ----------------------------------------------------------------------------------
+  // Summary calculations
+  // ----------------------------------------------------------------------------------
   const calculateStudentSummary = (studentId) => {
-    let rawCollectedScore = 0;
-    let rawCollectedMax = 0;
-    let rawExamScore = 0;
-    let rawExamMax = 0;
-    let activityScore = 0;
-    let activityMax = 0;
-    
-    const assignmentDetails = [];
-
-    // Assignments from the database
-    assignments.forEach(assignment => {
-      // PROPER FILTER: Only show assignments belonging to the student's classroom OR global assignments
-      const student = students.find(s => s.id === studentId);
-      // Try to find classroom ID from various possible student properties
-      const studentClassId = (student?.classroom?.id) || (student?.classroom_id) || null;
-      
-      if (assignment.classroom_id && assignment.classroom_id !== studentClassId) return;
-
-      // Exclude system summary titles from raw calculations and details list
-      if (assignment.title === "คะแนนเก็บรวม" || assignment.title === "คะแนนสอบรวม") return;
-
-      const assignmentGrades = grades[assignment.id] || {};
-      const rawScore = assignmentGrades[studentId] ? Number(assignmentGrades[studentId]) : 0;
-      const score = Math.min(rawScore, assignment.max_score);
-      const maxScore = assignment.max_score;
-
-      const isExam = checkIsExam(assignment.title);
-      
-      if (subjectType === 'activity') {
-        activityScore += score;
-        activityMax += maxScore;
-      } else {
-        if (isExam) {
-          rawExamScore += score;
-          rawExamMax += maxScore;
-        } else {
-          rawCollectedScore += score;
-          rawCollectedMax += maxScore;
-        }
-      }
-
-      assignmentDetails.push({
-        id: assignment.id,
-        title: assignment.title,
-        score: score,
-        maxScore: maxScore,
-        isExam: isExam,
-        percentage: maxScore > 0 ? Math.round((score / maxScore) * 100) : 0
-      });
-    });
-
-    const hasRealCollectedAssignments = assignments.some(a => !checkIsExam(a.title) && a.title !== "คะแนนเก็บรวม");
-    const hasRealExamAssignments = assignments.some(a => checkIsExam(a.title) && a.title !== "คะแนนสอบรวม");
-
-    // Final Calculate based on Admin Max Scores
     let collectedScore = 0;
     let examScore = 0;
-    let totalScore = 0;
-    let totalMaxScore = (subjectType === 'activity') ? maxCollectedScore : (maxCollectedScore + maxExamScore);
+    // Map to store details for each assignment
+    const assignmentDetails = assignments.map(a => {
+      const rawScore = grades[a.id] ? grades[a.id][studentId] : null;
+      const score = (rawScore !== null && rawScore !== undefined && rawScore !== '') ? Number(rawScore) : 0;
+      const isExam = checkIsExam(a.title);
 
-    // Look for manual summary grades if no real assignments
-    const student = students.find(s => s.id === studentId);
-    const studentClassId = (student?.classroom?.id) || (student?.classroom_id) || selectedClass?.id || null;
-    const manualCollected = grades["คะแนนเก็บรวม"]?.[studentId] || (studentClassId ? grades[`คะแนนเก็บรวม::${studentClassId}`]?.[studentId] : null);
-    const manualExam = grades["คะแนนสอบรวม"]?.[studentId] || (studentClassId ? grades[`คะแนนสอบรวม::${studentClassId}`]?.[studentId] : null);
-
-    if (subjectType === 'activity') {
-      if (assignments.length === 0 && manualCollected !== undefined) {
-        totalScore = Math.min(Number(manualCollected), maxCollectedScore);
+      if (subjectType !== 'activity') {
+        if (isExam) examScore += score;
+        else collectedScore += score;
       } else {
-        totalScore = activityMax > 0 ? Math.round((activityScore / activityMax) * maxCollectedScore) : activityScore;
+        // Activity type: just sum everything to total
+        collectedScore += score; 
       }
-    } else {
-      // Collected Score
-      if (!hasRealCollectedAssignments && manualCollected !== undefined) {
-        collectedScore = Math.min(Number(manualCollected), maxCollectedScore);
-      } else {
-        collectedScore = rawCollectedMax > 0 ? Math.round((rawCollectedScore / rawCollectedMax) * maxCollectedScore) : rawCollectedScore;
-      }
+      
+      return {
+        id: a.id,
+        title: a.title,
+        score: score,
+        max: a.max_score,
+        percentage: calculatePercentage(score, a.max_score)
+      };
+    });
 
-      // Exam Score
-      if (!hasRealExamAssignments && manualExam !== undefined) {
-        examScore = Math.min(Number(manualExam), maxExamScore);
-      } else {
-        examScore = rawExamMax > 0 ? Math.round((rawExamScore / rawExamMax) * maxExamScore) : rawExamScore;
-      }
-
-      totalScore = collectedScore + examScore;
+    if (subjectType !== 'activity') {
+      collectedScore = Math.min(collectedScore, maxCollectedScore);
+      examScore = Math.min(examScore, maxExamScore);
     }
+    
+    // For Activity based: collectedScore holds the sum of all assignments
+    // For Main based: collectedScore is capped sum of non-exams, examScore is capped sum of exams
+    
+    const totalScore = Math.min(collectedScore + examScore, 100);
+    const overallGrade = (subjectType === 'activity') 
+      ? (totalScore >= 50 ? 'ผ่าน' : 'ไม่ผ่าน')
+      : calculateGrade(totalScore);
 
-    const overallPercentage = totalMaxScore > 0 ? Math.round((totalScore / totalMaxScore) * 100) : 0;
-    const overallGrade = calculateGrade(overallPercentage);
-
-    return { 
-      totalScore, 
-      totalMaxScore, 
-      collectedScore, 
-      examScore, 
-      overallPercentage, 
-      overallGrade, 
-      assignmentDetails 
+    return {
+      collectedScore,
+      examScore,
+      totalScore,
+      totalMaxScore: 100, // standard base
+      overallGrade,
+      assignmentDetails
     };
   };
 
-  const getClassKey = (s) => {
-    if (!s) return 'label:Default';
-    if (s.classroom && (s.classroom.name || s.classroom.id)) return s.classroom.id ? `id:${s.classroom.id}` : `label:${s.classroom.name || String(s.classroom.id)}`;
-    if (s.classroom_name) return `label:${s.classroom_name}`;
-    if (s.class_name) return `label:${s.class_name}`;
-    if (s.grade_level && s.section) return `label:${s.grade_level} ${s.section}`;
-    if (s.grade_level) return `label:${s.grade_level}`;
-    if (s.homeroom) return `label:${s.homeroom}`;
-    if (s.section) return `label:${s.section}`;
-    return 'label:Default';
-  };
-
-  const visibleStudents = selectedClass ? students.filter(s => getClassKey(s) === selectedClass.key) : students;
-  const selectedAssignmentObj = assignments.find(a => a.id === selectedAssignmentId);
-  const selectedAssignmentClassLabel = selectedAssignmentObj ? (selectedAssignmentObj.classroom_id ? (classes.find(c => c.id === selectedAssignmentObj.classroom_id)?.label || `#${selectedAssignmentObj.classroom_id}`) : 'ทุกชั้น') : '';
+  const visibleStudents = students.filter(s => {
+    if (!selectedClass) return true;
+    const sId = s.classroom ? s.classroom.id : null;
+    if (selectedClass.id && sId) return sId === selectedClass.id;
+    return selectedClass.label === (
+            (s.classroom_name) || 
+            (s.class_name) || 
+            (s.grade_level && s.section ? `${s.grade_level} ${s.section}` : '') ||
+            (s.grade_level ? String(s.grade_level) : '') ||
+            (s.homeroom) ||
+            (s.section) ||
+            'Default'
+          );
+  });
+  const selectedAssignmentClassLabel = assignments.find(a => a.id === selectedAssignmentId)?.classroom_id 
+    ? (classes.find(c => c.id === assignments.find(a => a.id === selectedAssignmentId)?.classroom_id)?.label || 'Specific Class') 
+    : 'All Classes';
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] pb-20">
-      <ToastContainer position="top-right" autoClose={3000} hideProgressBar />
-      
-      {/* Navigation Header */}
-      <div className="bg-white border-b border-slate-200 sticky top-0 z-30">
+    <div className="min-h-screen bg-slate-50 pb-20 font-sans selection:bg-emerald-100 selection:text-emerald-900">
+      {/* Top Navigation Bar */}
+      <div className="bg-white/80 backdrop-blur-md border-b border-slate-200/60 sticky top-0 z-30 transition-all duration-300">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-20">
-            <div className="flex items-center gap-5">
+            <div className="flex items-center gap-6">
               <button 
                 onClick={() => navigate(-1)}
-                className="p-2.5 bg-slate-50 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-2xl transition-all active:scale-95 border border-slate-100"
+                className="group p-3 bg-white text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-2xl transition-all duration-300 active:scale-95 border border-slate-100 shadow-sm hover:shadow-md hover:border-emerald-100"
               >
-                <ArrowLeft className="w-5 h-5" />
+                <ArrowLeft className="w-5 h-5 group-hover:-translate-x-0.5 transition-transform" />
               </button>
               <div>
-                <h1 className="text-xl font-black text-slate-800 tracking-tight leading-none">บันทึกคะแนนรายวิชา</h1>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1.5 flex items-center gap-1.5">
-                  <BookOpen className="w-3 h-3 text-emerald-500" />
-                  {subjectName || `วิชา #${id}`}
-                </p>
+                <h1 className="text-2xl font-black text-slate-800 tracking-tight leading-none">
+                  บันทึกคะแนน
+                </h1>
+                <div className="flex items-center gap-2 mt-2">
+                  <span className="bg-emerald-100 text-emerald-700 text-[10px] font-black px-2 py-0.5 rounded-lg uppercase tracking-wider">
+                    GRADES
+                  </span>
+                  <p className="text-xs font-bold text-slate-400 flex items-center gap-1.5 truncat max-w-[200px] sm:max-w-md">
+                    <span className="w-1 h-1 rounded-full bg-slate-300"></span>
+                    {subjectName || `วิชา #${id}`}
+                  </p>
+                </div>
               </div>
             </div>
             
-            <div className="flex items-center gap-3">
-              <button 
-                onClick={() => navigate(`/teacher/subject/${id}/summary`)}
-                className="flex items-center gap-2 px-3 sm:px-6 py-3.5 bg-emerald-50 text-emerald-600 rounded-2xl font-black text-sm hover:bg-emerald-100 transition-all active:scale-95 border border-emerald-100"
-              >
-                <FileText className="w-5 h-5" />
-                <span className="hidden sm:inline">รายงานคะแนน</span>
-              </button>
-              <button 
-                onClick={() => setShowSummaryModal(true)}
-                className="hidden md:flex items-center gap-2 px-6 py-3.5 bg-slate-100 text-slate-600 rounded-2xl font-black text-sm hover:bg-slate-200 transition-all active:scale-95"
-              >
-                <BarChart3 className="w-5 h-5" />
-                <span>สรุปคะแนน</span>
-              </button>
-              <button 
-                onClick={save}
-                disabled={!selectedAssignmentId}
-                className="flex items-center gap-2 px-6 py-3.5 bg-emerald-600 text-white rounded-2xl font-black text-sm shadow-xl shadow-emerald-100 hover:bg-emerald-700 transition-all active:scale-95 disabled:opacity-50"
-              >
-                <Save className="w-5 h-5" />
-                <span>บันทึกคะแนน</span>
-              </button>
-            </div>
+            <button 
+              onClick={saveGrades}
+              className="group flex items-center gap-2.5 px-6 py-3.5 bg-emerald-600 text-white rounded-2xl font-black text-sm shadow-lg shadow-emerald-200 hover:bg-emerald-700 hover:shadow-emerald-300 hover:-translate-y-0.5 transition-all duration-300 active:scale-95"
+            >
+              <Save className="w-5 h-5 group-hover:scale-110 transition-transform" />
+              <span className="hidden sm:inline">บันทึกคะแนน</span>
+            </button>
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          
-          {/* Sidebar Controls */}
-          <div className="lg:col-span-4 space-y-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+        
+        {/* Controls and Stats */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-8">
+          {/* Left Controls */}
+          <div className="lg:col-span-8 flex flex-col gap-6">
             
-            {/* Class Selector */}
-            {classes.length > 1 && (
-              <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 p-8">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600 shadow-sm">
-                    <LayoutGrid className="w-5 h-5" />
-                  </div>
-                  <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">เลือกสำรวจชั้นเรียน</h3>
-                </div>
-                <div className="space-y-2">
-                  {classes.map(c => (
-                    <button
-                      key={c.key}
-                      onClick={() => setSelectedClass(c)}
-                      className={`w-full flex items-center justify-between px-5 py-4 rounded-2xl font-bold text-sm transition-all ${
-                        selectedClass?.key === c.key 
-                        ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-100 translate-x-1' 
-                        : 'bg-slate-50 text-slate-500 hover:bg-slate-100'
-                      }`}
-                    >
-                      <span>{c.label}</span>
-                      {selectedClass?.key === c.key && <CheckCircle2 className="w-4 h-4" />}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
+            {/* Quick Actions Row */}
+            <div className="flex flex-col sm:flex-row gap-4">
+              <button 
+                onClick={() => setShowSummaryModal(true)}
+                className="flex-1 bg-white rounded-[2rem] p-6 border border-slate-100/60 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group flex items-center gap-4"
+              >
+                 <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform">
+                    <BarChart3 className="w-6 h-6" />
+                 </div>
+                 <div className="text-left">
+                    <h3 className="text-base font-black text-slate-800 group-hover:text-blue-700 transition-colors">สรุปคะแนน</h3>
+                    <p className="text-xs font-medium text-slate-400">ดูเกรดรวมทั้งห้อง</p>
+                 </div>
+              </button>
 
-            {/* Assignment Selector */}
-            <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 p-8 overflow-hidden">
-               <div className="flex items-center justify-between mb-6">
-                 <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 shadow-sm">
-                      <FileText className="w-5 h-5" />
+              <div className="flex-[2] bg-white rounded-[2rem] p-6 border border-slate-100/60 shadow-sm flex items-center gap-4 relative overflow-hidden group">
+                  <div className="relative z-10 flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                        <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                            <BookOpen className="w-4 h-4" />
+                        </div>
+                        <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest">ชั้นเรียนที่เลือก</h3>
                     </div>
-                    <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">หัวข้องาน</h3>
+                    {classes.length > 1 ? (
+                      <div className="relative group/select">
+                          <select
+                          value={selectedClassId || ''}
+                          onChange={(e) => {
+                             const cls = classes.find(c => String(c.id) === e.target.value) || classes.find(c => c.label === e.target.value);
+                             setSelectedClass(cls);
+                          }}
+                          className="w-full bg-slate-50 border-2 border-slate-100 text-slate-800 text-lg font-bold rounded-xl px-4 py-3 appearance-none cursor-pointer focus:border-emerald-500 focus:bg-white transition-colors outline-none pr-10"
+                          >
+                            <option value="">ทั้งหมด / เลือกห้อง</option>
+                            {classes.map((cls) => (
+                              <option key={cls.key} value={cls.id || cls.label}>{cls.label}</option>
+                            ))}
+                          </select>
+                          <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none group-hover/select:text-slate-600 transition-colors" />
+                      </div>
+                    ) : (
+                      <div className="bg-slate-50/50 rounded-xl p-3 border border-slate-100/60 font-bold text-slate-600">
+                         {classes.length > 0 ? classes[0].label : 'กำลังโหลด...'}
+                      </div>
+                    )}
+                  </div>
+              </div>
+            </div>
+
+            {/* Assignment Selector Card */}
+            <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100/60 p-8">
+               <div className="flex items-center justify-between mb-6">
+                 <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-600 shadow-inner">
+                      <FileText className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-black text-slate-800">เลือกงานที่จะกรอกคะแนน</h3>
+                      <p className="text-xs text-slate-400 font-medium">จัดการคะแนนรายหัวข้อ</p>
+                    </div>
                  </div>
                  <button 
                   onClick={createNewAssignment}
-                  disabled={classes.length > 1 && !selectedClass}
-                  className="p-2 bg-emerald-50 text-emerald-600 rounded-xl hover:bg-emerald-100 transition-colors disabled:opacity-50"
+                  className="group flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-600 rounded-xl font-bold text-xs hover:bg-emerald-100 transition-all uppercase tracking-wider"
                  >
-                   <Plus className="w-5 h-5" />
+                   <Plus className="w-4 h-4 group-hover:scale-110 transition-transform" /> เพิ่มงานใหม่
                  </button>
                </div>
 
                {assignments.length === 0 ? (
-                 <div className="text-center py-8">
-                    <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <FileText className="w-8 h-8 text-slate-200" />
-                    </div>
-                    <p className="text-slate-400 font-bold text-sm">ยังไม่มีหัวข้องาน</p>
-                    <button 
-                      onClick={createNewAssignment}
-                      className="mt-4 text-emerald-600 font-black text-xs uppercase tracking-widest hover:underline"
-                    >
-                      + สร้างใหม่ตอนนี้
-                    </button>
+                 <div className="text-center py-12 bg-slate-50/50 rounded-3xl border-2 border-dashed border-slate-200">
+                    <p className="text-slate-400 font-bold">ยังไม่มีหัวข้องานในระบบ</p>
+                    <button onClick={createNewAssignment} className="text-emerald-600 font-black text-sm mt-2 hover:underline">สร้างงานแรกของคุณเลย</button>
                  </div>
                ) : (
-                <div className="space-y-3">
-                  <div className="relative">
+                <div className="space-y-4">
+                  <div className="relative group/assign-select">
                     <select
                       value={selectedAssignmentId || ''}
                       onChange={(e) => selectAssignment(e.target.value)}
-                      className="w-full pl-5 pr-11 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 text-sm font-black transition-all outline-none appearance-none cursor-pointer"
+                      className="w-full pl-6 pr-12 py-5 bg-white border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 text-base font-black text-slate-700 transition-all outline-none appearance-none cursor-pointer shadow-sm hover:border-emerald-200"
                     >
-                      <option value="">-- เลือกหัวข้องาน --</option>
+                      <option value="">-- กรุณาเลือกหัวข้องาน --</option>
                       {assignments.map(a => (
                         <option key={a.id} value={a.id}>
-                          {a.title} ({a.max_score} คะแนน)
+                          {a.title} (เต็ม {a.max_score})
                         </option>
                       ))}
                     </select>
-                    <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
+                    <ChevronDown className="absolute right-6 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none group-hover/assign-select:text-emerald-500 transition-colors" />
                   </div>
 
                   {selectedAssignmentId && (
-                    <div className="flex gap-2">
+                    <div className="flex gap-3 animate-in fade-in slide-in-from-top-2">
                        <button
                         onClick={() => {
                           const a = assignments.find(x => x.id === selectedAssignmentId);
@@ -879,9 +832,9 @@ function GradesPage(){
                           setEditAssignmentMaxScore(a.max_score);
                           setShowEditModal(true);
                         }}
-                        className="flex-1 flex items-center justify-center gap-2 py-3 bg-slate-50 text-slate-500 rounded-xl font-bold text-xs hover:bg-slate-100 transition-colors"
+                        className="flex-1 flex items-center justify-center gap-2 py-3 bg-slate-50 text-slate-500 rounded-xl font-bold text-xs hover:bg-white hover:shadow-md hover:text-slate-700 transition-all border border-transparent hover:border-slate-100"
                        >
-                         <Edit2 className="w-3.5 h-3.5" /> แก้ไข
+                         <Edit2 className="w-3.5 h-3.5" /> แก้ไขชื่อ/คะแนนเต็ม
                        </button>
                        <button
                         onClick={() => {
@@ -889,65 +842,78 @@ function GradesPage(){
                           setDeletingAssignment(a);
                           setShowDeleteModal(true);
                         }}
-                        className="flex-1 flex items-center justify-center gap-2 py-3 bg-slate-50 text-rose-500 rounded-xl font-bold text-xs hover:bg-rose-50 transition-colors"
+                        className="flex-1 flex items-center justify-center gap-2 py-3 bg-rose-50 text-rose-500 rounded-xl font-bold text-xs hover:bg-rose-100 hover:shadow-md transition-all border border-transparent hover:border-rose-200"
                        >
-                         <Trash2 className="w-3.5 h-3.5" /> ลบ
+                         <Trash2 className="w-3.5 h-3.5" /> ลบงานนี้
                        </button>
                     </div>
                   )}
                 </div>
                )}
             </div>
-
-            {/* Visual Reminder */}
-            {selectedAssignmentId && (
-              <div className="bg-amber-50 rounded-[2.5rem] p-8 border border-amber-100">
-                <div className="flex gap-4">
-                  <div className="w-10 h-10 bg-amber-200/50 rounded-xl flex items-center justify-center text-amber-700 shrink-0">
-                    <Info className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h4 className="text-amber-800 font-black text-sm tracking-tight mb-1">คำแนะนำ</h4>
-                    <p className="text-amber-700/70 text-[11px] font-bold leading-relaxed uppercase tracking-wider">
-                      หลังจากกรอกคะแนนแล้ว อย่าลืมกดปุ่ม "บันทึกคะแนน" ด้านบนเพื่อยืนยันข้อมูล
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
 
-          {/* Main Content Areas */}
-          <div className="lg:col-span-8">
-            <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden min-h-[400px]">
+          {/* Right Stats (Summary) */}
+          <div className="lg:col-span-4">
+               <div className="h-full bg-slate-900 rounded-[2.5rem] shadow-xl shadow-slate-200 p-8 text-white overflow-hidden relative group">
+                  <div className="absolute inset-0 bg-gradient-to-br from-slate-800 to-slate-950"></div>
+                  <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 group-hover:bg-emerald-500/20 transition-colors duration-700"></div>
+                  
+                  <div className="relative z-10 flex flex-col h-full">
+                     <div className="flex items-center gap-3 mb-8">
+                        <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center backdrop-blur-sm">
+                           <Award className="w-5 h-5 text-emerald-400" />
+                        </div>
+                        <div>
+                           <h3 className="text-sm font-black uppercase tracking-widest text-emerald-400">ภาพรวมคะแนน</h3>
+                           <p className="text-xs text-slate-400 font-medium">สถิติห้องเรียนปัจจุบัน</p>
+                        </div>
+                     </div>
+
+                     <div className="space-y-4 flex-1">
+                        <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-5 border border-white/5">
+                           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">จำนวนงานทั้งหมด</p>
+                           <p className="text-3xl font-black">{assignments.length} <span className="text-xs font-bold text-slate-500">Assignments</span></p>
+                        </div>
+                        
+                        <div className="bg-gradient-to-r from-emerald-500/20 to-teal-500/20 backdrop-blur-sm rounded-2xl p-5 border border-emerald-500/20">
+                            <p className="text-[10px] font-black text-emerald-300 uppercase tracking-widest mb-1">นักเรียนที่แสดงผล</p>
+                            <p className="text-3xl font-black text-emerald-400">{visibleStudents.length} <span className="text-xs font-bold text-emerald-500/50">Students</span></p>
+                        </div>
+                     </div>
+                  </div>
+               </div>
+          </div>
+        </div>
+
+        {/* Grades Table */}
+        <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100/60 overflow-hidden flex flex-col min-h-[500px]">
               
               {!selectedAssignmentId ? (
-                <div className="flex flex-col items-center justify-center h-full py-24 text-center px-8">
-                  <div className="w-24 h-24 bg-slate-50 rounded-[2rem] flex items-center justify-center mb-6">
-                    <BarChart3 className="w-10 h-10 text-slate-200" />
+                <div className="flex flex-col items-center justify-center flex-grow py-32 text-center px-8">
+                  <div className="w-28 h-28 bg-slate-50 rounded-[2.5rem] flex items-center justify-center mb-8 shadow-inner animate-in zoom-in-50 duration-500">
+                    <Table className="w-12 h-12 text-slate-300" />
                   </div>
-                  <h2 className="text-xl font-black text-slate-800 tracking-tight mb-2">ยังไม่มีตารางการให้คะแนน</h2>
-                  <p className="text-slate-400 font-bold text-sm max-w-xs leading-relaxed">
-                    {!selectedClass && classes.length > 1 
-                      ? "กรุณาเลือกชั้นเรียนจากรายการด้านซ้ายเพื่อดูข้อมูล" 
-                      : "เลือกหัวข้องาน หรือสร้างหัวข้องานใหม่เพื่อเริ่มบันทึกคะแนนให้กับนักเรียนของคุณ"}
+                  <h2 className="text-2xl font-black text-slate-800 tracking-tight mb-3">พร้อมบันทึกคะแนนหรือยัง?</h2>
+                  <p className="text-slate-400 font-medium text-base max-w-sm leading-relaxed mx-auto">
+                    กรุณาเลือกหัวข้องานจากด้านบน หรือสร้างงานใหม่เพื่อเริ่มกรอกคะแนนให้กับนักเรียน
                   </p>
                 </div>
               ) : (
                 <>
-                  <div className="p-8 border-b border-slate-50 bg-slate-50/20">
+                  <div className="p-8 border-b border-slate-50 bg-white sticky top-0 z-20">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                      <div className="flex items-center gap-4">
-                        <div className="w-14 h-14 bg-white shadow-sm border border-slate-100 rounded-2xl flex items-center justify-center text-emerald-600">
-                          <CheckCircle2 className="w-7 h-7" />
+                      <div className="flex items-center gap-5">
+                        <div className="w-16 h-16 bg-emerald-50 shadow-inner rounded-2xl flex items-center justify-center text-emerald-600 border border-emerald-100/50">
+                          <CheckCircle2 className="w-8 h-8" />
                         </div>
                         <div>
-                          <h2 className="text-[17px] font-black text-slate-800 tracking-tight leading-none">{title}</h2>
-                          <div className="flex items-center gap-4 mt-2">
-                             <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest bg-emerald-50 px-2 py-0.5 rounded">
-                               MAX: {maxScore} PTS
+                          <h2 className="text-xl font-black text-slate-800 tracking-tight leading-none mb-1">{title}</h2>
+                          <div className="flex items-center gap-3">
+                             <span className="text-[10px] font-black text-white uppercase tracking-widest bg-emerald-500 px-2.5 py-1 rounded-lg shadow-sm shadow-emerald-200">
+                               Max Score: {maxScore}
                              </span>
-                             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-l border-slate-200 pl-4 flex items-center gap-1">
+                             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-100">
                                <LayoutGrid className="w-3 h-3" /> {selectedAssignmentClassLabel}
                              </span>
                           </div>
@@ -960,36 +926,43 @@ function GradesPage(){
                   <div className="hidden md:block overflow-x-auto">
                     <table className="w-full">
                       <thead>
-                        <tr className="bg-slate-50/50">
-                          <th className="px-8 py-5 text-left text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">ข้อมูลนักเรียน</th>
-                          <th className="px-8 py-5 text-center text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">คะแนน / เกรด</th>
+                        <tr className="bg-slate-50/50 border-b border-slate-50">
+                          <th className="px-8 py-6 text-left text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] w-[40%]">ข้อมูลนักเรียน</th>
+                          <th className="px-8 py-6 text-center text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">คะแนน / เกรด</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
-                        {visibleStudents.map((s, idx) => {
+                        {visibleStudents.length === 0 ? (
+                           <tr>
+                              <td colSpan="2" className="py-20 text-center">
+                                 <p className="text-slate-400 font-bold">ไม่พบนักเรียนในห้องที่เลือก</p>
+                              </td>
+                           </tr>
+                        ) : visibleStudents.map((s, idx) => {
                           const currentGrades = grades[selectedAssignmentId] || {};
                           const score = currentGrades[s.id] ? Number(currentGrades[s.id]) : null;
                           const percentage = score !== null ? calculatePercentage(score, maxScore) : null;
                           const gradeLetter = percentage !== null ? calculateGrade(percentage) : null;
                           const isInvalid = currentGrades[s.id] && Number(currentGrades[s.id]) > maxScore;
+                          const studentNo = s.student_number || s.classroom?.student_number || '-';
 
                           return (
                             <tr key={s.id} className="group hover:bg-slate-50/50 transition-colors">
-                              <td className="px-8 py-6">
-                                <div className="flex items-center gap-4">
-                                  <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 font-black text-xs border-2 border-white group-hover:border-emerald-100 transition-all">
-                                    {idx + 1}
+                              <td className="px-8 py-5 align-middle">
+                                <div className="flex items-center gap-5">
+                                  <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-slate-400 font-black text-sm border border-slate-100 shadow-sm group-hover:border-emerald-200 group-hover:text-emerald-600 transition-all">
+                                    {studentNo !== '-' ? studentNo : idx + 1}
                                   </div>
                                   <div>
-                                    <h4 className="text-sm font-black text-slate-800 group-hover:text-emerald-600 transition-colors">
+                                    <h4 className="text-sm font-black text-slate-800 group-hover:text-emerald-700 transition-colors">
                                       {s.full_name || s.username}
                                     </h4>
-                                    <p className="text-[11px] font-bold text-slate-400 mt-0.5 uppercase tracking-tighter">STUDENT ID: {s.id}</p>
+                                    <p className="text-[11px] font-bold text-slate-400 mt-1 uppercase tracking-tight bg-slate-100 px-1.5 py-0.5 rounded-md inline-block">ID: {s.id}</p>
                                   </div>
                                 </div>
                               </td>
-                              <td className="px-8 py-6">
-                                <div className="flex flex-col items-center gap-2">
+                              <td className="px-8 py-5 align-middle">
+                                <div className="flex flex-col items-center gap-3">
                                   <div className="relative">
                                     <input
                                       type="number"
@@ -998,16 +971,16 @@ function GradesPage(){
                                       value={currentGrades[s.id] || ''}
                                       onChange={e=>setGrade(s.id, e.target.value)}
                                       placeholder="-"
-                                      className={`w-28 px-4 py-3 bg-white border rounded-2xl text-center text-sm font-black transition-all outline-none focus:ring-4 ${
+                                      className={`w-32 px-4 py-3 bg-white border-2 rounded-2xl text-center text-lg font-black transition-all outline-none focus:scale-105 shadow-sm ${
                                         isInvalid 
-                                        ? 'border-rose-300 bg-rose-50 text-rose-600 focus:ring-rose-500/10' 
-                                        : 'border-slate-100 hover:border-slate-300 focus:border-emerald-500 focus:ring-emerald-500/10'
+                                        ? 'border-rose-200 bg-rose-50 text-rose-600 focus:border-rose-400 focus:ring-4 focus:ring-rose-100' 
+                                        : 'border-slate-100 text-slate-700 focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100 hover:border-slate-300'
                                       }`}
                                     />
                                     {gradeLetter && (
-                                       <span className={`absolute -right-12 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center rounded-xl text-[11px] font-black border uppercase ${
-                                         percentage >= 80 ? 'bg-emerald-600 text-white border-emerald-600 shadow-lg shadow-emerald-200' :
-                                         percentage >= 70 ? 'bg-blue-600 text-white border-blue-600' :
+                                       <span className={`absolute -right-14 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center rounded-xl text-xs font-black border uppercase shadow-sm ${
+                                         percentage >= 80 ? 'bg-emerald-500 text-white border-emerald-500 shadow-emerald-200' :
+                                         percentage >= 70 ? 'bg-blue-500 text-white border-blue-500' :
                                          percentage >= 50 ? 'bg-amber-100 text-amber-600 border-amber-200' :
                                          'bg-rose-100 text-rose-600 border-rose-200'
                                        }`}>
@@ -1017,13 +990,13 @@ function GradesPage(){
                                   </div>
                                   
                                   {isInvalid && (
-                                    <span className="text-[10px] font-black text-rose-500 flex items-center gap-1 animate-pulse uppercase">
-                                      <AlertTriangle className="w-3 h-3" /> Exceeds Max
+                                    <span className="text-[10px] font-black text-rose-500 flex items-center gap-1 animate-pulse uppercase bg-rose-50 px-2 py-0.5 rounded-full">
+                                      <AlertTriangle className="w-3 h-3" /> Exceeds limit
                                     </span>
                                   )}
                                   
                                   {percentage !== null && !isInvalid && (
-                                    <div className="w-28 h-1 bg-slate-100 rounded-full overflow-hidden">
+                                    <div className="w-32 h-1.5 bg-slate-100 rounded-full overflow-hidden">
                                       <div 
                                         className={`h-full transition-all duration-500 ${
                                           percentage >= 80 ? 'bg-emerald-500' : percentage >= 50 ? 'bg-amber-500' : 'bg-rose-500'
@@ -1042,29 +1015,34 @@ function GradesPage(){
                   </div>
 
                   {/* Mobile View: Cards */}
-                  <div className="md:hidden grid grid-cols-1 divide-y divide-slate-100">
-                      {visibleStudents.map((s, idx) => {
+                  <div className="md:hidden grid grid-cols-1 divide-y divide-slate-100 bg-slate-50/30">
+                      {visibleStudents.length === 0 ? (
+                           <div className="py-20 text-center">
+                                 <p className="text-slate-400 font-bold">ไม่พบนักเรียนในห้องที่เลือก</p>
+                           </div>
+                      ) : visibleStudents.map((s, idx) => {
                           const currentGrades = grades[selectedAssignmentId] || {};
                           const score = currentGrades[s.id] ? Number(currentGrades[s.id]) : null;
                           const percentage = score !== null ? calculatePercentage(score, maxScore) : null;
                           const gradeLetter = percentage !== null ? calculateGrade(percentage) : null;
                           const isInvalid = currentGrades[s.id] && Number(currentGrades[s.id]) > maxScore;
+                          const studentNo = s.student_number || s.classroom?.student_number || '-';
 
                           return (
-                              <div key={s.id} className="p-4 flex flex-col gap-4">
+                              <div key={s.id} className="p-5 flex flex-col gap-5 bg-white">
                                   <div className="flex items-center gap-4">
-                                    <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 font-black text-xs border-2 border-white">
-                                      {idx + 1}
+                                    <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400 font-black text-sm border border-slate-100 shadow-sm">
+                                      {studentNo !== '-' ? studentNo : idx + 1}
                                     </div>
                                     <div>
-                                      <h4 className="text-sm font-black text-slate-800">
+                                      <h4 className="text-base font-black text-slate-800">
                                         {s.full_name || s.username}
                                       </h4>
-                                      <p className="text-[11px] font-bold text-slate-400 mt-0.5 uppercase tracking-tighter">STUDENT ID: {s.id}</p>
+                                      <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-tight bg-slate-100 px-1.5 py-0.5 rounded inline-block">ID: {s.id}</p>
                                     </div>
                                   </div>
 
-                                  <div className="flex items-start justify-between pl-[3.5rem] bg-slate-50/50 p-4 rounded-xl border border-slate-50/50">
+                                  <div className="flex items-start justify-between pl-[4rem]">
                                       <div className="flex flex-col gap-1.5">
                                           <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Score Input</span>
                                           <input
@@ -1074,10 +1052,10 @@ function GradesPage(){
                                             value={currentGrades[s.id] || ''}
                                             onChange={e=>setGrade(s.id, e.target.value)}
                                             placeholder="—"
-                                            className={`w-24 px-4 py-3 bg-white border rounded-xl text-center text-lg font-black transition-all outline-none focus:ring-4 ${
+                                            className={`w-32 px-4 py-3 bg-white border-2 rounded-xl text-center text-lg font-black transition-all outline-none focus:ring-4 shadow-sm ${
                                               isInvalid 
-                                              ? 'border-rose-300 bg-rose-50 text-rose-600 focus:ring-rose-500/10' 
-                                              : 'border-slate-100 hover:border-slate-300 focus:border-emerald-500 focus:ring-emerald-500/10'
+                                              ? 'border-rose-200 bg-rose-50 text-rose-600 focus:ring-rose-100' 
+                                              : 'border-slate-100 hover:border-slate-300 focus:border-emerald-500 focus:ring-emerald-100'
                                             }`}
                                           />
                                           {isInvalid && (
@@ -1090,16 +1068,16 @@ function GradesPage(){
                                       <div className="flex flex-col gap-1.5 items-end">
                                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Grade</span>
                                         {gradeLetter ? (
-                                           <div className={`w-12 h-12 flex items-center justify-center rounded-xl text-lg font-black border uppercase ${
-                                             percentage >= 80 ? 'bg-emerald-600 text-white border-emerald-600 shadow-lg shadow-emerald-200' :
-                                             percentage >= 70 ? 'bg-blue-600 text-white border-blue-600' :
+                                           <div className={`w-14 h-14 flex items-center justify-center rounded-2xl text-xl font-black border uppercase shadow-sm ${
+                                             percentage >= 80 ? 'bg-emerald-500 text-white border-emerald-500 shadow-emerald-200' :
+                                             percentage >= 70 ? 'bg-blue-500 text-white border-blue-500' :
                                              percentage >= 50 ? 'bg-amber-100 text-amber-600 border-amber-200' :
                                              'bg-rose-100 text-rose-600 border-rose-200'
                                            }`}>
                                              {gradeLetter}
                                            </div>
                                         ): (
-                                            <div className="w-12 h-12 flex items-center justify-center rounded-xl bg-slate-100 border border-slate-200 text-slate-300">
+                                            <div className="w-14 h-14 flex items-center justify-center rounded-2xl bg-slate-50 border-2 border-slate-100 text-slate-300">
                                               <span className="text-2xl">-</span>
                                             </div>
                                         )}
@@ -1111,8 +1089,6 @@ function GradesPage(){
                   </div>
                 </>
               )}
-            </div>
-          </div>
         </div>
       </div>
 
@@ -1122,11 +1098,11 @@ function GradesPage(){
       <Modal 
         isOpen={showCreateModal} 
         onClose={() => setShowCreateModal(false)}
-        title="สร้างหัวข้องานใหม่"
+        title="เพิ่มงานใหม่"
         footer={(
           <>
             <button onClick={() => setShowCreateModal(false)} className="flex-1 py-4 bg-white border border-slate-200 text-slate-500 rounded-2xl font-black text-sm hover:bg-slate-50 transition-all">ยกเลิก</button>
-            <button onClick={handleCreateAssignment} className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-black text-sm shadow-xl shadow-emerald-200 hover:bg-emerald-700 transition-all">ยืนยันการสร้าง</button>
+            <button onClick={handleCreateAssignment} className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-black text-sm shadow-xl shadow-emerald-200 hover:bg-emerald-700 transition-all">บันทึก</button>
           </>
         )}
       >
@@ -1137,8 +1113,9 @@ function GradesPage(){
               type="text"
               value={newAssignmentTitle}
               onChange={(e) => setNewAssignmentTitle(e.target.value)}
-              className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 text-sm font-bold transition-all outline-none"
-              placeholder="เข่น ทดสอบก่อนเรียน ครั้งที่ 1"
+              className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 text-sm font-bold transition-all outline-none"
+              placeholder="เช่น สอบย่อยบทที่ 1"
+              autoFocus
             />
           </div>
           <div className="space-y-2">
@@ -1153,7 +1130,7 @@ function GradesPage(){
               type="number"
               value={newAssignmentMaxScore}
               onChange={(e) => setNewAssignmentMaxScore(Number(e.target.value))}
-              className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 text-sm font-black transition-all outline-none"
+              className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 text-sm font-black transition-all outline-none"
             />
           </div>
         </div>
@@ -1163,7 +1140,7 @@ function GradesPage(){
       <Modal 
         isOpen={showEditModal} 
         onClose={() => setShowEditModal(false)}
-        title="แก้ไขหัวข้องาน"
+        title="แก้ไขงาน"
         footer={(
           <>
             <button onClick={() => setShowEditModal(false)} className="flex-1 py-4 bg-white border border-slate-200 text-slate-500 rounded-2xl font-black text-sm hover:bg-slate-50 transition-all">ยกเลิก</button>
@@ -1178,7 +1155,7 @@ function GradesPage(){
               type="text"
               value={editAssignmentTitle}
               onChange={(e) => setEditAssignmentTitle(e.target.value)}
-              className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 text-sm font-bold transition-all outline-none"
+              className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 text-sm font-bold transition-all outline-none"
             />
           </div>
           <div className="space-y-2">
@@ -1187,7 +1164,7 @@ function GradesPage(){
               type="number"
               value={editAssignmentMaxScore}
               onChange={(e) => setEditAssignmentMaxScore(Number(e.target.value))}
-              className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 text-sm font-black transition-all outline-none"
+              className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 text-sm font-black transition-all outline-none"
             />
           </div>
         </div>
@@ -1201,16 +1178,16 @@ function GradesPage(){
         footer={(
           <>
             <button onClick={() => setShowDeleteModal(false)} className="flex-1 py-4 bg-white border border-slate-200 text-slate-500 rounded-2xl font-black text-sm hover:bg-slate-50 transition-all">ยกเลิก</button>
-            <button onClick={confirmDeleteAssignment} className="flex-1 py-4 bg-rose-600 text-white rounded-2xl font-black text-sm shadow-xl shadow-rose-200 hover:bg-rose-700 transition-all">ลบหัวข้องาน</button>
+            <button onClick={confirmDeleteAssignment} className="flex-1 py-4 bg-rose-600 text-white rounded-2xl font-black text-sm shadow-xl shadow-rose-200 hover:bg-rose-700 transition-all">ลบงานนี้</button>
           </>
         )}
       >
         <div className="flex flex-col items-center text-center">
-            <div className="w-20 h-20 bg-rose-50 text-rose-500 rounded-3xl flex items-center justify-center mb-6">
+            <div className="w-24 h-24 bg-rose-50 text-rose-500 rounded-[2rem] flex items-center justify-center mb-6 shadow-inner">
               <Trash2 className="w-10 h-10" />
             </div>
             <h4 className="text-xl font-black text-slate-800 tracking-tight leading-tight">
-              คุณต้องการลบงาน <span className="text-rose-500">"{deletingAssignment?.title}"</span> หรือไม่?
+              คุณต้องการลบ <span className="text-rose-500">"{deletingAssignment?.title}"</span> หรือไม่?
             </h4>
             <p className="mt-4 text-slate-400 text-sm font-bold leading-relaxed px-4">
               การลบข้อมูลจะไม่สามารถย้อนกลับได้ และคะแนนของนักเรียนทั้งหมดในงานนี้จะหายไปจากระบบทันที
@@ -1222,26 +1199,26 @@ function GradesPage(){
       <Modal 
         isOpen={showSummaryModal} 
         onClose={() => setShowSummaryModal(false)}
-        title={`📊 สรุปคะแนนรวม - ${subjectName || `#${id}`}`}
+        title={`📊 สรุปผลการเรียน - ${subjectName || `#${id}`}`}
         type="summary"
         footer={(
           <button onClick={() => setShowSummaryModal(false)} className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-black text-sm shadow-xl shadow-emerald-200 hover:bg-emerald-700 transition-all">ปิดหน้าต่าง</button>
         )}
       >
         {(!selectedClass && classes.length > 1) ? (
-          <div className="text-center py-20">
-            <div className="w-20 h-20 bg-amber-50 text-amber-500 rounded-3xl flex items-center justify-center mb-6">
+          <div className="text-center py-32">
+            <div className="w-20 h-20 bg-amber-50 text-amber-500 rounded-3xl flex items-center justify-center mx-auto mb-6">
               <AlertTriangle className="w-10 h-10" />
             </div>
             <h4 className="text-xl font-black text-slate-800 tracking-tight leading-tight">
               กรุณาเลือกชั้นเรียนก่อนดูสรุปคะแนน
             </h4>
-            <p className="mt-4 text-slate-400 text-sm font-bold leading-relaxed px-4">
-              การสรุปคะแนนจะแสดงเฉพาะนักเรียนในชั้นเรียนที่เลือก เพื่อให้ข้อมูลถูกต้องและครบถ้วน
+            <p className="mt-4 text-slate-400 text-sm font-bold leading-relaxed px-4 mx-auto max-w-sm">
+              ระบบต้องการให้คุณระบุห้องเรียนเพื่อประมวลผลการตัดเกรดได้อย่างถูกต้อง
             </p>
           </div>
         ) : visibleStudents.length === 0 ? (
-          <div className="text-center py-20">
+          <div className="text-center py-32">
              <User className="w-16 h-16 text-slate-200 mx-auto mb-4" />
              <p className="text-slate-400 font-bold">ไม่พบรายชื่อนักเรียนในกลุ่มนี้</p>
           </div>
@@ -1249,103 +1226,103 @@ function GradesPage(){
           <div className="space-y-8">
             {/* Quick Stats */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-slate-50 rounded-[1.5rem] p-6 border border-slate-100">
+              <div className="bg-slate-50 rounded-[1.5rem] p-6 border border-slate-100 flex flex-col justify-between">
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">หัวข้องานทั่งหมด</p>
-                <p className="text-2xl font-black text-slate-800">{assignments.length}</p>
+                <div className="flex items-end justify-between">
+                    <p className="text-3xl font-black text-slate-800">{assignments.length}</p>
+                    <BarChart3 className="w-6 h-6 text-slate-300 mb-1" />
+                </div>
               </div>
-              <div className="bg-emerald-50 rounded-[1.5rem] p-6 border border-emerald-100">
+              <div className="bg-emerald-50 rounded-[1.5rem] p-6 border border-emerald-100 flex flex-col justify-between">
                 <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">นักเรียนในกลุ่ม</p>
-                <p className="text-2xl font-black text-emerald-700">{visibleStudents.length}</p>
+                <div className="flex items-end justify-between">
+                    <p className="text-3xl font-black text-emerald-700">{visibleStudents.length}</p>
+                    <User className="w-6 h-6 text-emerald-300 mb-1" />
+                </div>
               </div>
             </div>
 
-            <div className="overflow-x-auto rounded-[2rem] border border-slate-100">
-              {/* Desktop View: Table */}
-              <div className="hidden md:block">
-                <table className="w-full border-collapse">
+            <div className="overflow-hidden rounded-[2.5rem] border border-slate-200 shadow-sm">
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse min-w-[1000px]">
                   <thead>
-                    <tr className="bg-slate-50">
-                      <th className="px-6 py-4 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest w-16">อันดับ</th>
-                      <th className="px-6 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">รายชื่อนักเรียน</th>
+                    <tr className="bg-slate-50 border-b border-slate-200">
+                      <th className="px-6 py-5 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest w-20">เลขที่</th>
+                      <th className="px-6 py-5 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap bg-slate-50 sticky left-0 z-10 drop-shadow-sm border-r border-slate-200">รายชื่อนักเรียน</th>
                       {assignments.filter(a => a.title !== "คะแนนเก็บรวม" && a.title !== "คะแนนสอบรวม").map(a => (
-                        <th key={a.id} className="px-6 py-4 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest min-w-[120px]">
-                          {a.title}<br/>
-                          <span className="text-emerald-600">(/{a.max_score})</span>
+                        <th key={a.id} className="px-6 py-5 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest min-w-[100px]">
+                          <div className="flex flex-col items-center gap-1">
+                              <span className="truncate max-w-[80px]" title={a.title}>{a.title}</span>
+                              <span className="text-[9px] text-white bg-slate-300 px-1.5 rounded-md">/{a.max_score}</span>
+                          </div>
                         </th>
                       ))}
                       {subjectType === 'activity' ? (
-                        <th className="px-6 py-4 text-center text-[10px] font-black text-emerald-800 uppercase tracking-widest bg-emerald-50">คะแนนทั้งหมด</th>
+                        <th className="px-6 py-5 text-center text-[10px] font-black text-emerald-800 uppercase tracking-widest bg-emerald-50/50">คะแนนรวม</th>
                       ) : (
                         <>
-                          <th className="px-6 py-4 text-center text-[10px] font-black text-blue-700 uppercase tracking-widest bg-blue-50">
-                            คะแนนเก็บ<br/><span className="text-blue-400 font-bold">(/{maxCollectedScore})</span>
+                          <th className="px-6 py-5 text-center text-[10px] font-black text-blue-700 uppercase tracking-widest bg-blue-50/50">
+                            คะแนนเก็บ<br/><span className="text-blue-400 font-bold opacity-70">/{maxCollectedScore}</span>
                           </th>
-                          <th className="px-6 py-4 text-center text-[10px] font-black text-amber-700 uppercase tracking-widest bg-amber-50">
-                            คะแนนสอบ<br/><span className="text-amber-400 font-bold">(/{maxExamScore})</span>
+                          <th className="px-6 py-5 text-center text-[10px] font-black text-amber-700 uppercase tracking-widest bg-amber-50/50">
+                            คะแนนสอบ<br/><span className="text-amber-400 font-bold opacity-70">/{maxExamScore}</span>
                           </th>
                         </>
                       )}
-                      <th className="px-6 py-4 text-center text-[10px] font-black text-slate-800 uppercase tracking-widest bg-slate-100">รวม / เกรด</th>
+                      <th className="px-6 py-5 text-center text-[10px] font-black text-slate-800 uppercase tracking-widest bg-slate-100 sticky right-0 z-10 border-l border-slate-200 shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.1)]">GRADE</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-50">
+                  <tbody className="divide-y divide-slate-100 bg-white">
                     {(() => {
                       const withSummaries = visibleStudents.map(s => ({
                         ...s,
                         summary: calculateStudentSummary(s.id)
-                      })).sort((a, b) => b.summary.totalScore - a.summary.totalScore);
-                      
-                      let currentRank = 1;
-                      withSummaries.forEach((s, idx) => {
-                        if (idx > 0 && s.summary.totalScore < withSummaries[idx-1].summary.totalScore) {
-                          currentRank = idx + 1;
-                        }
-                        s.rank = currentRank;
+                      })).sort((a, b) => {
+                        const numA = a.student_number || a.classroom?.student_number || 999;
+                        const numB = b.student_number || b.classroom?.student_number || 999;
+                        return numA - numB;
                       });
                       
-                      return withSummaries.map(student => {
+                      return withSummaries.map((student) => {
                         const summary = student.summary;
                         return (
-                          <tr key={student.id} className="hover:bg-slate-50/50">
+                          <tr key={student.id} className="hover:bg-slate-50/50 transition-colors">
                             <td className="px-6 py-4 text-center">
-                              <span className={`inline-flex items-center justify-center w-8 h-8 rounded-lg font-black text-xs ${
-                                student.rank === 1 ? 'bg-amber-100 text-amber-600 border border-amber-200 shadow-sm shadow-amber-100' :
-                                student.rank === 2 ? 'bg-slate-100 text-slate-500 border border-slate-200 shadow-sm shadow-slate-100' :
-                                student.rank === 3 ? 'bg-orange-50 text-orange-600 border border-orange-100 shadow-sm shadow-orange-50' :
-                                'text-slate-400'
-                              }`}>
-                                {student.rank}
-                              </span>
+                              <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center mx-auto text-xs font-black text-slate-400">
+                                {student.student_number || student.classroom?.student_number || '-'}
+                              </div>
                             </td>
-                            <td className="px-6 py-4">
+                            <td className="px-6 py-4 sticky left-0 bg-white hover:bg-slate-50/50 z-10 border-r border-slate-100">
                               <h5 className="text-xs font-black text-slate-800 truncate max-w-[150px]">{student.full_name || student.username}</h5>
-                              <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tighter">ID: {student.id}</p>
+                              <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tighter mt-0.5">ID: {student.id}</p>
                             </td>
                             {summary.assignmentDetails.filter(d => d.title !== "คะแนนเก็บรวม" && d.title !== "คะแนนสอบรวม").map((detail, index) => (
                               <td key={index} className="px-6 py-4 text-center">
-                                <span className="text-xs font-black text-slate-600">{detail.score}</span>
-                                <span className="ml-1 text-[10px] font-bold text-slate-300">({detail.percentage}%)</span>
+                                <span className="text-xs font-black text-slate-600 block">{detail.score}</span>
                               </td>
                             ))}
                           {subjectType === 'activity' ? (
-                            <td className="px-6 py-4 text-center bg-emerald-50/30 font-black text-emerald-700 text-sm">
+                            <td className="px-6 py-4 text-center bg-emerald-50/10 font-black text-emerald-700 text-sm">
                               {summary.totalScore}
                             </td>
                           ) : (
                             <>
-                              <td className="px-6 py-4 text-center bg-blue-50/30 font-black text-blue-700 text-sm">
+                              <td className="px-6 py-4 text-center bg-blue-50/10 font-black text-blue-700 text-sm">
                                 {summary.collectedScore}
                               </td>
-                              <td className="px-6 py-4 text-center bg-amber-50/30 font-black text-amber-700 text-sm">
+                              <td className="px-6 py-4 text-center bg-amber-50/10 font-black text-amber-700 text-sm">
                                 {summary.examScore}
                               </td>
                             </>
                           )}
-                          <td className="px-6 py-4 text-center bg-slate-50/50">
-                            <div className="flex items-center justify-center gap-2">
-                              <span className="text-xs font-black text-slate-800">{summary.totalScore}/{summary.totalMaxScore}</span>
-                              <span className={`w-8 h-8 flex items-center justify-center rounded-lg text-[10px] font-black border uppercase ${
-                                summary.overallGrade === 'A' ? 'bg-emerald-600 text-white border-emerald-600' :
+                          <td className="px-6 py-4 text-center bg-slate-50 sticky right-0 z-10 border-l border-slate-100">
+                            <div className="flex items-center justify-center gap-3">
+                              <div className="text-right">
+                                  <div className="text-[10px] font-black text-slate-400 uppercase">Total</div>
+                                  <div className="text-xs font-black text-slate-800">{summary.totalScore}</div>
+                              </div>
+                              <span className={`w-10 h-10 flex items-center justify-center rounded-xl text-xs font-black border uppercase shadow-sm ${
+                                summary.overallGrade === 'A' ? 'bg-emerald-600 text-white border-emerald-600 shadow-emerald-200' :
                                 summary.overallGrade.includes('B') ? 'bg-blue-500 text-white border-blue-500' :
                                 summary.overallGrade.includes('C') ? 'bg-amber-100 text-amber-600 border-amber-200' :
                                 'bg-rose-100 text-rose-600 border-rose-200'
@@ -1356,95 +1333,10 @@ function GradesPage(){
                           </td>
                         </tr>
                       );
-                    })})()}
+                    });
+                    })()}
                   </tbody>
                 </table>
-              </div>
-
-              {/* Mobile View: Cards */}
-              <div className="md:hidden grid grid-cols-1 divide-y divide-slate-100 bg-white">
-                {(() => {
-                    const withSummaries = visibleStudents.map(s => ({
-                      ...s,
-                      summary: calculateStudentSummary(s.id)
-                    })).sort((a, b) => b.summary.totalScore - a.summary.totalScore);
-                    
-                    let currentRank = 1;
-                    withSummaries.forEach((s, idx) => {
-                      if (idx > 0 && s.summary.totalScore < withSummaries[idx-1].summary.totalScore) {
-                        currentRank = idx + 1;
-                      }
-                      s.rank = currentRank;
-                    });
-                    
-                    return withSummaries.map(student => {
-                        const summary = student.summary;
-                        return (
-                            <div key={student.id} className="p-4">
-                                <div className="flex items-center justify-between mb-4 border-b border-slate-50 pb-4">
-                                    <div className="flex items-center gap-3">
-                                       <div className={`w-8 h-8 flex items-center justify-center rounded-lg font-black text-xs shrink-0 ${
-                                         student.rank === 1 ? 'bg-amber-100 text-amber-600 border border-amber-200 shadow-sm' :
-                                         student.rank === 2 ? 'bg-slate-100 text-slate-500 border border-slate-200' :
-                                         student.rank === 3 ? 'bg-orange-50 text-orange-600 border border-orange-100' :
-                                         'bg-slate-50 text-slate-400'
-                                       }`}>
-                                         {student.rank}
-                                       </div>
-                                       <div>
-                                           <h5 className="text-sm font-black text-slate-800">{student.full_name || student.username}</h5>
-                                           <p className="text-[10px] font-bold text-slate-400 uppercase">ID: {student.id}</p>
-                                       </div>
-                                    </div>
-                                    <div className="flex flex-col items-end gap-1">
-                                    {subjectType === 'activity' ? (
-                                        <div className="flex items-center gap-2 px-3 py-1 bg-emerald-50 text-emerald-700 rounded-lg border border-emerald-100">
-                                            <span className="text-[8px] font-black uppercase">คะแนนทั้งหมด:</span>
-                                            <span className="text-sm font-black">{summary.totalScore}</span>
-                                        </div>
-                                    ) : (
-                                        <div className="flex gap-2">
-                                            <div className="flex flex-col items-center px-3 py-1 bg-blue-50 text-blue-700 rounded-lg border border-blue-100 min-w-[70px]">
-                                                <span className="text-[8px] font-black uppercase">คะแนนเก็บ (/{maxCollectedScore})</span>
-                                                <span className="text-xs font-black">{summary.collectedScore}</span>
-                                            </div>
-                                            <div className="flex flex-col items-center px-3 py-1 bg-amber-50 text-amber-700 rounded-lg border border-amber-100 min-w-[70px]">
-                                                <span className="text-[8px] font-black uppercase">คะแนนสอบ (/{maxExamScore})</span>
-                                                <span className="text-xs font-black">{summary.examScore}</span>
-                                            </div>
-                                        </div>
-                                    )}
-                                    <div className="flex items-center gap-2 mt-1">
-                                       <div className="text-right">
-                                           <div className="text-xs font-black text-slate-800">{summary.totalScore}/{summary.totalMaxScore}</div>
-                                           <div className="text-[9px] font-bold text-slate-400 uppercase">Total / Grade</div>
-                                       </div>
-                                       <div className={`w-10 h-10 flex items-center justify-center rounded-xl text-sm font-black border uppercase ${
-                                         summary.overallGrade === 'A' ? 'bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-200' :
-                                         summary.overallGrade.includes('B') ? 'bg-blue-500 text-white border-blue-500' :
-                                         summary.overallGrade.includes('C') ? 'bg-amber-100 text-amber-600 border-amber-200' :
-                                         'bg-rose-100 text-rose-600 border-rose-200'
-                                       }`}>
-                                         {summary.overallGrade}
-                                       </div>
-                                    </div>
-                                </div>
-                            
-                              <div className="space-y-3 pl-2">
-                                {summary.assignmentDetails.filter(d => d.title !== "คะแนนเก็บรวม" && d.title !== "คะแนนสอบรวม").map((detail) => (
-                                    <div key={detail.id} className="flex items-center justify-between text-xs">
-                                        <span className="text-slate-500 font-bold truncate max-w-[60%]">{detail.title}</span>
-                                        <div className="flex items-center gap-2">
-                                            <span className="font-black text-slate-700">{detail.score}</span>
-                                            <span className="text-[10px] text-slate-300 w-10 text-right">({detail.percentage}%)</span>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-                    )
-                })})()}
               </div>
             </div>
           </div>
@@ -1455,4 +1347,3 @@ function GradesPage(){
 }
 
 export default GradesPage;
-

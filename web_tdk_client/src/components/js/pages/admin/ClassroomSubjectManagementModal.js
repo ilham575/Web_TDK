@@ -98,14 +98,21 @@ function ClassroomSubjectManagementModal({ isOpen, onClose, onSave, subject, cla
 
   const getAvailableClassrooms = () => {
     const assignedIds = subjectClassrooms.map(c => c.id);
-    return classrooms.filter(c => !assignedIds.includes(c.id)) || [];
+    // Filter classrooms: 
+    // 1. Not already assigned to this subject
+    // 2. Match subject's academic_year and semester
+    return (classrooms || []).filter(c => 
+      !assignedIds.includes(c.id) && 
+      c.academic_year === subject.academic_year && 
+      c.semester === subject.semester
+    );
   };
 
   if (!isOpen || !subject) return null;
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-6 backdrop-blur-sm bg-slate-900/40 animate-in fade-in duration-300">
-      <div className="bg-white w-full max-w-xl rounded-[2.5rem] shadow-2xl shadow-slate-900/20 overflow-hidden flex flex-col animate-in zoom-in-95 duration-300 max-h-[90vh]">
+      <div className="bg-white w-full max-w-xl rounded-[2.5rem] shadow-2xl shadow-slate-900/20 overflow-hidden flex flex-col animate-in zoom-in-95 duration-300 max-h-[calc(100dvh-2rem)]">
         {/* Header */}
         <div className="px-8 py-6 border-b border-slate-50 flex items-center justify-between bg-white sticky top-0 z-10">
           <div className="flex items-center gap-3">
@@ -118,6 +125,11 @@ function ClassroomSubjectManagementModal({ isOpen, onClose, onSave, subject, cla
                 <BookOpen className="w-3 h-3" />
                 {subject.name}
               </p>
+              {(subject.academic_year || subject.semester) && (
+                <p className="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 px-2.5 py-1 rounded-lg mt-2 w-fit">
+                  ปีการศึกษา {subject.academic_year} • ภาคเรียนที่ {subject.semester}
+                </p>
+              )}
             </div>
           </div>
           <button 
@@ -128,7 +140,7 @@ function ClassroomSubjectManagementModal({ isOpen, onClose, onSave, subject, cla
           </button>
         </div>
 
-        <div className="p-8 overflow-y-auto space-y-8">
+        <div className="p-8 overflow-y-auto space-y-8 flex-1">
           {/* Current Classrooms */}
           <div>
             <h4 className="flex items-center gap-2 text-xs font-black text-slate-400 uppercase tracking-widest mb-4">
@@ -182,10 +194,14 @@ function ClassroomSubjectManagementModal({ isOpen, onClose, onSave, subject, cla
                     assignClassroom(e.target.value);
                   }
                 }}
-                disabled={loading}
+                disabled={loading || !getAvailableClassrooms().length}
               >
                 <option value="">
-                  {loading ? 'กำลังดำเนินการ...' : 'ระบุชั้นเรียนที่ต้องการเพิ่ม...'}
+                  {loading 
+                    ? 'กำลังดำเนินการ...' 
+                    : getAvailableClassrooms().length === 0 
+                    ? '✓ ชั้นเรียนทั้งหมดได้รับการเลือกแล้ว หรือไม่มีชั้นเรียนในเทอมนี้'
+                    : 'ระบุชั้นเรียนที่ต้องการเพิ่ม...'}
                 </option>
                 {getAvailableClassrooms().map(classroom => (
                   <option key={classroom.id} value={classroom.id}>
@@ -198,13 +214,31 @@ function ClassroomSubjectManagementModal({ isOpen, onClose, onSave, subject, cla
               </div>
             </div>
             
-            {subjectClassrooms.length > 0 && (
+            {(!getAvailableClassrooms().length && subjectClassrooms.length > 0) ? (
               <div className="mt-4 p-4 bg-blue-50/50 rounded-2xl flex items-start gap-3">
                 <div className="w-5 h-5 bg-blue-100 text-blue-500 rounded-full flex items-center justify-center mt-0.5 flex-shrink-0">
                   <span className="text-[10px] font-black">i</span>
                 </div>
-                <p className="text-[11px] font-bold text-blue-600 leading-relaxed italic">
+                <p className="text-[11px] font-bold text-blue-600 leading-relaxed">
                   * ชั้นเรียนที่เลือกจะสามารถเข้าถึงและบันทึกคะแนนในรายวิชานี้ได้ทันที
+                </p>
+              </div>
+            ) : !getAvailableClassrooms().length ? (
+              <div className="mt-4 p-4 bg-amber-50/50 rounded-2xl flex items-start gap-3">
+                <div className="w-5 h-5 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mt-0.5 flex-shrink-0">
+                  <span className="text-[10px] font-black">!</span>
+                </div>
+                <p className="text-[11px] font-bold text-amber-700 leading-relaxed">
+                  * ไม่มีชั้นเรียนที่พร้อมใช้งาน สำหรับปีการศึกษา {subject.academic_year} ภาคเรียนที่ {subject.semester}
+                </p>
+              </div>
+            ) : (
+              <div className="mt-4 p-4 bg-blue-50/50 rounded-2xl flex items-start gap-3">
+                <div className="w-5 h-5 bg-blue-100 text-blue-500 rounded-full flex items-center justify-center mt-0.5 flex-shrink-0">
+                  <span className="text-[10px] font-black">i</span>
+                </div>
+                <p className="text-[11px] font-bold text-blue-600 leading-relaxed">
+                  * เฉพาะชั้นเรียนในปีการศึกษา {subject.academic_year} ภาคเรียนที่ {subject.semester} เท่านั้นที่สามารถเลือกได้
                 </p>
               </div>
             )}

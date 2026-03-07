@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { API_BASE_URL } from '../../../endpoints';
+import { toast } from 'react-toastify';
 import { 
   Search, 
   User, 
@@ -11,7 +12,10 @@ import {
   Plus, 
   GraduationCap, 
   School,
-  Loader2
+  Loader2,
+  Hash,
+  ListOrdered,
+  Pencil
 } from 'lucide-react';
 
 const AddStudentsModal = ({
@@ -36,6 +40,10 @@ const AddStudentsModal = ({
   const [loadingAvailable, setLoadingAvailable] = useState(false);
   const [classroomStudents, setClassroomStudents] = useState([]);
   const [loadingClassroomStudents, setLoadingClassroomStudents] = useState(false);
+  const [autoAssigning, setAutoAssigning] = useState(false);
+  const [editingNumberId, setEditingNumberId] = useState(null);
+  const [editNumberValue, setEditNumberValue] = useState('');
+  const [savingNumber, setSavingNumber] = useState(false);
 
   // ดึงข้อมูลนักเรียนที่สามารถเพิ่มได้เมื่อ modal เปิด
   useEffect(() => {
@@ -118,6 +126,66 @@ const AddStudentsModal = ({
     setSearchTerm('');
   };
 
+  const handleAutoAssignNumbers = async () => {
+    if (!selectedClassroom) return;
+    setAutoAssigning(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE_URL}/classrooms/${selectedClassroom.id}/auto-assign-student-numbers`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        // Refresh classroom students
+        const studentsRes = await fetch(`${API_BASE_URL}/classrooms/${selectedClassroom.id}/students`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (studentsRes.ok) {
+          const data = await studentsRes.json();
+          if (Array.isArray(data)) setClassroomStudents(data);
+        }
+      }
+    } catch (err) {
+      console.error('Error auto-assigning student numbers:', err);
+    } finally {
+      setAutoAssigning(false);
+    }
+  };
+
+  const handleSaveStudentNumber = async (studentId) => {
+    if (!selectedClassroom) return;
+    setSavingNumber(true);
+    try {
+      const token = localStorage.getItem('token');
+      const body = { student_number: editNumberValue === '' ? null : parseInt(editNumberValue) };
+      const res = await fetch(`${API_BASE_URL}/classrooms/${selectedClassroom.id}/students/${studentId}/student-number`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify(body)
+      });
+      if (res.ok) {
+        // Refresh list
+        const studentsRes = await fetch(`${API_BASE_URL}/classrooms/${selectedClassroom.id}/students`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (studentsRes.ok) {
+          const data = await studentsRes.json();
+          if (Array.isArray(data)) setClassroomStudents(data);
+        }
+      } else {
+        const err = await res.json();
+        toast.error(err.detail || 'ไม่สามารถอัปเดตเลขที่ได้');
+      }
+    } catch (err) {
+      console.error('Error saving student number:', err);
+      toast.error('เกิดข้อผิดพลาด');
+    } finally {
+      setSavingNumber(false);
+      setEditingNumberId(null);
+      setEditNumberValue('');
+    }
+  };
+
   if (!isOpen || (classroomStep !== 'add_students' && classroomStep !== 'view_students')) return null;
 
   const isViewMode = classroomStep === 'view_students';
@@ -127,7 +195,7 @@ const AddStudentsModal = ({
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
       <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={onClose} />
       
-      <div className="relative w-full max-w-4xl max-h-[90vh] bg-white rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-300">
+      <div className="relative w-full max-w-4xl max-h-[calc(100dvh-2rem)] bg-white rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-300">
         {/* Header */}
         <div className="px-8 py-6 border-b border-slate-50 flex items-center justify-between bg-gradient-to-r from-slate-50 to-white">
           <div className="flex items-center gap-4">
@@ -221,8 +289,55 @@ const AddStudentsModal = ({
                           </div>
                         )}
                         <div className="flex-1 min-w-0">
-                          <div className="font-black text-slate-700 text-sm truncate group-hover:text-emerald-700 transition-colors">
-                            {student.full_name || '(ไม่ระบุชื่อ)'}
+                          <div className="flex items-center gap-2">
+                            {isViewMode && (
+                              editingNumberId === (student.student_id || student.id) ? (
+                                <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    className="w-14 px-2 py-1 text-xs font-bold border border-emerald-300 rounded-lg text-center focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                                    value={editNumberValue}
+                                    onChange={e => setEditNumberValue(e.target.value)}
+                                    onKeyDown={e => { if (e.key === 'Enter') handleSaveStudentNumber(student.student_id || student.id); if (e.key === 'Escape') { setEditingNumberId(null); setEditNumberValue(''); } }}
+                                    autoFocus
+                                  />
+                                  <button
+                                    onClick={() => handleSaveStudentNumber(student.student_id || student.id)}
+                                    disabled={savingNumber}
+                                    className="w-7 h-7 flex items-center justify-center rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 transition-colors"
+                                  >
+                                    {savingNumber ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                                  </button>
+                                  <button
+                                    onClick={() => { setEditingNumberId(null); setEditNumberValue(''); }}
+                                    className="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-200 text-slate-500 hover:bg-slate-300 transition-colors"
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <div
+                                  className="flex items-center gap-1 cursor-pointer group/num"
+                                  onClick={(e) => { e.stopPropagation(); setEditingNumberId(student.student_id || student.id); setEditNumberValue(student.student_number != null ? String(student.student_number) : ''); }}
+                                  title="คลิกเพื่อแก้ไขเลขที่"
+                                >
+                                  {student.student_number != null ? (
+                                    <span className="inline-flex items-center justify-center w-7 h-7 bg-emerald-100 text-emerald-700 text-xs font-black rounded-lg flex-shrink-0">
+                                      {student.student_number}
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center justify-center w-7 h-7 bg-slate-100 text-slate-400 text-[10px] font-bold rounded-lg flex-shrink-0 border border-dashed border-slate-300">
+                                      ?
+                                    </span>
+                                  )}
+                                  <Pencil className="w-3 h-3 text-slate-300 opacity-0 group-hover/num:opacity-100 transition-opacity flex-shrink-0" />
+                                </div>
+                              )
+                            )}
+                            <div className="font-black text-slate-700 text-sm truncate group-hover:text-emerald-700 transition-colors">
+                              {student.full_name || '(ไม่ระบุชื่อ)'}
+                            </div>
                           </div>
                           <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">
                             <span className="truncate">{student.username}</span>
@@ -269,6 +384,18 @@ const AddStudentsModal = ({
             <X className="w-4 h-4" />
             {t('common.close')}
           </button>
+          
+          {isViewMode && classroomStudents.length > 0 && (
+            <button
+              type="button"
+              className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl font-black text-sm shadow-lg shadow-blue-200 transition-all hover:bg-blue-700 active:scale-95 disabled:opacity-50"
+              onClick={handleAutoAssignNumbers}
+              disabled={autoAssigning}
+            >
+              {autoAssigning ? <Loader2 className="w-4 h-4 animate-spin" /> : <ListOrdered className="w-4 h-4" />}
+              กำหนดเลขที่อัตโนมัติ
+            </button>
+          )}
           
           { !isViewMode && (
             <div className="flex items-center gap-4">

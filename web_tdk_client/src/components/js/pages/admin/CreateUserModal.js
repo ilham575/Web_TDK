@@ -64,8 +64,8 @@ function CreateUserModal({ isOpen, onClose, onSuccess }) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-6 backdrop-blur-sm bg-slate-900/40 animate-in fade-in duration-300">
-      <div className="bg-white w-full max-w-xl rounded-[2.5rem] shadow-2xl shadow-slate-900/20 overflow-hidden flex flex-col animate-in zoom-in-95 duration-300 max-h-[90vh]">
+    <div className="fixed inset-0 z-[10000] flex items-end sm:items-center justify-center p-0 sm:p-4 sm:sm:p-6 backdrop-blur-sm bg-slate-900/40 animate-in fade-in duration-300">
+      <div className="bg-white w-full max-w-xl rounded-t-[2.5rem] sm:rounded-[2.5rem] shadow-2xl shadow-slate-900/20 overflow-hidden flex flex-col animate-in slide-in-from-bottom sm:zoom-in-95 duration-300 max-h-[85vh] sm:max-h-[calc(100dvh-2rem)]">
         {/* Header */}
         <div className="px-8 py-6 border-b border-slate-50 flex items-center justify-between bg-white sticky top-0 z-10">
           <div className="flex items-center gap-3">
@@ -90,7 +90,7 @@ function CreateUserModal({ isOpen, onClose, onSuccess }) {
         </div>
 
         <form onSubmit={handleCreateUser} className="flex flex-col flex-1 overflow-hidden">
-          <div className="p-8 overflow-y-auto space-y-5">
+          <div className="p-8 overflow-y-auto space-y-5 flex-1">
             <div className="space-y-1.5">
               <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 px-1">
                 <User className="w-3.5 h-3.5" />

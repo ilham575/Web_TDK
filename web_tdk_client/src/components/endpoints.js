@@ -17,7 +17,7 @@ const getBaseURL = () => {
   } else {
     // สำหรับ production ใช้ environment variable หรือ URL จริง
     // ตั้งค่า REACT_APP_API_BASE_URL ใน production
-    const raw = process.env.REACT_APP_API_BASE_URL || '';
+    const raw = process.env.REACT_APP_API_BASE_URL || 'https://web-tdk-server-449550769588.asia-southeast1.run.app';
     // ถ้าผู้ใช้เผลอใส่ http:// ให้แปลงเป็น https:// (Cloud Run ให้ https โดยค่าเริ่มต้น)
     if (raw.startsWith('http://')) {
       return raw.replace(/^http:\/\//i, 'https://');
@@ -27,7 +27,7 @@ const getBaseURL = () => {
       console.log('API_BASE_URL:', raw);
     }
 
-    return raw || undefined;
+    return raw;
   }
 };
 

@@ -1,44 +1,41 @@
 services:
-  db:
+  mysql:
     image: mysql:8.0
-    container_name: web_tdk_db
+    container_name: web_tdk_mysql
+    restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
+      MYSQL_ROOT_PASSWORD: rootpassword
       MYSQL_DATABASE: web_tdk_db
-      MYSQL_USER: ilham
+      MYSQL_USER: admin_tdk
       MYSQL_PASSWORD: Ihsan53295
     ports:
       - "3307:3306"
     volumes:
-      - db_data:/var/lib/mysql
-    networks:
-      - web_tdk_network
+      - mysql_data:/var/lib/mysql
+      - ./init_db.sql:/docker-entrypoint-initdb.d/init_db.sql
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      timeout: 20s
+      retries: 10
 
-  web:
-    build:
-      context: .
-      dockerfile: Dockerfile
+  app:
+    build: .
     container_name: web_tdk_server
-    env_file:
-      - .env
+    restart: always
     ports:
       - "8080:8080"
+    environment:
+      - DATABASE_URL=mysql+pymysql://admin_tdk:Ihsan53295@mysql/web_tdk_db
+      - JWT_SECRET_KEY=your-super-secret-jwt-key-change-this-in-production
+      - JWT_ALGORITHM=HS256
+      - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=1440
+      - DEBUG=True
+      - CORS_ORIGINS=*
     depends_on:
-      - db
+      mysql:
+        condition: service_healthy
     volumes:
-      - ./:/app:cached
-    networks:
-      - web_tdk_network
-    restart: unless-stopped
+      - ./uploads:/app/uploads
 
 volumes:
-  db_data:
-
-networks:
-  web_tdk_network:
-    driver: bridge
+  mysql_data:

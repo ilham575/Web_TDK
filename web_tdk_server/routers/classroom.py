@@ -7,6 +7,7 @@ from database.connection import get_db
 from models.classroom import Classroom, ClassroomStudent
 from models.user import User
 from models.grade import Grade
+from models.schedule import SubjectSchedule as SubjectScheduleModel
 from schemas.classroom import (
     ClassroomCreate,
     ClassroomUpdate,
@@ -76,6 +77,10 @@ async def create_classroom(
     - ถ้าหลายห้อง: name จะเป็น grade_level/room_number เช่น "ป.1/1"
     """
     verify_admin_or_owner(current_user)
+
+    # Enforce academic year setup before creating classrooms
+    from routers.school import require_academic_year_setup
+    require_academic_year_setup(data.school_id, db)
 
     # ตรวจสอบว่ามีชั้นเรียนซ้ำหรือไม่ (ชื่อเดียวกัน กับเทอม ปี โรงเรียนเดียวกัน)
     existing = db.query(Classroom).filter(
@@ -468,10 +473,78 @@ async def get_students_in_classroom(
             full_name=student.full_name,
             username=student.username,
             email=student.email,
+            student_number=enrollment.student_number,
             is_active=enrollment.is_active  # ใช้ enrollment.is_active ไม่ใช่ student.is_active
         ))
 
     return result
+
+
+@router.put("/{classroom_id}/students/{student_id}/student-number")
+async def update_student_number(
+    classroom_id: int,
+    student_id: int,
+    data: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """อัปเดตเลขที่นักเรียนในชั้นเรียน"""
+    if current_user.role not in ["admin", "owner", "teacher"]:
+        raise HTTPException(status_code=403, detail="ไม่มีสิทธิ์")
+
+    enrollment = db.query(ClassroomStudent).filter(
+        ClassroomStudent.classroom_id == classroom_id,
+        ClassroomStudent.student_id == student_id,
+        ClassroomStudent.is_active == True
+    ).first()
+
+    if not enrollment:
+        raise HTTPException(status_code=404, detail="ไม่พบนักเรียนในชั้นเรียนนี้")
+
+    new_number = data.get("student_number")
+    if new_number is not None:
+        new_number = int(new_number)
+        # ตรวจสอบเลขที่ซ้ำในห้องเรียนเดียวกัน
+        existing = db.query(ClassroomStudent).filter(
+            ClassroomStudent.classroom_id == classroom_id,
+            ClassroomStudent.student_number == new_number,
+            ClassroomStudent.is_active == True,
+            ClassroomStudent.student_id != student_id
+        ).first()
+        if existing:
+            raise HTTPException(status_code=400, detail=f"เลขที่ {new_number} ถูกใช้แล้วในชั้นเรียนนี้")
+
+    enrollment.student_number = new_number
+    db.commit()
+
+    return {"message": "อัปเดตเลขที่เรียบร้อยแล้ว", "student_number": new_number}
+
+
+@router.put("/{classroom_id}/auto-assign-student-numbers")
+async def auto_assign_student_numbers(
+    classroom_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """สุ่มเลขที่ให้นักเรียนทั้งห้องโดยอัตโนมัติ (เรียงตามชื่อ)"""
+    if current_user.role not in ["admin", "owner", "teacher"]:
+        raise HTTPException(status_code=403, detail="ไม่มีสิทธิ์")
+
+    classroom = get_classroom_or_404(classroom_id, db)
+
+    enrollments = db.query(ClassroomStudent, User).join(
+        User, ClassroomStudent.student_id == User.id
+    ).filter(
+        ClassroomStudent.classroom_id == classroom_id,
+        ClassroomStudent.is_active == True
+    ).order_by(User.full_name).all()
+
+    for idx, (enrollment, student) in enumerate(enrollments, start=1):
+        enrollment.student_number = idx
+
+    db.commit()
+
+    return {"message": f"กำหนดเลขที่ให้ {len(enrollments)} คนเรียบร้อย", "count": len(enrollments)}
 
 
 @router.delete("/{classroom_id}/students/{student_id}", status_code=status.HTTP_200_OK)
@@ -618,6 +691,12 @@ async def promote_classroom(
     grades_copied = 0
 
     for enrollment in students:
+        # ตรวจสอบว่านักเรียนยังมีอยู่ในระบบ
+        student = db.query(User).filter(User.id == enrollment.student_id).first()
+        if not student:
+            # ข้ามนักเรียนที่ไม่มีอยู่แล้ว
+            continue
+        
         # ตรวจสอบว่านักเรียนนี้ไม่มีอยู่ในชั้นเรียนเป้าหมายแล้ว
         existing_enrollment = db.query(ClassroomStudent).filter(
             ClassroomStudent.classroom_id == new_classroom.id,
@@ -626,16 +705,16 @@ async def promote_classroom(
         ).first()
         
         if not existing_enrollment:
-            # เพิ่มนักเรียนเข้าชั้นเรียนใหม่
+            # เพิ่มนักเรียนเข้าชั้นเรียนใหม่ พร้อมนำเลขที่มาด้วย
             new_enrollment = ClassroomStudent(
                 classroom_id=new_classroom.id,
-                student_id=enrollment.student_id
+                student_id=enrollment.student_id,
+                student_number=enrollment.student_number  # คัดลอกเลขที่จากชั้นเรียนเดิม
             )
             db.add(new_enrollment)
             promoted_students += 1
 
         # อัปเดต grade_level ของนักเรียน
-        student = db.query(User).filter(User.id == enrollment.student_id).first()
         if student:
             student.grade_level = new_grade_level
 
@@ -704,6 +783,57 @@ async def get_grades_from_previous_term(
             for g in grades
         ]
     }
+
+
+@router.get("/teacher-classrooms", response_model=List[ClassroomResponse])
+async def get_teacher_classrooms(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """ดึงชั้นเรียนที่ครูคนนี้สอน (จาก subject schedules)"""
+    if current_user.role not in ["teacher", "admin"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    # ดึง classroom IDs ที่ teacher สอน
+    classroom_ids = db.query(SubjectScheduleModel.classroom_id).filter(
+        SubjectScheduleModel.teacher_id == current_user.id,
+        SubjectScheduleModel.classroom_id.isnot(None)  # ไม่รวม global assignments
+    ).distinct().all()
+    
+    classroom_ids = [cid[0] for cid in classroom_ids]
+    
+    if not classroom_ids:
+        return []
+    
+    # ดึง classroom details
+    classrooms = db.query(Classroom).filter(
+        Classroom.id.in_(classroom_ids),
+        Classroom.is_active == True
+    ).all()
+    
+    results = []
+    for classroom in classrooms:
+        student_count = db.query(ClassroomStudent).filter(
+            ClassroomStudent.classroom_id == classroom.id,
+            ClassroomStudent.is_active == True
+        ).count()
+        
+        results.append(ClassroomResponse(
+            id=classroom.id,
+            name=classroom.name,
+            grade_level=classroom.grade_level,
+            room_number=classroom.room_number,
+            semester=classroom.semester,
+            academic_year=classroom.academic_year,
+            school_id=classroom.school_id,
+            is_active=classroom.is_active,
+            parent_classroom_id=classroom.parent_classroom_id,
+            student_count=student_count,
+            created_at=classroom.created_at,
+            updated_at=classroom.updated_at
+        ))
+    
+    return results
 
 
 @router.get("/my-classrooms", response_model=List[ClassroomResponse])
@@ -796,6 +926,8 @@ async def update_classroom_put(
             classroom.room_number = data.room_number
         if data.semester is not None:
             classroom.semester = data.semester
+        if data.academic_year is not None:
+            classroom.academic_year = data.academic_year
         if data.is_active is not None:
             classroom.is_active = data.is_active
 
@@ -848,10 +980,14 @@ async def update_classroom(
     try:
         if data.name is not None:
             classroom.name = data.name
+        if data.grade_level is not None:
+            classroom.grade_level = data.grade_level
         if data.room_number is not None:
             classroom.room_number = data.room_number
         if data.semester is not None:
             classroom.semester = data.semester
+        if data.academic_year is not None:
+            classroom.academic_year = data.academic_year
         if data.is_active is not None:
             classroom.is_active = data.is_active
 
