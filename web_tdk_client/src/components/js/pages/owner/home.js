@@ -9,6 +9,11 @@ import PageHeader from '../../PageHeader';
 import swalMessenger from './swalmessenger';
 import TokenExpireSettings from '../../../modals/TokenExpireSettings';
 import { API_BASE_URL } from '../../../endpoints';
+import FirstVisitOnboarding, {
+  ONBOARDING_KEYS,
+  markOnboardingSeen,
+  shouldShowOnboarding
+} from '../../FirstVisitOnboarding';
 import { setSchoolFavicon } from '../../../../utils/faviconUtils';
 import { logout } from '../../../../utils/authUtils';
 
@@ -24,6 +29,7 @@ function OwnerPage() {
   const [loadingActivities, setLoadingActivities] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
+  const [showOwnerOnboarding, setShowOwnerOnboarding] = useState(false);
 
   // Create admin state
   const [newUsername, setNewUsername] = useState('');
@@ -92,6 +98,17 @@ function OwnerPage() {
       })
       .catch(() => { logout(); toast.error('Invalid token or role. Please sign in again.'); setTimeout(() => navigate('/signin'), 1500); });
   }, [navigate]);
+
+  useEffect(() => {
+    if (currentUser) {
+      setShowOwnerOnboarding(shouldShowOnboarding(ONBOARDING_KEYS.owner));
+    }
+  }, [currentUser]);
+
+  const handleCloseOwnerOnboarding = () => {
+    markOnboardingSeen(ONBOARDING_KEYS.owner);
+    setShowOwnerOnboarding(false);
+  };
 
   useEffect(() => {
     if (!currentUser) return;
@@ -520,6 +537,39 @@ function OwnerPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
+      <FirstVisitOnboarding
+        open={showOwnerOnboarding}
+        onClose={handleCloseOwnerOnboarding}
+        badge="Owner Onboarding"
+        title="เริ่มจากจัดการโรงเรียน ผู้ดูแล และคำขอสำคัญ"
+        description="บทบาท owner ดูภาพรวมทั้งระบบหลายโรงเรียนได้ หน้าแรกนี้จึงรวมงานสร้างโรงเรียน อนุมัติคำขอ และตั้งค่าระดับระบบไว้ในที่เดียว"
+        accent="violet"
+        highlights={[
+          'แท็บ Schools ใช้สร้างโรงเรียนใหม่และตรวจสถานะข้อมูลของแต่ละโรงเรียน',
+          'แท็บคำขอช่วยอนุมัติ admin request และ password reset จากหลายโรงเรียน',
+          'ส่วน settings และ token ใช้ควบคุมนโยบายระดับระบบของแต่ละโรงเรียน',
+          'owner ควรเช็กคำขอที่ค้างอยู่ก่อนเสมอ เพื่อไม่ให้การใช้งานของโรงเรียนสะดุด'
+        ]}
+        steps={[
+          {
+            icon: '1',
+            title: 'ดูภาพรวมจำนวนโรงเรียนและผู้ใช้ก่อน',
+            description: 'การ์ดสรุปด้านบนช่วยบอกสถานะรวมของระบบทั้งหมดในทันที'
+          },
+          {
+            icon: '2',
+            title: 'เข้าแท็บ Schools เพื่อจัดการโครงสร้าง',
+            description: 'สร้างโรงเรียนใหม่ เปิดดูข้อมูลแต่ละโรงเรียน และกำหนดค่าเบื้องต้นได้จากส่วนนี้'
+          },
+          {
+            icon: '3',
+            title: 'ตรวจคำขอและการตั้งค่าที่ค้างอยู่',
+            description: 'คำขอ admin, รีเซ็ตรหัสผ่าน และ token settings เป็นงานที่ควรตามต่อเนื่องเพื่อให้ระบบรันได้ลื่น'
+          }
+        ]}
+        buttonLabel="เริ่มใช้งานหน้า Owner"
+      />
+
       {isAuthChecking ? (
         <Loading message={t('owner.checkingAuth')} />
       ) : (

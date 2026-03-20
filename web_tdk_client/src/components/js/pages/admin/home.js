@@ -29,7 +29,14 @@ import HomeroomTeacherModal from './HomeroomTeacherModal';
 import AdminTabs from './AdminTabs';
 import StudentDetailModal from '../../../modals/StudentDetailModal';
 import AcademicYearSetupModal from './AcademicYearSetupModal';
+import GradeExportTab from './GradeExportTab';
+import SummaryCompletionTab from './SummaryCompletionTab';
 import { API_BASE_URL } from '../../../endpoints';
+import FirstVisitOnboarding, {
+  ONBOARDING_KEYS,
+  markOnboardingSeen,
+  shouldShowOnboarding
+} from '../../FirstVisitOnboarding';
 import { setSchoolFavicon } from '../../../../utils/faviconUtils';
 import { logout } from '../../../../utils/authUtils';
 
@@ -180,6 +187,7 @@ function AdminPage() {
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [usersError, setUsersError] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
+  const [showAdminOnboarding, setShowAdminOnboarding] = useState(false);
   const [announcements, setAnnouncements] = useState([]);
   const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
   const [modalAnnouncement, setModalAnnouncement] = useState(null);
@@ -193,6 +201,8 @@ function AdminPage() {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [expiry, setExpiry] = useState('');
+  const [announcementToStudents, setAnnouncementToStudents] = useState(true);
+  const [announcementToTeachers, setAnnouncementToTeachers] = useState(true);
   const [announcementPdfFile, setAnnouncementPdfFile] = useState(null);
   const announcementPdfInputRef = React.useRef(null);
   const [uploading, setUploading] = useState(false);
@@ -212,6 +222,8 @@ function AdminPage() {
   const [showLogoUploadModal, setShowLogoUploadModal] = useState(false);
   const [schoolData, setSchoolData] = useState(null);
   const [updatingSettings, setUpdatingSettings] = useState(false);
+  const [graduationGradeLevelDraft, setGraduationGradeLevelDraft] = useState('');
+  const [savingGraduationGradeLevel, setSavingGraduationGradeLevel] = useState(false);
 
   // Academic year setup enforcement
   const [academicYearSetupDone, setAcademicYearSetupDone] = useState(null); // null = loading, false = not done, true = done
@@ -294,6 +306,8 @@ function AdminPage() {
     if (active) {
       setSelectedYear(active.academic_year);
       setSelectedSemester(active.semester);
+      setAdminScheduleYear(String(active.academic_year));
+      setAdminScheduleSemester(String(active.semester));
     }
   }, [semesterPeriods]);
 
@@ -389,6 +403,40 @@ function AdminPage() {
       setSchoolData(previousSchoolData);
       console.error('Update school setting error:', error);
       toast.error('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+    }
+  };
+
+  const saveGraduationGradeLevel = async () => {
+    if (!currentUser?.school_id) return;
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    setSavingGraduationGradeLevel(true);
+    try {
+      const payload = { graduation_grade_level: graduationGradeLevelDraft || null };
+      const res = await fetch(`${API_BASE_URL}/schools/${currentUser.school_id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (res.ok) {
+        const updated = await res.json();
+        setSchoolData(prev => ({ ...prev, ...updated }));
+        setGraduationGradeLevelDraft(updated?.graduation_grade_level || '');
+        toast.success('บันทึกชั้นจบเรียบร้อย');
+      } else {
+        const err = await res.json();
+        toast.error(err.detail || 'ไม่สามารถบันทึกชั้นจบได้');
+      }
+    } catch (error) {
+      console.error('Save graduation grade level error:', error);
+      toast.error('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+    } finally {
+      setSavingGraduationGradeLevel(false);
     }
   };
 
@@ -543,6 +591,8 @@ function AdminPage() {
   const [rankingGradeLevel, setRankingGradeLevel] = useState('');
   const [rankingAcademicYear, setRankingAcademicYear] = useState('');
   const [rankingSemester, setRankingSemester] = useState('');
+  const [rankingSchoolAcademicYear, setRankingSchoolAcademicYear] = useState('');
+  const [rankingSchoolSemester, setRankingSchoolSemester] = useState('');
   const [rankingFetched, setRankingFetched] = useState(false);
 
   // Responsive: detect mobile viewport to stack tabs above content
@@ -561,7 +611,9 @@ function AdminPage() {
   const [newScheduleStartTime, setNewScheduleStartTime] = useState('');
   const [newScheduleEndTime, setNewScheduleEndTime] = useState('');
   const [editingSchedule, setEditingSchedule] = useState(null);
-  
+  const [adminScheduleYear, setAdminScheduleYear] = useState(String(new Date().getFullYear() + 543));
+  const [adminScheduleSemester, setAdminScheduleSemester] = useState('');
+
   // Teacher/Student Schedule Management Modal state
   const [showScheduleManagementModal, setShowScheduleManagementModal] = useState(false);
   const [editingAssignment, setEditingAssignment] = useState(null);
@@ -1012,6 +1064,17 @@ function AdminPage() {
   }, [navigate]);
 
   useEffect(() => {
+    if (currentUser) {
+      setShowAdminOnboarding(shouldShowOnboarding(ONBOARDING_KEYS.admin));
+    }
+  }, [currentUser]);
+
+  const handleCloseAdminOnboarding = () => {
+    markOnboardingSeen(ONBOARDING_KEYS.admin);
+    setShowAdminOnboarding(false);
+  };
+
+  useEffect(() => {
     if (!currentUser || !currentUser.school_id) return;
     const schoolId = currentUser.school_id;
     setLoadingUsers(true);
@@ -1104,6 +1167,7 @@ function AdminPage() {
         if (!res.ok) return;
         const data = await res.json();
         setSchoolData(data);
+        setGraduationGradeLevelDraft(data?.graduation_grade_level || '');
         // Check academic year setup status
         if (data.is_academic_year_setup) {
           setAcademicYearSetupDone(true);
@@ -1186,9 +1250,16 @@ function AdminPage() {
     const token = localStorage.getItem('token');
     const schoolId = localStorage.getItem('school_id');
     if (!title || !content) { toast.error(t('admin.fillTitleContent')); return; }
+    if (!announcementToStudents && !announcementToTeachers) { toast.error(t('admin.selectAnnouncementAudience')); return; }
     if (!schoolId) { toast.error(t('admin.schoolNotFound')); return; }
     try {
-      const body = { title, content, school_id: Number(schoolId) };
+      const body = {
+        title,
+        content,
+        school_id: Number(schoolId),
+        to_students: announcementToStudents,
+        to_teachers: announcementToTeachers,
+      };
       if (expiry) {
         try {
           const localWithSec = expiry.length === 16 ? expiry + ':00' : expiry;
@@ -1213,7 +1284,7 @@ function AdminPage() {
         } catch { toast.error('เกิดข้อผิดพลาดในการอัปโหลด PDF'); }
       }
       toast.success(t('admin.announcementSuccess'));
-      setTitle(''); setContent(''); setExpiry(''); setAnnouncementPdfFile(null);
+      setTitle(''); setContent(''); setExpiry(''); setAnnouncementPdfFile(null); setAnnouncementToStudents(true); setAnnouncementToTeachers(true);
       if (finalData && finalData.id) setAnnouncements(prev => Array.isArray(prev) ? [finalData, ...prev] : [finalData]);
     } catch (err) { console.error('announcement error', err); toast.error(t('admin.announcementError')); }
   };
@@ -1757,6 +1828,37 @@ function AdminPage() {
     return false;
   };
 
+  const getAnnouncementAudienceMeta = (item) => {
+    const toStudents = item?.to_students !== false;
+    const toTeachers = item?.to_teachers !== false;
+
+    if (toStudents && toTeachers) {
+      return {
+        label: t('admin.announcementAudienceBoth'),
+        className: 'bg-violet-100 text-violet-700 border-violet-200',
+      };
+    }
+
+    if (toStudents) {
+      return {
+        label: t('admin.announcementAudienceStudents'),
+        className: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+      };
+    }
+
+    if (toTeachers) {
+      return {
+        label: t('admin.announcementAudienceTeachers'),
+        className: 'bg-sky-100 text-sky-700 border-sky-200',
+      };
+    }
+
+    return {
+      label: t('admin.announcementAudienceUnknown'),
+      className: 'bg-slate-100 text-slate-600 border-slate-200',
+    };
+  };
+
   const openAnnouncementModal = (item) => {
     setModalAnnouncement(item || null);
     setShowAnnouncementModal(true);
@@ -1764,11 +1866,16 @@ function AdminPage() {
 
   const closeAnnouncementModal = () => { setShowAnnouncementModal(false); setModalAnnouncement(null); };
 
-  const saveAnnouncementFromModal = async ({ title: t, content: c, expiry: ex, pdfFile: pdf }) => {
+  const saveAnnouncementFromModal = async ({ title: t, content: c, expiry: ex, pdfFile: pdf, to_students, to_teachers }) => {
     if (!modalAnnouncement || !modalAnnouncement.id) { toast.error('Invalid announcement to update'); return; }
     const token = localStorage.getItem('token');
     try {
-      const body = { title: t, content: c };
+      const body = {
+        title: t,
+        content: c,
+        to_students,
+        to_teachers,
+      };
       if (ex) {
         const localWithSec = ex.length === 16 ? ex + ':00' : ex;
         body.expires_at = localWithSec.replace('T', ' ');
@@ -2388,12 +2495,17 @@ function AdminPage() {
   }, [activeTab, currentUser?.school_id]);
 
   // Load schedule slots when switching to schedule tab
-  const loadAdminSchedules = async () => {
+  const loadAdminSchedules = async (yearOverride, semesterOverride) => {
     try {
       const schoolId = localStorage.getItem('school_id');
       if (!schoolId) return;
       const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE_URL}/schedule/assignments?school_id=${schoolId}`, { headers: { ...(token?{ Authorization: `Bearer ${token}` }:{}) } });
+      const params = new URLSearchParams({ school_id: schoolId });
+      const year = yearOverride !== undefined ? yearOverride : adminScheduleYear;
+      const sem = semesterOverride !== undefined ? semesterOverride : adminScheduleSemester;
+      if (year) params.set('academic_year', year);
+      if (sem) params.set('semester', sem);
+      const res = await fetch(`${API_BASE_URL}/schedule/assignments?${params.toString()}`, { headers: { ...(token?{ Authorization: `Bearer ${token}` }:{}) } });
       if (res.ok) {
         const data = await res.json();
         setAdminSchedules(Array.isArray(data) ? data : []);
@@ -2419,6 +2531,14 @@ function AdminPage() {
       setRankingFetched(false);
     }
   }, [activeTab]);
+
+  // Reload schedule assignments when the year/semester filter changes
+  React.useEffect(() => {
+    if (activeTab === 'schedules' || activeTab === 'schedule') {
+      loadAdminSchedules();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [adminScheduleYear, adminScheduleSemester]);
 
   // Load subjects when switching to subjects tab
   React.useEffect(() => {
@@ -3240,7 +3360,11 @@ function AdminPage() {
       const token = localStorage.getItem('token');
       let url = '';
       if (mode === 'school') {
-        url = `${API_BASE_URL}/grades/school/${schoolId || currentUser.school_id}/ranking`;
+        const params = new URLSearchParams();
+        if (academicYear) params.append('academic_year', academicYear);
+        if (semester) params.append('semester', semester);
+        const query = params.toString();
+        url = `${API_BASE_URL}/grades/school/${schoolId || currentUser.school_id}/ranking${query ? `?${query}` : ''}`;
       } else {
         if (!gradeLevel) { setRankingLoading(false); return; }
         const params = new URLSearchParams();
@@ -3462,6 +3586,39 @@ function AdminPage() {
           }}
         />
       )}
+
+      <FirstVisitOnboarding
+        open={showAdminOnboarding}
+        onClose={handleCloseAdminOnboarding}
+        badge="Admin Onboarding"
+        title="เริ่มต้นงานผู้ดูแลระบบจาก 3 จุดหลักก่อน"
+        description="หน้า admin มีหลายส่วนสำหรับจัดการโรงเรียน ถ้านี่เป็นครั้งแรกของคุณ ให้เริ่มจากผู้ใช้ ชั้นเรียน และแท็บสรุปผล เพื่อให้ระบบพร้อมใช้งานก่อนงานส่วนอื่น"
+        accent="blue"
+        highlights={[
+          'แท็บผู้ใช้ ใช้สร้างครู นักเรียน และรีเซ็ตรหัสผ่าน',
+          'แท็บชั้นเรียนและวิชา ใช้ผูกครู ห้องเรียน ตารางสอน และครูประจำชั้น',
+          'แท็บรายงานช่วยตรวจความครบถ้วนของคะแนนและข้อมูลสำคัญก่อนประกาศผล',
+          'ถ้ายังไม่ตั้งค่าปีการศึกษา ระบบจะบังคับให้ตั้งค่าก่อนใช้งานส่วนหลัก'
+        ]}
+        steps={[
+          {
+            icon: '1',
+            title: 'เริ่มจากจัดการผู้ใช้',
+            description: 'สร้างบัญชีครู นักเรียน และตรวจสอบสิทธิ์การใช้งานให้ตรงกับบทบาทจริง'
+          },
+          {
+            icon: '2',
+            title: 'ตั้งค่าโครงสร้างการเรียน',
+            description: 'สร้างชั้นเรียน วิชา ตารางเรียน และกำหนดครูประจำวิชาหรือครูประจำชั้น'
+          },
+          {
+            icon: '3',
+            title: 'ตรวจรายงานก่อนใช้งานจริง',
+            description: 'ดูแท็บสรุปคะแนนและรายงานต่าง ๆ เพื่อเช็กว่างานครบก่อนแจ้งผลให้ครูและนักเรียน'
+          }
+        ]}
+        buttonLabel="เริ่มใช้งานหน้า Admin"
+      />
 
       <div className="bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
         <PageHeader 
@@ -5821,6 +5978,38 @@ function AdminPage() {
                     />
                   </div>
                   <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">{t('admin.announcementAudienceLabel')}</label>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <label className={`flex items-start gap-3 rounded-xl border px-4 py-3 transition-all ${announcementToStudents ? 'border-emerald-300 bg-emerald-50' : 'border-slate-200 bg-white'}`}>
+                        <input
+                          type="checkbox"
+                          checked={announcementToStudents}
+                          onChange={e => setAnnouncementToStudents(e.target.checked)}
+                          className="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                        />
+                        <span>
+                          <span className="block text-sm font-semibold text-slate-700">{t('admin.announcementAudienceStudents')}</span>
+                          <span className="block text-xs text-slate-500">{t('admin.announcementAudienceStudentsHelp')}</span>
+                        </span>
+                      </label>
+                      <label className={`flex items-start gap-3 rounded-xl border px-4 py-3 transition-all ${announcementToTeachers ? 'border-sky-300 bg-sky-50' : 'border-slate-200 bg-white'}`}>
+                        <input
+                          type="checkbox"
+                          checked={announcementToTeachers}
+                          onChange={e => setAnnouncementToTeachers(e.target.checked)}
+                          className="mt-1 h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                        />
+                        <span>
+                          <span className="block text-sm font-semibold text-slate-700">{t('admin.announcementAudienceTeachers')}</span>
+                          <span className="block text-xs text-slate-500">{t('admin.announcementAudienceTeachersHelp')}</span>
+                        </span>
+                      </label>
+                    </div>
+                    {!announcementToStudents && !announcementToTeachers && (
+                      <p className="mt-2 text-sm font-medium text-rose-600">{t('admin.selectAnnouncementAudience')}</p>
+                    )}
+                  </div>
+                  <div>
                     <label className="block text-sm font-semibold text-slate-700 mb-2">แนบไฟล์ PDF (ไม่บังคับ)</label>
                     <div className="flex items-center gap-3">
                       <button
@@ -5853,6 +6042,7 @@ function AdminPage() {
                   <div>
                     <button 
                       type="submit" 
+                      disabled={!announcementToStudents && !announcementToTeachers}
                       className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 text-white font-semibold shadow-lg shadow-amber-500/30 hover:shadow-xl hover:shadow-amber-500/40 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-300"
                       aria-label="ประกาศข่าว"
                     >
@@ -5878,6 +6068,9 @@ function AdminPage() {
                           <h3 className="text-lg font-bold text-slate-800 mb-2">{item.title}</h3>
                           <div className="flex flex-wrap gap-3 text-sm">
                             <span className="text-slate-500">{item.created_at ? new Date(item.created_at).toLocaleDateString('th-TH',{year:'numeric',month:'short',day:'numeric'}) : ''}</span>
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-medium ${getAnnouncementAudienceMeta(item).className}`}>
+                              👁️ {getAnnouncementAudienceMeta(item).label}
+                            </span>
                             {(item.expires_at || item.expire_at || item.expiresAt) && (
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 text-xs font-medium">
                                 ⏰ หมดอายุ: {parseLocalDatetime(item.expires_at || item.expire_at || item.expiresAt).toLocaleString('th-TH')}
@@ -6130,11 +6323,34 @@ function AdminPage() {
 
         {activeTab === 'schedules' && (
           <div className="bg-white/80 backdrop-blur-xl rounded-3xl border border-white/60 shadow-xl shadow-slate-200/50 overflow-hidden">
-            <div className="px-8 py-6 bg-gradient-to-r from-slate-50 to-white border-b border-slate-100">
+            <div className="px-8 py-6 bg-gradient-to-r from-slate-50 to-white border-b border-slate-100 flex flex-wrap items-center justify-between gap-4">
               <h2 className="flex items-center gap-3 text-2xl font-bold text-slate-800">
                 <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white text-xl shadow-lg shadow-indigo-500/30">📅</span>
                 เพิ่มตารางเรียนสำหรับครูและนักเรียน
               </h2>
+              {semesterPeriods.length > 0 && (
+                <div className="flex items-center gap-2 bg-white p-1.5 rounded-2xl shadow-sm border border-slate-100/60">
+                  <select
+                    value={adminScheduleYear}
+                    onChange={e => setAdminScheduleYear(e.target.value)}
+                    className="py-2 pl-4 pr-10 bg-slate-50 hover:bg-slate-100 border border-transparent rounded-xl text-slate-700 font-bold text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 appearance-none cursor-pointer transition-all"
+                  >
+                    {[...new Set(semesterPeriods.map(p => p.academic_year))].sort((a, b) => parseInt(b) - parseInt(a)).map(y => (
+                      <option key={y} value={y}>ปี {y}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={adminScheduleSemester}
+                    onChange={e => setAdminScheduleSemester(e.target.value)}
+                    className="py-2 pl-4 pr-10 bg-slate-50 hover:bg-slate-100 border border-transparent rounded-xl text-slate-700 font-bold text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 appearance-none cursor-pointer transition-all"
+                  >
+                    <option value="">ทุกภาคเรียน</option>
+                    {[...new Set(semesterPeriods.filter(p => String(p.academic_year) === String(adminScheduleYear)).map(p => p.semester))].sort().map(s => (
+                      <option key={s} value={s}>ภาคเรียนที่ {s}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
             <div className="p-8">
               <div className="mb-6">
@@ -6541,6 +6757,40 @@ function AdminPage() {
                   </div>
                 </div>
 
+                <div className="mt-6 p-8 bg-gradient-to-br from-violet-50 to-white rounded-2xl border border-violet-200 shadow-sm">
+                  <h3 className="text-xl font-bold text-slate-800 mb-2 flex items-center gap-2">
+                    <span className="text-2xl">🎓</span> กำหนดชั้นจบ
+                  </h3>
+                  <p className="text-sm text-slate-500 mb-5">
+                    ตั้งค่าชั้นปลายทางของโรงเรียนเพื่อใช้จัดการข้อมูลนักเรียนในอนาคต (เช่น จบการศึกษา/ย้ายสถานะ)
+                  </p>
+                  <div className="flex flex-col md:flex-row gap-3 md:items-end">
+                    <div className="flex-1 max-w-sm">
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">ชั้นจบ</label>
+                      <select
+                        value={graduationGradeLevelDraft}
+                        onChange={e => setGraduationGradeLevelDraft(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-violet-400"
+                      >
+                        <option value="">-- ไม่กำหนด --</option>
+                        {getClassroomGradeLevels().map(level => (
+                          <option key={level} value={level}>{level}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <button
+                      onClick={saveGraduationGradeLevel}
+                      disabled={savingGraduationGradeLevel}
+                      className="px-5 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-xl text-sm font-semibold transition-colors disabled:opacity-50"
+                    >
+                      {savingGraduationGradeLevel ? 'กำลังบันทึก...' : 'บันทึกชั้นจบ'}
+                    </button>
+                  </div>
+                  <p className="text-xs text-violet-700 mt-3">
+                    ค่าปัจจุบัน: <span className="font-bold">{schoolData?.graduation_grade_level || 'ยังไม่กำหนด'}</span>
+                  </p>
+                </div>
+
                 {/* ── Semester Period Management ── */}
                 <div className="mt-6 p-8 bg-gradient-to-br from-indigo-50 to-white rounded-2xl border border-indigo-200 shadow-sm">
                   <h3 className="text-xl font-bold text-slate-800 mb-2 flex items-center gap-2">
@@ -6941,17 +7191,48 @@ function AdminPage() {
               {/* ---- SCHOOL MODE ---- */}
               {rankingMode === 'school' && (
                 <div>
-                  <div className="flex items-center justify-between mb-8">
+                  <div className="mb-8 space-y-4">
                     <p className="text-slate-600">
                       แสดงอันดับนักเรียนทุกคนในโรงเรียน จากคะแนนรวมทั้งหมด
                     </p>
-                    <button
-                      onClick={() => fetchRankings({ mode: 'school' })}
-                      disabled={rankingLoading}
-                      className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-bold shadow-md shadow-blue-200 hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 transition-all disabled:opacity-50 disabled:transform-none"
-                    >
-                      {rankingLoading ? <span className="animate-spin">⏳</span> : '🔄'} {rankingFetched ? 'รีเฟรช' : 'แสดงอันดับ'}
-                    </button>
+                    <div className="flex flex-wrap items-end gap-3">
+                      <div className="min-w-[170px]">
+                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">ปีการศึกษา (ไม่บังคับ)</label>
+                        <select
+                          value={rankingSchoolAcademicYear}
+                          onChange={e => {
+                            setRankingSchoolAcademicYear(e.target.value);
+                            setRankingSchoolSemester('');
+                          }}
+                          className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-400 transition-all text-sm"
+                        >
+                          <option value="">-- ทุกปี --</option>
+                          {[...new Set(semesterPeriods.map(p => p.academic_year))].sort((a, b) => b - a).map(y => (
+                            <option key={y} value={y}>{y}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="min-w-[150px]">
+                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">ภาคเรียน (ไม่บังคับ)</label>
+                        <select
+                          value={rankingSchoolSemester}
+                          onChange={e => setRankingSchoolSemester(e.target.value)}
+                          className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-400 transition-all text-sm"
+                          disabled={!rankingSchoolAcademicYear}
+                        >
+                          <option value="">-- ทุกภาคเรียน --</option>
+                          <option value="1">ภาคเรียนที่ 1</option>
+                          <option value="2">ภาคเรียนที่ 2</option>
+                        </select>
+                      </div>
+                      <button
+                        onClick={() => fetchRankings({ mode: 'school', academicYear: rankingSchoolAcademicYear, semester: rankingSchoolSemester })}
+                        disabled={rankingLoading}
+                        className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-bold shadow-md shadow-blue-200 hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 transition-all disabled:opacity-50 disabled:transform-none"
+                      >
+                        {rankingLoading ? <span className="animate-spin">⏳</span> : '🔄'} {rankingFetched ? 'รีเฟรช' : 'แสดงอันดับ'}
+                      </button>
+                    </div>
                   </div>
 
                   {rankingLoading ? (
@@ -6978,6 +7259,25 @@ function AdminPage() {
           </div>
         )}
 
+        {activeTab === 'gradeExport' && (
+          <GradeExportTab
+            classrooms={classrooms}
+            currentUser={currentUser}
+            semesterPeriods={semesterPeriods}
+            selectedYear={selectedYear}
+            selectedSemester={selectedSemester}
+            schoolData={schoolData}
+          />
+        )}
+
+        {activeTab === 'summaryCompletion' && (
+          <SummaryCompletionTab
+            semesterPeriods={semesterPeriods}
+            selectedYear={selectedYear}
+            selectedSemester={selectedSemester}
+          />
+        )}
+
         </div>
       </div>
 
@@ -6996,7 +7296,7 @@ function AdminPage() {
       )}
       {/* Confirm & Alert modals (shared) */}
   <ExpiryModal isOpen={showExpiryModal} initialValue={expiryModalValue} onClose={() => setShowExpiryModal(false)} onSave={saveExpiry} title="ตั้งวันหมดอายุ" />
-  <AnnouncementModal isOpen={showAnnouncementModal} initialData={modalAnnouncement} apiBaseUrl={API_BASE_URL} onClose={closeAnnouncementModal} onSave={saveAnnouncementFromModal} />
+  <AnnouncementModal isOpen={showAnnouncementModal} initialData={modalAnnouncement} apiBaseUrl={API_BASE_URL} onClose={closeAnnouncementModal} onSave={saveAnnouncementFromModal} allowAudienceSelection={true} />
 
       {/* ConfirmModal replaced by swalMessenger.confirm via `openConfirmModal` */}
 

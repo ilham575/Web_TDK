@@ -125,6 +125,8 @@ def update_school(school_id: int, school_update: SchoolUpdate, db: Session = Dep
         school.current_academic_year = school_update.current_academic_year
     if 'current_semester' in update_data:
         school.current_semester = school_update.current_semester
+    if 'graduation_grade_level' in update_data:
+        school.graduation_grade_level = school_update.graduation_grade_level
 
     # Update logo_url if provided (can be None to delete logo)
     # Check using dict to see if field was explicitly set in request

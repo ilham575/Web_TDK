@@ -2,19 +2,46 @@ from fastapi import APIRouter, HTTPException, Depends, status, Body
 from sqlalchemy.orm import Session
 from typing import List
 
-from schemas.subject import Subject, SubjectCreate, SubjectTeacher, SubjectTeacherCreate
+from schemas.subject import Subject, SubjectCreate, SubjectUpdate, SubjectTeacher, SubjectTeacherCreate
 from schemas.schedule import SubjectSchedule as SubjectScheduleSchema, SubjectScheduleCreate as SubjectScheduleCreateSchema, StudentScheduleResponse
+from models.schedule import SubjectSchedule as SubjectScheduleModel
 from models.subject import Subject as SubjectModel
 from models.subject_student import SubjectStudent as SubjectStudentModel
 from models.classroom_subject import ClassroomSubject as ClassroomSubjectModel
 from models.user import User as UserModel
 from models.classroom import Classroom as ClassroomModel, ClassroomStudent as ClassroomStudentModel
-from models.schedule import SubjectSchedule as SubjectScheduleModel
 from database.connection import get_db
 from routers.user import get_current_user
 from schemas.user import User as UserSchema
 
 router = APIRouter(prefix="/subjects", tags=["subjects"])
+
+
+def _with_teacher(subject_obj: SubjectModel, db: Session):
+    """Return dict representing subject, including optional teacher info."""
+    if not subject_obj:
+        return None
+    # base attributes from columns
+    data = {c.name: getattr(subject_obj, c.name) for c in subject_obj.__table__.columns}
+
+    teacher = None
+    # First: try direct teacher_id on subject row
+    if subject_obj.teacher_id:
+        teacher = db.query(UserModel).filter(UserModel.id == subject_obj.teacher_id).first()
+
+    # Fallback: look up from SubjectSchedule (TeacherAssignmentModal saves here)
+    if not teacher:
+        schedule = db.query(SubjectScheduleModel).filter(
+            SubjectScheduleModel.subject_id == subject_obj.id,
+            SubjectScheduleModel.is_ended == False
+        ).first()
+        if schedule:
+            teacher = db.query(UserModel).filter(UserModel.id == schedule.teacher_id).first()
+
+    if teacher:
+        data['teacher_name'] = teacher.full_name or teacher.username
+        data['teacher'] = teacher
+    return data
 
 def validate_activity_percentage(db: Session, subject_id: int = None, new_percentage: int = None, school_id: int = None, academic_year: int = None, semester: int = None):
     """
@@ -102,12 +129,12 @@ def create_subject(subject: SubjectCreate, db: Session = Depends(get_db), curren
     db.add(new_sub)
     db.commit()
     db.refresh(new_sub)
-    return new_sub
+    return _with_teacher(new_sub, db)
 
 
 @router.patch("/{subject_id}", response_model=Subject)
-def update_subject(subject_id: int, subject: SubjectCreate, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
-    """Update an existing subject"""
+def update_subject(subject_id: int, subject: SubjectUpdate, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    """Update an existing subject (PATCH - partial update)"""
     # Only admin can update subjects
     role = getattr(current_user, 'role', None)
     if role != 'admin':
@@ -121,10 +148,39 @@ def update_subject(subject_id: int, subject: SubjectCreate, db: Session = Depend
     if getattr(current_user, 'school_id', None) is not None and subj.school_id is not None and int(subj.school_id) != int(current_user.school_id):
         raise HTTPException(status_code=403, detail="Cannot update subject for different school")
     
-    # Validate activity_percentage if changing to activity type or updating percentage
-    new_type = subject.subject_type or subj.subject_type
-    new_percent = getattr(subject, 'activity_percentage', None) or subj.activity_percentage
-    if new_type == 'activity' and new_percent:
+    # Build update data from request fields that are not None
+    update_data = {}
+    if subject.name is not None:
+        update_data['name'] = subject.name
+    if subject.code is not None:
+        update_data['code'] = subject.code
+    if subject.subject_type is not None:
+        update_data['subject_type'] = subject.subject_type
+    if subject.teacher_id is not None:
+        update_data['teacher_id'] = subject.teacher_id
+    if subject.credits is not None:
+        update_data['credits'] = subject.credits
+    if subject.activity_percentage is not None:
+        update_data['activity_percentage'] = subject.activity_percentage
+    if subject.max_collected_score is not None:
+        update_data['max_collected_score'] = subject.max_collected_score
+    if subject.max_exam_score is not None:
+        update_data['max_exam_score'] = subject.max_exam_score
+    if subject.academic_year is not None:
+        update_data['academic_year'] = subject.academic_year
+    if subject.semester is not None:
+        update_data['semester'] = subject.semester
+    if subject.is_ended is not None:
+        update_data['is_ended'] = subject.is_ended
+    if subject.school_id is not None:
+        update_data['school_id'] = subject.school_id
+    if subject.linked_subject_id is not None:
+        update_data['linked_subject_id'] = subject.linked_subject_id
+    
+    # Validate activity_percentage if set
+    new_percent = update_data.get('activity_percentage')
+    new_type = update_data.get('subject_type') or subj.subject_type
+    if new_percent is not None and new_type == 'activity':
         validate_activity_percentage(
             db, 
             subject_id=subject_id, 
@@ -134,32 +190,13 @@ def update_subject(subject_id: int, subject: SubjectCreate, db: Session = Depend
             semester=subj.semester
         )
     
-    # Update fields
-    if subject.name:
-        subj.name = subject.name
-    if subject.code:
-        subj.code = subject.code
-    if subject.subject_type:
-        subj.subject_type = subject.subject_type
-    if subject.teacher_id is not None:
-        subj.teacher_id = subject.teacher_id
-    # optional new fields
-    if getattr(subject, 'credits', None) is not None:
-        subj.credits = subject.credits
-    if getattr(subject, 'activity_percentage', None) is not None:
-        subj.activity_percentage = subject.activity_percentage
-    if getattr(subject, 'max_collected_score', None) is not None:
-        subj.max_collected_score = subject.max_collected_score
-    if getattr(subject, 'max_exam_score', None) is not None:
-        subj.max_exam_score = subject.max_exam_score
-    if getattr(subject, 'academic_year', None) is not None:
-        subj.academic_year = subject.academic_year
-    if getattr(subject, 'semester', None) is not None:
-        subj.semester = subject.semester
+    # Apply updates
+    for key, value in update_data.items():
+        setattr(subj, key, value)
     
     db.commit()
     db.refresh(subj)
-    return subj
+    return _with_teacher(subj, db)
 
 
 @router.get("", response_model=List[Subject])
@@ -172,7 +209,8 @@ def list_subjects(db: Session = Depends(get_db), school_id: int = None, academic
         query = query.filter(SubjectModel.academic_year == academic_year)
     if semester is not None:
         query = query.filter(SubjectModel.semester == semester)
-    return query.order_by(SubjectModel.created_at.desc()).all()
+    subjects = query.order_by(SubjectModel.created_at.desc()).all()
+    return [_with_teacher(s, db) for s in subjects]
 
 
 @router.get("/{subject_id}", response_model=Subject)
@@ -181,7 +219,7 @@ def get_subject(subject_id: int, db: Session = Depends(get_db)):
     subject = db.query(SubjectModel).filter(SubjectModel.id == subject_id).first()
     if not subject:
         raise HTTPException(status_code=404, detail="Subject not found")
-    return subject
+    return _with_teacher(subject, db)
 
 
 @router.get("/teacher/{teacher_id}", response_model=List[dict])

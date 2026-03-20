@@ -25,6 +25,7 @@ router = APIRouter(prefix="/homeroom", tags=["homeroom"])
 @router.get("/", response_model=List[HomeroomTeacherWithDetails])
 def get_homeroom_teachers(
     school_id: Optional[int] = None,
+    classroom_id: Optional[int] = None,
     academic_year: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: UserModel = Depends(get_current_user)
@@ -32,8 +33,11 @@ def get_homeroom_teachers(
     """ดึงรายชื่อครูประจำชั้นทั้งหมด"""
     query = db.query(HomeroomTeacherModel)
     
+    # Filter by classroom_id first (specific classroom)
+    if classroom_id:
+        query = query.filter(HomeroomTeacherModel.classroom_id == classroom_id)
     # Filter by school_id
-    if school_id:
+    elif school_id:
         query = query.filter(HomeroomTeacherModel.school_id == school_id)
     elif current_user.school_id:
         query = query.filter(HomeroomTeacherModel.school_id == current_user.school_id)

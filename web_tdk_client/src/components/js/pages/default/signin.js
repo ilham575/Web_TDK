@@ -2,20 +2,32 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { API_BASE_URL } from '../../../endpoints';
+import FirstVisitOnboarding, {
+  ONBOARDING_KEYS,
+  markOnboardingSeen,
+  shouldShowOnboarding
+} from '../../FirstVisitOnboarding';
 import { setSchoolFavicon } from '../../../../utils/faviconUtils';
 
 function SigninPage() {
-  // User type selection ('staff' or 'student')
-  const [userType, setUserType] = useState('staff');
+  // Login type selection ('admin', 'teacher', or 'student')
+  const [loginType, setLoginType] = useState('teacher');
   
-  // Staff login fields
+  // Admin/Owner direct login fields
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   
+  // Teacher/Staff directory login fields
+  const [selectedTeacherSchoolId, setSelectedTeacherSchoolId] = useState('');
+  const [teacherMembers, setTeacherMembers] = useState([]);
+  const [selectedTeacherId, setSelectedTeacherId] = useState('');
+  const [teacherPassword, setTeacherPassword] = useState('');
+  
   // Student login fields
   const [schools, setSchools] = useState([]);
   const [selectedSchoolId, setSelectedSchoolId] = useState('');
+  const [allClassroomsByYear, setAllClassroomsByYear] = useState([]);
   const [classrooms, setClassrooms] = useState([]);
   const [selectedClassroomId, setSelectedClassroomId] = useState('');
   const [students, setStudents] = useState([]);
@@ -28,6 +40,7 @@ function SigninPage() {
   // Common state
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [showLoginOnboarding, setShowLoginOnboarding] = useState(false);
 
   // Set page title
   useEffect(() => {
@@ -57,9 +70,47 @@ function SigninPage() {
     }
   }, [location.state]);
 
-  // Load schools when student login is selected
   useEffect(() => {
-    if (userType === 'student') {
+    setShowLoginOnboarding(shouldShowOnboarding(ONBOARDING_KEYS.login));
+  }, []);
+
+  useEffect(() => {
+    setError('');
+    setShowPassword(false);
+
+    if (loginType !== 'admin') {
+      setUsername('');
+      setPassword('');
+    }
+
+    if (loginType !== 'teacher') {
+      setSelectedTeacherSchoolId('');
+      setTeacherMembers([]);
+      setSelectedTeacherId('');
+      setTeacherPassword('');
+    }
+
+    if (loginType !== 'student') {
+      setSelectedSchoolId('');
+      setSelectedAcademicYear('');
+      setAcademicYears([]);
+      setAllClassroomsByYear([]);
+      setClassrooms([]);
+      setSelectedClassroomId('');
+      setStudents([]);
+      setSelectedStudentId('');
+      setStudentPassword('');
+    }
+  }, [loginType]);
+
+  const handleCloseLoginOnboarding = () => {
+    markOnboardingSeen(ONBOARDING_KEYS.login);
+    setShowLoginOnboarding(false);
+  };
+
+  // Load schools when teacher or student login is selected
+  useEffect(() => {
+    if (loginType === 'teacher' || loginType === 'student') {
       fetch(`${API_BASE_URL}/schools/`)
         .then(res => res.json())
         .then(data => {
@@ -72,7 +123,36 @@ function SigninPage() {
           setSchools([]);
         });
     }
-  }, [userType]);
+  }, [loginType]);
+
+  // Load teachers/staff when school is selected (for teacher login)
+  useEffect(() => {
+    if (loginType !== 'teacher') {
+      return;
+    }
+
+    setSelectedTeacherId('');
+    setTeacherPassword('');
+    setTeacherMembers([]);
+
+    if (!selectedTeacherSchoolId) {
+      return;
+    }
+
+    fetch(`${API_BASE_URL}/users/public-teachers?school_id=${selectedTeacherSchoolId}`)
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setTeacherMembers(data);
+        } else {
+          setTeacherMembers([]);
+        }
+      })
+      .catch(err => {
+        console.error('Failed to load teacher members:', err);
+        setTeacherMembers([]);
+      });
+  }, [loginType, selectedTeacherSchoolId]);
 
   // Load school info when school is selected (to get current academic year)
   useEffect(() => {
@@ -82,6 +162,7 @@ function SigninPage() {
       setAcademicYears([]);
       setSelectedClassroomId('');
       setSelectedStudentId('');
+      setAllClassroomsByYear([]);
       setClassrooms([]);
       setStudents([]);
 
@@ -114,6 +195,7 @@ function SigninPage() {
     if (selectedSchoolId && selectedAcademicYear) {
       setSelectedClassroomId('');
       setSelectedStudentId('');
+      setAllClassroomsByYear([]);
       setClassrooms([]);
       setStudents([]);
 
@@ -125,6 +207,8 @@ function SigninPage() {
         .then(res => res.json())
         .then(data => {
           if (Array.isArray(data)) {
+            // Keep full list for merging students across semesters
+            setAllClassroomsByYear(data);
             // Filter out duplicate classrooms with same name and grade_level
             const uniqueClassrooms = data.filter((classroom, index, self) =>
               index === self.findIndex((c) => (
@@ -141,27 +225,46 @@ function SigninPage() {
     }
   }, [selectedSchoolId, selectedAcademicYear]);
 
-  // Load students when classroom is selected
+  // Load students when classroom is selected (merge across semesters)
   useEffect(() => {
     if (selectedClassroomId) {
       setSelectedStudentId('');
       setStudents([]);
       
-      fetch(`${API_BASE_URL}/classrooms/${selectedClassroomId}/students`)
-        .then(res => res.json())
-        .then(data => {
-          if (Array.isArray(data)) {
-            // Filter only active students (this endpoint returns enrollment rows without a `role` field)
-            const activeStudents = data.filter(s => s.is_active !== false);
-            setStudents(activeStudents);
+      // Find the selected classroom's name and grade_level
+      const selected = classrooms.find(c => String(c.id) === String(selectedClassroomId));
+      if (!selected) return;
+
+      // Find ALL classroom IDs with the same name+grade_level (across semesters)
+      const matchingIds = allClassroomsByYear
+        .filter(c => c.name === selected.name && c.grade_level === selected.grade_level)
+        .map(c => c.id);
+
+      // Fetch students from all matching classrooms and merge
+      Promise.all(
+        matchingIds.map(id =>
+          fetch(`${API_BASE_URL}/classrooms/${id}/students`)
+            .then(res => res.ok ? res.json() : [])
+            .catch(() => [])
+        )
+      ).then(results => {
+        const allStudents = results.flat();
+        // Deduplicate by student id, keep active only
+        const seen = new Set();
+        const unique = [];
+        for (const s of allStudents) {
+          if (s && !seen.has(s.id) && s.is_active !== false) {
+            seen.add(s.id);
+            unique.push(s);
           }
-        })
-        .catch(err => {
-          console.error('Failed to load students:', err);
-          setStudents([]);
-        });
+        }
+        setStudents(unique);
+      }).catch(err => {
+        console.error('Failed to load students:', err);
+        setStudents([]);
+      });
     }
-  }, [selectedClassroomId]);
+  }, [selectedClassroomId, allClassroomsByYear]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -171,43 +274,69 @@ function SigninPage() {
     let loginUsername = '';
     let loginPassword = '';
 
-    if (userType === 'staff') {
-      if (!username || !password) {
-        setError('กรุณากรอกข้อมูลให้ครบถ้วน');
-        setIsLoading(false);
-        return;
-      }
-      loginUsername = username;
-      loginPassword = password;
-    } else {
-      if (!selectedSchoolId || !selectedAcademicYear || !selectedClassroomId || !selectedStudentId || !studentPassword) {
-        setError('กรุณาเลือกข้อมูลให้ครบถ้วน');
-        toast.error('กรุณาเลือกข้อมูลให้ครบถ้วน', {
-          position: "top-center",
-          hideProgressBar: false,
-          theme: "colored"
-        });
-        setIsLoading(false);
-        return;
-      }
-      
-      const selectedStudent = students.find(s => String(s.id) === String(selectedStudentId));
-      if (!selectedStudent || !selectedStudent.username) {
-        setError('ไม่พบข้อมูลนักเรียน');
-        toast.error('ไม่พบข้อมูลนักเรียน', {
-          position: "top-center",
-          hideProgressBar: false,
-          theme: "colored"
-        });
-        setIsLoading(false);
-        return;
-      }
-      
-      loginUsername = selectedStudent.username;
-      loginPassword = studentPassword;
-    }
-
     try {
+      if (loginType === 'admin') {
+        if (!username || !password) {
+          setError('กรุณากรอกข้อมูลให้ครบถ้วน');
+          setIsLoading(false);
+          return;
+        }
+        loginUsername = username;
+        loginPassword = password;
+      } else if (loginType === 'teacher') {
+        if (!selectedTeacherSchoolId || !selectedTeacherId || !teacherPassword) {
+          setError('กรุณาเลือกข้อมูลให้ครบถ้วน');
+          toast.error('กรุณาเลือกข้อมูลให้ครบถ้วน', {
+            position: "top-center",
+            hideProgressBar: false,
+            theme: "colored"
+          });
+          setIsLoading(false);
+          return;
+        }
+
+        const selectedTeacher = teacherMembers.find(t => String(t.id) === String(selectedTeacherId));
+        if (!selectedTeacher || !selectedTeacher.username) {
+          setError('ไม่พบข้อมูลครูหรือบุคลากร');
+          toast.error('ไม่พบข้อมูลครูหรือบุคลากร', {
+            position: "top-center",
+            hideProgressBar: false,
+            theme: "colored"
+          });
+          setIsLoading(false);
+          return;
+        }
+
+        loginUsername = selectedTeacher.username;
+        loginPassword = teacherPassword;
+      } else {
+        if (!selectedSchoolId || !selectedAcademicYear || !selectedClassroomId || !selectedStudentId || !studentPassword) {
+          setError('กรุณาเลือกข้อมูลให้ครบถ้วน');
+          toast.error('กรุณาเลือกข้อมูลให้ครบถ้วน', {
+            position: "top-center",
+            hideProgressBar: false,
+            theme: "colored"
+          });
+          setIsLoading(false);
+          return;
+        }
+        
+        const selectedStudent = students.find(s => String(s.id) === String(selectedStudentId));
+        if (!selectedStudent || !selectedStudent.username) {
+          setError('ไม่พบข้อมูลนักเรียน');
+          toast.error('ไม่พบข้อมูลนักเรียน', {
+            position: "top-center",
+            hideProgressBar: false,
+            theme: "colored"
+          });
+          setIsLoading(false);
+          return;
+        }
+        
+        loginUsername = selectedStudent.username;
+        loginPassword = studentPassword;
+      }
+
       const res = await fetch(`${API_BASE_URL}/users/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -271,6 +400,39 @@ function SigninPage() {
       className="min-h-screen bg-gradient-to-br from-slate-50 to-emerald-50/30 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden"
       style={{ fontFamily: 'Mali, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial' }}
     >
+      <FirstVisitOnboarding
+        open={showLoginOnboarding}
+        onClose={handleCloseLoginOnboarding}
+        badge="เริ่มต้นใช้งาน"
+        title="เลือกประเภทผู้ใช้ แล้วเข้าสู่ระบบได้ทันที"
+        description="ถ้านี่คือครั้งแรกที่เข้ามาในเว็บ หน้านี้จะช่วยบอกว่าควรเลือกปุ่มไหนและต้องกรอกอะไรบ้าง เพื่อให้เริ่มใช้งานได้โดยไม่สับสน"
+        accent="emerald"
+        highlights={[
+          'Admin / Owner ใช้ชื่อผู้ใช้และรหัสผ่านโดยตรง',
+          'ครูและบุคลากรเลือกโรงเรียน แล้วเลือกชื่อของตัวเองจากรายการ',
+          'นักเรียนเลือกโรงเรียน ปีการศึกษา ชั้นเรียน และชื่อของตัวเองก่อนใส่รหัสผ่าน',
+          'หลังเข้าสู่ระบบครั้งแรก ถ้าระบบแจ้งให้เปลี่ยนรหัสผ่าน ควรเปลี่ยนทันทีเพื่อความปลอดภัย'
+        ]}
+        steps={[
+          {
+            icon: '1',
+            title: 'เลือกปุ่มให้ตรงกับบทบาทของคุณ',
+            description: 'ถ้าเป็นผู้ดูแลให้เลือก Admin, ถ้าเป็นครูให้เลือก ครู, ถ้าเป็นนักเรียนให้เลือก นักเรียน'
+          },
+          {
+            icon: '2',
+            title: 'กรอกข้อมูลตามแบบฟอร์มของบทบาทนั้น',
+            description: 'ระบบจะแสดงเฉพาะข้อมูลที่ต้องใช้จริงของแต่ละกลุ่ม เพื่อให้กรอกน้อยและเข้าใจง่าย'
+          },
+          {
+            icon: '3',
+            title: 'กดเข้าสู่ระบบ แล้วเริ่มใช้งานได้เลย',
+            description: 'เมื่อเข้าสู่ระบบสำเร็จ หน้าแรกของบทบาทคุณจะมีคำแนะนำสั้น ๆ ให้อีกครั้งเฉพาะครั้งแรก'
+          }
+        ]}
+        buttonLabel="เริ่มเข้าสู่ระบบ"
+      />
+
       {/* Decorative Ornaments */}
       <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-500"></div>
       <div className="absolute -top-32 -left-32 w-96 h-96 bg-emerald-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30"></div>
@@ -286,89 +448,182 @@ function SigninPage() {
           เข้าสู่ระบบ
         </h2>
         <p className="mt-2 text-center text-sm text-slate-500">
-          ยินดีต้อนรับกลับ — <span className="font-semibold text-emerald-600">{userType === 'staff' ? 'ส่วนของบุคลากร' : 'ส่วนของนักเรียน'}</span>
+          ยินดีต้อนรับกลับ — <span className="font-semibold text-emerald-600">
+            {loginType === 'admin' ? '🛡️ Admin / Owner' : loginType === 'teacher' ? '👨‍🏫 ครู/บุคลากร' : '👨‍🎓 นักเรียน'}
+          </span>
         </p>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md relative z-10 px-4 sm:px-0">
         <div className="bg-white/90 backdrop-blur-xl py-8 px-4 shadow-2xl shadow-slate-200/50 sm:rounded-3xl sm:px-10 border border-white">
           
-          {/* User Type Switcher */}
-          <div className="flex p-1.5 bg-slate-100/80 rounded-2xl mb-8 border border-slate-200/50">
+          {/* Login Type Selector (3 main buttons) */}
+          <div className="grid grid-cols-3 gap-2 mb-8">
             <button
               type="button"
-              onClick={() => { setUserType('staff'); setError(''); }}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-bold rounded-xl transition-all duration-300 ${
-                userType === 'staff' 
-                  ? 'bg-white text-emerald-600 shadow-sm border border-slate-100 scale-100' 
-                  : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50 scale-95'
+              onClick={() => { setLoginType('admin'); setError(''); }}
+              className={`flex flex-col items-center justify-center gap-1 py-3 px-2 text-xs font-bold rounded-xl transition-all duration-300 ${
+                loginType === 'admin' 
+                  ? 'bg-white text-emerald-600 shadow-md border border-slate-100 scale-100' 
+                  : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/30 scale-95'
               }`}
             >
-              <span>👨‍💼</span> บุคลากร
+              <span className="text-xl">🛡️</span>
+              <span>Admin</span>
             </button>
             <button
               type="button"
-              onClick={() => { setUserType('student'); setError(''); }}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-bold rounded-xl transition-all duration-300 ${
-                userType === 'student' 
-                  ? 'bg-white text-emerald-600 shadow-sm border border-slate-100 scale-100' 
-                  : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50 scale-95'
+              onClick={() => { setLoginType('teacher'); setError(''); }}
+              className={`flex flex-col items-center justify-center gap-1 py-3 px-2 text-xs font-bold rounded-xl transition-all duration-300 ${
+                loginType === 'teacher' 
+                  ? 'bg-white text-emerald-600 shadow-md border border-slate-100 scale-100' 
+                  : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/30 scale-95'
               }`}
             >
-              <span>👨‍🎓</span> นักเรียน
+              <span className="text-xl">👨‍🏫</span>
+              <span>ครู</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => { setLoginType('student'); setError(''); }}
+              className={`flex flex-col items-center justify-center gap-1 py-3 px-2 text-xs font-bold rounded-xl transition-all duration-300 ${
+                loginType === 'student' 
+                  ? 'bg-white text-emerald-600 shadow-md border border-slate-100 scale-100' 
+                  : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/30 scale-95'
+              }`}
+            >
+              <span className="text-xl">👨‍🎓</span>
+              <span>นักเรียน</span>
             </button>
           </div>
 
           <form className="space-y-6" onSubmit={handleSubmit}>
-            {userType === 'staff' ? (
+            {loginType === 'admin' ? (
               <>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    ชื่อผู้ใช้
-                  </label>
-                  <div className="relative group">
-                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                      <span className="text-slate-400 group-focus-within:text-emerald-500 transition-colors">👤</span>
+                {/* Admin/Owner Direct Login */}
+                <div className="space-y-5">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                      ชื่อผู้ใช้
+                    </label>
+                    <div className="relative group">
+                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <span className="text-slate-400 group-focus-within:text-emerald-500 transition-colors">👤</span>
+                      </div>
+                      <input
+                        type="text"
+                        className="block w-full pl-12 pr-4 py-3 border border-slate-200 rounded-xl bg-slate-50/50 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm shadow-sm"
+                        placeholder="Username ของคุณ"
+                        value={username}
+                        onChange={e => setUsername(e.target.value)}
+                        required
+                      />
                     </div>
-                    <input
-                      type="text"
-                      className="block w-full pl-12 pr-4 py-3 border border-slate-200 rounded-xl bg-slate-50/50 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm shadow-sm"
-                      placeholder="Username ของคุณ"
-                      value={username}
-                      onChange={e => setUsername(e.target.value)}
-                      required
-                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                      รหัสผ่าน
+                    </label>
+                    <div className="relative group">
+                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <span className="text-slate-400 group-focus-within:text-emerald-500 transition-colors">🔒</span>
+                      </div>
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        className="block w-full pl-12 pr-12 py-3 border border-slate-200 rounded-xl bg-slate-50/50 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm shadow-sm"
+                        placeholder="Password"
+                        value={password}
+                        onChange={e => setPassword(e.target.value)}
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-emerald-500 transition-colors focus:outline-none"
+                      >
+                        {showPassword ? '🙈' : '👁️'}
+                      </button>
+                    </div>
                   </div>
                 </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    รหัสผ่าน
-                  </label>
-                  <div className="relative group">
-                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                      <span className="text-slate-400 group-focus-within:text-emerald-500 transition-colors">🔒</span>
+              </>
+            ) : loginType === 'teacher' ? (
+              <>
+                {/* Teacher/Staff Directory Login */}
+                <div className="space-y-5">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">🏫 โรงเรียน</label>
+                    <div className="relative group">
+                      <select
+                        className="block w-full pl-4 pr-10 py-3 border border-slate-200 rounded-xl bg-slate-50/50 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm appearance-none cursor-pointer shadow-sm"
+                        value={selectedTeacherSchoolId}
+                        onChange={e => setSelectedTeacherSchoolId(e.target.value)}
+                        required
+                      >
+                        <option value="">-- เลือกโรงเรียน --</option>
+                        {schools.map(school => (
+                          <option key={school.id} value={school.id}>{school.name}</option>
+                        ))}
+                      </select>
+                      <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-slate-400 group-focus-within:text-emerald-500 transition-colors">▼</div>
                     </div>
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      className="block w-full pl-12 pr-12 py-3 border border-slate-200 rounded-xl bg-slate-50/50 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm shadow-sm"
-                      placeholder="Password"
-                      value={password}
-                      onChange={e => setPassword(e.target.value)}
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-emerald-500 transition-colors focus:outline-none"
-                    >
-                      {showPassword ? '🙈' : '👁️'}
-                    </button>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">👤 ชื่อครู/บุคลากร</label>
+                    <div className="relative group">
+                      <select
+                        className="block w-full pl-4 pr-10 py-3 border border-slate-200 rounded-xl bg-slate-50/50 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm appearance-none disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                        value={selectedTeacherId}
+                        onChange={e => setSelectedTeacherId(e.target.value)}
+                        required
+                        disabled={!selectedTeacherSchoolId || teacherMembers.length === 0}
+                      >
+                        <option value="">-- เลือกชื่อ --</option>
+                        {teacherMembers.map(member => (
+                          <option key={member.id} value={member.id}>{member.full_name || member.username}</option>
+                        ))}
+                      </select>
+                      <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-slate-400 group-focus-within:text-emerald-500 transition-colors">▼</div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">🔒 รหัสผ่าน</label>
+                    <div className="relative group">
+                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <span className="text-slate-400 group-focus-within:text-emerald-500 transition-colors">🔒</span>
+                      </div>
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        className="block w-full pl-12 pr-12 py-3 border border-slate-200 rounded-xl bg-slate-50/50 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                        placeholder="รหัสผ่านของคุณ"
+                        value={teacherPassword}
+                        onChange={e => setTeacherPassword(e.target.value)}
+                        required
+                        disabled={!selectedTeacherId}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-emerald-500 transition-colors focus:outline-none"
+                      >
+                        {showPassword ? '🙈' : '👁️'}
+                      </button>
+                    </div>
+                    <div className="mt-2.5 flex items-start gap-1.5">
+                      <span className="text-amber-500 text-xs mt-0.5">💡</span>
+                      <p className="text-[11px] text-slate-500 leading-tight">
+                        เลือกโรงเรียนและชื่อของคุณก่อนเข้าสู่ระบบ
+                      </p>
+                    </div>
                   </div>
                 </div>
               </>
             ) : (
               <>
+                {/* Student Login */}
                 <div className="space-y-5">
                   {/* School Selection */}
                   <div>

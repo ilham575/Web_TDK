@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session, joinedload
-from typing import List
+from typing import List, Optional
 from database.connection import get_db
 from models.schedule import ScheduleSlot, SubjectSchedule
 from models.subject import Subject
@@ -319,21 +319,29 @@ def assign_subject_to_schedule(
 @router.get("/teacher", response_model=List[SubjectScheduleSchema])
 def get_teacher_schedules(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    academic_year: Optional[str] = Query(None),
+    semester: Optional[int] = Query(None)
 ):
     if current_user.role != "teacher":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only teachers can access this endpoint"
         )
-    
-    schedules = db.query(SubjectSchedule).options(
+
+    query = db.query(SubjectSchedule).options(
         joinedload(SubjectSchedule.subject),
         joinedload(SubjectSchedule.schedule_slot),
         joinedload(SubjectSchedule.classroom)
-    ).filter(
+    ).join(SubjectSchedule.subject).filter(
         SubjectSchedule.teacher_id == current_user.id
-    ).all()
+    )
+    if academic_year:
+        query = query.filter(Subject.academic_year == academic_year)
+    if semester is not None:
+        query = query.filter(Subject.semester == semester)
+
+    schedules = query.all()
     
     result = []
     for schedule in schedules:
@@ -357,7 +365,9 @@ def get_teacher_schedules(
 @router.get('/student', response_model=List[StudentScheduleResponse])
 def get_student_schedule_current(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    academic_year: Optional[str] = Query(None),
+    semester: Optional[int] = Query(None)
 ):
     """Return schedule entries for the currently authenticated student."""
     if current_user.role != 'student':
@@ -385,7 +395,21 @@ def get_student_schedule_current(
     if classroom_id:
         classroom_subject_ids = [r.subject_id for r in db.query(ClassroomSubjectModel).filter(ClassroomSubjectModel.classroom_id == classroom_id).all()]
 
-    subject_ids = set(enrolled_subject_ids) | set(classroom_subject_ids)
+    all_subject_ids = set(enrolled_subject_ids) | set(classroom_subject_ids)
+
+    if not all_subject_ids:
+        return []
+
+    # Filter subject_ids by academic_year / semester if provided
+    if academic_year or semester is not None:
+        subject_filter = db.query(Subject.id).filter(Subject.id.in_(list(all_subject_ids)))
+        if academic_year:
+            subject_filter = subject_filter.filter(Subject.academic_year == academic_year)
+        if semester is not None:
+            subject_filter = subject_filter.filter(Subject.semester == semester)
+        subject_ids = set(row[0] for row in subject_filter.all())
+    else:
+        subject_ids = all_subject_ids
 
     if not subject_ids:
         return []
@@ -649,21 +673,29 @@ def delete_subject_schedule(
 @router.get("/assignments", response_model=List[SubjectScheduleSchema])
 def get_school_assignments(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    academic_year: Optional[str] = Query(None),
+    semester: Optional[int] = Query(None)
 ):
     if current_user.role != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only admins can access school assignments"
         )
-    
-    schedules = db.query(SubjectSchedule).options(
+
+    query = db.query(SubjectSchedule).options(
         joinedload(SubjectSchedule.subject),
         joinedload(SubjectSchedule.schedule_slot),
         joinedload(SubjectSchedule.teacher)
-    ).filter(
-        SubjectSchedule.subject.has(school_id=current_user.school_id)
-    ).all()
+    ).join(SubjectSchedule.subject).filter(
+        Subject.school_id == current_user.school_id
+    )
+    if academic_year:
+        query = query.filter(Subject.academic_year == academic_year)
+    if semester is not None:
+        query = query.filter(Subject.semester == semester)
+
+    schedules = query.all()
     
     result = []
     for schedule in schedules:

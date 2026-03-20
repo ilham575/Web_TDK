@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { API_BASE_URL } from '../../../endpoints';
 import { toast } from 'react-toastify';
 import ActivityDetailModal from '../../ActivityDetailModal';
@@ -50,11 +50,94 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
   const [selectedAcademicYear, setSelectedAcademicYear] = useState('');
   const [selectedSemester, setSelectedSemester] = useState('');
   const [academicYearInitialized, setAcademicYearInitialized] = useState(false);          
+  const rankingRequestRef = useRef(0);
+
+  const getSemestersForYear = (academicYear) => {
+    if (!academicYear) return [];
+
+    const merged = new Map();
+    availableSemesters
+      .filter(s => String(s.academic_year) === String(academicYear))
+      .forEach(s => {
+        const sem = Number(s.semester);
+        if (!Number.isFinite(sem)) return;
+
+        const allow = s.allow_student_view_grades !== false;
+        const existing = merged.get(sem);
+        if (!existing) {
+          merged.set(sem, { semester: sem, allow_student_view_grades: allow });
+        } else {
+          merged.set(sem, {
+            semester: sem,
+            allow_student_view_grades: existing.allow_student_view_grades && allow
+          });
+        }
+      });
+
+    return Array.from(merged.values()).sort((a, b) => a.semester - b.semester);
+  };
+
+  const selectedYearSemesters = getSemestersForYear(selectedAcademicYear);
+  const selectedYearAllowedSemesters = selectedYearSemesters.filter(s => s.allow_student_view_grades);
+  const canShowCombinedOption = selectedYearAllowedSemesters.length >= 2;
+
+  const allAcademicYears = [...new Set(availableSemesters.map(s => s.academic_year))].sort((a, b) => b - a);
+  const allowedAcademicYears = [...new Set(
+    availableSemesters
+      .filter(s => s.allow_student_view_grades !== false)
+      .map(s => s.academic_year)
+  )].sort((a, b) => b - a);
+  const visibleAcademicYears = allowedAcademicYears.length > 0 ? allowedAcademicYears : allAcademicYears;
+
+  useEffect(() => {
+    if (!selectedAcademicYear) return;
+
+    if (!selectedSemester) {
+      if (!canShowCombinedOption) {
+        const firstAllowedSemester = selectedYearAllowedSemesters[0];
+        if (firstAllowedSemester) {
+          setSelectedSemester(String(firstAllowedSemester.semester));
+        }
+      }
+      return;
+    }
+
+    const selectedSemesterNumber = Number(selectedSemester);
+    const selectedSemesterMeta = selectedYearSemesters.find(s => s.semester === selectedSemesterNumber);
+    if (!selectedSemesterMeta || !selectedSemesterMeta.allow_student_view_grades) {
+      const firstAllowedSemester = selectedYearAllowedSemesters[0];
+      if (firstAllowedSemester) {
+        setSelectedSemester(String(firstAllowedSemester.semester));
+      } else {
+        setSelectedSemester('');
+      }
+    }
+  }, [selectedAcademicYear, selectedSemester, selectedYearSemesters, selectedYearAllowedSemesters, canShowCombinedOption]);
 
   useEffect(() => {
     if (!studentId) {
       setLoading(false);
       return;
+    }
+
+    // Wait until semester permissions are loaded so we don't request a blocked default period.
+    if (!academicYearInitialized) {
+      return;
+    }
+
+    if (availableSemesters.length > 0) {
+      if (!selectedAcademicYear) {
+        return;
+      }
+
+      const yearSemesters = getSemestersForYear(selectedAcademicYear);
+      const allowedYearSemesters = yearSemesters.filter(s => s.allow_student_view_grades);
+      const combinedAllowed = allowedYearSemesters.length >= 2;
+
+      if (!selectedSemester && !combinedAllowed) {
+        // Auto-selection effect will choose a concrete allowed semester shortly.
+        return;
+      }
     }
 
     const loadGrades = async () => {
@@ -74,7 +157,8 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
             const errorMsg = errorData.detail;
             if (errorMsg && errorMsg.includes('ยังไม่เปิดให้เข้าดูผลการเรียน')) {
               toast.warning(errorMsg);
-              if (onGradesNotAnnounced) {
+              const hasAnyAllowedSemester = availableSemesters.some(s => s.allow_student_view_grades !== false);
+              if (onGradesNotAnnounced && !hasAnyAllowedSemester) {
                 onGradesNotAnnounced();
               }
               setLoading(false);
@@ -242,7 +326,7 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
     };
 
     loadGrades();
-  }, [studentId, selectedAcademicYear, selectedSemester]);
+  }, [studentId, academicYearInitialized, availableSemesters, selectedAcademicYear, selectedSemester]);
 
   useEffect(() => {
     if (!studentId) return;
@@ -256,15 +340,49 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
           const data = await res.json();
           if (Array.isArray(data)) {
             setAvailableSemesters(data);
-            // Auto-select the latest academic year
+
+            // Auto-select latest academic year/semester that student is allowed to view
             if (data.length > 0 && !academicYearInitialized) {
-              const latestYear = [...new Set(data.map(s => s.academic_year))].sort((a, b) => b - a)[0];
-              setSelectedAcademicYear(latestYear);
+              const normalized = data.map(s => ({
+                ...s,
+                allow_student_view_grades: s.allow_student_view_grades !== false
+              }));
+
+              const allowedYears = [...new Set(
+                normalized
+                  .filter(s => s.allow_student_view_grades)
+                  .map(s => s.academic_year)
+              )].sort((a, b) => b - a);
+
+              const allYears = [...new Set(normalized.map(s => s.academic_year))].sort((a, b) => b - a);
+              const defaultYear = allowedYears[0] || allYears[0];
+
+              if (defaultYear) {
+                setSelectedAcademicYear(defaultYear);
+
+                const allowedSemestersInYear = [...new Set(
+                  normalized
+                    .filter(s => String(s.academic_year) === String(defaultYear) && s.allow_student_view_grades)
+                    .map(s => Number(s.semester))
+                    .filter(v => Number.isFinite(v))
+                )].sort((a, b) => a - b);
+
+                if (allowedSemestersInYear.length === 1) {
+                  setSelectedSemester(String(allowedSemestersInYear[0]));
+                } else {
+                  setSelectedSemester('');
+                }
+              }
+
               setAcademicYearInitialized(true);
             }
           }
         }
-      } catch (err) {}
+      } catch (err) {
+      } finally {
+        // Unblock transcript loading even when list is empty or request fails.
+        setAcademicYearInitialized(true);
+      }
     };
     loadSemesters();
   }, [studentId]);
@@ -272,9 +390,16 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
   useEffect(() => {
     const loadRanking = async () => {
       if (!studentId || !gradesAnnounced) return;
+
+      const requestId = ++rankingRequestRef.current;
       
       try {
         const token = localStorage.getItem('token');
+        const params = new URLSearchParams();
+        if (selectedAcademicYear) params.set('academic_year', selectedAcademicYear);
+        if (selectedSemester) params.set('semester', selectedSemester);
+        const queryStr = params.toString() ? `?${params.toString()}` : '';
+
         let schoolId = localStorage.getItem('school_id');
         
         if (!schoolId) {
@@ -294,13 +419,39 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
         if (classroomRes.ok) {
           const classrooms = await classroomRes.json();
           if (classrooms && classrooms.length > 0) {
-            const currentClassroom = classrooms[0];
-            const rankingRes = await fetch(`${API_BASE_URL}/grades/classroom/${currentClassroom.id}/ranking`, {
+            const normalizedYear = selectedAcademicYear ? String(selectedAcademicYear) : '';
+            const normalizedSemester = selectedSemester ? Number(selectedSemester) : null;
+
+            const matchesAcademicYear = (classroomYear, selectedYear) => {
+              if (!selectedYear) return true;
+              const cy = String(classroomYear ?? '').trim();
+              const sy = String(selectedYear ?? '').trim();
+              if (!cy || !sy) return false;
+              if (cy === sy) return true;
+              return cy.slice(-2) === sy.slice(-2);
+            };
+
+            const classroomsInYear = normalizedYear
+              ? classrooms.filter(c => matchesAcademicYear(c.academic_year, normalizedYear))
+              : classrooms;
+
+            const classroomsInSemester = normalizedSemester
+              ? classrooms.filter(c => Number(c.semester) === normalizedSemester)
+              : classrooms;
+
+            const classroomsInPeriod = normalizedSemester
+              ? classroomsInYear.filter(c => Number(c.semester) === normalizedSemester)
+              : classroomsInYear;
+
+            const currentClassroom = classroomsInPeriod[0] || classroomsInSemester[0] || classroomsInYear[0] || classrooms[0];
+
+            const rankingRes = await fetch(`${API_BASE_URL}/grades/classroom/${currentClassroom.id}/ranking${queryStr}`, {
               headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
             });
             
             if (rankingRes.ok) {
               const rankingData = await rankingRes.json();
+              if (requestId !== rankingRequestRef.current) return;
               const myRank = rankingData.find(r => r.student_id === studentId);
               if (myRank) {
                 setRankingInfo({
@@ -311,18 +462,21 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
                   average: myRank.average_score,
                   classroomName: currentClassroom.name
                 });
+              } else {
+                setRankingInfo(null);
               }
             }
           }
         }
 
         if (schoolId) {
-          const schoolRankingRes = await fetch(`${API_BASE_URL}/grades/school/${schoolId}/ranking`, {
+          const schoolRankingRes = await fetch(`${API_BASE_URL}/grades/school/${schoolId}/ranking${queryStr}`, {
             headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
           });
           
           if (schoolRankingRes.ok) {
             const schoolRankingData = await schoolRankingRes.json();
+            if (requestId !== rankingRequestRef.current) return;
             const mySchoolRank = schoolRankingData.find(r => r.student_id === studentId);
             if (mySchoolRank) {
               setSchoolRankingInfo({
@@ -332,18 +486,22 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
                 totalMaxScore: mySchoolRank.total_max_score,
                 average: mySchoolRank.average_score
               });
+            } else {
+              setSchoolRankingInfo(null);
             }
           }
         }
       } catch (err) {
-        console.error('Error loading ranking:', err);
+        if (requestId === rankingRequestRef.current) {
+          console.error('Error loading ranking:', err);
+        }
       }
     };
     
     if (gradesAnnounced) {
       loadRanking();
     }
-  }, [studentId, gradesAnnounced]);
+  }, [studentId, gradesAnnounced, selectedAcademicYear, selectedSemester]);
 
   useEffect(() => {
     const checkGradeAnnouncement = async () => {
@@ -535,7 +693,7 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
                         value={selectedAcademicYear}
                         onChange={e => { setSelectedAcademicYear(e.target.value); setSelectedSemester(''); }}
                     >
-                        {[...new Set(availableSemesters.map(s => s.academic_year))].sort((a, b) => b - a).map(y => (
+                      {visibleAcademicYears.map(y => (
                         <option key={y} value={y}>ปี {y}</option>
                         ))}
                     </select>
@@ -549,16 +707,10 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
                             value={selectedSemester}
                             onChange={e => setSelectedSemester(e.target.value)}
                         >
-                            <option value="">รวม 2 ภาค</option>
-                            {availableSemesters
-                                .filter(s => s.academic_year === selectedAcademicYear)
-                                .map(s => s.semester)
-                                .filter((v, i, a) => a.indexOf(v) === i)
-                                .sort()
-                                .map(sem => (
-                                    <option key={sem} value={sem}>ภาค {sem} เท่านั้น</option>
-                                ))
-                            }
+                      {canShowCombinedOption && <option value="">รวม 2 ภาค</option>}
+                          {selectedYearAllowedSemesters.map(({ semester }) => (
+                        <option key={semester} value={semester}>ภาค {semester} เท่านั้น</option>
+                      ))}
                         </select>
                         <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                     </div>

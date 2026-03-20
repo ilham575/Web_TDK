@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { toast } from 'react-toastify';
 import { API_BASE_URL } from '../../../endpoints';
 import { 
@@ -10,14 +11,13 @@ import {
   LayoutGrid, 
   CheckCircle2,
   ChevronRight,
-  Info,
-  Download,
   Printer
 } from 'lucide-react';
 
 function GradeSummary() {
   const { id } = useParams(); // subject id
   const navigate = useNavigate();
+  const { t, i18n } = useTranslation();
   const [students, setStudents] = useState([]);
   const [assignments, setAssignments] = useState([]);
   const [subjectName, setSubjectName] = useState('');
@@ -29,6 +29,51 @@ function GradeSummary() {
   const [classes, setClasses] = useState([]);
   const [selectedClass, setSelectedClass] = useState(null);
 
+  const getClassKey = (s) => {
+    // Always key by name so classrooms with the same name across different semesters merge.
+    if (!s) return 'label:Default';
+    if (s.classroom && (s.classroom.name || s.classroom.id)) return `label:${s.classroom.name || String(s.classroom.id)}`;
+    if (s.classroom_name) return `label:${s.classroom_name}`;
+    return 'label:Default';
+  };
+
+  const selectedClassroomIds = selectedClass
+    ? Array.from(new Set(
+        students
+          .filter(s => getClassKey(s) === selectedClass.key)
+          .map(s => s.classroom?.id)
+          .filter(Boolean)
+      ))
+    : [];
+
+  const assignmentMatchesSelectedClass = (assignment) => {
+    if (!selectedClass) return true;
+    if (!assignment?.classroom_id) return true;
+    return selectedClassroomIds.includes(assignment.classroom_id);
+  };
+
+  const hasStudentRealActivityGrades = (studentId) => {
+    const student = students.find(s => s.id === studentId);
+    const studentClassId = student?.classroom?.id || null;
+
+    return assignments.some(a => {
+      if (a.title === "คะแนนเก็บรวม" || a.title === "คะแนนสอบรวม") return false;
+      if (!assignmentMatchesSelectedClass(a)) return false;
+      if (a.classroom_id && a.classroom_id !== studentClassId) return false;
+      const assignmentGrades = grades[a.id] || {};
+      const studentScore = assignmentGrades[studentId];
+      return studentScore !== undefined && studentScore !== null && studentScore !== '';
+    });
+  };
+
+  const shouldShowActivityManualInput = (studentId) => {
+    const manual = manualGrades[studentId]?.collected;
+    if (manual !== undefined && manual !== '') return true;
+    return !hasStudentRealActivityGrades(studentId);
+  };
+
+  const selectedClassroomIdForSave = selectedClassroomIds.length === 1 ? selectedClassroomIds[0] : null;
+
   const checkIsExam = (title) => {
     if (!title) return false;
     const t = title.toLowerCase();
@@ -36,33 +81,24 @@ function GradeSummary() {
     return t.includes('กลางภาค') || t.includes('ปลายภาค') || t.includes('final') || t.includes('midterm') || t.includes('คะแนนสอบ');
   };
 
-  const hasCollectedAssignments = assignments.some(a => 
-    !checkIsExam(a.title) && (!selectedClass || !a.classroom_id || a.classroom_id === selectedClass.id)
-  );
-  const hasExamAssignments = assignments.some(a => 
-    checkIsExam(a.title) && (!selectedClass || !a.classroom_id || a.classroom_id === selectedClass.id)
-  );
+  const hasCollectedAssignments = assignments.some(a => !checkIsExam(a.title) && assignmentMatchesSelectedClass(a));
+  const hasExamAssignments = assignments.some(a => checkIsExam(a.title) && assignmentMatchesSelectedClass(a));
 
   const hasRealCollectedAssignments = assignments.some(a => 
     !checkIsExam(a.title) && 
     a.title !== "คะแนนเก็บรวม" &&
-    (!selectedClass || !a.classroom_id || a.classroom_id === selectedClass.id)
+    assignmentMatchesSelectedClass(a)
   );
   const hasRealExamAssignments = assignments.some(a => 
     checkIsExam(a.title) && 
     a.title !== "คะแนนสอบรวม" &&
-    (!selectedClass || !a.classroom_id || a.classroom_id === selectedClass.id)
+    assignmentMatchesSelectedClass(a)
   );
-  const hasRealActivityAssignments = assignments.some(a => 
-    a.title !== "คะแนนเก็บรวม" &&
-    (!selectedClass || !a.classroom_id || a.classroom_id === selectedClass.id)
-  );
-
   useEffect(() => {
     const schoolName = localStorage.getItem('school_name');
-    const baseTitle = 'สรุปคะแนน';
+    const baseTitle = t('teacherGradeSummary.pageTitle');
     document.title = (schoolName && schoolName !== '-') ? `${baseTitle} - ${schoolName}` : baseTitle;
-  }, []);
+  }, [i18n.language, t]);
 
   const calculateGrade = (percentage) => {
     if (percentage >= 80) return 'A';
@@ -84,7 +120,7 @@ function GradeSummary() {
   const handleManualGradeChange = (studentId, type, value) => {
     const numValue = Number(value);
     if (isNaN(numValue) || numValue < 0) {
-      toast.error('คะแนนต้องเป็นตัวเลขและไม่ติดลบ');
+      toast.error(t('teacherGradeSummary.toastInvalidScore'));
       setManualGrades(prev => ({
         ...prev,
         [studentId]: {
@@ -97,7 +133,7 @@ function GradeSummary() {
     const maxScore = type === 'collected' ? maxCollectedScore : maxExamScore;
     const clampedValue = Math.min(numValue, maxScore);
     if (numValue > maxScore) {
-      toast.error(`คะแนนต้องไม่เกิน ${maxScore} คะแนน`);
+      toast.error(t('teacherGradeSummary.toastMaxScore', { maxScore }));
     }
     setManualGrades(prev => ({
       ...prev,
@@ -116,10 +152,14 @@ function GradeSummary() {
       const token = localStorage.getItem('token');
       const requests = [];
 
-      // For activity subjects with no real assignments, save manual as \"คะแนนเก็บรวม\"
-      if (subjectType === 'activity' && !hasRealActivityAssignments) {
+      // For activity subjects, save manual as "คะแนนเก็บรวม" for students who still need manual scores
+      if (subjectType === 'activity') {
         const activityGrades = Object.entries(manualGrades)
-          .filter(([_, data]) => data.collected !== undefined && data.collected !== '')
+          .filter(([sid, data]) =>
+            data.collected !== undefined &&
+            data.collected !== '' &&
+            shouldShowActivityManualInput(Number(sid))
+          )
           .map(([sid, data]) => ({ student_id: Number(sid), grade: Number(data.collected) }));
         
         if (activityGrades.length > 0) {
@@ -130,7 +170,7 @@ function GradeSummary() {
               subject_id: Number(id),
               title: "คะแนนเก็บรวม",
               max_score: maxCollectedScore,
-              classroom_id: selectedClass?.id || null,
+              classroom_id: selectedClassroomIdForSave,
               grades: activityGrades
             })
           }));
@@ -151,7 +191,7 @@ function GradeSummary() {
                 subject_id: Number(id),
                 title: "คะแนนเก็บรวม",
                 max_score: maxCollectedScore,
-                classroom_id: selectedClass?.id || null,
+                classroom_id: selectedClassroomIdForSave,
                 grades: collectedGrades
               })
             }));
@@ -172,7 +212,7 @@ function GradeSummary() {
                 subject_id: Number(id),
                 title: "คะแนนสอบรวม",
                 max_score: maxExamScore,
-                classroom_id: selectedClass?.id || null,
+                classroom_id: selectedClassroomIdForSave,
                 grades: examGrades
               })
             }));
@@ -181,16 +221,16 @@ function GradeSummary() {
       }
 
       if (requests.length === 0) {
-        toast.info('ไม่มีคะแนนที่ต้องบันทึก');
+        toast.info(t('teacherGradeSummary.toastNoScoresToSave'));
         return;
       }
 
       await Promise.all(requests);
-      toast.success('บันทึกคะแนนเรียบร้อยแล้ว');
+      toast.success(t('teacherGradeSummary.toastSaveSuccess'));
       // Reload is needed to move manual grades to assignments logic
       window.location.reload();
     } catch (err) {
-      toast.error('เกิดข้อผิดพลาดในการบันทึก');
+      toast.error(t('teacherGradeSummary.toastSaveError'));
     }
   };
 
@@ -216,17 +256,16 @@ function GradeSummary() {
           const studentsData = await studentsRes.json();
           setStudents(studentsData);
           
-          // Generate classes from students
+          // Generate classes from students — group by NAME so same-named classrooms
+          // across different semesters (e.g. "ป.1/1" เทอม 1 vs เทอม 2) appear as one group.
           const classMap = {};
           studentsData.forEach(s => {
             let label = 'Default';
-            let cid = null;
             if (s.classroom && (s.classroom.name || s.classroom.id)) {
                 label = s.classroom.name || String(s.classroom.id);
-                cid = s.classroom.id;
             } else if (s.classroom_name) label = s.classroom_name;
-            const key = cid ? `id:${cid}` : `label:${label}`;
-            classMap[key] = { key, id: cid, label };
+            const key = `label:${label}`;
+            classMap[key] = { key, label };
           });
           const distinctClasses = Object.values(classMap);
           setClasses(distinctClasses);
@@ -271,7 +310,7 @@ function GradeSummary() {
         }
 
       } catch (err) {
-        toast.error('โหลดข้อมูลไม่สำเร็จ');
+        toast.error(t('teacherGradeSummary.toastLoadError'));
       }
     };
 
@@ -336,7 +375,7 @@ function GradeSummary() {
       // Priority: manual grades > real assignments > default
       if (manual.collected !== undefined && manual.collected !== '') {
         totalScore = Number(manual.collected);
-      } else if (!hasRealActivityAssignments) {
+      } else if (!hasStudentRealActivityGrades(studentId)) {
         totalScore = 0;
       } else {
         totalScore = activityMax > 0 ? Math.round((activityScore / activityMax) * maxCollectedScore) : activityScore;
@@ -365,14 +404,8 @@ function GradeSummary() {
     return { totalScore, totalMaxScore, collectedScore, examScore, overallPercentage, overallGrade, assignmentDetails };
   };
 
-  const getClassKey = (s) => {
-    if (!s) return 'label:Default';
-    if (s.classroom && (s.classroom.name || s.classroom.id)) return s.classroom.id ? `id:${s.classroom.id}` : `label:${s.classroom.name || String(s.classroom.id)}`;
-    if (s.classroom_name) return `label:${s.classroom_name}`;
-    return 'label:Default';
-  };
-
   const baseVisibleStudents = selectedClass ? students.filter(s => getClassKey(s) === selectedClass.key) : students;
+  const getDisplayClassLabel = (label) => (label === 'Default' ? t('teacherGradeSummary.defaultClass') : label);
 
   // Calculate summaries and sort by student_number
   const visibleStudents = baseVisibleStudents.map(s => ({
@@ -383,6 +416,10 @@ function GradeSummary() {
     const numB = b.student_number || b.classroom?.student_number || 999;
     return numA - numB;
   });
+
+  const shouldShowSaveButton = subjectType === 'activity'
+    ? visibleStudents.some(s => shouldShowActivityManualInput(s.id))
+    : (!hasRealCollectedAssignments || !hasRealExamAssignments);
 
   return (
     <div className="min-h-screen bg-[#f8fafc] pb-20 selection:bg-emerald-100 selection:text-emerald-900">
@@ -398,27 +435,27 @@ function GradeSummary() {
                 <ArrowLeft className="w-5 h-5 group-hover:-translate-x-0.5 transition-transform" />
               </button>
               <div>
-                <h1 className="text-2xl font-black text-slate-800 tracking-tight leading-none">สรุปคะแนนรายวิชา</h1>
+                <h1 className="text-2xl font-black text-slate-800 tracking-tight leading-none">{t('teacherGradeSummary.title')}</h1>
                 <div className="flex items-center gap-2 mt-2">
                   <span className="bg-emerald-100 text-emerald-700 text-[10px] font-black px-2 py-0.5 rounded-lg uppercase tracking-wider">
-                    SUMMARY
+                    {t('teacherGradeSummary.summaryBadge')}
                   </span>
                   <p className="text-xs font-bold text-slate-400 flex items-center gap-1.5 overflow-hidden text-ellipsis whitespace-nowrap max-w-[200px] sm:max-w-md">
                     <span className="w-1 h-1 rounded-full bg-slate-300"></span>
-                    {subjectName || `วิชา #${id}`}
+                    {subjectName || t('teacherGradeSummary.subjectFallback', { id })}
                   </p>
                 </div>
               </div>
             </div>
             
             <div className="flex items-center gap-4">
-              {((subjectType === 'activity' && !hasRealActivityAssignments) || (!hasRealCollectedAssignments || !hasRealExamAssignments)) && (
+              {shouldShowSaveButton && (
                 <button 
                   onClick={saveManualChanges}
-                  className="hidden sm:flex items-center gap-2 px-5 py-3 bg-emerald-600 text-white rounded-2xl font-black text-sm shadow-lg shadow-emerald-200 hover:bg-emerald-700 hover:shadow-emerald-300 hover:-translate-y-0.5 transition-all duration-300 active:scale-95"
+                  className="flex items-center gap-2 px-3 sm:px-5 py-2.5 sm:py-3 bg-emerald-600 text-white rounded-2xl font-black text-xs sm:text-sm shadow-lg shadow-emerald-200 hover:bg-emerald-700 hover:shadow-emerald-300 hover:-translate-y-0.5 transition-all duration-300 active:scale-95"
                 >
-                  <CheckCircle2 className="w-5 h-5" />
-                  <span>บันทึกคะแนน</span>
+                  <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5" />
+                  <span>{t('teacherGradeSummary.saveScores')}</span>
                 </button>
               )}
               <button 
@@ -447,7 +484,7 @@ function GradeSummary() {
                             : 'bg-white text-slate-500 border border-slate-100 hover:bg-slate-50 hover:text-emerald-600'
                         }`}
                     >
-                        {c.label}
+                      {getDisplayClassLabel(c.label)}
                     </button>
                 ))}
             </div>
@@ -460,11 +497,11 @@ function GradeSummary() {
                    <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400 group-hover:scale-110 transition-transform">
                       <BarChart3 className="w-6 h-6" />
                    </div>
-                   <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest bg-slate-50 px-2 py-1 rounded-lg">Jobs</span>
+                   <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest bg-slate-50 px-2 py-1 rounded-lg">{t('teacherGradeSummary.jobsTag')}</span>
                 </div>
                 <div>
                    <p className="text-4xl font-black text-slate-800 tracking-tight">{assignments.length}</p>
-                   <p className="text-xs font-bold text-slate-400 mt-1">หัวข้องานทั้งหมด</p>
+                   <p className="text-xs font-bold text-slate-400 mt-1">{t('teacherGradeSummary.allAssignments')}</p>
                 </div>
             </div>
 
@@ -473,11 +510,11 @@ function GradeSummary() {
                    <div className="w-12 h-12 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform">
                       <User className="w-6 h-6" />
                    </div>
-                   <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest bg-slate-50 px-2 py-1 rounded-lg">Total</span>
+                   <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest bg-slate-50 px-2 py-1 rounded-lg">{t('teacherGradeSummary.totalTag')}</span>
                 </div>
                 <div>
                    <p className="text-4xl font-black text-slate-800 tracking-tight">{visibleStudents.length}</p>
-                   <p className="text-xs font-bold text-slate-400 mt-1">นักเรียนในกลุ่ม</p>
+                   <p className="text-xs font-bold text-slate-400 mt-1">{t('teacherGradeSummary.studentsInGroup')}</p>
                 </div>
             </div>
 
@@ -486,11 +523,11 @@ function GradeSummary() {
                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform ${subjectType === 'activity' ? 'bg-amber-50 text-amber-600' : 'bg-blue-50 text-blue-600'}`}>
                       <BookOpen className="w-6 h-6" />
                    </div>
-                   <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest bg-slate-50 px-2 py-1 rounded-lg">Type</span>
+                   <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest bg-slate-50 px-2 py-1 rounded-lg">{t('teacherGradeSummary.typeTag')}</span>
                 </div>
                 <div>
-                   <p className="text-lg font-black text-slate-800 tracking-tight">{subjectType === 'activity' ? 'กิจกรรม' : 'วิชาการ'}</p>
-                   <p className="text-xs font-bold text-slate-400 mt-1">ประเภทวิชา</p>
+                   <p className="text-lg font-black text-slate-800 tracking-tight">{subjectType === 'activity' ? t('teacherGradeSummary.activity') : t('teacherGradeSummary.academic')}</p>
+                   <p className="text-xs font-bold text-slate-400 mt-1">{t('teacherGradeSummary.subjectType')}</p>
                 </div>
             </div>
             
@@ -503,7 +540,7 @@ function GradeSummary() {
                     <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center shadow-lg shadow-emerald-200">
                       <LayoutGrid className="w-5 h-5" />
                     </span>
-                    ตารางสรุปผลการเรียน
+                    {t('teacherGradeSummary.summaryTable')}
                 </h3>
             </div>
 
@@ -512,10 +549,10 @@ function GradeSummary() {
                 <table className="w-full border-collapse">
                     <thead>
                         <tr className="bg-slate-50/80">
-                            <th className="px-6 py-5 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest w-16">No.</th>
-                            <th className="px-8 py-5 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap sticky left-0 bg-slate-50/95 backdrop-blur-sm z-10 border-r border-slate-100 shadow-[4px_0_24px_-10px_rgba(0,0,0,0.05)]">Student Name</th>
+                          <th className="px-6 py-5 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest w-16">{t('teacherGradeSummary.tableNo')}</th>
+                          <th className="px-8 py-5 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap sticky left-0 bg-slate-50/95 backdrop-blur-sm z-10 border-r border-slate-100 shadow-[4px_0_24px_-10px_rgba(0,0,0,0.05)]">{t('teacherGradeSummary.tableStudentName')}</th>
                             {assignments.filter(a => 
-                                (!selectedClass || !a.classroom_id || a.classroom_id === selectedClass.id) &&
+                              assignmentMatchesSelectedClass(a) &&
                                 a.title !== "คะแนนเก็บรวม" && a.title !== "คะแนนสอบรวม"
                             ).map(a => (
                                 <th key={a.id} className="px-6 py-5 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest min-w-[120px]">
@@ -524,18 +561,18 @@ function GradeSummary() {
                                 </th>
                             ))}
                             {subjectType === 'activity' ? (
-                                <th className="px-8 py-5 text-center text-[10px] font-black text-emerald-800 uppercase tracking-widest bg-emerald-50 whitespace-nowrap">Total Score</th>
+                              <th className="px-8 py-5 text-center text-[10px] font-black text-emerald-800 uppercase tracking-widest bg-emerald-50 whitespace-nowrap">{t('teacherGradeSummary.tableTotalScore')}</th>
                             ) : (
                                 <>
                                     <th className="px-8 py-5 text-center text-[10px] font-black text-blue-700 uppercase tracking-widest bg-blue-50 whitespace-nowrap border-l border-white">
-                                        Collected<br/><span className="text-blue-400/80 font-bold bg-white/50 px-1 rounded ml-1">/{maxCollectedScore}</span>
+                                  {t('teacherGradeSummary.tableCollected')}<br/><span className="text-blue-400/80 font-bold bg-white/50 px-1 rounded ml-1">/{maxCollectedScore}</span>
                                     </th>
                                     <th className="px-8 py-5 text-center text-[10px] font-black text-amber-700 uppercase tracking-widest bg-amber-50 whitespace-nowrap border-l border-white">
-                                        Exam<br/><span className="text-amber-400/80 font-bold bg-white/50 px-1 rounded ml-1">/{maxExamScore}</span>
+                                  {t('teacherGradeSummary.tableExam')}<br/><span className="text-amber-400/80 font-bold bg-white/50 px-1 rounded ml-1">/{maxExamScore}</span>
                                     </th>
                                 </>
                             )}
-                            <th className="px-8 py-5 text-center text-[10px] font-black text-slate-800 uppercase tracking-widest bg-slate-100 sticky right-0 z-10 shadow-[-10px_0_20px_-15px_rgba(0,0,0,0.1)]">Summary</th>
+                            <th className="px-8 py-5 text-center text-[10px] font-black text-slate-800 uppercase tracking-widest bg-slate-100 sticky right-0 z-10 shadow-[-10px_0_20px_-15px_rgba(0,0,0,0.1)]">{t('teacherGradeSummary.tableSummary')}</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
@@ -553,7 +590,7 @@ function GradeSummary() {
                                         <h5 className="text-sm font-black text-slate-800">{student.full_name || student.username}</h5>
                                         <div className="flex items-center gap-2 mt-1">
                                             <span className="text-[10px] font-bold text-slate-400 bg-slate-50 px-2 py-0.5 rounded-md border border-slate-100">
-                                              ID: {student.id}
+                                              {t('teacherGradeSummary.idLabel')}: {student.id}
                                             </span>
                                         </div>
                                     </td>
@@ -569,7 +606,7 @@ function GradeSummary() {
                                     ))}
                                     {subjectType === 'activity' ? (
                                         <td className="px-8 py-5 text-center bg-emerald-50/30 font-black text-emerald-700">
-                                            {!hasRealActivityAssignments ? (
+                                        {shouldShowActivityManualInput(student.id) ? (
                                                 <input 
                                                     type="number" 
                                                     className="w-16 px-2 py-1 bg-white border border-emerald-100 rounded text-center text-sm font-black focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-300 outline-none transition-all"
@@ -651,7 +688,7 @@ function GradeSummary() {
                                    </div>
                                    <div>
                                        <h5 className="text-sm font-black text-slate-800">{student.full_name || student.username}</h5>
-                                       <p className="text-[10px] font-bold text-slate-400 uppercase bg-slate-50 px-2 py-0.5 rounded-md inline-block mt-0.5">ID: {student.id}</p>
+                                       <p className="text-[10px] font-bold text-slate-400 uppercase bg-slate-50 px-2 py-0.5 rounded-md inline-block mt-0.5">{t('teacherGradeSummary.idLabel')}: {student.id}</p>
                                    </div>
                                 </div>
                                 <div className={`w-12 h-12 flex items-center justify-center rounded-2xl text-lg font-black border-2 uppercase shadow-sm ${
@@ -667,8 +704,8 @@ function GradeSummary() {
                             <div className="grid grid-cols-2 gap-3 mb-4">
                                 {subjectType === 'activity' ? (
                                     <div className="col-span-2 px-4 py-3 bg-emerald-50 rounded-2xl border border-emerald-100 flex justify-between items-center">
-                                        <span className="text-[10px] font-black text-emerald-600 uppercase">Total Score (/{maxCollectedScore})</span>
-                                        {!hasRealActivityAssignments ? (
+                                    <span className="text-[10px] font-black text-emerald-600 uppercase">{t('teacherGradeSummary.tableTotalScore')} (/{maxCollectedScore})</span>
+                                  {shouldShowActivityManualInput(student.id) ? (
                                             <input 
                                                 type="number" 
                                                 className="w-20 bg-transparent text-lg font-black text-emerald-700 outline-none placeholder:text-emerald-200 text-right"
@@ -684,7 +721,7 @@ function GradeSummary() {
                                 ) : (
                                     <>
                                         <div className="px-4 py-3 bg-blue-50/50 rounded-2xl border border-blue-100">
-                                            <span className="text-[9px] font-black text-blue-500 uppercase block mb-1">Collected (/{maxCollectedScore})</span>
+                                        <span className="text-[9px] font-black text-blue-500 uppercase block mb-1">{t('teacherGradeSummary.tableCollected')} (/{maxCollectedScore})</span>
                                             {!hasRealCollectedAssignments ? (
                                                 <input 
                                                     type="number" 
@@ -699,7 +736,7 @@ function GradeSummary() {
                                             )}
                                         </div>
                                         <div className="px-4 py-3 bg-amber-50/50 rounded-2xl border border-amber-100">
-                                            <span className="text-[9px] font-black text-amber-500 uppercase block mb-1">Exam (/{maxExamScore})</span>
+                                          <span className="text-[9px] font-black text-amber-500 uppercase block mb-1">{t('teacherGradeSummary.tableExam')} (/{maxExamScore})</span>
                                             {!hasRealExamAssignments ? (
                                                 <input 
                                                     type="number" 
@@ -718,13 +755,13 @@ function GradeSummary() {
                             </div>
 
                             <div className="flex justify-between items-center py-3 px-4 bg-slate-50 rounded-2xl border border-slate-100">
-                                <span className="text-[10px] font-black text-slate-400 uppercase">Total Summary</span>
+                              <span className="text-[10px] font-black text-slate-400 uppercase">{t('teacherGradeSummary.mobileTotalSummary')}</span>
                                 <span className="text-sm font-black text-slate-700">{summary.totalScore} / {summary.totalMaxScore} ({summary.overallPercentage}%)</span>
                             </div>
 
                             <details className="mt-4 group">
                                 <summary className="flex items-center justify-center gap-2 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer group-open:mb-2 hover:text-slate-600 transition-colors bg-white rounded-xl border border-dashed border-slate-200">
-                                    Show Assignment Details <ChevronRight className="w-3 h-3 transition-transform group-open:rotate-90" />
+                                {t('teacherGradeSummary.showAssignmentDetails')} <ChevronRight className="w-3 h-3 transition-transform group-open:rotate-90" />
                                 </summary>
                                 <div className="space-y-2 pt-2">
                                     {summary.assignmentDetails.filter(d => d.title !== "คะแนนเก็บรวม" && d.title !== "คะแนนสอบรวม").map(detail => (

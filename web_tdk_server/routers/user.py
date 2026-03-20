@@ -11,7 +11,7 @@ import smtplib
 from email.message import EmailMessage
 from datetime import timedelta
 
-from schemas.user import User, UserCreate, UserUpdate, Token, ChangePasswordRequest, PasswordResetRequestCreate, PasswordResetRequestResponse, PasswordResetByAdminRequest
+from schemas.user import User, UserCreate, UserUpdate, Token, ChangePasswordRequest, PasswordResetRequestCreate, PasswordResetRequestResponse, PasswordResetByAdminRequest, PublicLoginUser
 from models.user import User as UserModel
 from models.password_reset_request import PasswordResetRequest as PasswordResetRequestModel
 from database.connection import get_db
@@ -111,6 +111,18 @@ def get_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     users = db.query(UserModel).offset(skip).limit(limit).all()
     return users
 
+
+@router.get("/public-teachers", response_model=List[PublicLoginUser])
+def get_public_teachers_for_login(school_id: int, db: Session = Depends(get_db)):
+    """Return active teacher accounts for school-based login selection."""
+    users = db.query(UserModel).filter(
+        UserModel.school_id == school_id,
+        UserModel.role == 'teacher',
+        UserModel.is_active == True
+    ).order_by(UserModel.full_name.asc(), UserModel.username.asc()).all()
+    return users
+
+
 @router.post("", response_model=User, status_code=status.HTTP_201_CREATED)
 @router.post("/", response_model=User, status_code=status.HTTP_201_CREATED)
 def create_user(user: UserCreate, db: Session = Depends(get_db)):
@@ -192,6 +204,8 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
 def get_current_user_info(current_user: UserModel = Depends(get_current_user)):
     """ดึงข้อมูลผู้ใช้งานปัจจุบันจาก JWT"""
     return current_user
+
+
 
 
 @router.post('/forgot_password')
@@ -1796,3 +1810,16 @@ def promote_students_from_file(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f'Failed to process file: {str(e)}')
+    
+# ---- user-by-id endpoint placed after all other routes ----
+@router.get("/{user_id}", response_model=User)
+def get_user_by_id(user_id: int, db: Session = Depends(get_db)):
+    """ดึงข้อมูลผู้ใช้ตาม ID (สำหรับ UI ที่ต้องการข้อมูลผู้ใช้ทีละคน)
+
+    เพิ่มเพื่อให้ client สามารถโหลด user โดยตรงโดยไม่ต้องดึงรายการผู้ใช้ทั้งหมด
+    ซึ่งช่วยป้องกันกรณีที่ผู้ใช้ไม่ได้อยู่ในผลลัพธ์ที่ถูกจำกัดด้วย `limit`.
+    """
+    user = db.query(UserModel).filter(UserModel.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail='User not found')
+    return user

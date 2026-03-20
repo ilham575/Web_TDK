@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ReactDOM from 'react-dom';
 
-export default function AnnouncementModal({ isOpen, initialData = {}, apiBaseUrl = '', onClose, onSave }) {
+export default function AnnouncementModal({ isOpen, initialData = {}, apiBaseUrl = '', onClose, onSave, allowAudienceSelection = false }) {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [expiry, setExpiry] = useState('');
+  const [toStudents, setToStudents] = useState(true);
+  const [toTeachers, setToTeachers] = useState(true);
   const [pdfFile, setPdfFile] = useState(null);
   const [pdfDragOver, setPdfDragOver] = useState(false);
   const fileInputRef = useRef(null);
@@ -13,6 +15,8 @@ export default function AnnouncementModal({ isOpen, initialData = {}, apiBaseUrl
     if (!isOpen) return;
     setTitle(initialData.title || '');
     setContent(initialData.content || '');
+    setToStudents(initialData.to_students !== false);
+    setToTeachers(initialData.to_teachers !== false);
     setPdfFile(null);
     // normalize expiry for input: try ISO or "YYYY-MM-DD HH:MM:SS" -> "YYYY-MM-DDTHH:MM"
     const s = initialData.expires_at || initialData.expire_at || initialData.expiresAt || '';
@@ -71,7 +75,7 @@ export default function AnnouncementModal({ isOpen, initialData = {}, apiBaseUrl
             </div>
             <div>
               <h3 className="text-2xl font-black">{initialData.id ? 'แก้ไขประกาศข่าว' : 'สร้างประกาศข่าวใหม่'}</h3>
-              <p className="text-emerald-100/80 text-sm font-medium">จัดการข้อมูลข่าวสารเพื่อแจ้งให้นักเรียนทราบ</p>
+              <p className="text-emerald-100/80 text-sm font-medium">{allowAudienceSelection ? 'จัดการข้อมูลข่าวสารและกำหนดผู้รับประกาศ' : 'จัดการข้อมูลข่าวสารเพื่อแจ้งให้นักเรียนทราบ'}</p>
             </div>
           </div>
         </div>
@@ -119,6 +123,41 @@ export default function AnnouncementModal({ isOpen, initialData = {}, apiBaseUrl
               <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">📅</span>
             </div>
           </div>
+
+          {allowAudienceSelection && (
+            <div className="space-y-3">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">กลุ่มผู้รับประกาศ</label>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className={`flex items-start gap-3 rounded-2xl border px-4 py-3 transition-all ${toStudents ? 'border-emerald-300 bg-emerald-50' : 'border-slate-200 bg-white'}`}>
+                  <input
+                    type="checkbox"
+                    checked={toStudents}
+                    onChange={e => setToStudents(e.target.checked)}
+                    className="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <span>
+                    <span className="block text-sm font-bold text-slate-700">นักเรียน</span>
+                    <span className="block text-xs text-slate-500">นักเรียนจะเห็นประกาศนี้ในระบบ</span>
+                  </span>
+                </label>
+                <label className={`flex items-start gap-3 rounded-2xl border px-4 py-3 transition-all ${toTeachers ? 'border-sky-300 bg-sky-50' : 'border-slate-200 bg-white'}`}>
+                  <input
+                    type="checkbox"
+                    checked={toTeachers}
+                    onChange={e => setToTeachers(e.target.checked)}
+                    className="mt-1 h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                  />
+                  <span>
+                    <span className="block text-sm font-bold text-slate-700">ครู</span>
+                    <span className="block text-xs text-slate-500">ครูจะเห็นประกาศนี้ในระบบ</span>
+                  </span>
+                </label>
+              </div>
+              {!toStudents && !toTeachers && (
+                <p className="text-xs font-medium text-rose-600">กรุณาเลือกอย่างน้อย 1 กลุ่มผู้รับ</p>
+              )}
+            </div>
+          )}
 
           {/* PDF Attachment */}
           <div className="space-y-2">
@@ -194,8 +233,8 @@ export default function AnnouncementModal({ isOpen, initialData = {}, apiBaseUrl
             </button>
 
             <button 
-                disabled={!title || !content}
-                onClick={() => onSave({ title, content, expiry, pdfFile })} 
+              disabled={!title || !content || (allowAudienceSelection && !toStudents && !toTeachers)}
+              onClick={() => onSave({ title, content, expiry, pdfFile, to_students: toStudents, to_teachers: toTeachers })} 
                 className="px-10 py-3 bg-emerald-600 text-white rounded-2xl font-black hover:bg-emerald-700 shadow-lg shadow-emerald-100 transition-all active:scale-95 disabled:opacity-50 disabled:grayscale disabled:scale-100 disabled:cursor-not-allowed flex items-center gap-2"
             >
                 <span>บันทึกข้อมูล</span>

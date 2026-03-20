@@ -10,7 +10,10 @@
     "@testing-library/user-event": "^13.5.0",
     "baseline-browser-mapping": "^2.9.13",
     "caniuse-lite": "^1.0.30001763",
+    "html2pdf.js": "^0.14.0",
     "i18next": "^25.7.3",
+    "jspdf": "^4.2.0",
+    "jspdf-autotable": "^5.0.7",
     "lucide-react": "^0.562.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
@@ -20,7 +23,8 @@
     "react-scripts": "5.0.1",
     "react-toastify": "^11.0.5",
     "sweetalert2": "^11.26.17",
-    "web-vitals": "^2.1.4"
+    "web-vitals": "^2.1.4",
+    "xlsx": "^0.18.5"
   },
   "scripts": {
     "start": "react-scripts start",

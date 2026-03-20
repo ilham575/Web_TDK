@@ -14,9 +14,390 @@ from models.classroom import ClassroomStudent as ClassroomStudentModel, Classroo
 from models.classroom_subject import ClassroomSubject as ClassroomSubjectModel
 from models.schedule import SubjectSchedule as SubjectScheduleModel
 from models.school import School as SchoolModel
-from schemas.grade import GradesBulk, GradeResponse, AssignmentCreate, AssignmentUpdate, AssignmentResponse
+from models.school_access_control import SchoolAccessControl as SchoolAccessControlModel
+from schemas.grade import (
+    GradesBulk,
+    GradeResponse,
+    AssignmentCreate,
+    AssignmentUpdate,
+    AssignmentResponse,
+    SummaryCompletionReportItem,
+)
 
 router = APIRouter(prefix="/grades", tags=["grades"])
+
+
+def _is_exam_title(title: str) -> bool:
+    if not title:
+        return False
+
+    normalized = str(title).strip().lower()
+    return (
+        'กลางภาค' in normalized
+        or 'ปลายภาค' in normalized
+        or 'final' in normalized
+        or 'midterm' in normalized
+        or 'คะแนนสอบ' in normalized
+    )
+
+
+def _pick_preferred_classroom(classroom_rows, school_id, academic_year, semester):
+    if not classroom_rows:
+        return None
+
+    for row in classroom_rows:
+        if (
+            row.school_id == school_id
+            and str(row.academic_year or '') == str(academic_year or '')
+            and int(row.semester or 0) == int(semester or 0)
+        ):
+            return row
+
+    for row in classroom_rows:
+        if row.school_id == school_id:
+            return row
+
+    return classroom_rows[0]
+
+
+def _build_summary_completion_report(db: Session, school_id: int, academic_year: str = None, semester: int = None):
+    subjects_query = db.query(SubjectModel).filter(SubjectModel.school_id == school_id)
+    if academic_year is not None:
+        subjects_query = subjects_query.filter(SubjectModel.academic_year == academic_year)
+    if semester is not None:
+        subjects_query = subjects_query.filter(SubjectModel.semester == semester)
+
+    subjects = subjects_query.order_by(SubjectModel.academic_year.desc(), SubjectModel.semester.desc(), SubjectModel.name.asc()).all()
+    if not subjects:
+        return []
+
+    subject_ids = [subject.id for subject in subjects]
+    summary_titles = ["คะแนนเก็บรวม", "คะแนนสอบรวม"]
+
+    all_grade_rows = db.query(
+        GradeModel.subject_id,
+        GradeModel.student_id,
+        GradeModel.classroom_id,
+        GradeModel.title,
+        GradeModel.grade,
+    ).filter(
+        GradeModel.subject_id.in_(subject_ids),
+        GradeModel.title.isnot(None)
+    ).all()
+
+    grades_by_subject = {}
+    for grade in all_grade_rows:
+        grades_by_subject.setdefault(grade.subject_id, []).append(grade)
+
+    subject_schedules = db.query(SubjectScheduleModel).filter(
+        SubjectScheduleModel.subject_id.in_(subject_ids)
+    ).all()
+    schedules_by_subject = {}
+    teacher_ids = set()
+    for schedule in subject_schedules:
+        schedules_by_subject.setdefault(schedule.subject_id, []).append(schedule)
+        teacher_ids.add(schedule.teacher_id)
+
+    classroom_links = db.query(ClassroomSubjectModel).filter(
+        ClassroomSubjectModel.subject_id.in_(subject_ids)
+    ).all()
+    classroom_links_by_subject = {}
+    linked_classroom_ids = set()
+    for link in classroom_links:
+        classroom_links_by_subject.setdefault(link.subject_id, []).append(link.classroom_id)
+        linked_classroom_ids.add(link.classroom_id)
+
+    classroom_link_sets_by_subject = {
+        subject_id: set(classroom_ids)
+        for subject_id, classroom_ids in classroom_links_by_subject.items()
+    }
+
+    enrollments = db.query(SubjectStudentModel).filter(
+        SubjectStudentModel.subject_id.in_(subject_ids)
+    ).all()
+    enrollments_by_subject = {}
+    directly_enrolled_student_ids = set()
+    for enrollment in enrollments:
+        enrollments_by_subject.setdefault(enrollment.subject_id, []).append(enrollment.student_id)
+        directly_enrolled_student_ids.add(enrollment.student_id)
+
+    linked_classroom_students = {}
+    if linked_classroom_ids:
+        classroom_student_rows = db.query(ClassroomStudentModel).filter(
+            ClassroomStudentModel.classroom_id.in_(list(linked_classroom_ids)),
+            ClassroomStudentModel.is_active == True
+        ).all()
+        for row in classroom_student_rows:
+            linked_classroom_students.setdefault(row.classroom_id, []).append(row)
+            directly_enrolled_student_ids.add(row.student_id)
+
+    direct_classroom_rows_by_student = {}
+    all_classroom_ids = set(linked_classroom_ids)
+    if directly_enrolled_student_ids:
+        direct_classroom_rows = db.query(
+            ClassroomStudentModel.student_id,
+            ClassroomStudentModel.classroom_id,
+            ClassroomStudentModel.student_number,
+            ClassroomModel.name,
+            ClassroomModel.grade_level,
+            ClassroomModel.academic_year,
+            ClassroomModel.semester,
+            ClassroomModel.school_id,
+        ).join(
+            ClassroomModel,
+            ClassroomModel.id == ClassroomStudentModel.classroom_id
+        ).filter(
+            ClassroomStudentModel.student_id.in_(list(directly_enrolled_student_ids)),
+            ClassroomStudentModel.is_active == True
+        ).all()
+
+        for row in direct_classroom_rows:
+            direct_classroom_rows_by_student.setdefault(row.student_id, []).append(row)
+            all_classroom_ids.add(row.classroom_id)
+
+    classrooms_map = {}
+    if all_classroom_ids:
+        classroom_rows = db.query(ClassroomModel).filter(ClassroomModel.id.in_(list(all_classroom_ids))).all()
+        classrooms_map = {row.id: row for row in classroom_rows}
+
+    student_map = {}
+    if directly_enrolled_student_ids:
+        student_rows = db.query(UserModel).filter(
+            UserModel.id.in_(list(directly_enrolled_student_ids)),
+            UserModel.is_active == True,
+        ).all()
+        student_map = {row.id: row for row in student_rows}
+
+    if teacher_ids:
+        teacher_rows = db.query(UserModel).filter(UserModel.id.in_(list(teacher_ids))).all()
+        teacher_map = {row.id: row for row in teacher_rows}
+    else:
+        teacher_map = {}
+
+    if any(subject.teacher_id for subject in subjects):
+        extra_teacher_ids = [subject.teacher_id for subject in subjects if subject.teacher_id and subject.teacher_id not in teacher_map]
+        if extra_teacher_ids:
+            for teacher in db.query(UserModel).filter(UserModel.id.in_(extra_teacher_ids)).all():
+                teacher_map[teacher.id] = teacher
+
+    report_items = []
+
+    for subject in subjects:
+        required_summary_titles = ["คะแนนเก็บรวม"]
+        if subject.subject_type != 'activity' and float(subject.max_exam_score or 100) > 0:
+            required_summary_titles.append("คะแนนสอบรวม")
+
+        linked_classroom_ids_for_subject = classroom_link_sets_by_subject.get(subject.id, set())
+
+        teacher_names = []
+        seen_teacher_ids = set()
+        for schedule in schedules_by_subject.get(subject.id, []):
+            if schedule.teacher_id in seen_teacher_ids:
+                continue
+            teacher = teacher_map.get(schedule.teacher_id)
+            teacher_names.append((teacher.full_name or teacher.username) if teacher else f"ครู #{schedule.teacher_id}")
+            seen_teacher_ids.add(schedule.teacher_id)
+
+        if not teacher_names and subject.teacher_id:
+            teacher = teacher_map.get(subject.teacher_id)
+            if teacher:
+                teacher_names.append(teacher.full_name or teacher.username)
+
+        scopes = {}
+
+        for classroom_id in classroom_links_by_subject.get(subject.id, []):
+            classroom = classrooms_map.get(classroom_id)
+            scopes[classroom_id] = {
+                'classroom_id': classroom_id,
+                'classroom_name': classroom.name if classroom else f"ห้อง #{classroom_id}",
+                'students': set(),
+            }
+            for row in linked_classroom_students.get(classroom_id, []):
+                scopes[classroom_id]['students'].add(row.student_id)
+
+        for student_id in enrollments_by_subject.get(subject.id, []):
+            preferred_classroom = _pick_preferred_classroom(
+                direct_classroom_rows_by_student.get(student_id, []),
+                subject.school_id,
+                subject.academic_year,
+                subject.semester,
+            )
+
+            # If the subject is already scoped to specific classrooms, ignore dangling
+            # direct enrollments that no longer belong to one of those active classrooms.
+            if linked_classroom_ids_for_subject:
+                if not preferred_classroom or preferred_classroom.classroom_id not in linked_classroom_ids_for_subject:
+                    continue
+
+            if preferred_classroom:
+                classroom_id = preferred_classroom.classroom_id
+                if classroom_id not in scopes:
+                    scopes[classroom_id] = {
+                        'classroom_id': classroom_id,
+                        'classroom_name': preferred_classroom.name,
+                        'students': set(),
+                    }
+                scopes[classroom_id]['students'].add(student_id)
+            else:
+                general_key = 'general'
+                if general_key not in scopes:
+                    scopes[general_key] = {
+                        'classroom_id': None,
+                        'classroom_name': 'ทั่วไป',
+                        'students': set(),
+                    }
+                scopes[general_key]['students'].add(student_id)
+
+        if not scopes:
+            continue
+
+        summary_index = set()
+        summary_by_student_title = set()
+        assignment_title_set = set()
+        assignment_title_is_exam = {}
+        graded_by_student_title = set()
+
+        for grade in grades_by_subject.get(subject.id, []):
+            normalized_title = (grade.title or '').strip()
+
+            if normalized_title in summary_titles:
+                if grade.grade is not None:
+                    summary_index.add((grade.student_id, normalized_title, grade.classroom_id))
+                    summary_by_student_title.add((grade.student_id, normalized_title))
+                continue
+
+            assignment_title_set.add(normalized_title)
+            if normalized_title not in assignment_title_is_exam:
+                assignment_title_is_exam[normalized_title] = _is_exam_title(normalized_title)
+
+            if grade.grade is not None:
+                graded_by_student_title.add((grade.student_id, normalized_title))
+
+        scope_entries = sorted(
+            scopes.values(),
+            key=lambda item: (
+                item['classroom_id'] is None,
+                item['classroom_name'] or '',
+            )
+        )
+
+        for scope in scope_entries:
+            student_rows = []
+            for student_id in scope['students']:
+                student = student_map.get(student_id)
+                if not student:
+                    continue
+
+                preferred_classroom = _pick_preferred_classroom(
+                    direct_classroom_rows_by_student.get(student_id, []),
+                    subject.school_id,
+                    subject.academic_year,
+                    subject.semester,
+                )
+                student_rows.append({
+                    'student_id': student_id,
+                    'student_number': preferred_classroom.student_number if preferred_classroom else None,
+                    'classroom_id': preferred_classroom.classroom_id if preferred_classroom else scope['classroom_id'],
+                    'full_name': student.full_name or student.username,
+                    'username': student.username,
+                    'classroom_name': preferred_classroom.name if preferred_classroom else scope['classroom_name'],
+                })
+
+            student_rows.sort(key=lambda item: (
+                item['student_number'] is None,
+                item['student_number'] if item['student_number'] is not None else 999999,
+                item['full_name'],
+            ))
+
+            missing_students = []
+            completed_students_count = 0
+
+            for student_row in student_rows:
+                missing_titles = []
+
+                def has_complete_assignment_group(is_exam_group: bool) -> bool:
+                    applicable_titles = [
+                        title for title in assignment_title_set
+                        if assignment_title_is_exam.get(title, False) == is_exam_group
+                    ]
+
+                    if not applicable_titles:
+                        return False
+
+                    return all(
+                        (student_row['student_id'], title) in graded_by_student_title
+                        for title in applicable_titles
+                    )
+
+                for title in required_summary_titles:
+                    has_classroom_summary = False
+                    if scope['classroom_id'] is not None:
+                        has_classroom_summary = (student_row['student_id'], title, scope['classroom_id']) in summary_index
+
+                    has_global_summary = (student_row['student_id'], title, None) in summary_index
+                    has_any_summary = (student_row['student_id'], title) in summary_by_student_title
+                    has_assignment_derived_summary = has_complete_assignment_group(_is_exam_title(title))
+
+                    if not has_classroom_summary and not has_global_summary and not has_any_summary and not has_assignment_derived_summary:
+                        missing_titles.append(title)
+
+                if missing_titles:
+                    missing_students.append({
+                        'student_id': student_row['student_id'],
+                        'student_number': student_row['student_number'],
+                        'full_name': student_row['full_name'],
+                        'username': student_row['username'],
+                        'classroom_name': student_row['classroom_name'],
+                        'missing_titles': missing_titles,
+                    })
+                else:
+                    completed_students_count += 1
+
+            student_count = len(student_rows)
+            missing_students_count = len(missing_students)
+            completion_percentage = round((completed_students_count / student_count) * 100, 2) if student_count else 0.0
+
+            report_items.append({
+                'subject_id': subject.id,
+                'subject_name': subject.name,
+                'subject_type': subject.subject_type,
+                'academic_year': subject.academic_year,
+                'semester': subject.semester,
+                'classroom_id': scope['classroom_id'],
+                'classroom_name': scope['classroom_name'],
+                'teacher_names': teacher_names,
+                'required_summary_titles': required_summary_titles,
+                'student_count': student_count,
+                'completed_students_count': completed_students_count,
+                'missing_students_count': missing_students_count,
+                'completion_percentage': completion_percentage,
+                'is_complete': student_count > 0 and missing_students_count == 0,
+                'missing_students': missing_students,
+            })
+
+    report_items.sort(key=lambda item: (
+        item['is_complete'],
+        item['subject_name'].lower(),
+        item['classroom_name'] or '',
+    ))
+    return report_items
+
+
+@router.get('/admin/summary-completion', response_model=List[SummaryCompletionReportItem])
+def get_admin_summary_completion_report(
+    academic_year: str = None,
+    semester: int = None,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    if getattr(current_user, 'role', None) != 'admin':
+        raise HTTPException(status_code=403, detail='Not authorized to view summary completion report')
+
+    school_id = getattr(current_user, 'school_id', None)
+    if school_id is None:
+        raise HTTPException(status_code=400, detail='Admin user has no school assigned')
+
+    return _build_summary_completion_report(db, school_id=school_id, academic_year=academic_year, semester=semester)
 
 
 def calculate_activity_grades(db: Session, student_id: int, classroom_id: int = None, academic_year: str = None, semester: int = None):
@@ -36,8 +417,7 @@ def calculate_activity_grades(db: Session, student_id: int, classroom_id: int = 
         SubjectModel.academic_year,
         SubjectModel.semester
     ).filter(
-        SubjectModel.subject_type == 'activity',
-        SubjectModel.is_ended == False
+        SubjectModel.subject_type == 'activity'
     )
     if academic_year is not None:
         q_year = str(academic_year).strip()
@@ -74,19 +454,79 @@ def calculate_activity_grades(db: Session, student_id: int, classroom_id: int = 
             grades = grades.filter(GradeModel.classroom_id == classroom_id)
         
         grades = grades.all()
-        
+
         if not grades:
             continue
-        
+
+        # If teacher provided a manual aggregate (title == "คะแนนเก็บรวม"), prefer that
+        # single record instead of summing all individual assignments. This prevents
+        # double-counting when multiple assignment rows exist (e.g., per-class records).
+        manual_aggregate = None
+        try:
+            candidates = [g for g in grades if isinstance(getattr(g, 'title', None), str) and g.title.strip() == "คะแนนเก็บรวม"]
+        except Exception:
+            candidates = []
+
+        # Fallback to case-insensitive match if exact match not found
+        if not candidates:
+            try:
+                candidates = [g for g in grades if isinstance(getattr(g, 'title', None), str) and g.title.strip().lower() == "คะแนนเก็บรวม"]
+            except Exception:
+                candidates = []
+
+        if candidates:
+            chosen = None
+            # Prefer classroom-specific manual if classroom filter provided
+            if classroom_id is not None:
+                for c in candidates:
+                    if c.classroom_id == classroom_id:
+                        chosen = c
+                        break
+            # Otherwise prefer a global (classroom_id is None) manual grade
+            if not chosen:
+                for c in candidates:
+                    if c.classroom_id is None:
+                        chosen = c
+                        break
+            if not chosen:
+                chosen = candidates[0]
+            manual_aggregate = chosen
+
+        if manual_aggregate:
+            total_raw_score = float(manual_aggregate.grade or 0)
+            total_max_score = float(manual_aggregate.max_score or 100)
+            # Normalize to 100 scale based on total
+            normalized_score = (total_raw_score / total_max_score) * 100 if total_max_score else 0
+
+            percent = activity_percent or 0
+            contribution = (normalized_score * percent) / 100
+
+            activity_subjects.append({
+                'subject_id': subject_id,
+                'subject_name': subject_name,
+                'raw_score': round(total_raw_score, 2),
+                'max_score': round(total_max_score, 2),
+                'normalized_score': round(normalized_score, 2),
+                'percentage': percent,
+                'contribution': round(contribution, 2),
+                'grade_count': 1,
+                'academic_year': academic_year,
+                'semester': semester
+            })
+
+            total_score += contribution
+            total_percent += percent
+            continue
+
         # Aggregate all assignments for this subject correctly
         valid_grades = [g for g in grades if g.grade is not None and g.max_score]
         if not valid_grades:
             continue
-        
+
         # Sum all raw scores and max scores across all assignments (supports multi-assignment subjects)
         total_raw_score = sum(float(g.grade) for g in valid_grades)
         total_max_score = sum(float(g.max_score) for g in valid_grades)
-        
+
         # Normalize to 100 scale based on total
         normalized_score = (total_raw_score / total_max_score) * 100 if total_max_score else 0
         
@@ -156,6 +596,9 @@ def bulk_grades(payload: GradesBulk, db: Session = Depends(get_db), current_user
                 GradeModel.classroom_id.is_(None)
             ).first()
         if g:
+            # Admin cannot overwrite existing summary grades — only the teacher (or original creator) can
+            if getattr(current_user, 'role', None) == 'admin' and payload.title in {"\u0e04\u0e30\u0e41\u0e19\u0e19\u0e40\u0e01\u0e47\u0e1a\u0e23\u0e27\u0e21", "\u0e04\u0e30\u0e41\u0e19\u0e19\u0e2a\u0e2d\u0e1a\u0e23\u0e27\u0e21"}:
+                continue
             g.title = payload.title
             g.max_score = payload.max_score
             g.grade = entry.grade
@@ -732,36 +1175,68 @@ def get_student_transcript(student_id: int, classroom_id: int = None, academic_y
 
     # Access Control Logic per Year/Semester (Students/Teachers)
     if not getattr(current_user, 'role', None) == 'admin':
-        from models.school_access_control import SchoolAccessControl as SchoolAccessControlModel
-        
-        # Determine which year/semester to check
+        # Determine which year/semester(s) to check
         check_year = academic_year if academic_year else school.current_academic_year
-        check_semester = int(semester) if semester else school.current_semester
-        
-        if not check_year or not check_semester:
+
+        if not check_year:
+            raise HTTPException(status_code=400, detail="Academic year must be specified")
+
+        if semester is not None:
+            semesters_to_check = [int(semester)]
+        else:
+            subject_semesters = db.query(SubjectModel.semester).join(
+                SubjectStudentModel, SubjectModel.id == SubjectStudentModel.subject_id
+            ).filter(
+                SubjectStudentModel.student_id == student_id,
+                SubjectModel.academic_year == check_year,
+                SubjectModel.semester.isnot(None)
+            ).distinct().all()
+
+            classroom_semesters = db.query(ClassroomModel.semester).join(
+                ClassroomStudentModel, ClassroomModel.id == ClassroomStudentModel.classroom_id
+            ).filter(
+                ClassroomStudentModel.student_id == student_id,
+                ClassroomStudentModel.is_active == True,
+                ClassroomModel.academic_year == check_year,
+                ClassroomModel.semester.isnot(None)
+            ).distinct().all()
+
+            semester_values = {
+                int(row[0]) for row in (subject_semesters + classroom_semesters) if row and row[0] is not None
+            }
+
+            if semester_values:
+                semesters_to_check = sorted(list(semester_values))
+            elif school.current_semester:
+                semesters_to_check = [int(school.current_semester)]
+            else:
+                semesters_to_check = []
+
+        if not semesters_to_check:
             raise HTTPException(status_code=400, detail="Academic year and semester must be specified")
-        
-        # Get access control record for this year/semester
-        access_control = db.query(SchoolAccessControlModel).filter(
+
+        access_controls = db.query(SchoolAccessControlModel).filter(
             and_(
                 SchoolAccessControlModel.school_id == student.school_id,
-                SchoolAccessControlModel.academic_year == check_year,
-                SchoolAccessControlModel.semester == check_semester
+                SchoolAccessControlModel.academic_year == check_year
             )
-        ).first()
-        
-        if is_student:
-            if not access_control or not access_control.allow_student_view_grades:
-                raise HTTPException(
-                    status_code=403,
-                    detail=f"ทางโรงเรียนยังไม่เปิดให้เข้าดูผลการเรียนสำหรับปี {check_year} ภาคเรียนที่ {check_semester}"
-                )
-        elif is_teacher:
-            if not access_control or not access_control.allow_teacher_view_summary:
-                raise HTTPException(
-                    status_code=403,
-                    detail=f"ทางโรงเรียนยังไม่อนุญาตให้ครูดูสรุปคะแนนสำหรับปี {check_year} ภาคเรียนที่ {check_semester}"
-                ) 
+        ).all()
+        access_map = {int(a.semester): a for a in access_controls if a.semester is not None}
+
+        for check_semester in semesters_to_check:
+            access_control = access_map.get(int(check_semester))
+            if is_student:
+                if not access_control or not access_control.allow_student_view_grades:
+                    raise HTTPException(
+                        status_code=403,
+                        detail=f"ทางโรงเรียนยังไม่เปิดให้เข้าดูผลการเรียนสำหรับปี {check_year} ภาคเรียนที่ {check_semester}"
+                    )
+            elif is_teacher:
+                if not access_control or not access_control.allow_teacher_view_summary:
+                    raise HTTPException(
+                        status_code=403,
+                        detail=f"ทางโรงเรียนยังไม่อนุญาตให้ครูดูสรุปคะแนนสำหรับปี {check_year} ภาคเรียนที่ {check_semester}"
+                    )
     
     return _get_student_transcript_internal(student_id, classroom_id, db, academic_year=academic_year, semester=semester)
 
@@ -770,6 +1245,7 @@ def get_student_transcript(student_id: int, classroom_id: int = None, academic_y
 def get_student_semester_list(student_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     """
     Return a list of unique (academic_year, semester) combinations that the student has subjects in.
+    Also includes semesters from classroom enrollments (for new students without subject assignments yet).
     Useful for populating semester selector UI.
     """
     is_authorized = (
@@ -779,7 +1255,12 @@ def get_student_semester_list(student_id: int, db: Session = Depends(get_db), cu
     if not is_authorized:
         raise HTTPException(status_code=403, detail='Not authorized')
 
-    rows = db.query(SubjectModel.academic_year, SubjectModel.semester).join(
+    student = db.query(UserModel).filter(UserModel.id == student_id).first()
+    if not student:
+        raise HTTPException(status_code=404, detail='Student not found')
+
+    # Get semesters from enrolled subjects
+    subject_rows = db.query(SubjectModel.academic_year, SubjectModel.semester).join(
         SubjectStudentModel, SubjectModel.id == SubjectStudentModel.subject_id
     ).filter(
         SubjectStudentModel.student_id == student_id,
@@ -787,10 +1268,40 @@ def get_student_semester_list(student_id: int, db: Session = Depends(get_db), cu
         SubjectModel.semester.isnot(None)
     ).distinct().all()
 
-    result = sorted(
-        [{'academic_year': r[0], 'semester': r[1]} for r in rows],
-        key=lambda x: (x['academic_year'], x['semester'])
-    )
+    # Also get semesters from classroom enrollments (for students without subject assignments yet)
+    classroom_rows = db.query(ClassroomModel.academic_year, ClassroomModel.semester).join(
+        ClassroomStudentModel, ClassroomModel.id == ClassroomStudentModel.classroom_id
+    ).filter(
+        ClassroomStudentModel.student_id == student_id,
+        ClassroomModel.academic_year.isnot(None),
+        ClassroomModel.semester.isnot(None),
+        ClassroomStudentModel.is_active == True
+    ).distinct().all()
+
+    # Merge and deduplicate
+    all_rows = set()
+    for row in subject_rows + classroom_rows:
+        all_rows.add((row[0], row[1]))
+
+    access_rows = db.query(SchoolAccessControlModel).filter(
+        SchoolAccessControlModel.school_id == student.school_id
+    ).all()
+    access_map = {
+        (str(r.academic_year), int(r.semester)): r for r in access_rows
+    }
+
+    result = []
+    for year, sem in all_rows:
+        key = (str(year), int(sem))
+        access = access_map.get(key)
+        result.append({
+            'academic_year': year,
+            'semester': sem,
+            'allow_student_view_grades': bool(getattr(access, 'allow_student_view_grades', False)),
+            'allow_teacher_view_summary': bool(getattr(access, 'allow_teacher_view_summary', False))
+        })
+
+    result = sorted(result, key=lambda x: (x['academic_year'], x['semester']))
     return result
 
 
@@ -806,23 +1317,90 @@ def get_classroom_ranking(classroom_id: int, academic_year: str = None, semester
     query = db.query(UserModel).join(
         ClassroomStudentModel, UserModel.id == ClassroomStudentModel.student_id
     )
+    is_combined_classroom_mode = (not grade_level and semester is None)
+    target_classroom = None
+    q_year = str(academic_year).strip() if academic_year is not None else None
     
     if grade_level:
         # If grade_level is provided, find all students in any classroom of that grade level
         query = query.join(ClassroomModel, ClassroomStudentModel.classroom_id == ClassroomModel.id)
         query = query.filter(ClassroomModel.grade_level == grade_level)
+    elif is_combined_classroom_mode:
+        # Combined mode: merge same classroom across semesters in the selected academic year
+        # (same school + same classroom name + same grade level)
+        target_classroom = db.query(ClassroomModel).filter(ClassroomModel.id == classroom_id).first()
+        if not target_classroom:
+            return []
+
+        query = query.join(ClassroomModel, ClassroomStudentModel.classroom_id == ClassroomModel.id)
+        query = query.filter(
+            ClassroomModel.school_id == target_classroom.school_id,
+            ClassroomModel.name == target_classroom.name,
+            ClassroomModel.grade_level == target_classroom.grade_level
+        )
+
+        if q_year is not None:
+            if len(q_year) <= 2:
+                query = query.filter(or_(
+                    ClassroomModel.academic_year == academic_year,
+                    func.right(ClassroomModel.academic_year, len(q_year)) == q_year
+                ))
+            else:
+                query = query.filter(ClassroomModel.academic_year == academic_year)
+        elif target_classroom.academic_year:
+            query = query.filter(ClassroomModel.academic_year == target_classroom.academic_year)
     else:
         query = query.filter(ClassroomStudentModel.classroom_id == classroom_id)
         
     students = query.all()
+    # Deduplicate students that appear in both semesters of the same classroom
+    students = list({s.id: s for s in students}.values())
 
     if not students:
         return []
 
+    # Build student_number lookup map
+    student_ids = [s.id for s in students]
+    enrollments_query = db.query(ClassroomStudentModel).filter(
+        ClassroomStudentModel.student_id.in_(student_ids)
+    )
+
+    if grade_level:
+        enrollments_query = enrollments_query.join(
+            ClassroomModel, ClassroomStudentModel.classroom_id == ClassroomModel.id
+        ).filter(ClassroomModel.grade_level == grade_level)
+    elif is_combined_classroom_mode and target_classroom is not None:
+        enrollments_query = enrollments_query.join(
+            ClassroomModel, ClassroomStudentModel.classroom_id == ClassroomModel.id
+        ).filter(
+            ClassroomModel.school_id == target_classroom.school_id,
+            ClassroomModel.name == target_classroom.name,
+            ClassroomModel.grade_level == target_classroom.grade_level
+        )
+
+        if q_year is not None:
+            if len(q_year) <= 2:
+                enrollments_query = enrollments_query.filter(or_(
+                    ClassroomModel.academic_year == academic_year,
+                    func.right(ClassroomModel.academic_year, len(q_year)) == q_year
+                ))
+            else:
+                enrollments_query = enrollments_query.filter(ClassroomModel.academic_year == academic_year)
+        elif target_classroom.academic_year:
+            enrollments_query = enrollments_query.filter(ClassroomModel.academic_year == target_classroom.academic_year)
+    else:
+        enrollments_query = enrollments_query.filter(ClassroomStudentModel.classroom_id == classroom_id)
+
+    enrollments = enrollments_query.all()
+    student_number_map = {}
+    for e in enrollments:
+        if e.student_id not in student_number_map or (student_number_map[e.student_id] is None and e.student_number is not None):
+            student_number_map[e.student_id] = e.student_number
+
     results = []
     for student in students:
-        # If grade_level is used, we pass classroom_id=None to get overall performance for that period
-        cid_for_transcript = None if grade_level else classroom_id
+        # If grade_level/combined mode is used, pass classroom_id=None to get overall performance for that period
+        cid_for_transcript = None if (grade_level or is_combined_classroom_mode) else classroom_id
         transcript = _get_student_transcript_internal(student.id, cid_for_transcript, db, academic_year=academic_year, semester=semester)
         
         total_score = 0.0
@@ -845,45 +1423,106 @@ def get_classroom_ranking(classroom_id: int, academic_year: str = None, semester
             'username': student.username,
             'total_score': round(total_score, 2),
             'total_max_score': round(total_max, 2),
-            'average_score': round(final_percentage, 2)
+            'average_score': round(final_percentage, 2),
+            'student_number': student_number_map.get(student.id)
         })
 
-    # Sort descending by total_score as requested
-    results.sort(key=lambda x: x['total_score'], reverse=True)
+    # Sort descending by average_score (percentage) so ranking is fair
+    # regardless of how many subjects each student has
+    results.sort(key=lambda x: x['average_score'], reverse=True)
 
     # Assign ranks
     current_rank = 0
     last_val = -1.0
     for i, item in enumerate(results):
-        if item['total_score'] != last_val:
+        if item['average_score'] != last_val:
             current_rank = i + 1
-            last_val = item['total_score']
+            last_val = item['average_score']
         item['rank'] = current_rank
 
     return results
 
 
 @router.get('/school/{school_id}/ranking')
-def get_school_ranking(school_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
-    """Calculate ranking for all students in the entire school based on sum of scores."""
+def get_school_ranking(
+    school_id: int,
+    academic_year: str = None,
+    semester: int = None,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    """Calculate ranking for all students in the entire school based on selected period."""
     # Check authorization (Admin or Teacher or Student in this school)
     user_role = getattr(current_user, 'role', None)
     if user_role not in ['admin', 'teacher', 'student']:
         raise HTTPException(status_code=403, detail='Not authorized')
 
-    # Get students in school
-    students = db.query(UserModel).filter(
+    # Start from all students in school
+    students_query = db.query(UserModel).filter(
         UserModel.school_id == school_id,
         UserModel.role == 'student'
-    ).all()
+    )
+
+    # When year/semester is selected, rank only students who are in that period.
+    if academic_year is not None or semester is not None:
+        q_year = str(academic_year).strip() if academic_year is not None else None
+
+        subject_ids_query = db.query(SubjectStudentModel.student_id).join(
+            SubjectModel, SubjectModel.id == SubjectStudentModel.subject_id
+        ).filter(SubjectModel.school_id == school_id)
+
+        classroom_ids_query = db.query(ClassroomStudentModel.student_id).join(
+            ClassroomModel, ClassroomModel.id == ClassroomStudentModel.classroom_id
+        ).filter(
+            ClassroomModel.school_id == school_id,
+            ClassroomStudentModel.is_active == True
+        )
+
+        if q_year is not None:
+            if len(q_year) <= 2:
+                subject_ids_query = subject_ids_query.filter(or_(
+                    SubjectModel.academic_year == academic_year,
+                    func.right(SubjectModel.academic_year, len(q_year)) == q_year
+                ))
+                classroom_ids_query = classroom_ids_query.filter(or_(
+                    ClassroomModel.academic_year == academic_year,
+                    func.right(ClassroomModel.academic_year, len(q_year)) == q_year
+                ))
+            else:
+                subject_ids_query = subject_ids_query.filter(SubjectModel.academic_year == academic_year)
+                classroom_ids_query = classroom_ids_query.filter(ClassroomModel.academic_year == academic_year)
+
+        if semester is not None:
+            subject_ids_query = subject_ids_query.filter(SubjectModel.semester == semester)
+            classroom_ids_query = classroom_ids_query.filter(ClassroomModel.semester == semester)
+
+        period_student_ids = {
+            row[0] for row in subject_ids_query.distinct().all() if row and row[0] is not None
+        }
+        period_student_ids.update({
+            row[0] for row in classroom_ids_query.distinct().all() if row and row[0] is not None
+        })
+
+        if not period_student_ids:
+            return []
+
+        students_query = students_query.filter(UserModel.id.in_(period_student_ids))
+
+    students = students_query.all()
 
     if not students:
         return []
 
     results = []
     for student in students:
-        # Pass classroom_id=None to get overall grades
-        transcript = _get_student_transcript_internal(student.id, None, db)
+        # Pass classroom_id=None to get overall grades for the selected period
+        transcript = _get_student_transcript_internal(
+            student.id,
+            None,
+            db,
+            academic_year=academic_year,
+            semester=semester
+        )
         
         total_score = 0.0
         total_max = 0.0
@@ -906,16 +1545,16 @@ def get_school_ranking(school_id: int, db: Session = Depends(get_db), current_us
             'average_score': round(final_percentage, 2)
         })
 
-    # Sort descending by total_score
-    results.sort(key=lambda x: x['total_score'], reverse=True)
+    # Sort descending by average_score (percentage) for fair ranking
+    results.sort(key=lambda x: x['average_score'], reverse=True)
 
     # Assign ranks
     current_rank = 0
     last_val = -1.0
     for i, item in enumerate(results):
-        if item['total_score'] != last_val:
+        if item['average_score'] != last_val:
             current_rank = i + 1
-            last_val = item['total_score']
+            last_val = item['average_score']
         item['rank'] = current_rank
 
     return results

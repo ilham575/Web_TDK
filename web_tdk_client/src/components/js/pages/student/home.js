@@ -7,6 +7,11 @@ import StudentTabs from './StudentTabs';
 import PageHeader from '../../PageHeader';
 import { toast } from 'react-toastify';
 import { API_BASE_URL } from '../../../endpoints';
+import FirstVisitOnboarding, {
+  ONBOARDING_KEYS,
+  markOnboardingSeen,
+  shouldShowOnboarding
+} from '../../FirstVisitOnboarding';
 import { setSchoolFavicon } from '../../../../utils/faviconUtils';
 import { logout } from '../../../../utils/authUtils';
 import { 
@@ -30,6 +35,7 @@ function StudentPage() {
   const [announcements, setAnnouncements] = useState([]);
   const [studentSubjects, setStudentSubjects] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
+  const [showStudentOnboarding, setShowStudentOnboarding] = useState(false);
   const [expandedAnnouncement, setExpandedAnnouncement] = useState(null);
   const [activeTab, setActiveTab] = useState('subjects');
   
@@ -38,6 +44,16 @@ function StudentPage() {
   const [selectedAcademicYear, setSelectedAcademicYear] = useState('');
   const [selectedSemester, setSelectedSemester] = useState('');
   const [academicYearInitialized, setAcademicYearInitialized] = useState(false);
+
+  const getSemestersForYear = (academicYear) => {
+    if (!academicYear) return [];
+    return [...new Set(
+      availableSemesters
+        .filter(s => String(s.academic_year) === String(academicYear))
+        .map(s => Number(s.semester))
+        .filter(v => Number.isFinite(v))
+    )].sort((a, b) => a - b);
+  };
   
   // Schedule state
   const [studentSchedule, setStudentSchedule] = useState([]);
@@ -78,6 +94,17 @@ function StudentPage() {
         setTimeout(() => navigate('/signin'), 1500);
       });
   }, [navigate]);
+
+  useEffect(() => {
+    if (currentUser) {
+      setShowStudentOnboarding(shouldShowOnboarding(ONBOARDING_KEYS.student));
+    }
+  }, [currentUser]);
+
+  const handleCloseStudentOnboarding = () => {
+    markOnboardingSeen(ONBOARDING_KEYS.student);
+    setShowStudentOnboarding(false);
+  };
 
   // fetch subjects for the logged-in student
   useEffect(() => {
@@ -125,6 +152,16 @@ function StudentPage() {
     };
     loadSemesters();
   }, [currentUser]);
+
+  useEffect(() => {
+    if (activeTab !== 'subjects') return;
+    if (!selectedAcademicYear || selectedSemester) return;
+
+    const semesters = getSemestersForYear(selectedAcademicYear);
+    if (semesters.length > 0) {
+      setSelectedSemester(String(semesters[0]));
+    }
+  }, [activeTab, selectedAcademicYear, selectedSemester, availableSemesters]);
 
   // fetch student schedule
   useEffect(() => {
@@ -299,6 +336,39 @@ function StudentPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans selection:bg-emerald-100 selection:text-emerald-900 pb-20">
+      <FirstVisitOnboarding
+        open={showStudentOnboarding}
+        onClose={handleCloseStudentOnboarding}
+        badge="Student Onboarding"
+        title="เริ่มใช้งานจากวิชา ตารางเรียน และข่าวประกาศ"
+        description="หน้าแรกของนักเรียนถูกจัดไว้ให้ดูข้อมูลสำคัญได้เร็ว ถ้าเพิ่งเข้าระบบครั้งแรก ให้เริ่มจากดูวิชาที่ลงทะเบียน ตารางเรียน และข่าวสารของโรงเรียนก่อน"
+        accent="blue"
+        highlights={[
+          'แท็บรายวิชาช่วยดูวิชาที่เรียนอยู่ในปีและภาคเรียนที่เลือก',
+          'ตารางเรียนช่วยเช็กเวลาเรียนประจำวันและห้องเรียน',
+          'ข่าวประกาศและสถานะต่าง ๆ อยู่บนหน้าเดียวเพื่อไม่ให้พลาดข้อมูลสำคัญ',
+          'ถ้าได้รับรหัสผ่านเริ่มต้น ควรเปลี่ยนรหัสผ่านใหม่เมื่อระบบแจ้ง'
+        ]}
+        steps={[
+          {
+            icon: '1',
+            title: 'ดูปีการศึกษาและภาคเรียนก่อน',
+            description: 'เลือกตัวกรองให้ตรงกับช่วงที่ต้องการดู เพื่อให้รายวิชาและตารางเรียนแสดงถูกต้อง'
+          },
+          {
+            icon: '2',
+            title: 'เช็กวิชาและตารางเรียน',
+            description: 'ใช้สองส่วนนี้เป็นจุดเริ่มต้นทุกครั้งก่อนเข้าเรียนหรือเช็กงานของตัวเอง'
+          },
+          {
+            icon: '3',
+            title: 'ติดตามประกาศและข้อมูลส่วนตัว',
+            description: 'ถ้ามีข่าวจากโรงเรียนหรือผลการเรียนอัปเดต คุณจะเห็นได้จากหน้าในระบบนี้'
+          }
+        ]}
+        buttonLabel="เริ่มใช้งานหน้าของฉัน"
+      />
+
       <PageHeader 
         currentUser={currentUser}
         role="student"
@@ -391,16 +461,9 @@ function StudentPage() {
                                   value={selectedSemester}
                                   onChange={e => setSelectedSemester(e.target.value)}
                               >
-                                  <option value="">รวม 2 ภาค</option>
-                                  {availableSemesters
-                                      .filter(s => s.academic_year === selectedAcademicYear)
-                                      .map(s => s.semester)
-                                      .filter((v, i, a) => a.indexOf(v) === i)
-                                      .sort()
-                                      .map(sem => (
-                                          <option key={sem} value={sem}>ภาค {sem} เท่านั้น</option>
-                                      ))
-                                  }
+                              {getSemestersForYear(selectedAcademicYear).map(sem => (
+                                <option key={sem} value={sem}>ภาค {sem} เท่านั้น</option>
+                              ))}
                               </select>
                           </div>
                       )}
@@ -428,8 +491,8 @@ function StudentPage() {
             ) : (
               <div className="grid grid-cols-1 gap-4">
                 {(() => {
-                  // Only group by code when showing merged view (no semester selected)
-                  const shouldGroup = !selectedSemester;
+                  // Student subject tab always shows a specific semester (no merged two-semester view)
+                  const shouldGroup = false;
                   
                   if (shouldGroup) {
                     // Group subjects by code - show only one subject per code

@@ -18,6 +18,7 @@ class School(Base):
     is_academic_year_setup = Column(Boolean, default=False, nullable=False, server_default='0')  # ตั้งค่าปีการศึกษาแล้วหรือยัง
     current_academic_year = Column(String(10), nullable=True)  # ปีการศึกษาปัจจุบัน เช่น "2569"
     current_semester = Column(Integer, nullable=True)  # ภาคเรียนปัจจุบัน เช่น 1 หรือ 2
+    graduation_grade_level = Column(String(50), nullable=True)  # ชั้นจบของโรงเรียน เช่น "ม.6"
     
     # Relationships
     schedule_slots = relationship("ScheduleSlot", back_populates="school")

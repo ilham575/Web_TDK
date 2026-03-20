@@ -12,6 +12,11 @@ import StudentAttendanceModal from '../../../modals/StudentAttendanceModal';
 import ScheduleModal from '../../../modals/ScheduleModal';
 import StudentEvaluationModal from '../../../modals/StudentEvaluationModal';
 import { API_BASE_URL } from '../../../endpoints';
+import FirstVisitOnboarding, {
+  ONBOARDING_KEYS,
+  markOnboardingSeen,
+  shouldShowOnboarding
+} from '../../FirstVisitOnboarding';
 import { setSchoolFavicon } from '../../../../utils/faviconUtils';
 import { logout } from '../../../../utils/authUtils';
 import { 
@@ -41,6 +46,7 @@ function TeacherPage() {
   const navigate = useNavigate();
   const [teacherSubjects, setTeacherSubjects] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
+  const [showTeacherOnboarding, setShowTeacherOnboarding] = useState(false);
   const [subjectTeachersMap, setSubjectTeachersMap] = useState({});
   const [gradesAnnounced, setGradesAnnounced] = useState(true);
   const [gradeAnnouncementDate, setGradeAnnouncementDate] = useState(null);
@@ -74,6 +80,8 @@ function TeacherPage() {
   const [scheduleSlots, setScheduleSlots] = useState([]);
   const [subjectSchedules, setSubjectSchedules] = useState([]);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [scheduleYear, setScheduleYear] = useState(String(currentBEYear));
+  const [scheduleSemester, setScheduleSemester] = useState('');
   const [selectedSubjectId, setSelectedSubjectId] = useState('');
   const [selectedClassroomId, setSelectedClassroomId] = useState('');
   const [scheduleDay, setScheduleDay] = useState('');
@@ -162,6 +170,8 @@ function TeacherPage() {
     if (activePeriod) {
       setHomeroomYear(activePeriod.academic_year);
       setHomeroomSemester(String(activePeriod.semester));
+      setScheduleYear(String(activePeriod.academic_year));
+      setScheduleSemester(String(activePeriod.semester));
     }
   }, [activePeriod]);
 
@@ -221,6 +231,17 @@ function TeacherPage() {
         navigate('/signin');
       });
   }, [navigate]);
+
+  useEffect(() => {
+    if (currentUser) {
+      setShowTeacherOnboarding(shouldShowOnboarding(ONBOARDING_KEYS.teacher));
+    }
+  }, [currentUser]);
+
+  const handleCloseTeacherOnboarding = () => {
+    markOnboardingSeen(ONBOARDING_KEYS.teacher);
+    setShowTeacherOnboarding(false);
+  };
 
   useEffect(() => {
     const schoolId = localStorage.getItem('school_id');
@@ -1068,13 +1089,17 @@ function TeacherPage() {
     if (!currentUser) return;
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE_URL}/schedule/teacher`, { headers: { Authorization: `Bearer ${token}` } });
+      const params = new URLSearchParams();
+      if (scheduleYear) params.set('academic_year', scheduleYear);
+      if (scheduleSemester) params.set('semester', scheduleSemester);
+      const queryStr = params.toString() ? `?${params.toString()}` : '';
+      const res = await fetch(`${API_BASE_URL}/schedule/teacher${queryStr}`, { headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) {
         const data = await res.json();
         setSubjectSchedules(Array.isArray(data) ? data : []);
       }
     } catch (err) { setSubjectSchedules([]); }
-  }, [currentUser]);
+  }, [currentUser, scheduleYear, scheduleSemester]);
 
   const assignSubjectToSchedule = useCallback(async () => {
     if (!selectedSubjectId || !scheduleDay || !scheduleStartTime || !scheduleEndTime) { toast.error('กรุณากรอกข้อมูลให้ครบถ้วน'); return; }
@@ -1162,6 +1187,39 @@ function TeacherPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 pb-20">
+      <FirstVisitOnboarding
+        open={showTeacherOnboarding}
+        onClose={handleCloseTeacherOnboarding}
+        badge="Teacher Onboarding"
+        title="เริ่มงานสอนจากวิชา ตารางสอน และห้องโฮมรูม"
+        description="หน้าครูรวมงานหลักที่ต้องใช้ทุกวันไว้แล้ว ถ้าเพิ่งเข้าระบบครั้งแรก ให้เริ่มจากการดูรายวิชาที่รับผิดชอบ แล้วค่อยตรวจตารางเรียนและข้อมูลนักเรียนในห้องโฮมรูม"
+        accent="emerald"
+        highlights={[
+          'แท็บรายวิชาเป็นจุดเริ่มต้นสำหรับกรอกคะแนน เช็กข้อมูลวิชา และติดตามสถานะการสอน',
+          'ตารางสอนช่วยดูเวลาสอนและจัดการช่วงเวลาเรียนของแต่ละวิชา',
+          'ถ้ามีโฮมรูม จะสามารถติดตามภาพรวมคะแนน การมาเรียน และรายละเอียดนักเรียนได้จากหน้าเดียว',
+          'ถ้าระบบให้เปลี่ยนรหัสผ่านหลังเข้าสู่ระบบครั้งแรก ควรทำทันที'
+        ]}
+        steps={[
+          {
+            icon: '1',
+            title: 'เช็กวิชาที่รับผิดชอบ',
+            description: 'ดูรายชื่อวิชา ห้องเรียน และสถานะภาคเรียน เพื่อเริ่มกรอกข้อมูลได้ถูกวิชา'
+          },
+          {
+            icon: '2',
+            title: 'ดูตารางเรียนและประกาศ',
+            description: 'ตรวจเวลาสอน ข่าวประกาศ และกำหนดการสำคัญก่อนเริ่มใช้งานจริง'
+          },
+          {
+            icon: '3',
+            title: 'ติดตามนักเรียนในโฮมรูม',
+            description: 'ถ้าคุณเป็นครูประจำชั้น ใช้ส่วนโฮมรูมเพื่อตรวจคะแนน การมาเรียน และข้อมูลรายบุคคล'
+          }
+        ]}
+        buttonLabel="เริ่มใช้งานหน้าครู"
+      />
+
       <div className="max-w-7xl mx-auto px-4 py-8">
         <div className="mb-8">
           <PageHeader 
@@ -1997,12 +2055,37 @@ function TeacherPage() {
                   <h3 className="text-2xl font-black text-slate-800 tracking-tight">🗓️ ระบบตารางเรียน</h3>
                   <p className="text-slate-500 font-medium">จัดการเวลาเรียนและห้องเรียนสำหรับผู้สอน</p>
                 </div>
-                <button 
-                  onClick={() => { loadScheduleSlots(); loadClassrooms(); setShowScheduleModal(true); }}
-                  className="px-6 py-3 bg-emerald-600 text-white rounded-2xl font-black text-sm shadow-xl shadow-emerald-200 hover:bg-emerald-700 active:scale-95 transition-all flex items-center justify-center gap-2"
-                >
-                  <Plus className="w-4 h-4" /> กำหนดเวลาสอน
-                </button>
+                <div className="flex flex-wrap items-center gap-3">
+                  {semesterPeriods.length > 0 && (
+                    <div className="flex items-center gap-2 bg-white p-1.5 rounded-2xl shadow-sm border border-slate-100/60">
+                      <select
+                        value={scheduleYear}
+                        onChange={e => setScheduleYear(e.target.value)}
+                        className="py-2 pl-4 pr-10 bg-slate-50 hover:bg-slate-100 border border-transparent rounded-xl text-slate-700 font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 appearance-none cursor-pointer transition-all"
+                      >
+                        {[...new Set(semesterPeriods.map(p => p.academic_year))].sort((a, b) => parseInt(b) - parseInt(a)).map(y => (
+                          <option key={y} value={y}>ปี {y}</option>
+                        ))}
+                      </select>
+                      <select
+                        value={scheduleSemester}
+                        onChange={e => setScheduleSemester(e.target.value)}
+                        className="py-2 pl-4 pr-10 bg-slate-50 hover:bg-slate-100 border border-transparent rounded-xl text-slate-700 font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 appearance-none cursor-pointer transition-all"
+                      >
+                        <option value="">ทุกภาคเรียน</option>
+                        {[...new Set(semesterPeriods.filter(p => p.academic_year === scheduleYear).map(p => p.semester))].sort().map(s => (
+                          <option key={s} value={s}>ภาคเรียนที่ {s}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  <button 
+                    onClick={() => { loadScheduleSlots(); loadClassrooms(); setShowScheduleModal(true); }}
+                    className="px-6 py-3 bg-emerald-600 text-white rounded-2xl font-black text-sm shadow-xl shadow-emerald-200 hover:bg-emerald-700 active:scale-95 transition-all flex items-center justify-center gap-2"
+                  >
+                    <Plus className="w-4 h-4" /> กำหนดเวลาสอน
+                  </button>
+                </div>
               </div>
 
               {subjectSchedules.length === 0 ? (

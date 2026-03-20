@@ -144,7 +144,7 @@ const AboutMe = () => {
                                     </div>
                                     <div>
                                         <p className="text-xs text-slate-500 uppercase font-bold tracking-wider">Phone</p>
-                                        <p className="text-slate-800">065-409-5464</p>
+                                        <p className="text-slate-800">085-583-0612</p>
                                     </div>
                                 </div>
                                 <div className="flex items-center p-3 rounded-xl hover:bg-slate-50 transition-colors group">

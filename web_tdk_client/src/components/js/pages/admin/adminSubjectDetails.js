@@ -36,6 +36,10 @@ function AdminSubjectDetails() {
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState(null);
   const [activeTab, setActiveTab] = useState('attendance');
+  const [adminManualGrades, setAdminManualGrades] = useState({});
+  const [adminSaving, setAdminSaving] = useState(false);
+  const [classes, setClasses] = useState([]);
+  const [selectedClass, setSelectedClass] = useState(null);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -69,18 +73,10 @@ function AdminSubjectDetails() {
         const subjects = await subjectsRes.json();
         let subj = Array.isArray(subjects) ? subjects.find(s => String(s.id) === String(subjectId)) : null;
         
-        if (subj) {
-          if (!subj.teacher && (subj.teacher_id || subj.teacherId)) {
-            const tid = subj.teacher_id || subj.teacherId;
-            try {
-              const listRes = await fetch(`${API_BASE_URL}/users?limit=200`, { headers });
-              const list = await listRes.json();
-              if (Array.isArray(list)) {
-                const found = list.find(u => String(u.id) === String(tid));
-                if (found) subj.teacher = found;
-              }
-            } catch (e) {}
-          }
+        // backend now includes teacher object when available, no extra fetch needed
+        // subj may already contain `teacher` and `teacher_name` fields
+        if (subj && subj.teacher) {
+            // nothing to do
         }
         setSubject(subj);
 
@@ -100,7 +96,22 @@ function AdminSubjectDetails() {
           evaluationsRes.json()
         ]);
 
-        setStudents(Array.isArray(studs) ? studs : []);
+        const studentsArr = Array.isArray(studs) ? studs : [];
+        setStudents(studentsArr);
+        // Build distinct class list from students — group by NAME so same-named classrooms
+        // across different semesters (e.g. "ป.1/1" เทอม 1 vs เทอม 2) appear as one group.
+        const classMap = {};
+        studentsArr.forEach(s => {
+          let label = 'Default';
+          if (s.classroom && (s.classroom.name || s.classroom.id)) {
+            label = s.classroom.name || String(s.classroom.id);
+          } else if (s.classroom_name) label = s.classroom_name;
+          const key = `label:${label}`;
+          classMap[key] = { key, label };
+        });
+        const distinctClasses = Object.values(classMap);
+        setClasses(distinctClasses);
+        if (distinctClasses.length > 0 && !selectedClass) setSelectedClass(distinctClasses[0]);
         setAttendanceRecords(Array.isArray(att) ? att : []);
         setGrades(Array.isArray(grds) ? grds : []);
         setAssignments(Array.isArray(ass) ? ass : []);
@@ -312,15 +323,14 @@ function AdminSubjectDetails() {
   const computeClassroomStats = () => {
     const classroomMap = {};
 
-    // Group students by classroom
+    // Group students by classroom name (merge same-named classrooms across semesters)
     studentSummaries.forEach(student => {
-      const classroomId = student.classroom?.id || 'unknown';
       const classroomName = student.classroom?.name || 'ไม่ระบุห้อง';
       const gradeLevel = student.classroom?.grade_level || student.grade_level || '-';
+      const classroomKey = `${classroomName}::${gradeLevel}`;
 
-      if (!classroomMap[classroomId]) {
-        classroomMap[classroomId] = {
-          id: classroomId,
+      if (!classroomMap[classroomKey]) {
+        classroomMap[classroomKey] = {
           name: classroomName,
           gradeLevel,
           students: [],
@@ -332,13 +342,13 @@ function AdminSubjectDetails() {
         };
       }
 
-      classroomMap[classroomId].students.push(student);
-      classroomMap[classroomId].totalScore += student.grade.totalScore;
-      classroomMap[classroomId].totalMaxScore += student.grade.totalMaxScore;
+      classroomMap[classroomKey].students.push(student);
+      classroomMap[classroomKey].totalScore += student.grade.totalScore;
+      classroomMap[classroomKey].totalMaxScore += student.grade.totalMaxScore;
 
       // Count grade distribution
       const letter = student.grade.letter;
-      classroomMap[classroomId].gradeDistribution[letter] = (classroomMap[classroomId].gradeDistribution[letter] || 0) + 1;
+      classroomMap[classroomKey].gradeDistribution[letter] = (classroomMap[classroomKey].gradeDistribution[letter] || 0) + 1;
     });
 
     // Calculate averages (keep floats, format in UI)
@@ -359,6 +369,137 @@ function AdminSubjectDetails() {
   };
 
   const classroomStats = computeClassroomStats();
+
+  // Build visible student summaries filtered by selected class and sorted by student number
+  const getClassKey = (s) => {
+    // Always key by name so classrooms with the same name across different semesters merge.
+    if (!s) return 'label:Default';
+    if (s.classroom && (s.classroom.name || s.classroom.id)) return `label:${s.classroom.name || String(s.classroom.id)}`;
+    if (s.classroom_name) return `label:${s.classroom_name}`;
+    return 'label:Default';
+  };
+
+  const baseVisibleStudents = selectedClass ? students.filter(s => getClassKey(s) === selectedClass.key) : students;
+  const visibleStudentSummaries = baseVisibleStudents.map(s => calculateStudentSummary(s.id)).filter(Boolean);
+
+  // Assign ranks within visible group (by score)
+  const rankedVisible = [...visibleStudentSummaries].sort((a, b) => b.grade.totalScore - a.grade.totalScore);
+  let currentVisibleRank = 1;
+  rankedVisible.forEach((s, idx) => {
+    if (idx > 0 && s.grade.totalScore < rankedVisible[idx-1].grade.totalScore) {
+      currentVisibleRank = idx + 1;
+    }
+    s.rank = currentVisibleRank;
+  });
+
+  // Finally sort for display by student number (เลขที่)
+  const visibleStudentsSortedByNumber = [...visibleStudentSummaries].sort((a, b) => {
+    const numA = a.student_number || a.classroom?.student_number || 999;
+    const numB = b.student_number || b.classroom?.student_number || 999;
+    return (Number(numA) || 0) - (Number(numB) || 0);
+  });
+
+  // Admin grade entry helpers
+  const hasRealCollectedAssignments = assignments
+    .filter(a => a.title !== "คะแนนเก็บรวม" && a.title !== "คะแนนสอบรวม")
+    .some(a => !checkIsExam(a.title));
+  const hasRealExamAssignments = assignments
+    .filter(a => a.title !== "คะแนนเก็บรวม" && a.title !== "คะแนนสอบรวม")
+    .some(a => checkIsExam(a.title));
+  const hasRealActivityAssignments = assignments.some(
+    a => a.title !== "คะแนนเก็บรวม" && a.title !== "คะแนนสอบรวม"
+  );
+
+  const handleAdminGradeChange = (studentId, type, value) => {
+    if (value !== '') {
+      const numValue = Number(value);
+      if (isNaN(numValue) || numValue < 0) {
+        toast.error('คะแนนต้องเป็นตัวเลขและไม่ติดลบ');
+        return;
+      }
+      const maxScore = type === 'collected'
+        ? (subject?.max_collected_score || 100)
+        : (subject?.max_exam_score || 100);
+      const clamped = Math.min(numValue, maxScore);
+      if (numValue > maxScore) toast.error(`คะแนนต้องไม่เกิน ${maxScore} คะแนน`);
+      setAdminManualGrades(prev => ({
+        ...prev,
+        [studentId]: { ...(prev[studentId] || {}), [type]: clamped.toString() }
+      }));
+    } else {
+      setAdminManualGrades(prev => ({
+        ...prev,
+        [studentId]: { ...(prev[studentId] || {}), [type]: '' }
+      }));
+    }
+  };
+
+  const saveAdminGrades = async () => {
+    if (Object.keys(adminManualGrades).length === 0) {
+      toast.info('ไม่มีคะแนนที่ต้องบันทึก');
+      return;
+    }
+    setAdminSaving(true);
+    try {
+      const token = localStorage.getItem('token');
+      const headers = { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+      const subjectType = subject?.subject_type || 'main';
+      const requests = [];
+
+      if (subjectType === 'activity') {
+        const activityGrades = Object.entries(adminManualGrades)
+          .filter(([sid, data]) =>
+            data.collected !== undefined && data.collected !== '' &&
+            gradeMap[Number(sid)]?.["คะแนนเก็บรวม"] === undefined
+          )
+          .map(([sid, data]) => ({ student_id: Number(sid), grade: Number(data.collected) }));
+        if (activityGrades.length > 0) {
+          requests.push(fetch(`${API_BASE_URL}/grades/bulk`, {
+            method: 'POST', headers,
+            body: JSON.stringify({ subject_id: Number(subjectId), title: "คะแนนเก็บรวม", max_score: subject?.max_collected_score || 100, classroom_id: null, grades: activityGrades })
+          }));
+        }
+      } else {
+        const collectedGrades = Object.entries(adminManualGrades)
+          .filter(([sid, data]) =>
+            data.collected !== undefined && data.collected !== '' &&
+            gradeMap[Number(sid)]?.["คะแนนเก็บรวม"] === undefined
+          )
+          .map(([sid, data]) => ({ student_id: Number(sid), grade: Number(data.collected) }));
+        if (collectedGrades.length > 0) {
+          requests.push(fetch(`${API_BASE_URL}/grades/bulk`, {
+            method: 'POST', headers,
+            body: JSON.stringify({ subject_id: Number(subjectId), title: "คะแนนเก็บรวม", max_score: subject?.max_collected_score || 100, classroom_id: null, grades: collectedGrades })
+          }));
+        }
+        const examGrades = Object.entries(adminManualGrades)
+          .filter(([sid, data]) =>
+            data.exam !== undefined && data.exam !== '' &&
+            gradeMap[Number(sid)]?.["คะแนนสอบรวม"] === undefined
+          )
+          .map(([sid, data]) => ({ student_id: Number(sid), grade: Number(data.exam) }));
+        if (examGrades.length > 0) {
+          requests.push(fetch(`${API_BASE_URL}/grades/bulk`, {
+            method: 'POST', headers,
+            body: JSON.stringify({ subject_id: Number(subjectId), title: "คะแนนสอบรวม", max_score: subject?.max_exam_score || 100, classroom_id: null, grades: examGrades })
+          }));
+        }
+      }
+
+      if (requests.length === 0) {
+        toast.info('ไม่มีคะแนนที่ต้องบันทึก หรือครูได้กรอกทุกช่องแล้ว');
+        setAdminSaving(false);
+        return;
+      }
+      await Promise.all(requests);
+      toast.success('บันทึกคะแนนเรียบร้อยแล้ว');
+      window.location.reload();
+    } catch (err) {
+      toast.error('เกิดข้อผิดพลาดในการบันทึก');
+    } finally {
+      setAdminSaving(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-slate-50/50 pb-20">
@@ -524,6 +665,25 @@ function AdminSubjectDetails() {
           )}
         </section>
 
+        {/* Class Filter */}
+        {classes.length > 1 && (
+          <div className="flex overflow-x-auto gap-2 mb-6 pb-2 no-scrollbar">
+            {classes.map(c => (
+              <button
+                key={c.key}
+                onClick={() => setSelectedClass(c)}
+                className={`px-5 py-3 rounded-2xl font-black text-sm whitespace-nowrap transition-all duration-300 active:scale-95 ${
+                  selectedClass?.key === c.key
+                    ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200'
+                    : 'bg-white text-slate-500 border border-slate-100 hover:bg-slate-50 hover:text-emerald-600'
+                }`}
+              >
+                {c.label}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Student Summary Table Section */}
         <section className="bg-white rounded-[2.5rem] border border-slate-100 shadow-lg shadow-slate-200/50 overflow-hidden">
           <div className="px-8 py-6 border-b border-slate-50 flex items-center justify-between">
@@ -546,7 +706,7 @@ function AdminSubjectDetails() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {studentSummaries.map(student => (
+                {visibleStudentsSortedByNumber.map(student => (
                   <tr key={student.id} className="hover:bg-slate-50/50 transition-colors group">
                     <td className="px-6 py-5 text-center">
                       <span className={`inline-flex items-center justify-center w-8 h-8 rounded-lg font-black text-xs ${
@@ -679,7 +839,7 @@ function AdminSubjectDetails() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
-                        {students.map(student => (
+                        {visibleStudentsSortedByNumber.map(student => (
                           <tr key={student.id} className="hover:bg-slate-50/30 transition-colors group">
                             <td className="sticky left-0 bg-white group-hover:bg-slate-50 transition-colors px-6 py-4 text-sm font-bold text-slate-700 z-10 border-r border-slate-100">
                               {student.full_name || student.username}
@@ -715,7 +875,21 @@ function AdminSubjectDetails() {
                     <p className="text-lg font-black tracking-tight text-slate-400 text-center">ยังไม่มีรายชื่อนักเรียนในวิชานี้</p>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto rounded-[2rem] border border-slate-100">
+                  <>
+                    {((subject?.subject_type === 'activity' && !hasRealActivityAssignments) ||
+                      (subject?.subject_type !== 'activity' && (!hasRealCollectedAssignments || !hasRealExamAssignments))) && (
+                      <div className="flex justify-end mb-4">
+                        <button
+                          onClick={saveAdminGrades}
+                          disabled={adminSaving}
+                          className="flex items-center gap-2 px-5 py-3 bg-emerald-600 text-white rounded-2xl font-black text-sm shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-all active:scale-95 disabled:opacity-50"
+                        >
+                          <CheckCircle className="w-4 h-4" />
+                          {adminSaving ? 'กำลังบันทึก...' : 'บันทึกคะแนน (Admin)'}
+                        </button>
+                      </div>
+                    )}
+                    <div className="overflow-x-auto rounded-[2rem] border border-slate-100">
                     <table className="w-full text-left">
                       <thead>
                         <tr className="bg-slate-50/50">
@@ -747,7 +921,7 @@ function AdminSubjectDetails() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
-                        {studentSummaries.map(student => (
+                        {visibleStudentsSortedByNumber.map(student => (
                           <tr key={student.id} className="hover:bg-slate-50/30 transition-colors group">
                             <td className="px-6 py-5 text-center font-black text-xs text-slate-400">
                                {student.rank}
@@ -776,18 +950,75 @@ function AdminSubjectDetails() {
                               );
                             })}
 
-                            {/* Summary Values */}
+                            {/* Summary Values — Admin can fill empty fields only */}
                             {subject?.subject_type === 'activity' ? (
                               <td className="px-6 py-5 text-center bg-emerald-50/20 font-black text-emerald-700">
-                                {student.grade.totalScore}
+                                {!hasRealActivityAssignments ? (
+                                  gradeMap[student.id]?.["คะแนนเก็บรวม"] !== undefined ? (
+                                    <div className="flex flex-col items-center gap-0.5">
+                                      <span>{student.grade.totalScore}</span>
+                                      <span className="text-[9px] font-bold text-emerald-500 bg-emerald-50 px-2 py-0.5 rounded-full">ครูกรอกแล้ว</span>
+                                    </div>
+                                  ) : (
+                                    <input
+                                      type="number"
+                                      className="w-16 px-2 py-1 bg-white border border-emerald-200 rounded text-center text-sm font-black focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400 outline-none transition-all"
+                                      value={adminManualGrades[student.id]?.collected ?? ''}
+                                      onChange={(e) => handleAdminGradeChange(student.id, 'collected', e.target.value)}
+                                      placeholder={subject?.max_collected_score || 100}
+                                      min={0}
+                                      max={subject?.max_collected_score || 100}
+                                    />
+                                  )
+                                ) : (
+                                  <span>{student.grade.totalScore}</span>
+                                )}
                               </td>
                             ) : (
                               <>
                                 <td className="px-6 py-5 text-center bg-blue-50/20 font-black text-blue-700 border-l border-white">
-                                  {student.grade.collectedScore}
+                                  {!hasRealCollectedAssignments ? (
+                                    gradeMap[student.id]?.["คะแนนเก็บรวม"] !== undefined ? (
+                                      <div className="flex flex-col items-center gap-0.5">
+                                        <span>{student.grade.collectedScore}</span>
+                                        <span className="text-[9px] font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full">ครูกรอกแล้ว</span>
+                                      </div>
+                                    ) : (
+                                      <input
+                                        type="number"
+                                        className="w-16 px-2 py-1 bg-white border border-blue-200 rounded text-center text-sm font-black focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 outline-none transition-all"
+                                        value={adminManualGrades[student.id]?.collected ?? ''}
+                                        onChange={(e) => handleAdminGradeChange(student.id, 'collected', e.target.value)}
+                                        placeholder={subject?.max_collected_score || 100}
+                                        min={0}
+                                        max={subject?.max_collected_score || 100}
+                                      />
+                                    )
+                                  ) : (
+                                    <span>{student.grade.collectedScore}</span>
+                                  )}
                                 </td>
                                 <td className="px-6 py-5 text-center bg-amber-50/20 font-black text-amber-700 border-l border-white">
-                                  {student.grade.examScore}
+                                  {!hasRealExamAssignments ? (
+                                    gradeMap[student.id]?.["คะแนนสอบรวม"] !== undefined ? (
+                                      <div className="flex flex-col items-center gap-0.5">
+                                        <span>{student.grade.examScore}</span>
+                                        <span className="text-[9px] font-bold text-amber-500 bg-amber-50 px-2 py-0.5 rounded-full">ครูกรอกแล้ว</span>
+                                      </div>
+                                    ) : (
+                                      <input
+                                        type="number"
+                                        className="w-16 px-2 py-1 bg-white border border-amber-200 rounded text-center text-sm font-black focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 outline-none transition-all"
+                                        value={adminManualGrades[student.id]?.exam ?? ''}
+                                        onChange={(e) => handleAdminGradeChange(student.id, 'exam', e.target.value)}
+                                        placeholder={subject?.max_exam_score || 100}
+                                        min={0}
+                                        max={subject?.max_exam_score || 100}
+                                      />
+                                    )
+                                  ) : (
+                                    <span>{student.grade.examScore}</span>
+                                  )}
                                 </td>
                               </>
                             )}
@@ -810,7 +1041,8 @@ function AdminSubjectDetails() {
                         ))}
                       </tbody>
                     </table>
-                  </div>
+                    </div>
+                  </>
                 )}
               </div>
             )}
@@ -837,7 +1069,7 @@ function AdminSubjectDetails() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
-                        {students.map(student => {
+                        {visibleStudentsSortedByNumber.map(student => {
                           const evaluation = evaluations.find(e => e.student_id === student.id);
                           const getResultBadge = (result) => {
                             switch(result) {

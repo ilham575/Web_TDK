@@ -19,6 +19,7 @@ class SchoolUpdate(BaseModel):
     is_academic_year_setup: Optional[bool] = None
     current_academic_year: Optional[str] = None
     current_semester: Optional[int] = None
+    graduation_grade_level: Optional[str] = None
 
 
 class AcademicYearSetup(BaseModel):
@@ -35,6 +36,7 @@ class School(SchoolBase):
     is_academic_year_setup: bool = False
     current_academic_year: Optional[str] = None
     current_semester: Optional[int] = None
+    graduation_grade_level: Optional[str] = None
     class Config:
         # Pydantic v2 renamed 'orm_mode' -> 'from_attributes'
         # keep backward-compatible attribute for v1 style, prefer 'from_attributes'

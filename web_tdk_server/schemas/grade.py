@@ -49,3 +49,30 @@ class AssignmentResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class MissingSummaryStudent(BaseModel):
+    student_id: int
+    student_number: Optional[int] = None
+    full_name: str
+    username: Optional[str] = None
+    classroom_name: Optional[str] = None
+    missing_titles: List[str]
+
+
+class SummaryCompletionReportItem(BaseModel):
+    subject_id: int
+    subject_name: str
+    subject_type: str
+    academic_year: Optional[str] = None
+    semester: Optional[int] = None
+    classroom_id: Optional[int] = None
+    classroom_name: Optional[str] = None
+    teacher_names: List[str]
+    required_summary_titles: List[str]
+    student_count: int
+    completed_students_count: int
+    missing_students_count: int
+    completion_percentage: float
+    is_complete: bool
+    missing_students: List[MissingSummaryStudent]

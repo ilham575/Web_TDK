@@ -8,7 +8,7 @@ from routers.user import get_current_user  # keep existing
 from models.user import User as UserModel
 from fastapi.security import OAuth2PasswordBearer
 from utils.security import decode_access_token
-from sqlalchemy import or_
+from sqlalchemy import or_, and_
 from datetime import datetime
 import os
 import shutil
@@ -42,20 +42,51 @@ def create_announcement(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)  # เพิ่มตรงนี้
 ):
+    # Prevent students from creating announcements
+    role = getattr(current_user, 'role', None)
+    if role == 'student':
+        raise HTTPException(status_code=403, detail='Students are not allowed to create announcements')
+
+    # Teachers may only create announcements targeted to students
+    to_students = getattr(announcement, 'to_students', True)
+    to_teachers = getattr(announcement, 'to_teachers', False) if role == 'teacher' else getattr(announcement, 'to_teachers', True)
+
+    if not to_students and not to_teachers:
+        raise HTTPException(status_code=400, detail='Please select at least one target audience')
+
     new_announcement = AnnouncementModel(
         title=announcement.title,
         content=announcement.content,
-        author_id=current_user.id,  # ดึง id จาก user ที่ login
-        school_id=announcement.school_id,  # เพิ่มบรรทัดนี้
-        is_published=True
+        author_id=current_user.id,
+        school_id=announcement.school_id,
+        is_published=True,
+        to_students=bool(to_students),
+        to_teachers=bool(to_teachers)
     )
-    # set expiry if provided
+
     if getattr(announcement, 'expires_at', None):
         new_announcement.expires_at = announcement.expires_at
+
     db.add(new_announcement)
     db.commit()
     db.refresh(new_announcement)
-    return new_announcement
+    # Prepare response dict including author name
+    return {
+        'id': new_announcement.id,
+        'title': new_announcement.title,
+        'content': new_announcement.content,
+        'school_id': new_announcement.school_id,
+        'expires_at': new_announcement.expires_at,
+        'created_at': new_announcement.created_at,
+        'updated_at': new_announcement.updated_at,
+        'author_id': new_announcement.author_id,
+        'author_name': getattr(current_user, 'full_name', None) or getattr(current_user, 'username', None),
+        'to_students': new_announcement.to_students,
+        'to_teachers': new_announcement.to_teachers,
+        'pdf_file_path': new_announcement.pdf_file_path,
+        'pdf_file_name': new_announcement.pdf_file_name,
+        'is_published': new_announcement.is_published
+    }
 
 @router.get("", response_model=List[Announcement])
 @router.get("/", response_model=List[Announcement])
@@ -66,24 +97,89 @@ def list_announcements(db: Session = Depends(get_db), school_id: int = None, cur
 
     # if requester is admin, return all announcements
     if current_user and getattr(current_user, 'role', None) == 'admin':
-        return query.order_by(AnnouncementModel.created_at.desc()).all()
+        rows = query.order_by(AnnouncementModel.created_at.desc()).all()
+        result = []
+        for a in rows:
+            result.append({
+                'id': a.id,
+                'title': a.title,
+                'content': a.content,
+                'school_id': a.school_id,
+                'expires_at': a.expires_at,
+                'created_at': a.created_at,
+                'updated_at': a.updated_at,
+                'author_id': a.author_id,
+                'author_name': getattr(a.author, 'full_name', None) if hasattr(a, 'author') else None,
+                'to_students': a.to_students,
+                'to_teachers': a.to_teachers,
+                'pdf_file_path': a.pdf_file_path,
+                'pdf_file_name': a.pdf_file_name,
+                'is_published': a.is_published
+            })
+        return result
 
-    # For non-admins / anonymous users, only return announcements that are not expired,
-    # or those owned by the current_user (so owners can still see their expired posts).
+    # For non-admins / anonymous users, only return announcements targeted to their role
     now = datetime.now()
     if current_user:
-        query = query.filter(or_(AnnouncementModel.expires_at == None, AnnouncementModel.expires_at > now, AnnouncementModel.author_id == current_user.id))
-    else:
-        query = query.filter(or_(AnnouncementModel.expires_at == None, AnnouncementModel.expires_at > now))
+        role = getattr(current_user, 'role', None)
+        # expiry filter: not expired or authored by current user
+        expiry_filter = or_(AnnouncementModel.expires_at == None, AnnouncementModel.expires_at > now, AnnouncementModel.author_id == current_user.id)
 
-    return query.order_by(AnnouncementModel.created_at.desc()).all()
+        if role == 'teacher':
+            audience_filter = or_(AnnouncementModel.to_teachers == True, AnnouncementModel.author_id == current_user.id)
+        elif role == 'student':
+            audience_filter = or_(AnnouncementModel.to_students == True, AnnouncementModel.author_id == current_user.id)
+        else:
+            audience_filter = or_(AnnouncementModel.to_students == True, AnnouncementModel.to_teachers == True, AnnouncementModel.author_id == current_user.id)
+
+        query = query.filter(and_(expiry_filter, audience_filter))
+    else:
+        # anonymous: only non-expired announcements targeted to students
+        query = query.filter(and_(or_(AnnouncementModel.expires_at == None, AnnouncementModel.expires_at > now), AnnouncementModel.to_students == True))
+
+    rows = query.order_by(AnnouncementModel.created_at.desc()).all()
+    result = []
+    for a in rows:
+        result.append({
+            'id': a.id,
+            'title': a.title,
+            'content': a.content,
+            'school_id': a.school_id,
+            'expires_at': a.expires_at,
+            'created_at': a.created_at,
+            'updated_at': a.updated_at,
+            'author_id': a.author_id,
+            'author_name': getattr(a.author, 'full_name', None) if hasattr(a, 'author') else None,
+            'to_students': a.to_students,
+            'to_teachers': a.to_teachers,
+            'pdf_file_path': a.pdf_file_path,
+            'pdf_file_name': a.pdf_file_name,
+            'is_published': a.is_published
+        })
+    return result
 
 @router.get("/{announcement_id}", response_model=Announcement)
 def get_announcement(announcement_id: int, db: Session = Depends(get_db)):
     announcement = db.query(AnnouncementModel).filter(AnnouncementModel.id == announcement_id).first()
     if not announcement:
         raise HTTPException(status_code=404, detail="Announcement not found")
-    return announcement
+    # enrich with author_name
+    return {
+        'id': announcement.id,
+        'title': announcement.title,
+        'content': announcement.content,
+        'school_id': announcement.school_id,
+        'expires_at': announcement.expires_at,
+        'created_at': announcement.created_at,
+        'updated_at': announcement.updated_at,
+        'author_id': announcement.author_id,
+        'author_name': getattr(announcement.author, 'full_name', None) if hasattr(announcement, 'author') else None,
+        'to_students': announcement.to_students,
+        'to_teachers': announcement.to_teachers,
+        'pdf_file_path': announcement.pdf_file_path,
+        'pdf_file_name': announcement.pdf_file_name,
+        'is_published': announcement.is_published
+    }
 
 @router.delete("/{announcement_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_announcement(
@@ -112,11 +208,31 @@ def update_announcement(
     announcement = db.query(AnnouncementModel).filter(AnnouncementModel.id == announcement_id).first()
     if not announcement:
         raise HTTPException(status_code=404, detail="Announcement not found")
-    # only owner or admin can update expiry
+    # only owner or admin can update announcement
     if (announcement.author_id != current_user.id) and (getattr(current_user, "role", None) != "admin"):
         raise HTTPException(status_code=403, detail="Not authorized to update this announcement")
-    if announcement_update.expires_at is not None:
-        announcement.expires_at = announcement_update.expires_at
+    update_data = announcement_update.dict(exclude_unset=True)
+
+    if 'title' in update_data:
+        announcement.title = update_data['title']
+    if 'content' in update_data:
+        announcement.content = update_data['content']
+    if 'expires_at' in update_data:
+        announcement.expires_at = update_data['expires_at']
+
+    role = getattr(current_user, 'role', None)
+    if role == 'teacher':
+        announcement.to_students = True
+        announcement.to_teachers = False
+    else:
+        if 'to_students' in update_data:
+            announcement.to_students = bool(update_data['to_students'])
+        if 'to_teachers' in update_data:
+            announcement.to_teachers = bool(update_data['to_teachers'])
+
+    if not announcement.to_students and not announcement.to_teachers:
+        raise HTTPException(status_code=400, detail='Please select at least one target audience')
+
     db.commit()
     db.refresh(announcement)
     return announcement

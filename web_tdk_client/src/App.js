@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import { I18nextProvider } from 'react-i18next';
 import i18n from './i18n';
 import InstallPrompt from './components/js/InstallPrompt';
+import AnnouncementWatcher from './components/js/AnnouncementWatcher';
 import SigninPage from './components/js/pages/default/signin';
 import SignupPage from './components/js/pages/default/signup';
 import ForgotPage from './components/js/pages/default/forgot';
@@ -50,11 +51,11 @@ function RequireAuth({ children }) {
   return children;
 }
 
-// if (process.env.NODE_ENV === 'production') {
-//   console.log = function () {};
-// } else {
-//   // console.log = function () {};
-// }
+if (process.env.NODE_ENV === 'production') {
+  console.log = function () {};
+} else {
+  // console.log = function () {};
+}
 
 // Component สำหรับจัดการ favicon เมื่อเข้าสู่ระบบ
 function FaviconHandler() {
@@ -97,6 +98,7 @@ function App() {
     <I18nextProvider i18n={i18n}>
       <BrowserRouter>
         <FaviconHandler />
+        <AnnouncementWatcher />
         <InstallPrompt />
         <div className="pb-14">
         <Routes>

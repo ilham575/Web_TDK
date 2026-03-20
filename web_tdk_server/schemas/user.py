@@ -49,6 +49,14 @@ class Token(BaseModel):
     token_type: str
     user_info: User
 
+
+class PublicLoginUser(BaseModel):
+    id: int
+    username: str
+    full_name: str
+    role: str
+    school_id: Optional[int] = None
+
 # Admin request schema
 class AdminRequestCreate(BaseModel):
     username: str

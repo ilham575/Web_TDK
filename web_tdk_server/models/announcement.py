@@ -12,6 +12,9 @@ class Announcement(Base):
     author_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     school_id = Column(Integer, ForeignKey("schools.id"), nullable=False)  # เพิ่มบรรทัดนี้
     is_published = Column(Boolean, default=True, nullable=False)
+    # Target audience flags
+    to_students = Column(Boolean, default=True, nullable=False)
+    to_teachers = Column(Boolean, default=True, nullable=False)
     expires_at = Column(DateTime(timezone=True), nullable=True)
     pdf_file_path = Column(String(500), nullable=True)
     pdf_file_name = Column(String(255), nullable=True)

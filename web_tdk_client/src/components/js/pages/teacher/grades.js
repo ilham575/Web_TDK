@@ -128,11 +128,9 @@ function GradesPage(){
           setStudents(data);
 
           const makeClassObj = (s) => {
-            let id = null;
             let label = 'Default';
             if (s.classroom && (s.classroom.name || s.classroom.id)) {
               label = s.classroom.name || String(s.classroom.id);
-              id = s.classroom.id || null;
             } else if (s.classroom_name) {
               label = s.classroom_name;
             } else if (s.class_name) {
@@ -146,8 +144,9 @@ function GradesPage(){
             } else if (s.section) {
               label = s.section;
             }
-            const key = id ? `id:${id}` : `label:${label}`;
-            return { key, id, label };
+            // Always key by name so classrooms with the same name across different semesters merge.
+            const key = `label:${label}`;
+            return { key, label };
           };
 
           const classMap = {};
@@ -412,12 +411,10 @@ function GradesPage(){
     }
 
     let resolvedClassroomId = selectedClassId || null;
-    if (selectedClass && !selectedClass.id) {
+    if (selectedClass && !resolvedClassroomId) {
       const foundId = await findClassroomIdByLabel(selectedClass.label);
       if (foundId) {
         resolvedClassroomId = foundId;
-        setSelectedClass(prev => prev ? { ...prev, id: foundId, key: `id:${foundId}` } : prev);
-        setClasses(prev => prev.map(c => c.key === selectedClass.key ? { ...c, id: foundId, key: `id:${foundId}` } : c));
       } else {
         toast.error('ชั้นเรียนที่เลือกยังไม่ได้สร้างในระบบ กรุณาสร้างชั้นเรียนก่อน');
         return;
