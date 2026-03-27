@@ -13,7 +13,7 @@ import FirstVisitOnboarding, {
   shouldShowOnboarding
 } from '../../FirstVisitOnboarding';
 import { setSchoolFavicon } from '../../../../utils/faviconUtils';
-import { logout } from '../../../../utils/authUtils';
+import { fetchCurrentUser, hasSessionMarker, logout } from '../../../../utils/authUtils';
 import { 
   BookOpen, 
   Megaphone, 
@@ -60,15 +60,11 @@ function StudentPage() {
   const [operatingHours, setOperatingHours] = useState([]);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) {
+    if (!hasSessionMarker()) {
       navigate('/signin');
       return;
     }
-    fetch(`${API_BASE_URL}/users/me`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-      .then(res => res.json())
+    fetchCurrentUser()
       .then(data => {
         if (data.role !== 'student') {
           logout();
@@ -111,12 +107,11 @@ function StudentPage() {
     if (!currentUser) return;
     const load = async () => {
       try {
-        const token = localStorage.getItem('token');
         const params = new URLSearchParams();
         if (selectedAcademicYear) params.set('academic_year', selectedAcademicYear);
         if (selectedSemester) params.set('semester', selectedSemester);
         const queryStr = params.toString() ? `?${params.toString()}` : '';
-        const res = await fetch(`${API_BASE_URL}/subjects/student/${currentUser.id}${queryStr}`, { headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+        const res = await fetch(`${API_BASE_URL}/subjects/student/${currentUser.id}${queryStr}`);
         const data = await res.json();
         if (res.ok && Array.isArray(data)) setStudentSubjects(data);
         else setStudentSubjects([]);
@@ -132,10 +127,7 @@ function StudentPage() {
     if (!currentUser) return;
     const loadSemesters = async () => {
       try {
-        const token = localStorage.getItem('token');
-        const res = await fetch(`${API_BASE_URL}/grades/student/${currentUser.id}/semester-list`, {
-          headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
-        });
+        const res = await fetch(`${API_BASE_URL}/grades/student/${currentUser.id}/semester-list`);
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data)) {
@@ -168,12 +160,11 @@ function StudentPage() {
     if (!currentUser) return;
     const loadSchedule = async () => {
       try {
-        const token = localStorage.getItem('token');
         const params = new URLSearchParams();
         if (selectedAcademicYear) params.set('academic_year', selectedAcademicYear);
         if (selectedSemester) params.set('semester', selectedSemester);
         const queryStr = params.toString() ? `?${params.toString()}` : '';
-        const res = await fetch(`${API_BASE_URL}/schedule/student${queryStr}`, { headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+        const res = await fetch(`${API_BASE_URL}/schedule/student${queryStr}`);
         const data = await res.json();
         if (res.ok && Array.isArray(data)) setStudentSchedule(data);
         else setStudentSchedule([]);
@@ -188,10 +179,7 @@ function StudentPage() {
   useEffect(() => {
     const loadOperatingHours = async () => {
       try {
-        const token = localStorage.getItem('token');
-        const res = await fetch(`${API_BASE_URL}/schedule/slots`, {
-          headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
-        });
+        const res = await fetch(`${API_BASE_URL}/schedule/slots`);
         
         if (res.ok) {
           const data = await res.json();
@@ -335,7 +323,7 @@ function StudentPage() {
   }, [displaySchool]);
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans selection:bg-emerald-100 selection:text-emerald-900 pb-20">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-emerald-50/20 to-sky-50/30 font-sans selection:bg-emerald-100 selection:text-emerald-900 pb-20">
       <FirstVisitOnboarding
         open={showStudentOnboarding}
         onClose={handleCloseStudentOnboarding}
@@ -378,47 +366,41 @@ function StudentPage() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
         
-        {/* Welcome Section */}
-        <div className="mb-8">
-           <h1 className="text-3xl font-black text-slate-800 tracking-tight">สวัสดี, {currentUser?.username || 'นักเรียน'} 👋</h1>
-           <p className="text-slate-500 font-medium mt-2">ยินดีต้อนรับสู่ระบบการเรียนการสอน</p>
-        </div>
-
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-100/60 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
+          <div className="bg-white rounded-2xl p-5 shadow-sm border-l-4 border-l-blue-400 border border-slate-100/60 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-4xl font-black text-slate-800 group-hover:text-emerald-600 transition-colors">{studentSubjects.length}</p>
-                <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-2">รายวิชาที่ลงทะเบียน</p>
+                <p className="text-3xl font-black text-slate-800 group-hover:text-blue-600 transition-colors">{studentSubjects.length}</p>
+                <p className="text-xs text-slate-500 font-semibold mt-1.5">รายวิชาที่ลงทะเบียน</p>
               </div>
-              <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-500 group-hover:scale-110 transition-transform">
-                <BookOpen className="w-8 h-8" />
+              <div className="w-14 h-14 bg-blue-50 rounded-xl flex items-center justify-center text-blue-500 group-hover:bg-blue-100 group-hover:scale-105 transition-all">
+                <BookOpen className="w-7 h-7" />
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-100/60 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group">
+          <div className="bg-white rounded-2xl p-5 shadow-sm border-l-4 border-l-amber-400 border border-slate-100/60 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-4xl font-black text-slate-800 group-hover:text-emerald-600 transition-colors">{visibleAnnouncements.length}</p>
-                <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-2">ข่าวสารทั้งหมด</p>
+                <p className="text-3xl font-black text-slate-800 group-hover:text-amber-600 transition-colors">{visibleAnnouncements.length}</p>
+                <p className="text-xs text-slate-500 font-semibold mt-1.5">ข่าวสารทั้งหมด</p>
               </div>
-              <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-500 group-hover:scale-110 transition-transform">
-                <Megaphone className="w-8 h-8" />
+              <div className="w-14 h-14 bg-amber-50 rounded-xl flex items-center justify-center text-amber-500 group-hover:bg-amber-100 group-hover:scale-105 transition-all">
+                <Megaphone className="w-7 h-7" />
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-100/60 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group">
+          <div className="bg-white rounded-2xl p-5 shadow-sm border-l-4 border-l-emerald-400 border border-slate-100/60 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xl font-bold text-slate-800 group-hover:text-emerald-600 transition-colors truncate max-w-[150px]">{currentUser?.username || '-'}</p>
-                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider bg-slate-100 px-2 py-0.5 rounded-md inline-block mt-1">ID: {currentUser?.id || '-'}</p>
-                <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-3">ข้อมูลผู้ใช้</p>
+                <p className="text-base font-bold text-slate-800 group-hover:text-emerald-600 transition-colors truncate max-w-[160px]">{currentUser?.full_name || currentUser?.username || '-'}</p>
+                <p className="text-[11px] text-slate-400 font-semibold bg-slate-100 px-2 py-0.5 rounded-md inline-block mt-1">ID: {currentUser?.id || '-'}</p>
+                <p className="text-xs text-slate-500 font-semibold mt-2">ข้อมูลผู้ใช้</p>
               </div>
-              <div className="w-16 h-16 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-500 group-hover:scale-110 transition-transform">
-                <User className="w-8 h-8" />
+              <div className="w-14 h-14 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-500 group-hover:bg-emerald-100 group-hover:scale-105 transition-all">
+                <User className="w-7 h-7" />
               </div>
             </div>
           </div>

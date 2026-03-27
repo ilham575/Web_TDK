@@ -39,8 +39,7 @@ function AttendancePage(){
     const load = async ()=>{
       try{
         setLoading(true);
-        const token = localStorage.getItem('token');
-        const res = await fetch(`${API_BASE_URL}/subjects/${id}/students`, { headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
+        const res = await fetch(`${API_BASE_URL}/subjects/${id}/students`);
         const data = await res.json();
         if (Array.isArray(data)){
           setStudents(data);
@@ -93,8 +92,7 @@ function AttendancePage(){
   useEffect(() => {
     const loadSubject = async () => {
       try {
-        const token = localStorage.getItem('token');
-        const res = await fetch(`${API_BASE_URL}/subjects/${id}`, { headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
+        const res = await fetch(`${API_BASE_URL}/subjects/${id}`);
         if (!res.ok) {
           if (students && students.length > 0) {
             const s = students[0];
@@ -120,8 +118,7 @@ function AttendancePage(){
   useEffect(()=>{
     const loadAttendance = async ()=>{
       try{
-        const token = localStorage.getItem('token');
-        const res = await fetch(`${API_BASE_URL}/attendance/?subject_id=${id}&date=${selectedDate}`, { headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
+        const res = await fetch(`${API_BASE_URL}/attendance/?subject_id=${id}&date=${selectedDate}`);
         if (!res.ok) {
           setAttendance({});
           return;
@@ -149,9 +146,8 @@ function AttendancePage(){
 
   const save = async ()=>{
     try{
-      const token = localStorage.getItem('token');
       const body = { subject_id: Number(id), date: selectedDate, attendance: attendance };
-      const res = await fetch(`${API_BASE_URL}/attendance/mark`, { method:'POST', headers:{ 'Content-Type':'application/json', ...(token?{Authorization:`Bearer ${token}`}:{}) }, body: JSON.stringify(body)});
+      const res = await fetch(`${API_BASE_URL}/attendance/mark`, { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(body)});
       if (!res.ok) { 
         const d = await res.json().catch(()=>({})); 
         toast.error(d.detail || 'บันทึกไม่สำเร็จ'); 
@@ -190,7 +186,7 @@ function AttendancePage(){
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-20 font-sans selection:bg-emerald-100 selection:text-emerald-900">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-teal-50/20 to-emerald-50/20 pb-20 font-sans selection:bg-emerald-100 selection:text-emerald-900">
       {/* Top Navigation Bar */}
       <div className="bg-white/80 backdrop-blur-md border-b border-slate-200/60 sticky top-0 z-30 transition-all duration-300">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

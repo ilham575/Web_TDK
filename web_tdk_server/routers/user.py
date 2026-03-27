@@ -1,4 +1,6 @@
-from fastapi import APIRouter, HTTPException, Depends, status, UploadFile, File
+from datetime import datetime, timedelta, timezone
+
+from fastapi import APIRouter, HTTPException, Depends, Response, Request, status, UploadFile, File
 import secrets
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from sqlalchemy.orm import Session
@@ -9,13 +11,11 @@ from sqlalchemy.exc import IntegrityError
 import os
 import smtplib
 from email.message import EmailMessage
-from datetime import timedelta
-
-from schemas.user import User, UserCreate, UserUpdate, Token, ChangePasswordRequest, PasswordResetRequestCreate, PasswordResetRequestResponse, PasswordResetByAdminRequest, PublicLoginUser
+from schemas.user import User, UserCreate, UserUpdate, Token, SessionInfo, ChangePasswordRequest, PasswordResetRequestCreate, PasswordResetRequestResponse, PasswordResetByAdminRequest, PublicLoginUser
 from models.user import User as UserModel
 from models.password_reset_request import PasswordResetRequest as PasswordResetRequestModel
 from database.connection import get_db
-from utils.security import hash_password, verify_password, create_access_token, decode_access_token
+from utils.security import clear_auth_cookie, get_request_token, hash_password, verify_password, create_access_token, decode_access_token, resolve_access_token_ttl, set_auth_cookie
 from typing import List
 from sqlalchemy.orm import Session
 from io import BytesIO
@@ -46,6 +46,7 @@ def _normalize_cell_str(val) -> str:
 
 # สร้าง router พร้อมกำหนด prefix
 router = APIRouter(prefix="/users", tags=["users"])
+COOKIE_AUTH_MARKER = "cookie-authenticated"
 
 
 def _validate_no_null_classroom_student(db: Session):
@@ -66,8 +67,12 @@ def _validate_no_null_classroom_student(db: Session):
 # กำหนด OAuth2 Security Scheme
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/users/login")
 
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+def get_current_user(request: Request, db: Session = Depends(get_db)):
     """Get current user from JWT token"""
+    token = get_request_token(request)
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
     try:
         payload = decode_access_token(token)
         username = payload.get("sub")
@@ -161,7 +166,7 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
     return db_user
 
 @router.post("/login", response_model=Token)
-def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+def login(response: Response, form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     """ล็อกอินและสร้าง JWT"""
     user = db.query(UserModel).filter(UserModel.username == form_data.username).first()
     
@@ -194,16 +199,46 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     
     # Create token with custom expiration if available, otherwise use role-based default
     access_token = create_access_token(data={"sub": user.username}, role=user.role, expires_delta=expires_delta)
+    effective_expires_delta = resolve_access_token_ttl(expires_delta=expires_delta, role=user.role)
+
+    expires_at = datetime.now(timezone.utc) + effective_expires_delta
+    set_auth_cookie(response, access_token, expires_delta=effective_expires_delta, role=user.role)
     return {
-        "access_token": access_token, 
+        "access_token": COOKIE_AUTH_MARKER,
         "token_type": "bearer",
-        "user_info": user
+        "user_info": user,
+        "expires_at": expires_at,
     }
+
+
+@router.post("/logout")
+def logout(response: Response):
+    clear_auth_cookie(response)
+    return {"detail": "Logged out"}
 
 @router.get("/me", response_model=User)
 def get_current_user_info(current_user: UserModel = Depends(get_current_user)):
     """ดึงข้อมูลผู้ใช้งานปัจจุบันจาก JWT"""
     return current_user
+
+
+@router.get("/session", response_model=SessionInfo)
+def get_session_info(request: Request):
+    """Return current authenticated session expiration for client-side countdown UI."""
+    token = get_request_token(request)
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    try:
+        payload = decode_access_token(token)
+    except ValueError as exc:
+        raise HTTPException(status_code=401, detail=str(exc))
+
+    exp = payload.get("exp")
+    if not exp:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    return {"expires_at": datetime.fromtimestamp(exp, tz=timezone.utc)}
 
 
 
@@ -866,7 +901,15 @@ def delete_user(
     
     # Safety checks before deletion
     deletion_blocks = []
-    
+
+    # Block deletion for graduated or resigned users (data must be kept)
+    protected_status = getattr(user_to_delete, 'user_status', 'active')
+    if protected_status == 'graduated':
+        deletion_blocks.append('ไม่สามารถลบนักเรียนที่จบการศึกษาแล้วได้ - ข้อมูลต้องถูกเก็บไว้ในระบบ')
+    elif protected_status == 'resigned':
+        role_th = 'นักเรียน' if user_to_delete.role == 'student' else 'ครู'
+        deletion_blocks.append(f'ไม่สามารถลบ{role_th}ที่ลาออกแล้วได้ - ข้อมูลต้องถูกเก็บไว้ในระบบ')
+
     # Check if user is active
     if user_to_delete.is_active:
         deletion_blocks.append('User is still active. Deactivate the user first before deletion.')
@@ -1324,6 +1367,7 @@ def deactivate_user(
         raise HTTPException(status_code=400, detail='Cannot deactivate another admin account')
     
     user.is_active = False
+    user.user_status = 'inactive'
     db.commit()
     db.refresh(user)
     return {'message': f'User {user.username} deactivated successfully', 'user': user}
@@ -1344,9 +1388,119 @@ def activate_user(
         raise HTTPException(status_code=404, detail='User not found')
     
     user.is_active = True
+    user.user_status = 'active'
     db.commit()
     db.refresh(user)
     return {'message': f'User {user.username} activated successfully', 'user': user}
+
+
+@router.patch("/{user_id}/graduate")
+def graduate_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user)
+):
+    """Admin-only: Mark a student as graduated. Deactivates login, data is preserved."""
+    if getattr(current_user, 'role', None) != 'admin':
+        raise HTTPException(status_code=403, detail='Only admins can graduate students')
+
+    user = db.query(UserModel).filter(UserModel.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail='User not found')
+    if user.role != 'student':
+        raise HTTPException(status_code=400, detail='Only students can be graduated')
+
+    user.is_active = False
+    user.user_status = 'graduated'
+    db.commit()
+    db.refresh(user)
+    return {'message': f'นักเรียน {user.full_name} จบการศึกษาเรียบร้อยแล้ว', 'user': user}
+
+
+@router.patch("/{user_id}/resign")
+def resign_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user)
+):
+    """Admin-only: Mark a teacher or student as resigned. Deactivates login, data is preserved."""
+    if getattr(current_user, 'role', None) != 'admin':
+        raise HTTPException(status_code=403, detail='Only admins can mark users as resigned')
+
+    user = db.query(UserModel).filter(UserModel.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail='User not found')
+    if user.role not in ('student', 'teacher'):
+        raise HTTPException(status_code=400, detail='Only students and teachers can be set as resigned')
+
+    user.is_active = False
+    user.user_status = 'resigned'
+    db.commit()
+    db.refresh(user)
+    role_th = 'นักเรียน' if user.role == 'student' else 'ครู'
+    return {'message': f'{role_th} {user.full_name} ลาออกแล้ว ข้อมูลยังคงอยู่ในระบบ', 'user': user}
+
+
+@router.patch("/{user_id}/reinstate")
+def reinstate_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user)
+):
+    """Admin-only: Reinstate a graduated or resigned user back to active."""
+    if getattr(current_user, 'role', None) != 'admin':
+        raise HTTPException(status_code=403, detail='Only admins can reinstate users')
+
+    user = db.query(UserModel).filter(UserModel.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail='User not found')
+    if user.user_status not in ('graduated', 'resigned'):
+        raise HTTPException(status_code=400, detail='เฉพาะผู้ที่เรียนจบหรือลาออกแล้วเท่านั้นที่สามารถกู้คืนได้')
+
+    user.is_active = True
+    user.user_status = 'active'
+    db.commit()
+    db.refresh(user)
+    return {'message': f'{user.full_name} ถูกกู้คืนกลับสู่วันเรียบร้อยแล้ว', 'user': user}
+
+
+@router.post("/bulk/graduate")
+def bulk_graduate_students(
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user)
+):
+    """Admin-only: Graduate ALL students at the school's graduation_grade_level."""
+    if getattr(current_user, 'role', None) != 'admin':
+        raise HTTPException(status_code=403, detail='Only admins can bulk graduate students')
+
+    from models.school import School as SchoolModel
+    school = db.query(SchoolModel).filter(SchoolModel.id == current_user.school_id).first()
+    if not school or not school.graduation_grade_level:
+        raise HTTPException(status_code=400, detail='ยังไม่ได้กำหนดชั้นจบในการตั้งค่าโรงเรียน')
+
+    students = db.query(UserModel).filter(
+        UserModel.school_id == current_user.school_id,
+        UserModel.role == 'student',
+        UserModel.grade_level == school.graduation_grade_level,
+        UserModel.user_status == 'active'
+    ).all()
+
+    if not students:
+        return {'message': f'ไม่พบนักเรียนชั้น {school.graduation_grade_level} ที่สามารถจบการศึกษาได้', 'graduated_count': 0, 'graduated': []}
+
+    graduated = []
+    for s in students:
+        s.is_active = False
+        s.user_status = 'graduated'
+        graduated.append({'id': s.id, 'username': s.username, 'full_name': s.full_name})
+
+    db.commit()
+    return {
+        'message': f'จบการศึกษานักเรียนชั้น {school.graduation_grade_level} จำนวน {len(graduated)} คน เรียบร้อยแล้ว',
+        'graduated_count': len(graduated),
+        'graduation_grade_level': school.graduation_grade_level,
+        'graduated': graduated
+    }
 
 
 

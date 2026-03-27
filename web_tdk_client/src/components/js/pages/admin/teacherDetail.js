@@ -21,7 +21,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import Loading from '../../Loading';
 import swalMessenger from '../owner/swalmessenger';
 import { API_BASE_URL } from '../../../endpoints';
-import { logout } from '../../../../utils/authUtils';
+import { fetchCurrentUser, hasSessionMarker, logout } from '../../../../utils/authUtils';
 
 function TeacherDetail() {
   const { id } = useParams();
@@ -41,10 +41,8 @@ function TeacherDetail() {
   };
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) { navigate('/signin'); return; }
-    fetch(`${API_BASE_URL}/users/me`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(res => res.json())
+    if (!hasSessionMarker()) { navigate('/signin'); return; }
+    fetchCurrentUser()
       .then(data => {
         if (data.role !== 'admin') {
           logout();
@@ -143,8 +141,8 @@ function TeacherDetail() {
   if (loading) return <Loading message="กำลังโหลดข้อมูลครู..." />;
 
   if (!teacher) return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
-      <div className="bg-white p-12 rounded-[3rem] shadow-xl shadow-slate-200 text-center max-w-md w-full animate-in zoom-in-95 duration-300">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/20 to-blue-50/20 flex items-center justify-center p-6">
+      <div className="bg-white/95 border border-white/70 p-12 rounded-[2rem] shadow-[0_24px_70px_-30px_rgba(15,23,42,0.32)] ring-1 ring-slate-200/50 text-center max-w-md w-full animate-in zoom-in-95 duration-300">
         <div className="w-24 h-24 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-6">
           <AlertCircle className="w-12 h-12" />
         </div>
@@ -162,7 +160,7 @@ function TeacherDetail() {
   );
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] p-4 sm:p-8 lg:p-12">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/20 to-blue-50/20 p-4 sm:p-8 lg:p-12">
       <div className="max-w-6xl mx-auto space-y-8">
         {/* Navigation & Actions */}
         <div className="flex items-center justify-between animate-in fade-in slide-in-from-top-4 duration-500">
@@ -182,7 +180,7 @@ function TeacherDetail() {
         </div>
 
         {/* Hero Profile Section */}
-        <div className="bg-white rounded-[3rem] p-8 sm:p-12 shadow-2xl shadow-slate-200/50 border border-slate-50 relative overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-700">
+        <div className="bg-white/90 backdrop-blur-xl rounded-[2rem] p-8 sm:p-12 shadow-[0_24px_70px_-30px_rgba(15,23,42,0.32)] ring-1 ring-slate-200/40 border border-white/70 relative overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-700">
           <div className="absolute top-0 right-0 w-64 h-64 bg-slate-50 rounded-full -mr-32 -mt-32 opacity-50 blur-3xl"></div>
           
           <div className="relative flex flex-col md:flex-row items-center md:items-start gap-10">
@@ -263,7 +261,7 @@ function TeacherDetail() {
               {subjects.map((s, idx) => (
                 <div 
                   key={s.id} 
-                  className="group bg-white p-8 rounded-[2.5rem] shadow-sm hover:shadow-xl hover:shadow-slate-200/50 transition-all duration-300 border border-slate-50 relative overflow-hidden"
+                  className="group bg-white/90 backdrop-blur-sm p-8 rounded-[2rem] shadow-[0_18px_55px_-34px_rgba(15,23,42,0.38)] hover:shadow-[0_24px_65px_-28px_rgba(15,23,42,0.42)] transition-all duration-300 border border-white/70 ring-1 ring-slate-200/30 relative overflow-hidden"
                   style={{ animationDelay: `${idx * 50}ms` }}
                 >
                   <div className="absolute top-0 right-0 p-4 opacity-0 group-hover:opacity-100 transition-opacity">

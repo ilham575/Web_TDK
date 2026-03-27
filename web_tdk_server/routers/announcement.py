@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from fastapi import APIRouter, HTTPException, Depends, status, UploadFile, File
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -6,34 +8,36 @@ from models.announcement import Announcement as AnnouncementModel
 from database.connection import get_db
 from routers.user import get_current_user  # keep existing
 from models.user import User as UserModel
-from fastapi.security import OAuth2PasswordBearer
-from utils.security import decode_access_token
 from sqlalchemy import or_, and_
 from datetime import datetime
 import os
 import shutil
 import uuid
+from utils.security import get_optional_current_user
 
 router = APIRouter(prefix="/announcements", tags=["announcements"])
 
 PDF_UPLOAD_DIR = "uploads/pdfs"
 os.makedirs(PDF_UPLOAD_DIR, exist_ok=True)
 
-# optional oauth2 scheme (no auto_error) for endpoints that accept anonymous access
-oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="/users/login", auto_error=False)
 
-def get_optional_current_user(token: str = Depends(oauth2_scheme_optional), db: Session = Depends(get_db)) -> Optional[UserModel]:
-    if not token:
+def _resolve_managed_pdf_path(file_path: str) -> Path | None:
+    if not file_path:
         return None
-    try:
-        payload = decode_access_token(token)
-        username = payload.get("sub")
-        if not username:
-            return None
-        user = db.query(UserModel).filter(UserModel.username == username).first()
-        return user
-    except Exception:
-        return None
+
+    upload_root = Path(PDF_UPLOAD_DIR).resolve()
+    candidate = Path(file_path.lstrip("/")).resolve()
+    if upload_root == candidate or upload_root in candidate.parents:
+        return candidate
+    return None
+
+
+def _sanitize_pdf_filename(filename: str) -> str:
+    original_name = Path(filename).name
+    sanitized = "".join(ch for ch in original_name if ch.isalnum() or ch in {"-", "_", "."})
+    if not sanitized.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Invalid PDF filename")
+    return sanitized
 
 @router.post("", response_model=Announcement, status_code=status.HTTP_201_CREATED)
 @router.post("/", response_model=Announcement, status_code=status.HTTP_201_CREATED)
@@ -257,15 +261,15 @@ def upload_announcement_pdf(
 
     # Delete old PDF if exists
     if announcement.pdf_file_path:
-        old_path = announcement.pdf_file_path.lstrip("/")
-        if os.path.exists(old_path):
+        old_path = _resolve_managed_pdf_path(announcement.pdf_file_path)
+        if old_path and old_path.exists():
             try:
-                os.remove(old_path)
+                old_path.unlink()
             except Exception:
                 pass
 
     # Save new PDF
-    safe_name = f"{uuid.uuid4().hex}_{file.filename.replace(' ', '_')}"
+    safe_name = f"{uuid.uuid4().hex}_{_sanitize_pdf_filename(file.filename)}"
     dest = os.path.join(PDF_UPLOAD_DIR, safe_name)
     with open(dest, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
@@ -290,10 +294,10 @@ def delete_announcement_pdf(
         raise HTTPException(status_code=403, detail="Not authorized")
 
     if announcement.pdf_file_path:
-        old_path = announcement.pdf_file_path.lstrip("/")
-        if os.path.exists(old_path):
+        old_path = _resolve_managed_pdf_path(announcement.pdf_file_path)
+        if old_path and old_path.exists():
             try:
-                os.remove(old_path)
+                old_path.unlink()
             except Exception:
                 pass
         announcement.pdf_file_path = None

@@ -15,7 +15,7 @@ body {
   background: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(255,255,255,0.75));
   color: #072a6b; /* darker text to match content */
   box-shadow: 0 -10px 30px rgba(16,24,40,0.06);
-  font-family: 'Inter', sans-serif;
+  font-family: var(--app-font-sans);
   border-top: 3px solid rgba(255,255,255,0.75);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);

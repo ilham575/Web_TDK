@@ -21,6 +21,7 @@ class UserUpdate(BaseModel):
     full_name: Optional[str] = None
     role: Optional[str] = None
     is_active: Optional[bool] = None
+    user_status: Optional[str] = None  # active, inactive, graduated, resigned
     school_id: Optional[int] = None
     grade_level: Optional[str] = None
 
@@ -32,6 +33,7 @@ class ChangePasswordRequest(BaseModel):
 class User(UserBase):
     id: int
     is_active: bool
+    user_status: str = 'active'  # active, inactive, graduated, resigned
     must_change_password: bool
     created_at: datetime
     updated_at: datetime
@@ -48,6 +50,11 @@ class Token(BaseModel):
     access_token: str
     token_type: str
     user_info: User
+    expires_at: Optional[datetime] = None
+
+
+class SessionInfo(BaseModel):
+    expires_at: datetime
 
 
 class PublicLoginUser(BaseModel):

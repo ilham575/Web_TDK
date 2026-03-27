@@ -74,7 +74,7 @@ function AcademicYearSetupModal({ schoolId, schoolName, onSetupComplete }) {
 
       <div className="relative w-full max-w-lg animate-in zoom-in-95 duration-500 max-h-[calc(100dvh-2rem)] overflow-hidden flex flex-col">
         {/* Main card */}
-        <div className="bg-white/95 backdrop-blur-2xl rounded-[2.5rem] shadow-2xl shadow-indigo-500/20 overflow-hidden flex flex-col flex-1 min-h-0">
+        <div className="bg-white/95 backdrop-blur-2xl border border-white/70 rounded-[2rem] shadow-[0_36px_100px_-34px_rgba(79,70,229,0.38)] ring-1 ring-white/30 overflow-hidden flex flex-col flex-1 min-h-0">
           {/* Header */}
           <div className="relative px-8 pt-10 pb-6 text-center shrink-0">
             <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500"></div>

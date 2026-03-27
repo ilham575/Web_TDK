@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, status
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, func
+from sqlalchemy.exc import IntegrityError
 from typing import List, Optional
 import json
 from datetime import datetime, timezone
@@ -21,12 +22,53 @@ from routers.user import get_current_user
 router = APIRouter(prefix="/homeroom", tags=["homeroom"])
 
 
+def _serialize_homeroom_conflict(db: Session, hr: HomeroomTeacherModel):
+    teacher = db.query(UserModel).filter(UserModel.id == hr.teacher_id).first()
+    classroom = None
+    if getattr(hr, 'classroom_id', None):
+        classroom = db.query(ClassroomModel).filter(ClassroomModel.id == hr.classroom_id).first()
+
+    return {
+        "id": hr.id,
+        "teacher_id": hr.teacher_id,
+        "teacher_name": teacher.full_name if teacher else None,
+        "teacher_email": teacher.email if teacher else None,
+        "classroom_id": getattr(hr, 'classroom_id', None),
+        "classroom_name": classroom.name if classroom else None,
+        "grade_level": hr.grade_level,
+        "school_id": hr.school_id,
+        "academic_year": hr.academic_year,
+        "semester": getattr(hr, 'semester', None),
+    }
+
+
+def _raise_homeroom_integrity_error(exc: IntegrityError):
+    message = str(getattr(exc, "orig", exc))
+    if 'uq_homeroom_teacher_school_year' in message:
+        raise HTTPException(
+            status_code=400,
+            detail="ฐานข้อมูลยังใช้ unique constraint แบบเก่า ทำให้ครู 1 คนยังถูกบังคับซ้ำได้แค่ต่อปีการศึกษาเดียว แม้คนละภาคเรียน กรุณารัน migration ปรับ homeroom indexes ก่อน"
+        )
+    if 'uq_homeroom_teacher_school_year_semester' in message:
+        raise HTTPException(
+            status_code=400,
+            detail="ครูท่านนี้มีการประจำชั้นอยู่แล้วในปีการศึกษาและภาคเรียนนี้"
+        )
+    if 'uq_homeroom_classroom_year' in message or 'uq_homeroom_classroom_year_semester' in message:
+        raise HTTPException(
+            status_code=400,
+            detail="ห้องเรียนนี้มีครูประจำชั้นในปีการศึกษาและภาคเรียนนี้แล้ว"
+        )
+    raise HTTPException(status_code=400, detail="ไม่สามารถบันทึกข้อมูลครูประจำชั้นได้ เนื่องจากชนกับข้อจำกัดข้อมูลซ้ำในฐานข้อมูล")
+
+
 @router.get("", response_model=List[HomeroomTeacherWithDetails])
 @router.get("/", response_model=List[HomeroomTeacherWithDetails])
 def get_homeroom_teachers(
     school_id: Optional[int] = None,
     classroom_id: Optional[int] = None,
     academic_year: Optional[str] = None,
+    semester: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: UserModel = Depends(get_current_user)
 ):
@@ -45,6 +87,8 @@ def get_homeroom_teachers(
     # Filter by academic_year if provided
     if academic_year:
         query = query.filter(HomeroomTeacherModel.academic_year == academic_year)
+    if semester is not None:
+        query = query.filter(HomeroomTeacherModel.semester == semester)
     
     homerooms = query.all()
 
@@ -78,6 +122,7 @@ def get_homeroom_teachers(
             classroom_id=getattr(hr, 'classroom_id', None),
             school_id=hr.school_id,
             academic_year=hr.academic_year,
+            semester=getattr(hr, 'semester', None),
             created_at=hr.created_at,
             updated_at=hr.updated_at,
             teacher_name=teacher.full_name if teacher else None,
@@ -145,6 +190,7 @@ def get_homeroom_teacher(
         classroom_id=getattr(hr, 'classroom_id', None),
         school_id=hr.school_id,
         academic_year=hr.academic_year,
+        semester=getattr(hr, 'semester', None),
         created_at=hr.created_at,
         updated_at=hr.updated_at,
         teacher_name=teacher.full_name if teacher else None,
@@ -186,40 +232,62 @@ def create_homeroom_teacher(
         # Check classroom is not already assigned for this academic year
         existing_classroom = db.query(HomeroomTeacherModel).filter(
             HomeroomTeacherModel.classroom_id == homeroom.classroom_id,
-            HomeroomTeacherModel.academic_year == homeroom.academic_year
+            HomeroomTeacherModel.academic_year == classroom.academic_year,
+            HomeroomTeacherModel.semester == classroom.semester
         ).first()
         if existing_classroom:
-            raise HTTPException(status_code=400, detail="ห้องเรียนนี้มีครูประจำชั้นในปีการศึกษานี้แล้ว")
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "code": "homeroom_classroom_conflict",
+                    "message": "ห้องเรียนนี้มีครูประจำชั้นในปีการศึกษาและภาคเรียนนี้แล้ว",
+                    "conflict": _serialize_homeroom_conflict(db, existing_classroom),
+                }
+            )
 
     # Check if this teacher is already assigned to another class for this school/year
     existing = db.query(HomeroomTeacherModel).filter(
         HomeroomTeacherModel.teacher_id == homeroom.teacher_id,
         HomeroomTeacherModel.school_id == homeroom.school_id,
-        HomeroomTeacherModel.academic_year == homeroom.academic_year
+        HomeroomTeacherModel.academic_year == (classroom.academic_year if classroom else homeroom.academic_year),
+        HomeroomTeacherModel.semester == (classroom.semester if classroom else homeroom.semester)
     ).first()
     
     if existing:
         raise HTTPException(
-            status_code=400, 
-            detail=f"ครูท่านนี้มีการประจำชั้นอยู่แล้ว (ชั้น {existing.grade_level}) ครูสามารถประจำชั้นได้เพียงแค่ 1 ห้องเท่านั้น"
+            status_code=400,
+            detail={
+                "code": "homeroom_teacher_conflict",
+                "message": f"ครูท่านนี้มีการประจำชั้นอยู่แล้ว (ชั้น {existing.grade_level}) ครูสามารถประจำชั้นได้เพียงแค่ 1 ห้องเท่านั้น",
+                "conflict": _serialize_homeroom_conflict(db, existing),
+            }
         )
     
     # Create homeroom teacher assignment
     # If classroom provided, prefer classroom.grade_level as assigned grade
     assigned_grade = homeroom.grade_level
+    assigned_year = homeroom.academic_year
+    assigned_semester = homeroom.semester
     if classroom and getattr(classroom, 'grade_level', None):
         assigned_grade = classroom.grade_level
+        assigned_year = classroom.academic_year
+        assigned_semester = classroom.semester
 
     db_homeroom = HomeroomTeacherModel(
         teacher_id=homeroom.teacher_id,
         grade_level=assigned_grade,
         classroom_id=getattr(homeroom, 'classroom_id', None),
         school_id=homeroom.school_id,
-        academic_year=homeroom.academic_year
+        academic_year=assigned_year,
+        semester=assigned_semester
     )
     
     db.add(db_homeroom)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        _raise_homeroom_integrity_error(exc)
     db.refresh(db_homeroom)
     
     return db_homeroom
@@ -257,14 +325,19 @@ def update_homeroom_teacher(
         existing = db.query(HomeroomTeacherModel).filter(
             HomeroomTeacherModel.teacher_id == new_teacher_id,
             HomeroomTeacherModel.school_id == hr.school_id,
-            HomeroomTeacherModel.academic_year == hr.academic_year,
+            HomeroomTeacherModel.academic_year == (update_data.get('academic_year') or hr.academic_year),
+            HomeroomTeacherModel.semester == (update_data.get('semester') if 'semester' in update_data else hr.semester),
             HomeroomTeacherModel.id != homeroom_id
         ).first()
         
         if existing:
             raise HTTPException(
                 status_code=400,
-                detail=f"ครูท่านนี้มีการประจำชั้นอยู่แล้ว (ชั้น {existing.grade_level}) ครูสามารถประจำชั้นได้เพียงแค่ 1 ห้องเท่านั้น"
+                detail={
+                    "code": "homeroom_teacher_conflict",
+                    "message": f"ครูท่านนี้มีการประจำชั้นอยู่แล้ว (ชั้น {existing.grade_level}) ครูสามารถประจำชั้นได้เพียงแค่ 1 ห้องเท่านั้น",
+                    "conflict": _serialize_homeroom_conflict(db, existing),
+                }
             )
 
     # If changing classroom, verify classroom exists and belongs to the same school
@@ -279,16 +352,32 @@ def update_homeroom_teacher(
         # Ensure new classroom is not already assigned in the same academic year
         existing_room = db.query(HomeroomTeacherModel).filter(
             HomeroomTeacherModel.classroom_id == update_data['classroom_id'],
-            HomeroomTeacherModel.academic_year == (update_data.get('academic_year') or hr.academic_year),
+            HomeroomTeacherModel.academic_year == new_classroom.academic_year,
+            HomeroomTeacherModel.semester == new_classroom.semester,
             HomeroomTeacherModel.id != homeroom_id
         ).first()
         if existing_room:
-            raise HTTPException(status_code=400, detail="ห้องเรียนนี้มีครูประจำชั้นในปีการศึกษานี้แล้ว")
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "code": "homeroom_classroom_conflict",
+                    "message": "ห้องเรียนนี้มีครูประจำชั้นในปีการศึกษาและภาคเรียนนี้แล้ว",
+                    "conflict": _serialize_homeroom_conflict(db, existing_room),
+                }
+            )
+
+        update_data['grade_level'] = new_classroom.grade_level
+        update_data['academic_year'] = new_classroom.academic_year
+        update_data['semester'] = new_classroom.semester
     
     for key, value in update_data.items():
         setattr(hr, key, value)
-    
-    db.commit()
+
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        _raise_homeroom_integrity_error(exc)
     db.refresh(hr)
     
     return hr
@@ -330,7 +419,8 @@ def copy_homeroom_assignments(
         child = db.query(ClassroomModel).filter(
             ClassroomModel.parent_classroom_id == a.classroom_id,
             ClassroomModel.academic_year == to_year,
-            ClassroomModel.school_id == school_id
+            ClassroomModel.school_id == school_id,
+            ClassroomModel.semester == getattr(a, 'semester', None)
         ).first()
 
         if not child:
@@ -340,7 +430,8 @@ def copy_homeroom_assignments(
         # Skip if classroom already has a homeroom assignment
         exists = db.query(HomeroomTeacherModel).filter(
             HomeroomTeacherModel.classroom_id == child.id,
-            HomeroomTeacherModel.academic_year == to_year
+            HomeroomTeacherModel.academic_year == to_year,
+            HomeroomTeacherModel.semester == child.semester
         ).first()
 
         if exists:
@@ -353,12 +444,17 @@ def copy_homeroom_assignments(
             classroom_id=child.id,
             grade_level=child.grade_level,
             school_id=school_id,
-            academic_year=to_year
+            academic_year=to_year,
+            semester=child.semester
         )
         db.add(new_hr)
         copied += 1
 
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        _raise_homeroom_integrity_error(exc)
 
     return { 'copied': copied, 'skipped': skipped, 'unmapped': unmapped }
 
@@ -388,6 +484,7 @@ def get_homeroom_by_grade(
     grade_level: str,
     school_id: Optional[int] = None,
     academic_year: Optional[str] = None,
+    semester: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: UserModel = Depends(get_current_user)
 ):
@@ -401,6 +498,8 @@ def get_homeroom_by_grade(
     
     if academic_year:
         query = query.filter(HomeroomTeacherModel.academic_year == academic_year)
+    if semester is not None:
+        query = query.filter(HomeroomTeacherModel.semester == semester)
     
     hr = query.first()
     
@@ -421,6 +520,7 @@ def get_homeroom_by_grade(
         grade_level=hr.grade_level,
         school_id=hr.school_id,
         academic_year=hr.academic_year,
+        semester=getattr(hr, 'semester', None),
         created_at=hr.created_at,
         updated_at=hr.updated_at,
         teacher_name=teacher.full_name if teacher else None,
@@ -526,12 +626,20 @@ def get_homeroom_summary(
             q_year = str(academic_year).strip()
             if not (hr_year == q_year or hr_year.endswith(q_year) or q_year.endswith(hr_year)):
                 continue
+        if semester is not None and getattr(hr, 'semester', None) not in (None, semester):
+            continue
 
-        # Get classrooms for this grade level
-        classrooms_query = db.query(ClassroomModel).filter(
-            ClassroomModel.school_id == hr.school_id,
-            ClassroomModel.grade_level == hr.grade_level
-        )
+        # Use the exact assigned classroom when available; otherwise fall back to grade-level matching.
+        if getattr(hr, 'classroom_id', None):
+            classrooms_query = db.query(ClassroomModel).filter(
+                ClassroomModel.id == hr.classroom_id,
+                ClassroomModel.school_id == hr.school_id
+            )
+        else:
+            classrooms_query = db.query(ClassroomModel).filter(
+                ClassroomModel.school_id == hr.school_id,
+                ClassroomModel.grade_level == hr.grade_level
+            )
         
         # If classrooms have academic_year, filter them too. Support short-year like "69" matching "2569".
         if academic_year and hasattr(ClassroomModel, 'academic_year'):
@@ -719,8 +827,13 @@ def get_homeroom_classroom_students(
     if current_user.role == 'teacher':
         homeroom = db.query(HomeroomTeacherModel).filter(
             HomeroomTeacherModel.teacher_id == current_user.id,
-            HomeroomTeacherModel.grade_level == classroom.grade_level,
-            HomeroomTeacherModel.school_id == classroom.school_id
+            HomeroomTeacherModel.school_id == classroom.school_id,
+            or_(
+                HomeroomTeacherModel.classroom_id == classroom.id,
+                HomeroomTeacherModel.grade_level == classroom.grade_level
+            ),
+            or_(HomeroomTeacherModel.academic_year == None, HomeroomTeacherModel.academic_year == classroom.academic_year),
+            or_(HomeroomTeacherModel.semester == None, HomeroomTeacherModel.semester == classroom.semester)
         ).first()
         
         if not homeroom:

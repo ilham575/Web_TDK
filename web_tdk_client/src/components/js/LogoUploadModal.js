@@ -80,12 +80,8 @@ function LogoUploadModal({ isOpen, schoolId, onClose, onSuccess, school }) {
     formData.append('file', selectedFile);
 
     try {
-      const token = localStorage.getItem('token');
       const res = await fetch(`${API_BASE_URL}/schools/${schoolId}/upload-logo`, {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
         body: formData,
       });
 
@@ -129,12 +125,10 @@ function LogoUploadModal({ isOpen, schoolId, onClose, onSuccess, school }) {
     if (!schoolId) return;
     setUploading(true);
     try {
-      const token = localStorage.getItem('token');
       const res = await fetch(`${API_BASE_URL}/schools/${schoolId}`, {
         method: 'PATCH',
         headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({ logo_url: null }),
       });

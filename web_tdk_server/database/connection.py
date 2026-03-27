@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import inspect
@@ -42,8 +42,28 @@ def table_exists(table_name):
 
 def create_all_tables():
     # Import models to register them with Base
-    from models import user, school, announcement, document, subject, subject_student, attendance, grade, schedule, admin_request, evaluation, semester_period
+    from models import user, school, announcement, document, subject, subject_student, attendance, grade, schedule, admin_request, evaluation, semester_period, homeroom, absence
     Base.metadata.create_all(bind=engine)
+    migrate_homeroom_schema()
+    migrate_user_status_schema()
+
+def migrate_user_status_schema():
+    """Add user_status column to users table if it doesn't exist."""
+    inspector = inspect(engine)
+    if "users" not in inspector.get_table_names():
+        return
+    column_names = {col["name"] for col in inspector.get_columns("users")}
+    if "user_status" not in column_names:
+        with engine.connect() as conn:
+            try:
+                conn.execute(text("ALTER TABLE users ADD COLUMN user_status VARCHAR(20) NOT NULL DEFAULT 'active'"))
+                conn.commit()
+                # Sync existing inactive users
+                conn.execute(text("UPDATE users SET user_status = 'inactive' WHERE is_active = 0 AND user_status = 'active'"))
+                conn.commit()
+                print("✓ Added column user_status to users")
+            except Exception as e:
+                print(f"migrate_user_status_schema: {e}")
 
 def migrate_evaluation_schema():
     """Update evaluations table schema"""
@@ -62,6 +82,65 @@ def migrate_evaluation_schema():
             print("✓ Added column semester to evaluations")
         except Exception:
             pass
+
+
+def migrate_homeroom_schema():
+    """Update homeroom schema to support semester-aware assignments."""
+    inspector = inspect(engine)
+    if "homeroom_teachers" not in inspector.get_table_names():
+        return
+
+    column_names = {column["name"] for column in inspector.get_columns("homeroom_teachers")}
+    dialect = engine.dialect.name
+
+    with engine.connect() as conn:
+        if "semester" not in column_names:
+            try:
+                conn.execute(text("ALTER TABLE homeroom_teachers ADD COLUMN semester INTEGER NULL"))
+                conn.commit()
+                print("✓ Added column semester to homeroom_teachers")
+            except Exception:
+                pass
+
+        try:
+            conn.execute(text(
+                """
+                UPDATE homeroom_teachers AS hr
+                JOIN classrooms AS c ON c.id = hr.classroom_id
+                SET hr.semester = c.semester
+                WHERE hr.classroom_id IS NOT NULL AND hr.semester IS NULL
+                """
+            ))
+            conn.commit()
+        except Exception:
+            pass
+
+        old_indexes = [
+            "uq_homeroom_teacher_school_year",
+            "uq_homeroom_classroom_year",
+        ]
+        for index_name in old_indexes:
+            try:
+                if dialect == "sqlite":
+                    conn.execute(text(f"DROP INDEX IF EXISTS {index_name}"))
+                else:
+                    conn.execute(text(f"ALTER TABLE homeroom_teachers DROP INDEX {index_name}"))
+                conn.commit()
+                print(f"✓ Dropped legacy homeroom index {index_name}")
+            except Exception:
+                pass
+
+        new_indexes = {
+            "uq_homeroom_teacher_school_year_semester": "CREATE UNIQUE INDEX uq_homeroom_teacher_school_year_semester ON homeroom_teachers (teacher_id, school_id, academic_year, semester)",
+            "uq_homeroom_classroom_year_semester": "CREATE UNIQUE INDEX uq_homeroom_classroom_year_semester ON homeroom_teachers (classroom_id, academic_year, semester)",
+        }
+        for index_name, statement in new_indexes.items():
+            try:
+                conn.execute(text(statement))
+                conn.commit()
+                print(f"✓ Added homeroom index {index_name}")
+            except Exception:
+                pass
 
         try:
             # Try to drop old constraint

@@ -8,7 +8,6 @@ export default function AnnouncementWatcher() {
   useEffect(() => {
     let mounted = true;
     const schoolId = localStorage.getItem('school_id');
-    const token = localStorage.getItem('token');
     if (!schoolId) return;
 
     const getLatestId = (items) => {
@@ -18,9 +17,7 @@ export default function AnnouncementWatcher() {
 
     const checkNow = async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/announcements/?school_id=${schoolId}`, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {}
-        });
+        const res = await fetch(`${API_BASE_URL}/announcements/?school_id=${schoolId}`);
         if (!res.ok) return;
         const data = await res.json();
         const latest = getLatestId(data);
@@ -56,9 +53,7 @@ export default function AnnouncementWatcher() {
     // initial set if not present
     (async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/announcements/?school_id=${schoolId}`, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {}
-        });
+        const res = await fetch(`${API_BASE_URL}/announcements/?school_id=${schoolId}`);
         if (!res.ok) return;
         const data = await res.json();
         const latest = getLatestId(data);

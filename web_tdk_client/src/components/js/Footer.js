@@ -1,26 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { API_BASE_URL } from '../endpoints';
 import { logout } from '../../utils/authUtils';
 import { Shield, Clock, AlertTriangle } from 'lucide-react';
-
-function decodeToken(token) {
-  try {
-    const parts = token.split('.');
-    if (parts.length !== 3) return null;
-    const payload = parts[1];
-    const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
-    const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
-    const decoded = atob(padded);
-    return JSON.parse(decodeURIComponent(escape(decoded)));
-  } catch (e) {
-    try {
-      const parts = token.split('.');
-      return JSON.parse(atob(parts[1]));
-    } catch (e2) {
-      return null;
-    }
-  }
-}
 
 const formatDuration = (seconds) => {
   if (seconds <= 0) return '00:00:00';
@@ -36,36 +18,73 @@ export default function Footer() {
   const [timeLeft, setTimeLeft] = useState(null);
   const [expired, setExpired] = useState(false);
   const [shouldRender, setShouldRender] = useState(false);
-  const tokenRef = React.useRef(null);
   const expRef = React.useRef(null);
   const logoutExecutedRef = React.useRef(false);
+  const sessionFetchRef = React.useRef(false);
+
+  const resetFooterState = React.useCallback(() => {
+    expRef.current = null;
+    setTimeLeft(null);
+    setExpired(false);
+    setShouldRender(false);
+    logoutExecutedRef.current = false;
+  }, []);
+
+  const fetchSessionInfo = React.useCallback(async () => {
+    if (sessionFetchRef.current) {
+      return;
+    }
+
+    sessionFetchRef.current = true;
+    try {
+      const response = await fetch(`${API_BASE_URL}/users/session`, {
+        credentials: 'include',
+      });
+
+      if (response.status === 401) {
+        resetFooterState();
+        return;
+      }
+
+      if (!response.ok) {
+        return;
+      }
+
+      const data = await response.json();
+      const expiresAtMs = Date.parse(data.expires_at);
+      if (Number.isNaN(expiresAtMs)) {
+        expRef.current = null;
+        setTimeLeft(null);
+        return;
+      }
+
+      expRef.current = Math.floor(expiresAtMs / 1000);
+      setShouldRender(true);
+      logoutExecutedRef.current = false;
+    } catch (error) {
+      console.error('Failed to fetch session info', error);
+    } finally {
+      sessionFetchRef.current = false;
+    }
+  }, [resetFooterState]);
 
   useEffect(() => {
     const update = () => {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        tokenRef.current = null;
-        expRef.current = null;
-        setTimeLeft(null);
-        setExpired(false);
-        setShouldRender(false);
+      const sessionMarker = localStorage.getItem('token');
+      if (!sessionMarker) {
+        resetFooterState();
         return;
       }
 
       setShouldRender(true);
 
-      if (tokenRef.current !== token) {
-        tokenRef.current = token;
-        const payload = decodeToken(token);
-        const exp = payload && (payload.exp || payload.expires_at || payload.expire);
-        expRef.current = exp || null;
-      }
-
       if (!expRef.current) {
         setTimeLeft(null);
         setExpired(false);
+        void fetchSessionInfo();
         return;
       }
+
       const now = Math.floor(Date.now() / 1000);
       const rem = Math.max(0, expRef.current - now);
       setTimeLeft(rem);
@@ -82,7 +101,7 @@ export default function Footer() {
     update();
     const id = setInterval(update, 1000);
     return () => clearInterval(id);
-  }, [navigate]);
+  }, [fetchSessionInfo, navigate, resetFooterState]);
 
   const handleTokenExpired = () => {
     logout();

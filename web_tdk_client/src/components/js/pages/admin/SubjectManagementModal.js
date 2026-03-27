@@ -107,10 +107,10 @@ function SubjectManagementModal({ isOpen, onClose, onSave, subject, currentSchoo
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-6 backdrop-blur-sm bg-slate-900/40 animate-in fade-in duration-300">
-      <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl shadow-slate-900/20 overflow-hidden flex flex-col animate-in zoom-in-95 duration-300 max-h-[calc(100dvh-2rem)]">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 bg-slate-950/55 backdrop-blur-md animate-in fade-in duration-300">
+      <div className="bg-white/95 border border-white/70 w-full max-w-lg rounded-[2rem] shadow-[0_32px_90px_-28px_rgba(15,23,42,0.42)] ring-1 ring-slate-200/60 overflow-hidden flex flex-col animate-in zoom-in-95 duration-300 max-h-[calc(100dvh-2rem)]">
         {/* Header */}
-        <div className="px-8 py-6 border-b border-slate-50 flex items-center justify-between bg-white sticky top-0 z-10">
+        <div className="px-8 py-6 border-b border-slate-100/80 flex items-center justify-between bg-gradient-to-r from-slate-50 via-white to-indigo-50/50 sticky top-0 z-10">
           <div className="flex items-center gap-3">
             <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${currentSubject ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'}`}>
               <BookOpen className="w-5 h-5" />
@@ -134,7 +134,7 @@ function SubjectManagementModal({ isOpen, onClose, onSave, subject, currentSchoo
 
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
           {/* Body */}
-          <div className="p-8 space-y-6 flex-1 overflow-y-auto">
+          <div className="p-8 space-y-6 flex-1 overflow-y-auto bg-gradient-to-b from-white via-slate-50/35 to-indigo-50/20">
             <div className="space-y-4">
               <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1 px-1">
                 <Info className="w-3.5 h-3.5" />

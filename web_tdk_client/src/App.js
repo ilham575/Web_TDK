@@ -25,29 +25,63 @@ import EvaluationsPage from './components/js/pages/teacher/evaluations';
 import ProfilePage from './components/js/pages/profile';
 import OwnerPage from './components/js/pages/owner/home';
 import Footer from './components/js/Footer';
+import { fetchSessionInfo, hasSessionMarker, logout } from './utils/authUtils';
 import { setSchoolFavicon, resetFavicon } from './utils/faviconUtils';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
-// ฟังก์ชั่นตรวจสอบ login
-function isLoggedIn() {
-  // ตัวอย่าง: ตรวจสอบ token ใน localStorage
-  return !!localStorage.getItem('token');
-}
-
 // Component สำหรับตรวจสอบ login
 function RequireAuth({ children }) {
   const navigate = useNavigate();
+  const [isChecking, setIsChecking] = React.useState(true);
+  const [isAuthenticated, setIsAuthenticated] = React.useState(false);
 
   React.useEffect(() => {
-    if (!isLoggedIn()) {
-      navigate('/signin', { replace: true });
-    }
+    let isCancelled = false;
+
+    const checkSession = async () => {
+      if (!hasSessionMarker()) {
+        if (!isCancelled) {
+          setIsAuthenticated(false);
+          setIsChecking(false);
+          navigate('/signin', { replace: true });
+        }
+        return;
+      }
+
+      try {
+        await fetchSessionInfo();
+        if (!isCancelled) {
+          setIsAuthenticated(true);
+        }
+      } catch (error) {
+        logout();
+        if (!isCancelled) {
+          setIsAuthenticated(false);
+          navigate('/signin', { replace: true });
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsChecking(false);
+        }
+      }
+    };
+
+    checkSession();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [navigate]);
 
-  if (!isLoggedIn()) {
+  if (isChecking) {
     return null;
   }
+
+  if (!isAuthenticated) {
+    return null;
+  }
+
   return children;
 }
 

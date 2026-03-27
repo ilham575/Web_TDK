@@ -84,17 +84,18 @@ function PageHeader({
 
   const themeColors = {
     owner: 'from-emerald-600 to-teal-600',
-    admin: 'from-emerald-600 to-teal-600',
+    admin: 'from-indigo-700 via-violet-700 to-fuchsia-700',
     teacher: 'from-emerald-600 to-emerald-500',
     student: 'from-indigo-600 to-blue-600'
   };
 
   const currentTheme = themeColors[role] || themeColors.teacher;
+  const isAdmin = role === 'admin';
   const isStudent = role === 'student';
   const isTeacher = role === 'teacher';
 
   return (
-    <div className={`relative mb-8 rounded-3xl bg-gradient-to-r ${currentTheme} p-6 sm:p-8 shadow-xl shadow-emerald-200/50 overflow-visible z-[100]`}>
+    <div className={`relative mb-8 ${isAdmin ? 'rounded-[2rem] border border-white/20 shadow-[0_28px_80px_-32px_rgba(79,70,229,0.52)]' : 'rounded-3xl shadow-xl shadow-emerald-200/50'} bg-gradient-to-r ${currentTheme} p-6 sm:p-8 overflow-visible z-[100]`}>
       {/* Decorative Background Elements */}
       {/* <div className="absolute top-0 right-0 -mr-20 -mt-20 w-64 h-64 bg-white/10 rounded-full blur-3xl" /> */}
       <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-48 h-48 bg-black/5 rounded-full blur-2xl" />
@@ -160,34 +161,35 @@ function PageHeader({
             {extraActions}
             {rightContent}
             
-            <div className="relative z-50">
+            <div className={`relative w-full sm:w-auto ${showHeaderMenu ? 'z-[100]' : 'z-50'}`}>
               <button 
                 onClick={() => setShowHeaderMenu(!showHeaderMenu)}
-                className="flex items-center gap-2 px-4 py-2.5 bg-white text-emerald-700 rounded-xl font-bold text-sm shadow-md hover:bg-emerald-50 transition-all active:scale-95"
+                className={`flex w-full sm:w-auto items-center justify-center gap-2 px-4 py-2.5 ${isAdmin ? 'bg-white/95 text-indigo-700 hover:bg-indigo-50 shadow-lg shadow-indigo-900/10' : 'bg-white text-emerald-700 hover:bg-emerald-50 shadow-md'} rounded-xl font-bold text-sm transition-all active:scale-95`}
               >
                 <User className="w-4 h-4" />
                 <span className="hidden sm:inline">{t('common.manageProfile') || 'โปรไฟล์'}</span>
+                <span className="sm:hidden">{t('common.manageProfile') || 'จัดการโปรไฟล์'}</span>
                 <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${showHeaderMenu ? 'rotate-180' : ''}`} />
               </button>
 
               {showHeaderMenu && (
-                <div className="absolute right-0 mt-2 w-64 sm:w-56 max-w-[calc(100vw-2rem)] bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
-                  <div className="p-3 border-b border-slate-50 bg-slate-50/50">
+                <div className={`mt-3 w-full sm:absolute sm:right-0 sm:mt-2 sm:w-56 max-w-[calc(100vw-2rem)] ${isAdmin ? 'bg-white/95 border-white/70 ring-1 ring-slate-200/60 shadow-[0_28px_70px_-30px_rgba(15,23,42,0.38)]' : 'bg-white border border-slate-100 shadow-2xl'} rounded-2xl overflow-hidden z-[101] animate-in fade-in slide-in-from-top-2 duration-200`}>
+                  <div className={`p-3 border-b ${isAdmin ? 'border-slate-100/80 bg-gradient-to-r from-slate-50 via-white to-indigo-50/60' : 'border-slate-50 bg-slate-50/50'}`}>
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 mb-1">บัญชีผู้ใช้</p>
-                    <p className="text-sm font-bold text-slate-700 px-2 truncate">{currentUser?.full_name || currentUser?.name || currentUser?.username || currentUser?.email}</p>
+                    <p className="text-sm font-bold text-slate-700 px-2 truncate font-display">{currentUser?.full_name || currentUser?.name || currentUser?.username || currentUser?.email}</p>
                   </div>
                   <div className="p-2 space-y-1">
                     {extraMenuActions}
                     <button 
                       onClick={handleProfile}
-                      className="w-full flex items-center gap-3 px-3 py-2 text-sm font-bold text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 rounded-xl transition-colors"
+                      className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-bold ${isAdmin ? 'text-indigo-600 hover:bg-indigo-50' : 'text-slate-600 hover:bg-emerald-50 hover:text-emerald-700'} rounded-xl transition-colors font-display`}
                     >
-                      <User className="w-4 h-4" />
+                      <Settings className="w-4 h-4" />
                       {t('common.manageProfile') || 'แก้ไขข้อมูลส่วนตัว'}
                     </button>
                     <button 
                       onClick={handleSignout}
-                      className="w-full flex items-center gap-3 px-3 py-2 text-sm font-bold text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"
+                      className="w-full flex items-center gap-3 px-3 py-2 text-sm font-bold text-rose-600 hover:bg-rose-50 rounded-xl transition-colors font-display"
                     >
                       <LogOut className="w-4 h-4" />
                       {t('auth.logout') || 'ออกจากระบบ'}

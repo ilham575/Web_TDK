@@ -111,10 +111,10 @@ function ClassroomSubjectManagementModal({ isOpen, onClose, onSave, subject, cla
   if (!isOpen || !subject) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-6 backdrop-blur-sm bg-slate-900/40 animate-in fade-in duration-300">
-      <div className="bg-white w-full max-w-xl rounded-[2.5rem] shadow-2xl shadow-slate-900/20 overflow-hidden flex flex-col animate-in zoom-in-95 duration-300 max-h-[calc(100dvh-2rem)]">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 bg-slate-950/55 backdrop-blur-md animate-in fade-in duration-300">
+      <div className="bg-white/95 border border-white/70 w-full max-w-xl rounded-[2rem] shadow-[0_32px_90px_-28px_rgba(15,23,42,0.42)] ring-1 ring-slate-200/60 overflow-hidden flex flex-col animate-in zoom-in-95 duration-300 max-h-[calc(100dvh-2rem)]">
         {/* Header */}
-        <div className="px-8 py-6 border-b border-slate-50 flex items-center justify-between bg-white sticky top-0 z-10">
+        <div className="px-8 py-6 border-b border-slate-100/80 flex items-center justify-between bg-gradient-to-r from-slate-50 via-white to-indigo-50/50 sticky top-0 z-10">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center">
               <Building2 className="w-5 h-5" />
@@ -140,7 +140,7 @@ function ClassroomSubjectManagementModal({ isOpen, onClose, onSave, subject, cla
           </button>
         </div>
 
-        <div className="p-8 overflow-y-auto space-y-8 flex-1">
+        <div className="p-8 overflow-y-auto space-y-8 flex-1 bg-gradient-to-b from-white via-slate-50/35 to-indigo-50/20">
           {/* Current Classrooms */}
           <div>
             <h4 className="flex items-center gap-2 text-xs font-black text-slate-400 uppercase tracking-widest mb-4">

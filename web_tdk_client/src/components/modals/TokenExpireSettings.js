@@ -22,10 +22,7 @@ function TokenExpireSettings({ currentUser, schoolId }) {
     if (!schoolId) return;
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE_URL}/owner/schools/${schoolId}/token-settings`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      const res = await fetch(`${API_BASE_URL}/owner/schools/${schoolId}/token-settings`);
       if (res.ok) {
         const data = await res.json();
         // keep owner in state for read-only display, but owner is managed in code only
@@ -41,7 +38,6 @@ function TokenExpireSettings({ currentUser, schoolId }) {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const token = localStorage.getItem('token');
       // Only send editable roles to the API — do NOT send `owner` (owner is configured in code only)
       const payload = {
         admin: settings.admin,
@@ -52,7 +48,6 @@ function TokenExpireSettings({ currentUser, schoolId }) {
       const res = await fetch(`${API_BASE_URL}/owner/schools/${schoolId}/token-settings`, {
         method: 'PUT',
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(payload)

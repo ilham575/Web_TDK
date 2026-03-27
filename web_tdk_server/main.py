@@ -1,5 +1,7 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+import secrets
+
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.security import OAuth2PasswordBearer
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -137,12 +139,23 @@ app.include_router(evaluation_router)
 app.include_router(semester_period_router)
 app.include_router(school_access_control_router)
 
+
+def require_bootstrap_access(request: Request):
+    bootstrap_token = os.getenv("BOOTSTRAP_ADMIN_TOKEN")
+    if not bootstrap_token:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    provided_token = request.headers.get("X-Bootstrap-Token")
+    if not provided_token or not secrets.compare_digest(provided_token, bootstrap_token):
+        raise HTTPException(status_code=403, detail="Bootstrap access denied")
+
 @app.get("/", tags=["root"])
 def read_root():
     return {"message": "Hello, FastAPI!"}
 @app.post("/init-database", tags=["admin"])
-def initialize_database():
+def initialize_database(request: Request):
     """Initialize database tables - call this endpoint once after deployment"""
+    require_bootstrap_access(request)
     try:
         from database.connection import create_all_tables
         create_all_tables()
@@ -152,17 +165,21 @@ def initialize_database():
         return {"status": "error", "message": str(e), "traceback": traceback.format_exc()}
 
 @app.post("/create-owner-user", tags=["admin"])
-def create_owner_user():
+def create_owner_user(request: Request):
     """Create default owner user - run once after init-database"""
+    require_bootstrap_access(request)
     try:
         from database.connection import SessionLocal
         from models.user import User
-        from utils.security import hash_password, verify_password
+        from utils.security import hash_password
         
         db = SessionLocal()
+        owner_username = os.getenv("OWNER_BOOTSTRAP_USERNAME", "owner")
+        owner_email = os.getenv("OWNER_BOOTSTRAP_EMAIL", "owner@example.com")
+        owner_full_name = os.getenv("OWNER_BOOTSTRAP_FULL_NAME", "System Owner")
         
         # Check if owner already exists
-        existing = db.query(User).filter(User.username == "owner").first()
+        existing = db.query(User).filter(User.username == owner_username).first()
         if existing:
             return {
                 "status": "info",
@@ -172,11 +189,12 @@ def create_owner_user():
             }
         
         # Create owner user
-        hashed = hash_password("owner123")
+        temp_password = os.getenv("OWNER_INITIAL_PASSWORD") or secrets.token_urlsafe(16)
+        hashed = hash_password(temp_password)
         owner = User(
-            username="owner",
-            email="owner@example.com",
-            full_name="System Owner",
+            username=owner_username,
+            email=owner_email,
+            full_name=owner_full_name,
             hashed_password=hashed,
             role="owner",
             must_change_password=True
@@ -188,8 +206,8 @@ def create_owner_user():
         return {
             "status": "success",
             "message": "Owner user created successfully!",
-            "username": "owner",
-            "temporary_password": "owner123",
+            "username": owner.username,
+            "temporary_password": temp_password,
             "warning": "IMPORTANT: Owner must change this temporary password on first login!"
         }
     except Exception as e:

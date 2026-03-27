@@ -198,7 +198,7 @@ function SummaryCompletionTab({ semesterPeriods = [], selectedYear, selectedSeme
   };
 
   return (
-    <div className="bg-white/80 backdrop-blur-xl rounded-3xl border border-white/60 shadow-xl shadow-slate-200/50 overflow-hidden">
+    <div className="bg-white/85 backdrop-blur-xl rounded-[2rem] border border-white/70 shadow-[0_24px_70px_-30px_rgba(15,23,42,0.32)] ring-1 ring-slate-200/40 overflow-hidden">
       <div className="px-8 py-6 bg-gradient-to-r from-emerald-50 via-teal-50 to-cyan-50 border-b border-emerald-100 flex flex-wrap items-center justify-between gap-4">
         <div>
           <h2 className="flex items-center gap-3 text-2xl font-extrabold text-slate-800">

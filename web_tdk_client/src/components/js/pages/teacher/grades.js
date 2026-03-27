@@ -121,8 +121,7 @@ function GradesPage(){
   useEffect(()=>{
     const load = async ()=>{
       try{
-        const token = localStorage.getItem('token');
-        const res = await fetch(`${API_BASE_URL}/subjects/${id}/students`, { headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
+        const res = await fetch(`${API_BASE_URL}/subjects/${id}/students`);
         const data = await res.json();
         if (Array.isArray(data)){
           setStudents(data);
@@ -183,9 +182,7 @@ function GradesPage(){
   useEffect(() => {
     const loadSubject = async () => {
       try {
-        const token = localStorage.getItem('token');
-        const headers = { ...(token?{Authorization:`Bearer ${token}`}:{}) };
-        const res = await fetch(`${API_BASE_URL}/subjects/${id}`, { headers });
+        const res = await fetch(`${API_BASE_URL}/subjects/${id}`);
         if (res.ok) {
           const data = await res.json();
           const name = data.name || data.title || data.subject_name || '';
@@ -214,10 +211,9 @@ function GradesPage(){
   const findClassroomIdByLabel = async (label) => {
     if (!label) return null;
     try {
-      const token = localStorage.getItem('token');
       const schoolId = localStorage.getItem('school_id');
       if (!schoolId) return null;
-      const res = await fetch(`${API_BASE_URL}/classrooms/list/${schoolId}`, { headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
+      const res = await fetch(`${API_BASE_URL}/classrooms/list/${schoolId}`);
       if (!res.ok) return null;
       const data = await res.json();
       if (!Array.isArray(data)) return null;
@@ -239,8 +235,6 @@ function GradesPage(){
   const refreshAssignmentsAndGrades = async ()=>{
       try{
         if (classes.length === 0) return;
-        
-        const token = localStorage.getItem('token');
         let classroomIdToFilter = null;
         if (classes.length === 1 && classes[0].id) {
           classroomIdToFilter = classes[0].id;
@@ -266,7 +260,7 @@ function GradesPage(){
         }
         
         const assignmentUrl = `${API_BASE_URL}/grades/assignments/${id}${classroomIdToFilter ? `?classroom_id=${classroomIdToFilter}` : ''}`;
-        const assignmentsRes = await fetch(assignmentUrl, { headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
+        const assignmentsRes = await fetch(assignmentUrl);
         if (!assignmentsRes.ok) return;
         const assignmentsData = await assignmentsRes.json();
         const assignmentList = assignmentsData
@@ -281,7 +275,7 @@ function GradesPage(){
         setAssignments(assignmentList);
         
         const gradesUrl = `${API_BASE_URL}/grades/?subject_id=${id}${classroomIdToFilter ? `&classroom_id=${classroomIdToFilter}` : ''}`;
-        const gradesRes = await fetch(gradesUrl, { headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
+        const gradesRes = await fetch(gradesUrl);
         if (!gradesRes.ok) return;
         const gradesData = await gradesRes.json();
         
@@ -364,7 +358,6 @@ function GradesPage(){
     }
 
     try{
-      const token = localStorage.getItem('token');
       const selectedAssignmentObjForSave = assignments.find(a => a.id === selectedAssignmentId);
       const payload = {
         subject_id: Number(id),
@@ -376,7 +369,7 @@ function GradesPage(){
           grade: grade ? Number(grade) : null
         }))
       };
-      const res = await fetch(`${API_BASE_URL}/grades/bulk`, { method:'POST', headers:{ 'Content-Type':'application/json', ...(token?{Authorization:`Bearer ${token}`}:{}) }, body: JSON.stringify(payload)});
+      const res = await fetch(`${API_BASE_URL}/grades/bulk`, { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(payload)});
       if(!res.ok){ const d = await res.json().catch(()=>({})); toast.error(d.detail || 'Save failed'); } 
       else { toast.success('บันทึกคะแนนเรียบร้อยแล้ว'); }
     }catch(err){ toast.error('เกิดข้อผิดพลาดในการบันทึก'); }
@@ -428,7 +421,6 @@ function GradesPage(){
     }
 
     try {
-      const token = localStorage.getItem('token');
       const payloadClassroomId = selectedClassId || resolvedClassroomId || null;
       const payload = {
         title: newAssignmentTitle.trim(),
@@ -439,8 +431,7 @@ function GradesPage(){
       const res = await fetch(`${API_BASE_URL}/grades/assignments/${id}`, { 
         method: 'POST', 
         headers: { 
-          'Content-Type': 'application/json', 
-          ...(token ? { Authorization: `Bearer ${token}` } : {}) 
+          'Content-Type': 'application/json'
         }, 
         body: JSON.stringify(payload)
       });
@@ -506,7 +497,6 @@ function GradesPage(){
     }
 
     try {
-      const token = localStorage.getItem('token');
       const payload = {
         title: editAssignmentTitle.trim(),
         max_score: editAssignmentMaxScore,
@@ -517,8 +507,7 @@ function GradesPage(){
       const res = await fetch(editUrl, { 
         method: 'PUT', 
         headers: { 
-          'Content-Type': 'application/json', 
-          ...(token ? { Authorization: `Bearer ${token}` } : {}) 
+          'Content-Type': 'application/json'
         }, 
         body: JSON.stringify(payload)
       });
@@ -569,10 +558,8 @@ function GradesPage(){
 
   const confirmDeleteAssignment = async () => {
     try {
-      const token = localStorage.getItem('token');
       const res = await fetch(`${API_BASE_URL}/grades/assignments/${id}/${deletingAssignment.title}${deletingAssignment.classroom_id ? `?classroom_id=${deletingAssignment.classroom_id}` : ''}`, { 
-        method: 'DELETE', 
-        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
+        method: 'DELETE'
       });
       
       if (!res.ok) {
@@ -681,7 +668,7 @@ function GradesPage(){
     : 'All Classes';
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-20 font-sans selection:bg-emerald-100 selection:text-emerald-900">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-teal-50/20 to-emerald-50/20 pb-20 font-sans selection:bg-emerald-100 selection:text-emerald-900">
       {/* Top Navigation Bar */}
       <div className="bg-white/80 backdrop-blur-md border-b border-slate-200/60 sticky top-0 z-30 transition-all duration-300">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

@@ -192,12 +192,12 @@ const AddStudentsModal = ({
   const isLoading = (classroomStep === 'add_students' && loadingAvailable) || (classroomStep === 'view_students' && loadingClassroomStudents);
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6">
       <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={onClose} />
       
-      <div className="relative w-full max-w-4xl max-h-[calc(100dvh-2rem)] bg-white rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-300">
+      <div className="relative w-full max-w-4xl max-h-[calc(100dvh-2rem)] bg-white/95 border border-white/70 rounded-[2rem] shadow-[0_32px_90px_-28px_rgba(15,23,42,0.42)] ring-1 ring-slate-200/60 overflow-hidden flex flex-col animate-in zoom-in-95 duration-300">
         {/* Header */}
-        <div className="px-8 py-6 border-b border-slate-50 flex items-center justify-between bg-gradient-to-r from-slate-50 to-white">
+        <div className="px-8 py-6 border-b border-slate-100/80 flex items-center justify-between bg-gradient-to-r from-slate-50 via-white to-indigo-50/50">
           <div className="flex items-center gap-4">
             <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-lg ${isViewMode ? 'bg-blue-500 shadow-blue-200' : 'bg-emerald-500 shadow-emerald-200'}`}>
               {isViewMode ? <User className="w-6 h-6" /> : <Plus className="w-6 h-6" />}
@@ -229,7 +229,7 @@ const AddStudentsModal = ({
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-hidden flex flex-col p-8">
+        <div className="flex-1 overflow-hidden flex flex-col p-8 bg-gradient-to-b from-white via-slate-50/35 to-indigo-50/20">
           {isLoading ? (
             <div className="flex-1 flex flex-col items-center justify-center gap-4 py-20">
               <Loader2 className="w-12 h-12 text-emerald-500 animate-spin" />

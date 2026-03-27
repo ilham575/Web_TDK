@@ -8,6 +8,7 @@ import FirstVisitOnboarding, {
   shouldShowOnboarding
 } from '../../FirstVisitOnboarding';
 import { setSchoolFavicon } from '../../../../utils/faviconUtils';
+import { AUTH_MARKER } from '../../../../utils/authUtils';
 
 function SigninPage() {
   // Login type selection ('admin', 'teacher', or 'student')
@@ -348,13 +349,14 @@ function SigninPage() {
       const data = await res.json();
       
       if (!res.ok) {
+        localStorage.removeItem('token');
         setError(data.detail || 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
         toast.error(data.detail || 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง', {
           position: "top-center",
           theme: "colored"
         });
       } else {
-        localStorage.setItem('token', data.access_token);
+        localStorage.setItem('token', AUTH_MARKER);
         const detectedSchoolId = data.user_info?.school_id || data.user_info?.school?.id || data.school_id || data.school?.id || null;
         if (detectedSchoolId) localStorage.setItem('school_id', String(detectedSchoolId));
         const detectedSchoolName = data.user_info?.school_name || data.user_info?.school?.name || data.school_name || data.school?.name || '';

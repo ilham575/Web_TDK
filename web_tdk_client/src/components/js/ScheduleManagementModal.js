@@ -3,10 +3,28 @@ import ReactDOM from 'react-dom';
 import { API_BASE_URL } from '../endpoints';
 import { toast } from 'react-toastify';
 
-export default function ScheduleManagementModal({ isOpen, onClose, teachers, subjects, classrooms, onSuccess, editingAssignment }) {
+export default function ScheduleManagementModal({
+  isOpen,
+  onClose,
+  teachers,
+  subjects,
+  classrooms,
+  semesterPeriods = [],
+  initialAcademicYear = '',
+  initialSemester = '',
+  onSuccess,
+  editingAssignment
+}) {
+  const safeSubjects = Array.isArray(subjects) ? subjects : [];
+  const safeClassrooms = Array.isArray(classrooms) ? classrooms : [];
+  const periodSources = Array.isArray(semesterPeriods) && semesterPeriods.length > 0
+    ? semesterPeriods
+    : [...safeSubjects, ...safeClassrooms];
   const [selectedTeacher, setSelectedTeacher] = useState('');
   const [selectedSubject, setSelectedSubject] = useState('');
   const [selectedClassroom, setSelectedClassroom] = useState('');
+  const [selectedAcademicYear, setSelectedAcademicYear] = useState('');
+  const [selectedSemester, setSelectedSemester] = useState('');
   const [selectedDayOfWeek, setSelectedDayOfWeek] = useState('');
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
@@ -14,15 +32,40 @@ export default function ScheduleManagementModal({ isOpen, onClose, teachers, sub
   const [teacherName, setTeacherName] = useState('');
   const [scheduleSlots, setScheduleSlots] = useState([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
-  const [availableSubjects, setAvailableSubjects] = useState(subjects || []);
+  const [availableSubjects, setAvailableSubjects] = useState(safeSubjects);
+  const [availableClassrooms, setAvailableClassrooms] = useState(safeClassrooms);
 
   const dayNames = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
 
+  const availableAcademicYears = [...new Set(periodSources
+    .map(item => item?.academic_year)
+    .filter(Boolean)
+    .map((year) => String(year)))
+  ].sort((a, b) => Number(b) - Number(a));
+
+  const getSemestersForYear = (year) => [...new Set(periodSources
+    .filter(item => !year || String(item?.academic_year) === String(year))
+    .map(item => item?.semester)
+    .filter(Boolean)
+    .map((semester) => String(semester)))
+  ].sort((a, b) => Number(a) - Number(b));
+
+  const availableSemesters = getSemestersForYear(selectedAcademicYear);
+
   // ดึง schedule slots เมื่อ modal เปิด
   useEffect(() => {
-    setAvailableSubjects(Array.isArray(subjects) ? subjects : []);
     if (isOpen) {
       loadScheduleSlots();
+      const openAcademicYear = editingAssignment?.academic_year
+        ? String(editingAssignment.academic_year)
+        : String(initialAcademicYear || availableAcademicYears[0] || '');
+      const semesterOptions = getSemestersForYear(openAcademicYear);
+      const openSemester = editingAssignment?.semester
+        ? String(editingAssignment.semester)
+        : String(initialSemester || semesterOptions[0] || '');
+      setSelectedAcademicYear(openAcademicYear);
+      setSelectedSemester(openSemester);
+
       if (editingAssignment) {
         // prefill fields when editing assignment
         const subjId = editingAssignment.subject_id;
@@ -60,8 +103,36 @@ export default function ScheduleManagementModal({ isOpen, onClose, teachers, sub
         setSelectedTeacher('');
         setTeacherName('');
       }
+    } else {
+      setSelectedAcademicYear(String(initialAcademicYear || ''));
+      setSelectedSemester(String(initialSemester || ''));
     }
   }, [isOpen, editingAssignment]);
+
+  useEffect(() => {
+    const subjectList = Array.isArray(subjects) ? subjects : [];
+    const classroomList = Array.isArray(classrooms) ? classrooms : [];
+    const periodMatch = (item) => {
+      const yearMatch = !selectedAcademicYear || String(item?.academic_year || '') === String(selectedAcademicYear);
+      const semesterMatch = !selectedSemester || String(item?.semester || '') === String(selectedSemester);
+      return yearMatch && semesterMatch;
+    };
+
+    const filteredSubjects = subjectList.filter(periodMatch);
+    const filteredClassrooms = classroomList.filter(periodMatch);
+    setAvailableSubjects(filteredSubjects);
+    setAvailableClassrooms(filteredClassrooms);
+
+    if (selectedSubject && !filteredSubjects.some((s) => String(s.id) === String(selectedSubject))) {
+      setSelectedSubject('');
+      setSelectedTeacher('');
+      setTeacherName('');
+    }
+
+    if (selectedClassroom && !filteredClassrooms.some((c) => String(c.id) === String(selectedClassroom))) {
+      setSelectedClassroom('');
+    }
+  }, [subjects, classrooms, selectedAcademicYear, selectedSemester, selectedSubject, selectedClassroom]);
 
   // Lock body scroll when modal is open
   useEffect(() => {
@@ -185,7 +256,17 @@ export default function ScheduleManagementModal({ isOpen, onClose, teachers, sub
     return hh * 60 + mm;
   };
 
-  const checkScheduleConflict = async (teacherId, subjectId, classroomId, dayOfWeek, startTime, endTime, excludeAssignmentId = null) => {
+  const checkScheduleConflict = async (
+    teacherId,
+    subjectId,
+    classroomId,
+    dayOfWeek,
+    startTime,
+    endTime,
+    academicYear,
+    semester,
+    excludeAssignmentId = null
+  ) => {
     const allSchedules = await getAllAdminSchedules();
     const startMin = timeStringToMinutes(startTime);
     const endMin = timeStringToMinutes(endTime);
@@ -194,6 +275,8 @@ export default function ScheduleManagementModal({ isOpen, onClose, teachers, sub
     for (const schedule of allSchedules) {
       if (excludeAssignmentId && schedule.id === excludeAssignmentId) continue;
       if (String(schedule.day_of_week) !== String(dayOfWeek)) continue;
+      if (academicYear && String(schedule.academic_year || '') && String(schedule.academic_year) !== String(academicYear)) continue;
+      if (semester && String(schedule.semester || '') && String(schedule.semester) !== String(semester)) continue;
       
       const scheduleStartMin = timeStringToMinutes(schedule.start_time);
       const scheduleEndMin = timeStringToMinutes(schedule.end_time);
@@ -239,7 +322,7 @@ export default function ScheduleManagementModal({ isOpen, onClose, teachers, sub
   const handleSubjectChange = (subjectId) => {
     setSelectedSubject(subjectId);
     if (subjectId) {
-      const subject = subjects.find(s => s.id === parseInt(subjectId));
+      const subject = availableSubjects.find(s => s.id === parseInt(subjectId));
       if (subject && subject.teacher_id) {
         const teacher = teachers.find(t => t.id === subject.teacher_id);
         if (teacher) {
@@ -263,6 +346,8 @@ export default function ScheduleManagementModal({ isOpen, onClose, teachers, sub
     const token = localStorage.getItem('token');
     
     try {
+      if (!selectedAcademicYear) { toast.error('กรุณาเลือกปีการศึกษา'); return; }
+      if (!selectedSemester) { toast.error('กรุณาเลือกภาคเรียน'); return; }
       if (!selectedSubject) { toast.error('กรุณาเลือกวิชา'); return; }
       if (!selectedTeacher) { toast.error('วิชานี้ไม่มีครูผู้สอน'); return; }
       if (!selectedClassroom) { toast.error('กรุณาเลือกชั้นเรียน'); return; }
@@ -295,6 +380,8 @@ export default function ScheduleManagementModal({ isOpen, onClose, teachers, sub
         parseInt(selectedDayOfWeek),
         st,
         en,
+        selectedAcademicYear,
+        selectedSemester,
         editingAssignment ? editingAssignment.id : null
       );
       
@@ -367,6 +454,8 @@ export default function ScheduleManagementModal({ isOpen, onClose, teachers, sub
     setSelectedTeacher('');
     setSelectedSubject('');
     setSelectedClassroom('');
+    setSelectedAcademicYear(String(initialAcademicYear || ''));
+    setSelectedSemester(String(initialSemester || ''));
     setSelectedDayOfWeek('');
     setStartTime('');
     setEndTime('');
@@ -385,9 +474,9 @@ export default function ScheduleManagementModal({ isOpen, onClose, teachers, sub
       ></div>
 
       {/* Modal Content */}
-      <div className="relative w-full max-w-2xl bg-white rounded-[2.5rem] shadow-2xl overflow-hidden transform transition-all animate-in fade-in zoom-in duration-200 flex flex-col max-h-[calc(100dvh-2rem)]">
+      <div className="relative w-full max-w-2xl bg-white/95 border border-white/70 rounded-[2rem] shadow-[0_32px_90px_-28px_rgba(15,23,42,0.42)] ring-1 ring-slate-200/60 overflow-hidden transform transition-all animate-in fade-in zoom-in duration-200 flex flex-col max-h-[calc(100dvh-2rem)]">
         {/* Header */}
-        <div className="bg-gradient-to-r from-emerald-600 to-teal-700 p-8 text-white relative shrink-0">
+        <div className="bg-gradient-to-r from-indigo-700 via-violet-700 to-fuchsia-700 p-8 text-white relative shrink-0">
           <button 
                 onClick={handleReset}
                 className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/20 transition-all text-2xl leading-none"
@@ -409,9 +498,43 @@ export default function ScheduleManagementModal({ isOpen, onClose, teachers, sub
         </div>
 
         {/* Body */}
-        <div className="p-8 space-y-8 overflow-y-auto bg-slate-50/50 flex-1 custom-scrollbar">
+        <div className="p-8 space-y-8 overflow-y-auto bg-gradient-to-b from-white via-slate-50/35 to-indigo-50/20 flex-1 custom-scrollbar">
           {/* Main Selects */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">ปีการศึกษา</label>
+            <select
+              className="w-full bg-white border-2 border-slate-100 rounded-2xl px-5 py-4 font-bold text-slate-700 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all shadow-sm hover:border-slate-200 appearance-none"
+              value={selectedAcademicYear}
+              onChange={e => {
+                const year = e.target.value;
+                setSelectedAcademicYear(year);
+                const semesters = getSemestersForYear(year);
+                setSelectedSemester(semesters[0] || '');
+              }}
+            >
+              <option value="">-- เลือกปีการศึกษา --</option>
+              {availableAcademicYears.map(y => (
+                <option key={y} value={y}>ปี {y}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">ภาคเรียน</label>
+            <select
+              className="w-full bg-white border-2 border-slate-100 rounded-2xl px-5 py-4 font-bold text-slate-700 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all shadow-sm hover:border-slate-200 appearance-none"
+              value={selectedSemester}
+              onChange={e => setSelectedSemester(e.target.value)}
+              disabled={!selectedAcademicYear}
+            >
+              <option value="">-- เลือกภาคเรียน --</option>
+              {availableSemesters.map(s => (
+                <option key={s} value={s}>ภาคเรียนที่ {s}</option>
+              ))}
+            </select>
+          </div>
+
             <div className="space-y-2">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">เลือกวิชา</label>
                 <select
@@ -421,7 +544,7 @@ export default function ScheduleManagementModal({ isOpen, onClose, teachers, sub
                 >
                     <option value="">-- เลือกวิชา --</option>
                     {availableSubjects.map(s => (
-                        <option key={s.id} value={s.id}>{s.name} ({s.code})</option>
+                    <option key={s.id} value={s.id}>{s.name} ({s.code}) • ปี {s.academic_year} เทอม {s.semester}</option>
                     ))}
                 </select>
             </div>
@@ -448,8 +571,8 @@ export default function ScheduleManagementModal({ isOpen, onClose, teachers, sub
                     onChange={e => setSelectedClassroom(e.target.value)}
                 >
                     <option value="">-- เลือกชั้นเรียน --</option>
-                    {classrooms.map(c => (
-                        <option key={c.id} value={c.id}>{c.name} ({c.grade_level})</option>
+                  {availableClassrooms.map(c => (
+                    <option key={c.id} value={c.id}>{c.name} ({c.grade_level}) • ปี {c.academic_year} เทอม {c.semester}</option>
                     ))}
                 </select>
             </div>
@@ -550,7 +673,7 @@ export default function ScheduleManagementModal({ isOpen, onClose, teachers, sub
         </div>
 
         {/* Footer */}
-        <div className="p-6 bg-white border-t border-slate-100 flex gap-3 justify-end shrink-0">
+        <div className="p-6 bg-gradient-to-r from-slate-50/90 via-white to-indigo-50/50 border-t border-slate-100/80 flex gap-3 justify-end shrink-0">
           <button
             type="button"
             className="px-8 py-3.5 text-slate-500 font-bold hover:bg-slate-50 rounded-2xl transition-all"

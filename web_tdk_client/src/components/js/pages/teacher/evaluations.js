@@ -4,7 +4,7 @@ import { toast } from 'react-toastify';
 import StudentEvaluationModal from '../../../modals/StudentEvaluationModal';
 import { API_BASE_URL } from '../../../endpoints';
 import { setSchoolFavicon } from '../../../../utils/faviconUtils';
-import { logout } from '../../../../utils/authUtils';
+import { fetchCurrentUser, hasSessionMarker, logout } from '../../../../utils/authUtils';
 import ReactDOM from 'react-dom';
 import {
   ArrowLeft,
@@ -106,15 +106,11 @@ function TeacherEvaluationsPage() {
   };
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) {
+    if (!hasSessionMarker()) {
       navigate('/signin');
       return;
     }
-    fetch(`${API_BASE_URL}/users/me`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-      .then(res => res.json())
+    fetchCurrentUser()
       .then(data => {
         if (data.role !== 'teacher') {
           logout();
@@ -225,10 +221,7 @@ function TeacherEvaluationsPage() {
   const fetchTeacherClassrooms = async () => {
     if (!currentUser) return;
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE_URL}/classrooms/teacher-classrooms`, {
-        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
-      });
+      const res = await fetch(`${API_BASE_URL}/classrooms/teacher-classrooms`);
       const data = await res.json();
       if (Array.isArray(data)) {
         setTeacherClassrooms(data);
@@ -247,7 +240,6 @@ function TeacherEvaluationsPage() {
     if (!currentUser || teacherSubjects.length === 0) return;
 
     try {
-      const token = localStorage.getItem('token');
       const evaluations = [];
 
       for (const subject of teacherSubjects) {
@@ -261,9 +253,7 @@ function TeacherEvaluationsPage() {
             if (subject.semester) params.append('semester', subject.semester);
             const queryString = params.toString() ? `?${params.toString()}` : '';
 
-            const res = await fetch(`${API_BASE_URL}/evaluations/subject/${subId}${queryString}`, {
-              headers: { Authorization: `Bearer ${token}` }
-            });
+            const res = await fetch(`${API_BASE_URL}/evaluations/subject/${subId}${queryString}`);
             if (res.ok) {
               const subjectEvaluations = await res.json();
               if (Array.isArray(subjectEvaluations)) {
@@ -361,8 +351,6 @@ function TeacherEvaluationsPage() {
 
   const handleOpenEvaluationModal = async (subject) => {
     try {
-      const token = localStorage.getItem('token');
-      
       // Get students from all subject IDs in group
       const subjectIds = subject.all_subjects?.map(s => s.id) || [subject.id];
       const allStudents = [];
@@ -370,9 +358,7 @@ function TeacherEvaluationsPage() {
       
       for (const subId of subjectIds) {
         try {
-          const res = await fetch(`${API_BASE_URL}/subjects/${subId}/students`, {
-            headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
-          });
+          const res = await fetch(`${API_BASE_URL}/subjects/${subId}/students`);
           if (res.ok) {
             const students = await res.json();
             students.forEach(student => {
@@ -425,10 +411,8 @@ function TeacherEvaluationsPage() {
 
   const handleDeleteEvaluation = async (evaluationId, subjectId) => {
     try {
-      const token = localStorage.getItem('token');
       const res = await fetch(`${API_BASE_URL}/evaluations/${evaluationId}`, {
-        method: 'DELETE',
-        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
+        method: 'DELETE'
       });
 
       if (!res.ok) {
@@ -489,7 +473,7 @@ function TeacherEvaluationsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-teal-50/20 to-emerald-50/20 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-16 w-16 border-4 border-emerald-200 border-t-emerald-600 mx-auto mb-6"></div>
           <p className="text-slate-400 font-black tracking-widest uppercase text-xs">Loading Resources...</p>
@@ -499,7 +483,7 @@ function TeacherEvaluationsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-20 font-sans selection:bg-emerald-100 selection:text-emerald-900">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-teal-50/20 to-emerald-50/20 pb-20 font-sans selection:bg-emerald-100 selection:text-emerald-900">
       {/* Top Navigation Bar */}
       <div className="bg-white/80 backdrop-blur-md border-b border-slate-200/60 sticky top-0 z-30 transition-all duration-300">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

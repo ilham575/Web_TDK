@@ -30,8 +30,17 @@ DATABASE_URL=mysql+pymysql://username:password@localhost/database_name
 JWT_SECRET_KEY=your-secret-key-here
 JWT_ALGORITHM=HS256
 JWT_ACCESS_TOKEN_EXPIRE_MINUTES=1440
-CORS_ORIGINS=*
+JWT_COOKIE_NAME=access_token
+JWT_COOKIE_SECURE=auto
+JWT_COOKIE_SAMESITE=lax
+CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+BOOTSTRAP_ADMIN_TOKEN=generate-a-one-time-bootstrap-token
 ```
+
+`BOOTSTRAP_ADMIN_TOKEN` protects the dangerous setup endpoints `/init-database` and `/create-owner-user`.
+If it is not set, those endpoints stay disabled.
+
+For production deployments where the frontend and API are on different origins, set `JWT_COOKIE_SECURE=true` and `JWT_COOKIE_SAMESITE=none` so the browser will send the auth cookie cross-site over HTTPS.
 
 ### 4. Database Setup
 

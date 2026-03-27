@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { API_BASE_URL } from '../../../endpoints';
 import { toast } from 'react-toastify';
 import ActivityDetailModal from '../../ActivityDetailModal';
+import { hasSessionMarker } from '../../../../utils/authUtils';
 import { 
   Award, 
   BookOpen, 
@@ -142,14 +143,11 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
 
     const loadGrades = async () => {
       try {
-        const token = localStorage.getItem('token');
         const params = new URLSearchParams();
         if (selectedAcademicYear) params.set('academic_year', selectedAcademicYear);
         if (selectedSemester) params.set('semester', selectedSemester);
         const queryStr = params.toString() ? `?${params.toString()}` : '';
-        const transcriptRes = await fetch(`${API_BASE_URL}/grades/student/${studentId}/transcript${queryStr}`, {
-          headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
-        });
+          const transcriptRes = await fetch(`${API_BASE_URL}/grades/student/${studentId}/transcript${queryStr}`);
 
         if (!transcriptRes.ok) {
           if (transcriptRes.status === 403) {
@@ -332,10 +330,7 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
     if (!studentId) return;
     const loadSemesters = async () => {
       try {
-        const token = localStorage.getItem('token');
-        const res = await fetch(`${API_BASE_URL}/grades/student/${studentId}/semester-list`, {
-          headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
-        });
+        const res = await fetch(`${API_BASE_URL}/grades/student/${studentId}/semester-list`);
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data)) {
@@ -394,7 +389,6 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
       const requestId = ++rankingRequestRef.current;
       
       try {
-        const token = localStorage.getItem('token');
         const params = new URLSearchParams();
         if (selectedAcademicYear) params.set('academic_year', selectedAcademicYear);
         if (selectedSemester) params.set('semester', selectedSemester);
@@ -402,9 +396,9 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
 
         let schoolId = localStorage.getItem('school_id');
         
-        if (!schoolId) {
+        if (!schoolId && hasSessionMarker()) {
           const userRes = await fetch(`${API_BASE_URL}/users/me`, {
-            headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
+            credentials: 'include'
           });
           if (userRes.ok) {
             const userData = await userRes.json();
@@ -412,10 +406,8 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
           }
         }
 
-        const classroomRes = await fetch(`${API_BASE_URL}/classrooms/my-classrooms`, {
-          headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
-        });
-        
+        const classroomRes = await fetch(`${API_BASE_URL}/classrooms/my-classrooms`);
+
         if (classroomRes.ok) {
           const classrooms = await classroomRes.json();
           if (classrooms && classrooms.length > 0) {
@@ -445,9 +437,7 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
 
             const currentClassroom = classroomsInPeriod[0] || classroomsInSemester[0] || classroomsInYear[0] || classrooms[0];
 
-            const rankingRes = await fetch(`${API_BASE_URL}/grades/classroom/${currentClassroom.id}/ranking${queryStr}`, {
-              headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
-            });
+              const rankingRes = await fetch(`${API_BASE_URL}/grades/classroom/${currentClassroom.id}/ranking${queryStr}`);
             
             if (rankingRes.ok) {
               const rankingData = await rankingRes.json();
@@ -470,9 +460,7 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
         }
 
         if (schoolId) {
-          const schoolRankingRes = await fetch(`${API_BASE_URL}/grades/school/${schoolId}/ranking${queryStr}`, {
-            headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
-          });
+          const schoolRankingRes = await fetch(`${API_BASE_URL}/grades/school/${schoolId}/ranking${queryStr}`);
           
           if (schoolRankingRes.ok) {
             const schoolRankingData = await schoolRankingRes.json();
@@ -507,11 +495,10 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
     const checkGradeAnnouncement = async () => {
       if (!studentId) return;
       try {
-        const token = localStorage.getItem('token');
         let schoolId = localStorage.getItem('school_id');
-        if (!schoolId) {
+        if (!schoolId && hasSessionMarker()) {
           const userRes = await fetch(`${API_BASE_URL}/users/me`, {
-            headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
+            credentials: 'include'
           });
           const userData = await userRes.json();
           schoolId = userData.school_id;

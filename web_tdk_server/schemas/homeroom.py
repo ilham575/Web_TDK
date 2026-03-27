@@ -8,6 +8,7 @@ class HomeroomTeacherBase(BaseModel):
     classroom_id: Optional[int] = None
     school_id: int
     academic_year: Optional[str] = None
+    semester: Optional[int] = None
 
 class HomeroomTeacherCreate(HomeroomTeacherBase):
     pass
@@ -17,6 +18,7 @@ class HomeroomTeacherUpdate(BaseModel):
     grade_level: Optional[str] = None
     classroom_id: Optional[int] = None
     academic_year: Optional[str] = None
+    semester: Optional[int] = None
 
 class HomeroomTeacher(HomeroomTeacherBase):
     id: int

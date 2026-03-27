@@ -38,7 +38,7 @@ import FirstVisitOnboarding, {
   shouldShowOnboarding
 } from '../../FirstVisitOnboarding';
 import { setSchoolFavicon } from '../../../../utils/faviconUtils';
-import { logout } from '../../../../utils/authUtils';
+import { fetchCurrentUser, hasSessionMarker, logout } from '../../../../utils/authUtils';
 
 // ====== RankingTable helper component ======
 function RankingTable({ data, showAll = false }) {
@@ -627,6 +627,7 @@ function AdminPage() {
   const [newHomeroomGradeLevel, setNewHomeroomGradeLevel] = useState('');
   const [newHomeroomClassroomId, setNewHomeroomClassroomId] = useState('');
   const [newHomeroomAcademicYear, setNewHomeroomAcademicYear] = useState('');
+  const [newHomeroomSemester, setNewHomeroomSemester] = useState('');
 
   // Grade level management state
   const [gradeAssignmentFile, setGradeAssignmentFile] = useState(null);
@@ -1034,10 +1035,8 @@ function AdminPage() {
     setShowHeaderMenu(false);
   }, [location]);
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) { navigate('/signin'); return; }
-    fetch(`${API_BASE_URL}/users/me`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(res => res.json())
+    if (!hasSessionMarker()) { navigate('/signin'); return; }
+    fetchCurrentUser()
       .then(data => {
         if (data.role !== 'admin') {
           logout();
@@ -1465,6 +1464,50 @@ function AdminPage() {
         window.location.reload();
       }
     } catch (err) { console.error(err); toast.error(t('admin.activateUserError')); }
+  };
+
+  const graduateUser = async (userId, userName) => {
+    const token = localStorage.getItem('token');
+    if (!token) { toast.error(t('admin.loginRequired')); return; }
+    try {
+      const res = await fetch(`${API_BASE_URL}/users/${userId}/graduate`, { method: 'PATCH', headers: { 'Authorization': `Bearer ${token}` } });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.detail || 'ไม่สามารถจบการศึกษาได้'); }
+      else { toast.success(`🎓 ${userName} จบการศึกษาแล้ว`); window.location.reload(); }
+    } catch (err) { console.error(err); toast.error('เกิดข้อผิดพลาด'); }
+  };
+
+  const resignUser = async (userId, userName) => {
+    const token = localStorage.getItem('token');
+    if (!token) { toast.error(t('admin.loginRequired')); return; }
+    try {
+      const res = await fetch(`${API_BASE_URL}/users/${userId}/resign`, { method: 'PATCH', headers: { 'Authorization': `Bearer ${token}` } });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.detail || 'ไม่สามารถบันทึกการลาออกได้'); }
+      else { toast.success(`📋 ${userName} ลาออกแล้ว — ข้อมูลยังอยู่ในระบบ`); window.location.reload(); }
+    } catch (err) { console.error(err); toast.error('เกิดข้อผิดพลาด'); }
+  };
+
+  const reinstateUser = async (userId, userName) => {
+    const token = localStorage.getItem('token');
+    if (!token) { toast.error(t('admin.loginRequired')); return; }
+    try {
+      const res = await fetch(`${API_BASE_URL}/users/${userId}/reinstate`, { method: 'PATCH', headers: { 'Authorization': `Bearer ${token}` } });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.detail || 'ไม่สามารถกู้คืนได้'); }
+      else { toast.success(`✅ ${userName} ถูกกู้คืนกลับสู่ใช้งานแล้ว`); window.location.reload(); }
+    } catch (err) { console.error(err); toast.error('เกิดข้อผิดพลาด'); }
+  };
+
+  const bulkGraduateStudents = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) { toast.error(t('admin.loginRequired')); return; }
+    try {
+      const res = await fetch(`${API_BASE_URL}/users/bulk/graduate`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.detail || 'ไม่สามารถจบการศึกษาหมู่ได้'); }
+      else { toast.success(`🎓 จบการศึกษา ${data.graduated_count} คน (ชั้น ${data.graduation_grade_level})`); window.location.reload(); }
+    } catch (err) { console.error(err); toast.error('เกิดข้อผิดพลาด'); }
   };
 
   const deleteUser = async (userId, userName) => {
@@ -2279,7 +2322,10 @@ function AdminPage() {
     
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE_URL}/homeroom?school_id=${schoolId}`, {
+      const params = new URLSearchParams({ school_id: schoolId });
+      if (selectedYear) params.set('academic_year', selectedYear);
+      if (selectedSemester) params.set('semester', selectedSemester);
+      const res = await fetch(`${API_BASE_URL}/homeroom?${params.toString()}`, {
         headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
       });
       
@@ -2320,7 +2366,42 @@ function AdminPage() {
     setAvailableGradeLevels(gradeLevels);
   };
 
-  const createHomeroomTeacher = async (teacherId = null, classroomId = null, academicYear = null, gradeLevel = null) => {
+  const handleHomeroomConflict = (detail, fallbackMessage) => {
+    if (!detail || typeof detail !== 'object') {
+      toast.error(fallbackMessage);
+      return;
+    }
+
+    const conflict = detail.conflict || {};
+    if (conflict.academic_year) {
+      setSelectedYear(String(conflict.academic_year));
+    }
+    if (conflict.semester !== undefined && conflict.semester !== null) {
+      setSelectedSemester(Number(conflict.semester));
+    }
+
+    const scopeText = conflict.academic_year || conflict.semester
+      ? `ปี ${conflict.academic_year || '-'} เทอม ${conflict.semester || '-'}`
+      : '';
+
+    if (detail.code === 'homeroom_classroom_conflict') {
+      const teacherLabel = conflict.teacher_name || conflict.teacher_email || 'ไม่ทราบชื่อครู';
+      const classroomLabel = conflict.classroom_name || conflict.grade_level || 'ห้องเรียนที่เลือก';
+      toast.error(`${classroomLabel} มี ${teacherLabel} เป็นครูประจำชั้นอยู่แล้ว${scopeText ? ` ใน${scopeText}` : ''}`);
+      return;
+    }
+
+    if (detail.code === 'homeroom_teacher_conflict') {
+      const teacherLabel = conflict.teacher_name || conflict.teacher_email || 'ครูที่เลือก';
+      const classroomLabel = conflict.classroom_name || conflict.grade_level || 'อีกห้องหนึ่ง';
+      toast.error(`${teacherLabel} ถูกกำหนดเป็นครูประจำชั้นของ ${classroomLabel} แล้ว${scopeText ? ` ใน${scopeText}` : ''}`);
+      return;
+    }
+
+    toast.error(detail.message || fallbackMessage);
+  };
+
+  const createHomeroomTeacher = async (teacherId = null, classroomId = null, academicYear = null, gradeLevel = null, semester = null) => {
     const schoolId = localStorage.getItem('school_id');
     const token = localStorage.getItem('token');
     
@@ -2328,6 +2409,7 @@ function AdminPage() {
     const classroom_id_to_use = classroomId ?? newHomeroomClassroomId;
     const grade_level_to_use = gradeLevel ?? newHomeroomGradeLevel;
     const academic_year_to_use = academicYear ?? newHomeroomAcademicYear;
+    const semester_to_use = semester ?? newHomeroomSemester ?? selectedSemester;
 
     if (!teacher_id_to_use || (!grade_level_to_use && !classroom_id_to_use)) {
       toast.error(t('admin.selectTeacherAndClassroom'));
@@ -2340,7 +2422,8 @@ function AdminPage() {
         grade_level: grade_level_to_use,
         classroom_id: classroom_id_to_use ? Number(classroom_id_to_use) : undefined,
         school_id: Number(schoolId),
-        academic_year: academic_year_to_use || null
+        academic_year: academic_year_to_use || null,
+        semester: semester_to_use ? Number(semester_to_use) : null
       };
       
       const res = await fetch(`${API_BASE_URL}/homeroom`, {
@@ -2359,7 +2442,11 @@ function AdminPage() {
         cancelHomeroomModal();
         loadHomeroomTeachers();
       } else {
-        toast.error(data.detail || t('admin.assignHomeroomFailed'));
+        if (data?.detail && typeof data.detail === 'object') {
+          handleHomeroomConflict(data.detail, t('admin.assignHomeroomFailed'));
+        } else {
+          toast.error(data.detail || t('admin.assignHomeroomFailed'));
+        }
       }
     } catch (err) {
       console.error('Create homeroom teacher error:', err);
@@ -2367,7 +2454,7 @@ function AdminPage() {
     }
   };
 
-  const updateHomeroomTeacher = async (teacherId = null, classroomId = null, academicYear = null) => {
+  const updateHomeroomTeacher = async (teacherId = null, classroomId = null, academicYear = null, semester = null) => {
     if (!editingHomeroom) return;
     
     const token = localStorage.getItem('token');
@@ -2375,6 +2462,7 @@ function AdminPage() {
     const teacher_id_to_use = teacherId ?? newHomeroomTeacherId;
     const classroom_id_to_use = classroomId ?? newHomeroomClassroomId;
     const academic_year_to_use = academicYear ?? newHomeroomAcademicYear;
+    const semester_to_use = semester ?? newHomeroomSemester ?? selectedSemester;
 
     if (!teacher_id_to_use) {
       toast.error(t('admin.selectTeacher'));
@@ -2384,7 +2472,8 @@ function AdminPage() {
     try {
       const body = {
         teacher_id: Number(teacher_id_to_use),
-        academic_year: academic_year_to_use || null
+        academic_year: academic_year_to_use || null,
+        semester: semester_to_use ? Number(semester_to_use) : null
       };
       if (classroom_id_to_use) body.classroom_id = Number(classroom_id_to_use);
       
@@ -2404,7 +2493,11 @@ function AdminPage() {
         cancelHomeroomModal();
         loadHomeroomTeachers();
       } else {
-        toast.error(data.detail || t('admin.editHomeroomFailed'));
+        if (data?.detail && typeof data.detail === 'object') {
+          handleHomeroomConflict(data.detail, t('admin.editHomeroomFailed'));
+        } else {
+          toast.error(data.detail || t('admin.editHomeroomFailed'));
+        }
       }
     } catch (err) {
       console.error('Update homeroom teacher error:', err);
@@ -2441,12 +2534,14 @@ function AdminPage() {
       setNewHomeroomGradeLevel(homeroom.grade_level || '');
       setNewHomeroomClassroomId(homeroom.classroom_id || '');
       setNewHomeroomAcademicYear(homeroom.academic_year || '');
+      setNewHomeroomSemester(homeroom.semester || '');
     } else {
       setEditingHomeroom(null);
       setNewHomeroomTeacherId('');
       setNewHomeroomGradeLevel('');
       setNewHomeroomClassroomId('');
       setNewHomeroomAcademicYear('');
+      setNewHomeroomSemester('');
     }
     setShowHomeroomModal(true);
   };
@@ -2457,6 +2552,7 @@ function AdminPage() {
     setNewHomeroomTeacherId('');
     setNewHomeroomGradeLevel('');
     setNewHomeroomAcademicYear('');
+    setNewHomeroomSemester('');
   };
 
   // Load homeroom data when switching to homeroom tab
@@ -2465,7 +2561,7 @@ function AdminPage() {
       loadHomeroomTeachers();
       loadAvailableGradeLevels();
     }
-  }, [activeTab]);
+  }, [activeTab, selectedYear, selectedSemester]);
 
   // Load classrooms when switching to classrooms or promotions tabs
   React.useEffect(() => {
@@ -3620,7 +3716,7 @@ function AdminPage() {
         buttonLabel="เริ่มใช้งานหน้า Admin"
       />
 
-      <div className="bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
+      <div className="relative bg-[radial-gradient(circle_at_top_left,_rgba(99,102,241,0.18),_transparent_28%),radial-gradient(circle_at_top_right,_rgba(168,85,247,0.14),_transparent_24%),linear-gradient(180deg,_rgba(248,250,252,1)_0%,_rgba(238,242,255,0.88)_45%,_rgba(241,245,249,1)_100%)]">
         <PageHeader 
           currentUser={currentUser}
           role="admin"
@@ -3687,52 +3783,54 @@ function AdminPage() {
       </div>
 
       {/* Stats Section - Modern Glass Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 px-4 sm:px-6 lg:px-8 py-6 -mt-4">
+      <div className="relative min-h-screen bg-[linear-gradient(180deg,_rgba(238,242,255,0.35)_0%,_rgba(248,250,252,0.94)_18%,_rgba(248,250,252,1)_100%)]">
+      <div className="absolute inset-x-0 top-0 h-40 bg-[radial-gradient(circle_at_center,_rgba(99,102,241,0.12),_transparent_70%)] pointer-events-none"></div>
+      <div className="relative grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 px-4 sm:px-6 lg:px-8 py-8 mt-3 sm:-mt-6">
         {/* Teachers Card */}
-        <div className="group relative overflow-hidden rounded-2xl bg-white/70 backdrop-blur-xl border border-white/50 shadow-xl shadow-blue-500/10 hover:shadow-2xl hover:shadow-blue-500/20 hover:-translate-y-1 transition-all duration-500" title={t('admin.teachers')}>
-          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-transparent to-cyan-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+        <div className="group relative overflow-hidden rounded-[2rem] bg-white/78 backdrop-blur-2xl border border-white/70 ring-1 ring-blue-100/60 shadow-[0_24px_60px_-28px_rgba(37,99,235,0.38)] hover:shadow-[0_30px_75px_-26px_rgba(37,99,235,0.42)] hover:-translate-y-1.5 transition-all duration-500" title={t('admin.teachers')}>
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.16),_transparent_38%),linear-gradient(135deg,_rgba(255,255,255,0.55),_transparent_65%)] opacity-80"></div>
           <div className="relative p-6 flex items-center gap-5">
-            <div className="flex-shrink-0 w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-3xl shadow-lg shadow-blue-500/40 group-hover:scale-110 group-hover:rotate-3 transition-transform duration-500">
+            <div className="flex-shrink-0 w-16 h-16 rounded-[1.4rem] bg-gradient-to-br from-blue-500 via-cyan-500 to-sky-500 flex items-center justify-center text-3xl shadow-lg shadow-blue-500/40 group-hover:scale-110 group-hover:rotate-3 transition-transform duration-500">
               👨‍🏫
             </div>
             <div>
-              <div className="text-4xl font-black bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">{teachers.length}</div>
-              <div className="text-slate-500 font-medium mt-1">{t('admin.teachers')}</div>
+              <div className="text-[2.6rem] leading-none font-black bg-gradient-to-r from-blue-700 to-cyan-600 bg-clip-text text-transparent">{teachers.length}</div>
+              <div className="text-slate-500 font-semibold mt-2 tracking-wide">{t('admin.teachers')}</div>
             </div>
           </div>
         </div>
         
         {/* Students Card */}
-        <div className="group relative overflow-hidden rounded-2xl bg-white/70 backdrop-blur-xl border border-white/50 shadow-xl shadow-emerald-500/10 hover:shadow-2xl hover:shadow-emerald-500/20 hover:-translate-y-1 transition-all duration-500" title={t('admin.students')}>
-          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 via-transparent to-teal-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+        <div className="group relative overflow-hidden rounded-[2rem] bg-white/78 backdrop-blur-2xl border border-white/70 ring-1 ring-emerald-100/60 shadow-[0_24px_60px_-28px_rgba(16,185,129,0.34)] hover:shadow-[0_30px_75px_-26px_rgba(16,185,129,0.4)] hover:-translate-y-1.5 transition-all duration-500" title={t('admin.students')}>
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.16),_transparent_38%),linear-gradient(135deg,_rgba(255,255,255,0.55),_transparent_65%)] opacity-80"></div>
           <div className="relative p-6 flex items-center gap-5">
-            <div className="flex-shrink-0 w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center text-3xl shadow-lg shadow-emerald-500/40 group-hover:scale-110 group-hover:rotate-3 transition-transform duration-500">
+            <div className="flex-shrink-0 w-16 h-16 rounded-[1.4rem] bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-500 flex items-center justify-center text-3xl shadow-lg shadow-emerald-500/40 group-hover:scale-110 group-hover:rotate-3 transition-transform duration-500">
               👨‍🎓
             </div>
             <div>
-              <div className="text-4xl font-black bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">{students.length}</div>
-              <div className="text-slate-500 font-medium mt-1">{t('admin.students')}</div>
+              <div className="text-[2.6rem] leading-none font-black bg-gradient-to-r from-emerald-700 to-teal-600 bg-clip-text text-transparent">{students.length}</div>
+              <div className="text-slate-500 font-semibold mt-2 tracking-wide">{t('admin.students')}</div>
             </div>
           </div>
         </div>
         
         {/* Announcements Card */}
-        <div className="group relative overflow-hidden rounded-2xl bg-white/70 backdrop-blur-xl border border-white/50 shadow-xl shadow-amber-500/10 hover:shadow-2xl hover:shadow-amber-500/20 hover:-translate-y-1 transition-all duration-500 sm:col-span-2 lg:col-span-1" title={t('nav.announcements')}>
-          <div className="absolute inset-0 bg-gradient-to-br from-amber-500/10 via-transparent to-orange-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+        <div className="group relative overflow-hidden rounded-[2rem] bg-white/78 backdrop-blur-2xl border border-white/70 ring-1 ring-amber-100/60 shadow-[0_24px_60px_-28px_rgba(245,158,11,0.34)] hover:shadow-[0_30px_75px_-26px_rgba(245,158,11,0.42)] hover:-translate-y-1.5 transition-all duration-500 sm:col-span-2 lg:col-span-1" title={t('nav.announcements')}>
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(245,158,11,0.16),_transparent_38%),linear-gradient(135deg,_rgba(255,255,255,0.55),_transparent_65%)] opacity-80"></div>
           <div className="relative p-6 flex items-center gap-5">
-            <div className="flex-shrink-0 w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center text-3xl shadow-lg shadow-amber-500/40 group-hover:scale-110 group-hover:rotate-3 transition-transform duration-500">
+            <div className="flex-shrink-0 w-16 h-16 rounded-[1.4rem] bg-gradient-to-br from-amber-500 via-orange-500 to-rose-500 flex items-center justify-center text-3xl shadow-lg shadow-amber-500/40 group-hover:scale-110 group-hover:rotate-3 transition-transform duration-500">
               📢
             </div>
             <div>
-              <div className="text-4xl font-black bg-gradient-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent">{(Array.isArray(announcements) ? announcements.filter(a => !isExpired(a)).length : 0)}</div>
-              <div className="text-slate-500 font-medium mt-1">{t('nav.announcements')}</div>
+              <div className="text-[2.6rem] leading-none font-black bg-gradient-to-r from-amber-700 to-orange-600 bg-clip-text text-transparent">{(Array.isArray(announcements) ? announcements.filter(a => !isExpired(a)).length : 0)}</div>
+              <div className="text-slate-500 font-semibold mt-2 tracking-wide">{t('nav.announcements')}</div>
             </div>
           </div>
         </div>
       </div>
 
       {/* Responsive layout: Sidebar (tabs) + Main content — stacks on mobile */}
-      <div className={`flex ${isMobile ? 'flex-col gap-4' : 'flex-row gap-8'} mt-2 px-4 sm:px-6 lg:px-8 pb-12`}>
+      <div className={`relative flex ${isMobile ? 'flex-col gap-4' : 'flex-row gap-8'} mt-1 px-4 sm:px-6 lg:px-8 pb-14`}>
         {/* Left Sidebar - AdminTabs */}
         <div className={`flex-shrink-0 ${isMobile ? 'w-full mb-3' : 'w-auto'}`}>
           <AdminTabs isMobile={isMobile} activeTab={activeTab} setActiveTab={setActiveTab} loadSubjects={loadSubjects} />
@@ -3741,9 +3839,9 @@ function AdminPage() {
         {/* Right Content - Tab content */}
         <div className={`flex-1 ${isMobile ? 'min-w-0' : 'min-w-[640px]'}`}>
           {activeTab === 'users' && (
-            <div className="bg-white/80 backdrop-blur-xl rounded-3xl border border-white/60 shadow-xl shadow-slate-200/50 overflow-hidden">
+            <div className="bg-white/86 backdrop-blur-2xl rounded-[2rem] border border-white/70 ring-1 ring-slate-200/45 shadow-[0_24px_70px_-30px_rgba(15,23,42,0.34)] overflow-hidden">
               {/* Card Header */}
-              <div className="px-8 py-6 bg-gradient-to-r from-slate-50 to-white border-b border-slate-100">
+              <div className="px-8 py-6 bg-gradient-to-r from-violet-50 via-white to-indigo-50/70 border-b border-slate-100/80">
                 <h2 className="flex items-center gap-3 text-2xl font-bold text-slate-800">
                   <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 text-white text-xl shadow-lg shadow-violet-500/30">👥</span>
                   {t('admin.userManagement')}
@@ -3751,46 +3849,46 @@ function AdminPage() {
               </div>
 
               {/* Sub-tabs for Users Section */}
-              <div className="px-8 pt-6 border-b border-slate-100 flex gap-2 overflow-x-auto no-scrollbar">
+              <div className="px-6 pt-5 pb-0 border-b border-slate-100 flex gap-1.5 overflow-x-auto no-scrollbar bg-slate-50/50">
                 <button
                   onClick={() => setUserSubTab('teachers')}
-                  className={`flex items-center gap-2 px-5 py-3 rounded-t-2xl font-bold text-sm whitespace-nowrap transition-all border-b-2 ${
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm whitespace-nowrap transition-all mb-2 ${
                     userSubTab === 'teachers'
-                      ? 'border-b-violet-600 text-violet-600 bg-violet-50'
-                      : 'border-b-transparent text-slate-600 hover:text-violet-600 hover:bg-slate-50'
+                      ? 'bg-violet-600 text-white shadow-md shadow-violet-200/60'
+                      : 'text-slate-600 hover:bg-slate-100 hover:text-violet-600'
                   }`}
                 >
-                  <span className="text-lg">👨‍🏫</span> {t('admin.teachers')}
+                  <span className="text-base">👨‍🏫</span> {t('admin.teachers')}
                 </button>
                 <button
                   onClick={() => setUserSubTab('students')}
-                  className={`flex items-center gap-2 px-5 py-3 rounded-t-2xl font-bold text-sm whitespace-nowrap transition-all border-b-2 ${
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm whitespace-nowrap transition-all mb-2 ${
                     userSubTab === 'students'
-                      ? 'border-b-emerald-600 text-emerald-600 bg-emerald-50'
-                      : 'border-b-transparent text-slate-600 hover:text-emerald-600 hover:bg-slate-50'
+                      ? 'bg-emerald-600 text-white shadow-md shadow-emerald-200/60'
+                      : 'text-slate-600 hover:bg-slate-100 hover:text-emerald-600'
                   }`}
                 >
-                  <span className="text-lg">👨‍🎓</span> {t('admin.students')}
+                  <span className="text-base">👨‍🎓</span> {t('admin.students')}
                 </button>
                 <button
                   onClick={() => setUserSubTab('bulk_upload')}
-                  className={`flex items-center gap-2 px-5 py-3 rounded-t-2xl font-bold text-sm whitespace-nowrap transition-all border-b-2 ${
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm whitespace-nowrap transition-all mb-2 ${
                     userSubTab === 'bulk_upload'
-                      ? 'border-b-blue-600 text-blue-600 bg-blue-50'
-                      : 'border-b-transparent text-slate-600 hover:text-blue-600 hover:bg-slate-50'
+                      ? 'bg-blue-600 text-white shadow-md shadow-blue-200/60'
+                      : 'text-slate-600 hover:bg-slate-100 hover:text-blue-600'
                   }`}
                 >
                   <span className="text-lg">📤</span> อัปโหลดผู้ใช้จำนวนมาก
                 </button>
                 <button
                   onClick={() => setUserSubTab('password_reset')}
-                  className={`flex items-center gap-2 px-5 py-3 rounded-t-2xl font-bold text-sm whitespace-nowrap transition-all border-b-2 ${
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm whitespace-nowrap transition-all mb-2 ${
                     userSubTab === 'password_reset'
-                      ? 'border-b-orange-600 text-orange-600 bg-orange-50'
-                      : 'border-b-transparent text-slate-600 hover:text-orange-600 hover:bg-slate-50'
+                      ? 'bg-orange-500 text-white shadow-md shadow-orange-200/60'
+                      : 'text-slate-600 hover:bg-slate-100 hover:text-orange-600'
                   }`}
                 >
-                  <span className="text-lg">🔑</span> คำขอรีเซ็ตรหัสผ่าน
+                  <span className="text-base">🔑</span> คำขอรีเซ็ตรหัสผ่าน
                 </button>
               </div>
               
@@ -3833,6 +3931,7 @@ function AdminPage() {
                       <option value="all">📊 ทั้งหมด</option>
                       <option value="active">✅ ใช้งาน</option>
                       <option value="inactive">🚫 ปิดใช้งาน</option>
+                      <option value="resigned">📋 ลาออก</option>
                     </select>
 
                     {/* Rows per page selector */}
@@ -3949,8 +4048,9 @@ function AdminPage() {
                         (t.username && t.username.toLowerCase().includes(teacherSearchTerm.toLowerCase())) ||
                         (t.email && t.email.toLowerCase().includes(teacherSearchTerm.toLowerCase()));
                       const matchStatus = teacherStatusFilter === 'all' ||
-                        (teacherStatusFilter === 'active' && t.is_active) ||
-                        (teacherStatusFilter === 'inactive' && !t.is_active);
+                        (teacherStatusFilter === 'active' && t.user_status === 'active') ||
+                        (teacherStatusFilter === 'inactive' && t.user_status === 'inactive') ||
+                        (teacherStatusFilter === 'resigned' && t.user_status === 'resigned');
                       return matchSearch && matchStatus;
                     });
 
@@ -4056,7 +4156,11 @@ function AdminPage() {
                                   <td className="px-4 py-4 text-slate-600">{teacher.email}</td>
                                   <td className="px-4 py-4 text-slate-500">{teacher.username}</td>
                                   <td className="px-4 py-4 text-center">
-                                    {teacher.is_active ? (
+                                    {teacher.user_status === 'graduated' ? (
+                                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-100 text-blue-700 text-xs font-bold">🎓 จบการศึกษา</span>
+                                    ) : teacher.user_status === 'resigned' ? (
+                                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-orange-100 text-orange-700 text-xs font-bold">📋 ลาออก</span>
+                                    ) : teacher.is_active ? (
                                       <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold">✅ {t('admin.activeUsers')}</span>
                                     ) : (
                                       <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-red-100 text-red-700 text-xs font-bold">🚫 {t('admin.inactiveUsers')}</span>
@@ -4085,14 +4189,39 @@ function AdminPage() {
                                       >
                                         🔄
                                       </button>
-                                      {teacher.is_active ? (
-                                        <button 
-                                          className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-800 transition-all duration-200" 
-                                          onClick={() => openConfirmModal(t('admin.deactivateTitle'), `${t('admin.deactivateTitle')} "${teacher.full_name || teacher.username}"?`, async () => { await deactivateUser(teacher.id, teacher.full_name || teacher.username); })}
-                                          title={t('admin.deactivateTitle')}
+                                      {teacher.user_status === 'graduated' ? (
+                                        <button
+                                          className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-blue-100 text-blue-600 hover:bg-blue-200 hover:text-blue-800 transition-all duration-200"
+                                          onClick={() => openConfirmModal('🎓 ยกเลิกการจบการศึกษา', `ยกเลิกการจบการศึกษาของ "${teacher.full_name || teacher.username}" กลับสู่สถานะใช้งานปกติ?`, async () => { await reinstateUser(teacher.id, teacher.full_name || teacher.username); })}
+                                          title="ยกเลิกการจบการศึกษา"
                                         >
-                                          🚫
+                                          ↩️
                                         </button>
+                                      ) : teacher.user_status === 'resigned' ? (
+                                        <button
+                                          className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-orange-100 text-orange-600 hover:bg-orange-200 hover:text-orange-800 transition-all duration-200"
+                                          onClick={() => openConfirmModal('📋 ยกเลิกการลาออก', `ยกเลิกการลาออกของ "${teacher.full_name || teacher.username}" กลับสู่สถานะใช้งานปกติ?`, async () => { await reinstateUser(teacher.id, teacher.full_name || teacher.username); })}
+                                          title="ยกเลิกการลาออก"
+                                        >
+                                          ↩️
+                                        </button>
+                                      ) : teacher.is_active ? (
+                                        <>
+                                          <button 
+                                            className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-800 transition-all duration-200" 
+                                            onClick={() => openConfirmModal(t('admin.deactivateTitle'), `${t('admin.deactivateTitle')} "${teacher.full_name || teacher.username}"?`, async () => { await deactivateUser(teacher.id, teacher.full_name || teacher.username); })}
+                                            title={t('admin.deactivateTitle')}
+                                          >
+                                            🚫
+                                          </button>
+                                          <button
+                                            className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-orange-100 text-orange-600 hover:bg-orange-200 hover:text-orange-800 transition-all duration-200"
+                                            onClick={() => openConfirmModal('📋 ลาออก', `บันทึกการลาออกของ "${teacher.full_name || teacher.username}"? ข้อมูลจะยังคงอยู่ในระบบ`, async () => { await resignUser(teacher.id, teacher.full_name || teacher.username); })}
+                                            title="บันทึกการลาออก (ข้อมูลยังอยู่)"
+                                          >
+                                            📋
+                                          </button>
+                                        </>
                                       ) : (
                                         <button 
                                           className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-emerald-100 text-emerald-600 hover:bg-emerald-200 hover:text-emerald-800 transition-all duration-200" 
@@ -4102,7 +4231,7 @@ function AdminPage() {
                                           ✅
                                         </button>
                                       )}
-                                      {!teacher.is_active && deletionStatuses[teacher.id]?.can_delete && (
+                                      {!teacher.is_active && teacher.user_status === 'inactive' && deletionStatuses[teacher.id]?.can_delete && (
                                         <button 
                                           className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-red-100 text-red-600 hover:bg-red-200 hover:text-red-800 transition-all duration-200" 
                                           onClick={() => openConfirmModal(t('admin.deleteTitle'), `${t('admin.deleteTitle')} "${teacher.full_name || teacher.username}"?`, async () => { await deleteUser(teacher.id, teacher.full_name || teacher.username); })}
@@ -4207,7 +4336,11 @@ function AdminPage() {
                                             <div className="text-sm text-slate-500 font-medium">@{teacher.username}</div>
                                         </div>
                                     </div>
-                                    {teacher.is_active ? (
+                                    {teacher.user_status === 'graduated' ? (
+                                      <span className="inline-flex items-center px-2 py-1 rounded-lg bg-blue-100 text-blue-700 text-[10px] font-black uppercase tracking-wider">🎓 จบการศึกษา</span>
+                                    ) : teacher.user_status === 'resigned' ? (
+                                      <span className="inline-flex items-center px-2 py-1 rounded-lg bg-orange-100 text-orange-700 text-[10px] font-black uppercase tracking-wider">📋 ลาออก</span>
+                                    ) : teacher.is_active ? (
                                       <span className="inline-flex items-center px-2 py-1 rounded-lg bg-emerald-100 text-emerald-700 text-[10px] font-black uppercase tracking-wider">✅ Active</span>
                                     ) : (
                                       <span className="inline-flex items-center px-2 py-1 rounded-lg bg-red-100 text-red-700 text-[10px] font-black uppercase tracking-wider">🚫 Inactive</span>
@@ -4240,14 +4373,39 @@ function AdminPage() {
                                       >
                                         🔄
                                       </button>
-                                      {teacher.is_active ? (
-                                        <button 
-                                          className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-800 transition-all" 
-                                          onClick={() => openConfirmModal(t('admin.deactivateTitle'), `${t('admin.deactivateTitle')} "${teacher.full_name || teacher.username}"?`, async () => { await deactivateUser(teacher.id, teacher.full_name || teacher.username); })}
-                                          title={t('admin.deactivateTitle')}
+                                      {teacher.user_status === 'graduated' ? (
+                                        <button
+                                          className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-blue-100 text-blue-600 hover:bg-blue-200 hover:text-blue-800 transition-all"
+                                          onClick={() => openConfirmModal('🎓 ยกเลิกการจบการศึกษา', `ยกเลิกการจบการศึกษาของ "${teacher.full_name || teacher.username}" กลับสู่สถานะใช้งานปกติ?`, async () => { await reinstateUser(teacher.id, teacher.full_name || teacher.username); })}
+                                          title="ยกเลิกการจบการศึกษา"
                                         >
-                                          🚫
+                                          ↩️
                                         </button>
+                                      ) : teacher.user_status === 'resigned' ? (
+                                        <button
+                                          className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-orange-100 text-orange-600 hover:bg-orange-200 hover:text-orange-800 transition-all"
+                                          onClick={() => openConfirmModal('📋 ยกเลิกการลาออก', `ยกเลิกการลาออกของ "${teacher.full_name || teacher.username}" กลับสู่สถานะใช้งานปกติ?`, async () => { await reinstateUser(teacher.id, teacher.full_name || teacher.username); })}
+                                          title="ยกเลิกการลาออก"
+                                        >
+                                          ↩️
+                                        </button>
+                                      ) : teacher.is_active ? (
+                                        <>
+                                          <button 
+                                            className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-800 transition-all" 
+                                            onClick={() => openConfirmModal(t('admin.deactivateTitle'), `${t('admin.deactivateTitle')} "${teacher.full_name || teacher.username}"?`, async () => { await deactivateUser(teacher.id, teacher.full_name || teacher.username); })}
+                                            title={t('admin.deactivateTitle')}
+                                          >
+                                            🚫
+                                          </button>
+                                          <button
+                                            className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-orange-100 text-orange-600 hover:bg-orange-200 hover:text-orange-800 transition-all"
+                                            onClick={() => openConfirmModal('📋 ลาออก', `บันทึกการลาออกของ "${teacher.full_name || teacher.username}"? ข้อมูลจะยังคงอยู่ในระบบ`, async () => { await resignUser(teacher.id, teacher.full_name || teacher.username); })}
+                                            title="บันทึกการลาออก (ข้อมูลยังอยู่)"
+                                          >
+                                            📋
+                                          </button>
+                                        </>
                                       ) : (
                                         <button 
                                           className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-emerald-100 text-emerald-600 hover:bg-emerald-200 hover:text-emerald-800 transition-all" 
@@ -4257,7 +4415,7 @@ function AdminPage() {
                                           ✅
                                         </button>
                                       )}
-                                      {!teacher.is_active && deletionStatuses[teacher.id]?.can_delete && (
+                                      {!teacher.is_active && teacher.user_status === 'inactive' && deletionStatuses[teacher.id]?.can_delete && (
                                         <button 
                                           className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-red-100 text-red-600 hover:bg-red-200 hover:text-red-800 transition-all" 
                                           onClick={() => openConfirmModal(t('admin.deleteTitle'), `${t('admin.deleteTitle')} "${teacher.full_name || teacher.username}"?`, async () => { await deleteUser(teacher.id, teacher.full_name || teacher.username); })}
@@ -4345,6 +4503,8 @@ function AdminPage() {
                       <option value="all">📊 ทั้งหมด</option>
                       <option value="active">✅ ใช้งาน</option>
                       <option value="inactive">🚫 ปิดใช้งาน</option>
+                      <option value="graduated">🎓 จบการศึกษา</option>
+                      <option value="resigned">📋 ลาออก</option>
                     </select>
 
                     {/* Rows per page selector */}
@@ -4404,6 +4564,20 @@ function AdminPage() {
                       >
                         🗑️ ลบ {studentBulkMode === 'delete' && selectedStudentsForDelete.size > 0 && `(${selectedStudentsForDelete.size})`}
                       </button>
+                      {graduationGradeLevelDraft && (
+                        <button
+                          type="button"
+                          onClick={() => openConfirmModal(
+                            '🎓 จบการศึกษาหมู่',
+                            `จบการศึกษาสำหรับนักเรียนชั้น ${graduationGradeLevelDraft} ทั้งหมด? นักเรียนจะถูกปิดใช้งาน แต่ข้อมูลยังคงอยู่ในระบบ`,
+                            async () => { await bulkGraduateStudents(); }
+                          )}
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg font-semibold bg-blue-100 text-blue-700 hover:bg-blue-200 border border-blue-200 transition-all duration-300"
+                          title={`จบการศึกษาสำหรับนักเรียนชั้น ${graduationGradeLevelDraft} ทั้งหมด`}
+                        >
+                          🎓 จบการศึกษาชั้น {graduationGradeLevelDraft}
+                        </button>
+                      )}
                     </div>
                     <div className="flex gap-2 items-center flex-wrap">
                       <button
@@ -4461,8 +4635,10 @@ function AdminPage() {
                         (s.username && s.username.toLowerCase().includes(studentSearchTermUsers.toLowerCase())) ||
                         (s.email && s.email.toLowerCase().includes(studentSearchTermUsers.toLowerCase()));
                       const matchStatus = studentStatusFilter === 'all' ||
-                        (studentStatusFilter === 'active' && s.is_active) ||
-                        (studentStatusFilter === 'inactive' && !s.is_active);
+                        (studentStatusFilter === 'active' && s.user_status === 'active') ||
+                        (studentStatusFilter === 'inactive' && s.user_status === 'inactive') ||
+                        (studentStatusFilter === 'graduated' && s.user_status === 'graduated') ||
+                        (studentStatusFilter === 'resigned' && s.user_status === 'resigned');
                       return matchSearch && matchStatus;
                     });
 
@@ -4575,7 +4751,11 @@ function AdminPage() {
                                   <td className="px-4 py-4 text-slate-600">{student.email}</td>
                                   <td className="px-4 py-4 text-slate-500">{student.username}</td>
                                   <td className="px-4 py-4 text-center">
-                                    {student.is_active ? (
+                                    {student.user_status === 'graduated' ? (
+                                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-100 text-blue-700 text-xs font-bold">🎓 จบการศึกษา</span>
+                                    ) : student.user_status === 'resigned' ? (
+                                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-orange-100 text-orange-700 text-xs font-bold">📋 ลาออก</span>
+                                    ) : student.is_active ? (
                                       <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold">✅ {t('admin.activeUsers')}</span>
                                     ) : (
                                       <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-red-100 text-red-700 text-xs font-bold">🚫 {t('admin.inactiveUsers')}</span>
@@ -4597,14 +4777,48 @@ function AdminPage() {
                                       >
                                         🔄
                                       </button>
-                                      {student.is_active ? (
-                                        <button 
-                                          className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-800 transition-all duration-200" 
-                                          onClick={() => openConfirmModal(t('admin.deactivateTitle'), `${t('admin.deactivateTitle')} "${student.full_name || student.username}"?`, async () => { await deactivateUser(student.id, student.full_name || student.username); })}
-                                          title={t('admin.deactivateTitle')}
+                                      {student.user_status === 'graduated' ? (
+                                        <button
+                                          className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-blue-100 text-blue-600 hover:bg-blue-200 hover:text-blue-800 transition-all duration-200"
+                                          onClick={() => openConfirmModal('🎓 ยกเลิกการจบการศึกษา', `ยกเลิกการจบการศึกษาของ "${student.full_name || student.username}" (ชั้น ${student.grade_level}) กลับสู่สถานะนักเรียนปกติ?`, async () => { await reinstateUser(student.id, student.full_name || student.username); })}
+                                          title="ยกเลิกการจบการศึกษา"
                                         >
-                                          🚫
+                                          ↩️
                                         </button>
+                                      ) : student.user_status === 'resigned' ? (
+                                        <button
+                                          className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-orange-100 text-orange-600 hover:bg-orange-200 hover:text-orange-800 transition-all duration-200"
+                                          onClick={() => openConfirmModal('📋 ยกเลิกการลาออก', `ยกเลิกการลาออกของ "${student.full_name || student.username}" กลับสู่สถานะนักเรียนปกติ?`, async () => { await reinstateUser(student.id, student.full_name || student.username); })}
+                                          title="ยกเลิกการลาออก"
+                                        >
+                                          ↩️
+                                        </button>
+                                      ) : student.is_active ? (
+                                        <>
+                                          <button 
+                                            className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-800 transition-all duration-200" 
+                                            onClick={() => openConfirmModal(t('admin.deactivateTitle'), `${t('admin.deactivateTitle')} "${student.full_name || student.username}"?`, async () => { await deactivateUser(student.id, student.full_name || student.username); })}
+                                            title={t('admin.deactivateTitle')}
+                                          >
+                                            🚫
+                                          </button>
+                                          {graduationGradeLevelDraft && student.grade_level === graduationGradeLevelDraft && (
+                                            <button
+                                              className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-blue-100 text-blue-600 hover:bg-blue-200 hover:text-blue-800 transition-all duration-200"
+                                              onClick={() => openConfirmModal('🎓 จบการศึกษา', `บันทึกการจบการศึกษาของ "${student.full_name || student.username}" (ชั้น ${student.grade_level})?`, async () => { await graduateUser(student.id, student.full_name || student.username); })}
+                                              title="จบการศึกษา"
+                                            >
+                                              🎓
+                                            </button>
+                                          )}
+                                          <button
+                                            className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-orange-100 text-orange-600 hover:bg-orange-200 hover:text-orange-800 transition-all duration-200"
+                                            onClick={() => openConfirmModal('📋 ลาออก', `บันทึกการลาออกของ "${student.full_name || student.username}"? ข้อมูลจะยังคงอยู่ในระบบ`, async () => { await resignUser(student.id, student.full_name || student.username); })}
+                                            title="บันทึกการลาออก (ข้อมูลยังอยู่)"
+                                          >
+                                            📋
+                                          </button>
+                                        </>
                                       ) : (
                                         <button 
                                           className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-emerald-100 text-emerald-600 hover:bg-emerald-200 hover:text-emerald-800 transition-all duration-200" 
@@ -4614,7 +4828,7 @@ function AdminPage() {
                                           ✅
                                         </button>
                                       )}
-                                      {!student.is_active && deletionStatuses[student.id]?.can_delete && (
+                                      {!student.is_active && student.user_status === 'inactive' && deletionStatuses[student.id]?.can_delete && (
                                         <button 
                                           className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-red-100 text-red-600 hover:bg-red-200 hover:text-red-800 transition-all duration-200" 
                                           onClick={() => openConfirmModal(t('admin.deleteTitle'), `${t('admin.deleteTitle')} "${student.full_name || student.username}"?`, async () => { await deleteUser(student.id, student.full_name || student.username); })}
@@ -4724,7 +4938,11 @@ function AdminPage() {
                                             <div className="text-sm text-slate-500 font-medium">@{student.username}</div>
                                         </div>
                                     </div>
-                                    {student.is_active ? (
+                                    {student.user_status === 'graduated' ? (
+                                      <span className="inline-flex items-center px-2 py-1 rounded-lg bg-blue-100 text-blue-700 text-[10px] font-black uppercase tracking-wider">🎓 จบการศึกษา</span>
+                                    ) : student.user_status === 'resigned' ? (
+                                      <span className="inline-flex items-center px-2 py-1 rounded-lg bg-orange-100 text-orange-700 text-[10px] font-black uppercase tracking-wider">📋 ลาออก</span>
+                                    ) : student.is_active ? (
                                       <span className="inline-flex items-center px-2 py-1 rounded-lg bg-emerald-100 text-emerald-700 text-[10px] font-black uppercase tracking-wider">✅ Active</span>
                                     ) : (
                                       <span className="inline-flex items-center px-2 py-1 rounded-lg bg-red-100 text-red-700 text-[10px] font-black uppercase tracking-wider">🚫 Inactive</span>
@@ -4751,14 +4969,48 @@ function AdminPage() {
                                       >
                                         🔄
                                       </button>
-                                      {student.is_active ? (
-                                        <button 
-                                          className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-800 transition-all" 
-                                          onClick={() => openConfirmModal(t('admin.deactivateTitle'), `${t('admin.deactivateTitle')} "${student.full_name || student.username}"?`, async () => { await deactivateUser(student.id, student.full_name || student.username); })}
-                                          title={t('admin.deactivateTitle')}
+                                      {student.user_status === 'graduated' ? (
+                                        <button
+                                          className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-blue-100 text-blue-600 hover:bg-blue-200 hover:text-blue-800 transition-all"
+                                          onClick={() => openConfirmModal('🎓 ยกเลิกการจบการศึกษา', `ยกเลิกการจบการศึกษาของ "${student.full_name || student.username}" (ชั้น ${student.grade_level}) กลับสู่สถานะนักเรียนปกติ?`, async () => { await reinstateUser(student.id, student.full_name || student.username); })}
+                                          title="ยกเลิกการจบการศึกษา"
                                         >
-                                          🚫
+                                          ↩️
                                         </button>
+                                      ) : student.user_status === 'resigned' ? (
+                                        <button
+                                          className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-orange-100 text-orange-600 hover:bg-orange-200 hover:text-orange-800 transition-all"
+                                          onClick={() => openConfirmModal('📋 ยกเลิกการลาออก', `ยกเลิกการลาออกของ "${student.full_name || student.username}" กลับสู่สถานะนักเรียนปกติ?`, async () => { await reinstateUser(student.id, student.full_name || student.username); })}
+                                          title="ยกเลิกการลาออก"
+                                        >
+                                          ↩️
+                                        </button>
+                                      ) : student.is_active ? (
+                                        <>
+                                          <button 
+                                            className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-800 transition-all" 
+                                            onClick={() => openConfirmModal(t('admin.deactivateTitle'), `${t('admin.deactivateTitle')} "${student.full_name || student.username}"?`, async () => { await deactivateUser(student.id, student.full_name || student.username); })}
+                                            title={t('admin.deactivateTitle')}
+                                          >
+                                            🚫
+                                          </button>
+                                          {graduationGradeLevelDraft && student.grade_level === graduationGradeLevelDraft && (
+                                            <button
+                                              className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-blue-100 text-blue-600 hover:bg-blue-200 hover:text-blue-800 transition-all"
+                                              onClick={() => openConfirmModal('🎓 จบการศึกษา', `บันทึกการจบการศึกษาของ "${student.full_name || student.username}" (ชั้น ${student.grade_level})?`, async () => { await graduateUser(student.id, student.full_name || student.username); })}
+                                              title="จบการศึกษา"
+                                            >
+                                              🎓
+                                            </button>
+                                          )}
+                                          <button
+                                            className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-orange-100 text-orange-600 hover:bg-orange-200 hover:text-orange-800 transition-all"
+                                            onClick={() => openConfirmModal('📋 ลาออก', `บันทึกการลาออกของ "${student.full_name || student.username}"? ข้อมูลจะยังคงอยู่ในระบบ`, async () => { await resignUser(student.id, student.full_name || student.username); })}
+                                            title="บันทึกการลาออก (ข้อมูลยังอยู่)"
+                                          >
+                                            📋
+                                          </button>
+                                        </>
                                       ) : (
                                         <button 
                                           className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-emerald-100 text-emerald-600 hover:bg-emerald-200 hover:text-emerald-800 transition-all" 
@@ -4768,7 +5020,7 @@ function AdminPage() {
                                           ✅
                                         </button>
                                       )}
-                                      {!student.is_active && deletionStatuses[student.id]?.can_delete && (
+                                      {!student.is_active && student.user_status === 'inactive' && deletionStatuses[student.id]?.can_delete && (
                                         <button 
                                           className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-red-100 text-red-600 hover:bg-red-200 hover:text-red-800 transition-all" 
                                           onClick={() => openConfirmModal(t('admin.deleteTitle'), `${t('admin.deleteTitle')} "${student.full_name || student.username}"?`, async () => { await deleteUser(student.id, student.full_name || student.username); })}
@@ -4968,7 +5220,7 @@ function AdminPage() {
                   ) : (
                     <>
                     {/* Desktop View: Table */}
-                    <div className="hidden md:block overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
+                    <div className="hidden md:block overflow-x-auto rounded-[1.25rem] border border-blue-100/80 ring-1 ring-blue-100/50 shadow-[0_18px_50px_-38px_rgba(59,130,246,0.28)] bg-white/85">
                       <table className="w-full text-sm">
                         <thead>
                           <tr className="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
@@ -5096,9 +5348,9 @@ function AdminPage() {
             </div>
         )}
         {activeTab === 'classrooms' && (
-          <div className="bg-white/80 backdrop-blur-xl rounded-3xl border border-white/60 shadow-xl shadow-slate-200/50 overflow-hidden">
+          <div className="bg-white/86 backdrop-blur-2xl rounded-[2rem] border border-white/70 ring-1 ring-slate-200/45 shadow-[0_24px_70px_-30px_rgba(15,23,42,0.34)] overflow-hidden">
             {/* Card Header */}
-            <div className="px-8 py-6 bg-gradient-to-r from-slate-50 to-white border-b border-slate-100">
+            <div className="px-8 py-6 bg-gradient-to-r from-indigo-50 via-white to-sky-50/70 border-b border-slate-100/80">
               <h2 className="flex items-center gap-3 text-2xl font-bold text-slate-800">
                 <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-blue-600 text-white text-xl shadow-lg shadow-indigo-500/30">🏫</span>
                 จัดการชั้นเรียน
@@ -5171,7 +5423,7 @@ function AdminPage() {
               ) : (
                 <>
                 {/* Desktop View: Table */}
-                <div className="hidden md:block overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
+                <div className="hidden md:block overflow-x-auto rounded-[1.25rem] border border-indigo-100/80 ring-1 ring-indigo-100/50 shadow-[0_18px_50px_-38px_rgba(99,102,241,0.28)] bg-white/85">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
@@ -5312,8 +5564,8 @@ function AdminPage() {
           </div>
         )}
         {activeTab === 'promotions' && (
-          <div className="bg-white/80 backdrop-blur-xl rounded-3xl border border-white/60 shadow-xl shadow-slate-200/50 overflow-hidden">
-            <div className="px-8 py-6 bg-gradient-to-r from-slate-50 to-white border-b border-slate-100">
+          <div className="bg-white/86 backdrop-blur-2xl rounded-[2rem] border border-white/70 ring-1 ring-slate-200/45 shadow-[0_24px_70px_-30px_rgba(15,23,42,0.34)] overflow-hidden">
+            <div className="px-8 py-6 bg-gradient-to-r from-fuchsia-50 via-white to-pink-50/70 border-b border-slate-100/80">
               <h2 className="flex items-center gap-3 text-2xl font-bold text-slate-800">
                 <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-600 text-white text-xl shadow-lg shadow-purple-500/30">⬆️</span>
                 เลื่อนชั้นเรียน
@@ -5386,7 +5638,7 @@ function AdminPage() {
               ) : (
                 <>
                 {/* Desktop View: Table */}
-                <div className="hidden md:block overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
+                <div className="hidden md:block overflow-x-auto rounded-[1.25rem] border border-purple-100/80 ring-1 ring-purple-100/50 shadow-[0_18px_50px_-38px_rgba(168,85,247,0.28)] bg-white/85">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
@@ -5522,8 +5774,8 @@ function AdminPage() {
           </div>
         )}
         {activeTab === 'homeroom' && (
-          <div className="bg-white/80 backdrop-blur-xl rounded-3xl border border-white/60 shadow-xl shadow-slate-200/50 overflow-hidden">
-            <div className="px-8 py-6 bg-gradient-to-r from-slate-50 to-white border-b border-slate-100">
+          <div className="bg-white/86 backdrop-blur-2xl rounded-[2rem] border border-white/70 ring-1 ring-slate-200/45 shadow-[0_24px_70px_-30px_rgba(15,23,42,0.34)] overflow-hidden">
+            <div className="px-8 py-6 bg-gradient-to-r from-teal-50 via-white to-emerald-50/70 border-b border-slate-100/80">
               <h2 className="flex items-center gap-3 text-2xl font-bold text-slate-800">
                 <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-teal-500 to-emerald-600 text-white text-xl shadow-lg shadow-teal-500/30">🏠</span>
                 ครูประจำชั้น
@@ -5541,6 +5793,29 @@ function AdminPage() {
                     กำหนดครูประจำชั้น
                   </button>
                 </div>
+
+                <div className="flex flex-wrap gap-3 items-center p-4 rounded-2xl bg-teal-50/70 border border-teal-100">
+                  <span className="text-sm font-bold text-teal-700 shrink-0">🗓️ กรองตาม:</span>
+                  <select
+                    value={selectedYear}
+                    onChange={e => setSelectedYear(e.target.value)}
+                    className="px-4 py-2.5 rounded-xl border border-teal-200 bg-white text-slate-700 font-semibold text-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-teal-400 transition-all"
+                  >
+                    <option value="">ทุกปีการศึกษา</option>
+                    {yearOptions.map(y => <option key={y} value={y}>ปี {y}</option>)}
+                  </select>
+                  <select
+                    value={selectedSemester}
+                    onChange={e => setSelectedSemester(Number(e.target.value))}
+                    className="px-4 py-2.5 rounded-xl border border-teal-200 bg-white text-slate-700 font-semibold text-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-teal-400 transition-all"
+                  >
+                    <option value={1}>ภาคเรียนที่ 1</option>
+                    <option value={2}>ภาคเรียนที่ 2</option>
+                  </select>
+                  <span className="ml-auto text-xs font-bold text-teal-600 bg-white px-3 py-1.5 rounded-full border border-teal-100">
+                    กำลังแสดง: ปี {selectedYear || '-'} เทอม {selectedSemester || '-'}
+                  </span>
+                </div>
                 
                 <div>
                   <h3 className="flex items-center gap-2 text-lg font-bold text-slate-700 mb-4">
@@ -5550,12 +5825,12 @@ function AdminPage() {
                     <div className="flex flex-col items-center justify-center py-16 px-8 rounded-2xl bg-gradient-to-br from-slate-50 to-teal-50 border-2 border-dashed border-slate-200">
                       <div className="text-6xl mb-4 animate-bounce">🏠</div>
                       <div className="text-xl font-bold text-slate-600 mb-2">{t('admin.noHomeroomTeachers')}</div>
-                      <div className="text-slate-400">{t('admin.startByAssigningHomeroom')}</div>
+                      <div className="text-slate-400 text-center">{`ยังไม่พบครูประจำชั้นในปี ${selectedYear || '-'} เทอม ${selectedSemester || '-'} กรุณาตรวจสอบตัวกรองด้านบน`}</div>
                     </div>
                   ) : (
                     <>
                     {/* Desktop View: Table */}
-                    <div className="hidden md:block overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
+                    <div className="hidden md:block overflow-x-auto rounded-[1.25rem] border border-teal-100/80 ring-1 ring-teal-100/50 shadow-[0_18px_50px_-38px_rgba(20,184,166,0.28)] bg-white/85">
                       <table className="w-full text-sm">
                         <thead>
                           <tr className="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
@@ -5563,6 +5838,7 @@ function AdminPage() {
                             <th className="px-4 py-4 text-left font-semibold text-slate-600">{t('admin.homeroomTeacher')}</th>
                             <th className="px-4 py-4 text-left font-semibold text-slate-600">{t('admin.studentCount')}</th>
                             <th className="px-4 py-4 text-left font-semibold text-slate-600">{t('admin.academicYear')}</th>
+                            <th className="px-4 py-4 text-left font-semibold text-slate-600">ภาคเรียน</th>
                             <th className="px-4 py-4 text-left font-semibold text-slate-600">{t('admin.management')}</th>
                           </tr>
                         </thead>
@@ -5570,7 +5846,12 @@ function AdminPage() {
                           {homeroomTeachers.map((hr) => (
                             <tr key={hr.id} className="hover:bg-teal-50/50 transition-colors duration-200">
                               <td className="px-4 py-4">
-                                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-teal-100 text-teal-700 text-sm font-semibold">📚 {hr.grade_level}</span>
+                                <div className="space-y-1">
+                                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-teal-100 text-teal-700 text-sm font-semibold">📚 {hr.classroom_name || hr.grade_level}</span>
+                                  {hr.classroom_name && hr.grade_level && (
+                                    <div className="text-xs text-slate-500">ระดับชั้น {hr.grade_level}</div>
+                                  )}
+                                </div>
                               </td>
                               <td className="px-4 py-4">
                                 <div className="space-y-1">
@@ -5581,9 +5862,10 @@ function AdminPage() {
                                 </div>
                               </td>
                               <td className="px-4 py-4">
-                                <span className="text-slate-600">👨‍🎓 {classrooms.filter(c => c.grade_level === hr.grade_level).reduce((total, c) => total + (classroomStudentCounts[c.id] || 0), 0) || 0} คน</span>
+                                <span className="text-slate-600">👨‍🎓 {hr.student_count || 0} คน</span>
                               </td>
                               <td className="px-4 py-4 text-slate-600">{hr.academic_year || '-'}</td>
+                              <td className="px-4 py-4 text-slate-600">{hr.semester ? `เทอม ${hr.semester}` : '-'}</td>
                               <td className="px-4 py-4">
                                 <div className="flex gap-2">
                                   <button 
@@ -5621,8 +5903,11 @@ function AdminPage() {
                                 <div className="flex justify-between items-start relative z-10">
                                     <div>
                                         <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-teal-100 text-teal-700 text-xs font-bold mb-2">
-                                            {hr.grade_level}
+                                        {hr.classroom_name || hr.grade_level}
                                         </span>
+                                      {hr.classroom_name && hr.grade_level && (
+                                        <div className="text-xs text-slate-400 font-semibold mb-1">ระดับชั้น {hr.grade_level}</div>
+                                      )}
                                         <h3 className="text-xl font-black text-slate-800">{hr.teacher_name || t('admin.notSpecified')}</h3>
                                         {hr.teacher_email && (
                                             <div className="text-sm text-slate-500 font-medium">{hr.teacher_email}</div>
@@ -5637,9 +5922,11 @@ function AdminPage() {
                                     </div>
                                     <div className="bg-slate-50 rounded-xl p-3 text-center border border-slate-100">
                                         <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">นักเรียนทั้งหมด</div>
-                                        <div className="font-bold text-slate-700">
-                                            {classrooms.filter(c => c.grade_level === hr.grade_level).reduce((total, c) => total + (classroomStudentCounts[c.id] || 0), 0)} คน
-                                        </div>
+                                      <div className="font-bold text-slate-700">{hr.student_count || 0} คน</div>
+                                    </div>
+                                    <div className="bg-slate-50 rounded-xl p-3 text-center border border-slate-100">
+                                      <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">ภาคเรียน</div>
+                                      <div className="font-bold text-slate-700">{hr.semester ? `เทอม ${hr.semester}` : '-'}</div>
                                     </div>
                                 </div>
 
@@ -5672,11 +5959,11 @@ function AdminPage() {
           </div>
         )}
         {activeTab === 'absences' && (
-          <AbsenceApproval />
+          <AbsenceApproval academicYear={selectedYear} semester={selectedSemester} />
         )}
         {activeTab === 'evaluations' && (
-          <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-xl overflow-hidden">
-            <div className="px-8 py-8 border-b border-slate-50 bg-gradient-to-r from-emerald-50/50 to-white">
+          <div className="bg-white/86 backdrop-blur-2xl rounded-[2rem] border border-white/70 ring-1 ring-slate-200/45 shadow-[0_24px_70px_-30px_rgba(15,23,42,0.34)] overflow-hidden">
+            <div className="px-8 py-8 border-b border-slate-100/80 bg-gradient-to-r from-emerald-50 via-white to-teal-50/70">
               <h2 className="flex items-center gap-4 text-2xl font-black text-slate-800 tracking-tight">
                 <div className="w-12 h-12 bg-emerald-500 text-white rounded-2xl flex items-center justify-center text-2xl">🧠</div>
                 จัดการหัวข้อคุณลักษณะอันพึงประสงค์
@@ -5684,9 +5971,9 @@ function AdminPage() {
               <p className="text-slate-500 font-medium mt-1 pl-16">กำหนดหัวข้อที่ครูต้องประเมินนักเรียนในแต่ละรายวิชา</p>
             </div>
             
-            <div className="p-8 space-y-8">
+            <div className="p-8 space-y-8 bg-gradient-to-b from-white via-slate-50/30 to-emerald-50/15">
               {/* Form to add new topic */}
-              <div className="max-w-2xl bg-slate-50 p-6 rounded-3xl border border-slate-100">
+              <div className="max-w-2xl bg-white/80 p-6 rounded-[1.75rem] border border-white/80 ring-1 ring-emerald-100/70 shadow-[0_18px_50px_-34px_rgba(16,185,129,0.28)]">
                 <h3 className="text-lg font-bold text-slate-700 mb-4 flex items-center gap-2">
                   <span className="text-xl">➕</span> เพิ่มหัวข้อใหม่
                 </h3>
@@ -5717,7 +6004,7 @@ function AdminPage() {
                      <div className="w-10 h-10 border-4 border-emerald-100 border-t-emerald-600 rounded-full animate-spin" />
                   </div>
                 ) : characteristicTopics.length === 0 ? (
-                  <div className="text-center py-16 bg-white border-2 border-dashed border-slate-100 rounded-3xl">
+                  <div className="text-center py-16 bg-gradient-to-br from-white to-emerald-50/50 border-2 border-dashed border-emerald-100 rounded-[1.75rem]">
                      <div className="text-5xl mb-4 grayscale opacity-30">📋</div>
                      <p className="text-slate-400 font-bold">ยังไม่มีหัวข้อการประเมิน</p>
                      <p className="text-slate-300 text-sm">เริ่มเพิ่มหัวข้อแรกที่แบบฟอร์มด้านบน</p>
@@ -5935,8 +6222,8 @@ function AdminPage() {
           </div>
         )}
         {activeTab === 'announcements' && (
-          <div className="bg-white/80 backdrop-blur-xl rounded-3xl border border-white/60 shadow-xl shadow-slate-200/50 overflow-hidden">
-            <div className="px-8 py-6 bg-gradient-to-r from-slate-50 to-white border-b border-slate-100">
+          <div className="bg-white/86 backdrop-blur-2xl rounded-[2rem] border border-white/70 ring-1 ring-slate-200/45 shadow-[0_24px_70px_-30px_rgba(15,23,42,0.34)] overflow-hidden">
+            <div className="px-8 py-6 bg-gradient-to-r from-amber-50 via-white to-orange-50/70 border-b border-slate-100/80">
               <h2 className="flex items-center gap-3 text-2xl font-bold text-slate-800">
                 <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 text-white text-xl shadow-lg shadow-amber-500/30">📢</span>
                 จัดการประกาศข่าว
@@ -6111,8 +6398,8 @@ function AdminPage() {
           </div>
         )}
         {activeTab === 'schedule' && (
-          <div className="bg-white/80 backdrop-blur-xl rounded-3xl border border-white/60 shadow-xl shadow-slate-200/50 overflow-hidden">
-            <div className="px-8 py-6 bg-gradient-to-r from-slate-50 to-white border-b border-slate-100">
+          <div className="bg-white/86 backdrop-blur-2xl rounded-[2rem] border border-white/70 ring-1 ring-slate-200/45 shadow-[0_24px_70px_-30px_rgba(15,23,42,0.34)] overflow-hidden">
+            <div className="px-8 py-6 bg-gradient-to-r from-cyan-50 via-white to-blue-50/70 border-b border-slate-100/80">
               <h2 className="flex items-center gap-3 text-2xl font-bold text-slate-800">
                 <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 text-white text-xl shadow-lg shadow-cyan-500/30">🗓️</span>
                 {t('admin.manageSchedule')}
@@ -6133,7 +6420,7 @@ function AdminPage() {
               <div>
                 <h3 className="flex items-center gap-2 text-lg font-bold text-slate-700 mb-4">{t('admin.schedulePeriods')}</h3>
                 {scheduleSlots.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-16 px-8 rounded-2xl bg-gradient-to-br from-slate-50 to-cyan-50 border-2 border-dashed border-slate-200">
+                  <div className="flex flex-col items-center justify-center py-16 px-8 rounded-[1.75rem] bg-gradient-to-br from-white to-cyan-50/80 border-2 border-dashed border-cyan-100 shadow-[0_18px_50px_-38px_rgba(6,182,212,0.38)]">
                     <div className="text-6xl mb-4 animate-bounce">🗓️</div>
                     <div className="text-xl font-bold text-slate-600 mb-2">{t('admin.noSchedulePeriods')}</div>
                     <div className="text-slate-400">{t('admin.startByAddingPeriod')}</div>
@@ -6141,7 +6428,7 @@ function AdminPage() {
                 ) : (
                   <>
                   {/* Desktop View: Table */}
-                  <div className="hidden md:block overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
+                  <div className="hidden md:block overflow-x-auto rounded-[1.25rem] border border-cyan-100/80 ring-1 ring-cyan-100/50 shadow-[0_18px_50px_-38px_rgba(6,182,212,0.3)] bg-white/85">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
@@ -6180,7 +6467,6 @@ function AdminPage() {
                       </tbody>
                     </table>
                   </div>
-
                   {/* Mobile View: Cards */}
                   <div className="grid grid-cols-1 gap-4 md:hidden">
                       {scheduleSlots.map(slot => (
@@ -6233,8 +6519,8 @@ function AdminPage() {
         )}
 
         {activeTab === 'school_deletion' && (
-          <div className="bg-white/80 backdrop-blur-xl rounded-3xl border border-white/60 shadow-xl shadow-slate-200/50 overflow-hidden">
-            <div className="px-8 py-6 bg-gradient-to-r from-slate-50 to-white border-b border-slate-100">
+          <div className="bg-white/86 backdrop-blur-2xl rounded-[2rem] border border-white/70 ring-1 ring-slate-200/45 shadow-[0_24px_70px_-30px_rgba(15,23,42,0.34)] overflow-hidden">
+            <div className="px-8 py-6 bg-gradient-to-r from-rose-50 via-white to-red-50/70 border-b border-slate-100/80">
               <h2 className="flex items-center gap-3 text-2xl font-bold text-slate-800">
                 <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-red-500 to-rose-600 text-white text-xl shadow-lg shadow-red-500/30">🏫</span>
                 ขอลบโรงเรียน
@@ -6253,7 +6539,7 @@ function AdminPage() {
 
               <div className="max-w-2xl space-y-6">
                 {/* Request Form */}
-                <div className="p-6 rounded-2xl bg-gradient-to-br from-slate-50 to-slate-100 border border-slate-200">
+                <div className="p-6 rounded-[1.75rem] bg-gradient-to-br from-white to-slate-50 border border-white/80 ring-1 ring-slate-200/60 shadow-[0_18px_50px_-36px_rgba(15,23,42,0.24)]">
                   <h3 className="flex items-center gap-2 text-lg font-bold text-slate-700 mb-4">📝 ส่งคำขอการลบโรงเรียน</h3>
                   <div className="mb-6">
                     <label className="block text-sm font-semibold text-slate-700 mb-2">เหตุผลในการลบโรงเรียน *</label>
@@ -6279,7 +6565,7 @@ function AdminPage() {
                 </div>
 
                 {/* Request Status */}
-                <div className="p-6 rounded-2xl bg-gradient-to-br from-slate-50 to-slate-100 border border-slate-200">
+                <div className="p-6 rounded-[1.75rem] bg-gradient-to-br from-white to-slate-50 border border-white/80 ring-1 ring-slate-200/60 shadow-[0_18px_50px_-36px_rgba(15,23,42,0.24)]">
                   <h3 className="flex items-center gap-2 text-lg font-bold text-slate-700 mb-4">📋 {t('admin.requestStatus')}</h3>
 
                   {loadingDeletionRequests ? (
@@ -6323,7 +6609,7 @@ function AdminPage() {
 
         {activeTab === 'schedules' && (
           <div className="bg-white/80 backdrop-blur-xl rounded-3xl border border-white/60 shadow-xl shadow-slate-200/50 overflow-hidden">
-            <div className="px-8 py-6 bg-gradient-to-r from-slate-50 to-white border-b border-slate-100 flex flex-wrap items-center justify-between gap-4">
+            <div className="px-8 py-6 bg-gradient-to-r from-indigo-50 via-white to-violet-50/70 border-b border-slate-100/80 flex flex-wrap items-center justify-between gap-4">
               <h2 className="flex items-center gap-3 text-2xl font-bold text-slate-800">
                 <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white text-xl shadow-lg shadow-indigo-500/30">📅</span>
                 เพิ่มตารางเรียนสำหรับครูและนักเรียน
@@ -6392,8 +6678,8 @@ function AdminPage() {
         )}
 
         {activeTab === 'subjects' && (
-          <div className="bg-white/80 backdrop-blur-xl rounded-3xl border border-white/60 shadow-xl shadow-slate-200/50 overflow-hidden">
-            <div className="px-8 py-6 bg-gradient-to-r from-slate-50 to-white border-b border-slate-100">
+          <div className="bg-white/86 backdrop-blur-2xl rounded-[2rem] border border-white/70 ring-1 ring-slate-200/45 shadow-[0_24px_70px_-30px_rgba(15,23,42,0.34)] overflow-hidden">
+            <div className="px-8 py-6 bg-gradient-to-r from-emerald-50 via-white to-lime-50/70 border-b border-slate-100/80">
               <h2 className="flex items-center gap-3 text-2xl font-bold text-slate-800">
                 <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-green-600 text-white text-xl shadow-lg shadow-emerald-500/30">📚</span>
                 {t('admin.manageSubjects')}
@@ -6728,8 +7014,8 @@ function AdminPage() {
         )}
 
         {activeTab === 'settings' && (
-          <div className="bg-white/80 backdrop-blur-xl rounded-3xl border border-white/60 shadow-xl shadow-slate-200/50 overflow-hidden">
-            <div className="px-8 py-6 bg-gradient-to-r from-slate-50 to-white border-b border-slate-100">
+          <div className="bg-white/86 backdrop-blur-2xl rounded-[2rem] border border-white/70 ring-1 ring-slate-200/45 shadow-[0_24px_70px_-30px_rgba(15,23,42,0.34)] overflow-hidden">
+            <div className="px-8 py-6 bg-gradient-to-r from-slate-50 via-white to-blue-50/70 border-b border-slate-100/80">
               <h2 className="flex items-center gap-3 text-2xl font-bold text-slate-800">
                 <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-slate-500 to-slate-600 text-white text-xl shadow-lg shadow-slate-500/30">⚙️</span>
                 ตั้งค่า
@@ -7075,7 +7361,7 @@ function AdminPage() {
 
         {/* ===================== RANKINGS TAB ===================== */}
         {activeTab === 'rankings' && (
-          <div className="bg-white/80 backdrop-blur-xl rounded-3xl border border-white/60 shadow-xl shadow-slate-200/50 overflow-hidden">
+          <div className="bg-white/86 backdrop-blur-2xl rounded-[2rem] border border-white/70 ring-1 ring-slate-200/45 shadow-[0_24px_70px_-30px_rgba(15,23,42,0.34)] overflow-hidden">
             {/* Header */}
             <div className="px-8 py-6 bg-gradient-to-r from-amber-50 via-orange-50 to-yellow-50 border-b border-amber-100 flex flex-wrap items-center justify-between gap-4">
               <h2 className="flex items-center gap-3 text-2xl font-extrabold text-slate-800">
@@ -7280,6 +7566,7 @@ function AdminPage() {
 
         </div>
       </div>
+      </div>
 
       {showModal && (
         <CreateUserModal 
@@ -7415,16 +7702,19 @@ function AdminPage() {
       availableGradeLevels={availableGradeLevels}
       homeroomTeachers={homeroomTeachers}
       classrooms={classrooms}
+      selectedYear={selectedYear}
+      selectedSemester={selectedSemester}
       onClose={cancelHomeroomModal}
-      onSave={(teacherId, classroomId, academicYear, gradeLevel) => {
+      onSave={(teacherId, classroomId, academicYear, gradeLevel, semester) => {
         setNewHomeroomTeacherId(teacherId);
         setNewHomeroomClassroomId(classroomId || '');
         setNewHomeroomGradeLevel(gradeLevel || '');
         setNewHomeroomAcademicYear(academicYear || '');
+        setNewHomeroomSemester(semester || '');
         if (editingHomeroom) {
-          updateHomeroomTeacher(teacherId, classroomId, academicYear);
+          updateHomeroomTeacher(teacherId, classroomId, academicYear, semester);
         } else {
-          createHomeroomTeacher(teacherId, classroomId, academicYear, gradeLevel);
+          createHomeroomTeacher(teacherId, classroomId, academicYear, gradeLevel, semester);
         }
       }}
     />
@@ -7466,6 +7756,9 @@ function AdminPage() {
       teachers={teachers}
       subjects={subjects}
       classrooms={classrooms}
+      semesterPeriods={semesterPeriods}
+      initialAcademicYear={adminScheduleYear}
+      initialSemester={adminScheduleSemester}
       editingAssignment={editingAssignment}
       onSuccess={() => {
         // Refresh schedules or data as needed

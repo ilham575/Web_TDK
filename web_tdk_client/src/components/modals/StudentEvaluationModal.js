@@ -25,9 +25,7 @@ function StudentEvaluationModal({ isOpen, subject, students, onClose, teacherId,
       const schoolId = localStorage.getItem('school_id');
       if (!schoolId) return;
       try {
-        const response = await fetch(`${API_BASE_URL}/evaluations/characteristic-topics?school_id=${schoolId}`, {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-        });
+        const response = await fetch(`${API_BASE_URL}/evaluations/characteristic-topics?school_id=${schoolId}`);
         if (response.ok) {
           const data = await response.json();
           setCharacteristicTopics(data);
@@ -77,9 +75,7 @@ function StudentEvaluationModal({ isOpen, subject, students, onClose, teacherId,
           
           const queryString = `?${params.toString()}`;
 
-          const res = await fetch(`${API_BASE_URL}/evaluations/subject/${subject.id}${queryString}`, {
-             headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-          });
+           const res = await fetch(`${API_BASE_URL}/evaluations/subject/${subject.id}${queryString}`);
           if (res.ok) {
              const data = await res.json();
              setEvaluatedStudentIds(data.map(e => e.student_id));
@@ -175,8 +171,7 @@ function StudentEvaluationModal({ isOpen, subject, students, onClose, teacherId,
       const response = await fetch(`${API_BASE_URL}/evaluations${isEditing ? `/${existingEvaluation.id}` : ''}`, {
         method: isEditing ? 'PUT' : 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify(isEditing ? {
           reading: evaluation.reading,

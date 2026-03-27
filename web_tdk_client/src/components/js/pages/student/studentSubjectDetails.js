@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { API_BASE_URL } from '../../../endpoints';
-import { logout } from '../../../../utils/authUtils';
+import { fetchCurrentUser, hasSessionMarker, logout } from '../../../../utils/authUtils';
 import { 
   ArrowLeft, 
   Calendar, 
@@ -28,10 +28,8 @@ function StudentSubjectDetails() {
   const [activeTab, setActiveTab] = useState('attendance');
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) { navigate('/signin'); return; }
-    fetch(`${API_BASE_URL}/users/me`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(res => res.json())
+      if (!hasSessionMarker()) { navigate('/signin'); return; }
+      fetchCurrentUser()
       .then(data => {
         if (data.role !== 'student') {
           logout();
@@ -52,23 +50,20 @@ function StudentSubjectDetails() {
     if (!currentUser) return;
     const fetchData = async () => {
       try {
-        const token = localStorage.getItem('token');
-        const headers = { ...(token ? { Authorization: `Bearer ${token}` } : {}) };
-
-        const subjectsRes = await fetch(`${API_BASE_URL}/subjects/student/${currentUser.id}`, { headers });
+            const subjectsRes = await fetch(`${API_BASE_URL}/subjects/student/${currentUser.id}`);
         const subjects = await subjectsRes.json();
         const subj = Array.isArray(subjects) ? subjects.find(s => String(s.id) === String(subjectId)) : null;
         setSubject(subj);
 
-        const attendanceRes = await fetch(`${API_BASE_URL}/attendance/?subject_id=${subjectId}`, { headers });
+            const attendanceRes = await fetch(`${API_BASE_URL}/attendance/?subject_id=${subjectId}`);
         const att = await attendanceRes.json();
         setAttendanceRecords(Array.isArray(att) ? att : []);
 
-        const gradesRes = await fetch(`${API_BASE_URL}/grades/?subject_id=${subjectId}`, { headers });
+            const gradesRes = await fetch(`${API_BASE_URL}/grades/?subject_id=${subjectId}`);
         const grds = await gradesRes.json();
         setGrades(Array.isArray(grds) ? grds.filter(g => g.student_id === currentUser.id) : []);
 
-        const assignmentsRes = await fetch(`${API_BASE_URL}/grades/assignments/${subjectId}`, { headers });
+            const assignmentsRes = await fetch(`${API_BASE_URL}/grades/assignments/${subjectId}`);
         const ass = await assignmentsRes.json();
         setAssignments(Array.isArray(ass) ? ass : []);
 
@@ -155,14 +150,14 @@ function StudentSubjectDetails() {
   }
 
   if (loading) return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-sky-50/20 to-emerald-50/20 flex flex-col items-center justify-center p-6">
        <div className="w-16 h-16 border-4 border-emerald-100 border-t-emerald-500 rounded-full animate-spin mb-4"></div>
        <p className="text-slate-400 font-bold animate-pulse">กำลังโหลดข้อมูล...</p>
     </div>
   );
 
   if (!subject) return (
-    <div className="min-h-screen bg-slate-50 p-6 flex items-center justify-center">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-sky-50/20 to-emerald-50/20 p-6 flex items-center justify-center">
       <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100 p-12 text-center max-w-md w-full">
          <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6">
             <AlertCircle className="w-10 h-10 text-slate-300" />
@@ -182,7 +177,7 @@ function StudentSubjectDetails() {
   const isAllEnded = subject.teachers?.length > 0 && subject.teachers.every(t => t.is_ended);
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-20 selection:bg-emerald-100 selection:text-emerald-900">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-sky-50/20 to-emerald-50/20 pb-20 selection:bg-emerald-100 selection:text-emerald-900">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
         
         {/* Header */}

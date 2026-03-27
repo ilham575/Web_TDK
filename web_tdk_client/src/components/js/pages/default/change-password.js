@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { API_BASE_URL } from '../../../endpoints';
-import { logout } from '../../../../utils/authUtils';
+import { fetchCurrentUser, hasSessionMarker, logout } from '../../../../utils/authUtils';
 
 function ChangePasswordPage() {
   const navigate = useNavigate();
@@ -15,17 +15,13 @@ function ChangePasswordPage() {
 
   useEffect(() => {
     // Check for token
-    const token = localStorage.getItem('token');
-    if (!token) {
+    if (!hasSessionMarker()) {
       navigate('/signin');
       return;
     }
 
     // Fetch user info
-    fetch(`${API_BASE_URL}/users/me`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-      .then(res => res.json())
+    fetchCurrentUser()
       .then(data => {
         if (data.detail) {
           logout();
@@ -121,7 +117,7 @@ function ChangePasswordPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-violet-50/20 to-indigo-50/20 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
       {/* Decorative Ornaments */}
       <div className="absolute top-0 left-0 w-full h-2 bg-emerald-600"></div>
       <div className="absolute -top-24 -left-24 w-96 h-96 bg-emerald-100 rounded-full opacity-50 blur-3xl"></div>

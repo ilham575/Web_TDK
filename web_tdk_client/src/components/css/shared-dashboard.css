@@ -4,7 +4,7 @@
 .dashboard-base {
   min-height: 100vh;
   background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 30%, #cbd5e1 70%, #f1f5f9 100%);
-  font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-family: var(--app-font-sans);
   color: #2d3748;
   position: relative;
   overflow-x: hidden;

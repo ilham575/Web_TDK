@@ -18,7 +18,7 @@ import FirstVisitOnboarding, {
   shouldShowOnboarding
 } from '../../FirstVisitOnboarding';
 import { setSchoolFavicon } from '../../../../utils/faviconUtils';
-import { logout } from '../../../../utils/authUtils';
+import { fetchCurrentUser, hasSessionMarker, logout } from '../../../../utils/authUtils';
 import { 
   BookOpen, 
   Home, 
@@ -198,15 +198,11 @@ function TeacherPage() {
   };
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) {
+    if (!hasSessionMarker()) {
       navigate('/signin');
       return;
     }
-    fetch(`${API_BASE_URL}/users/me`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-      .then(res => res.json())
+    fetchCurrentUser()
       .then(data => {
         if (data.role !== 'teacher') {
           logout();
@@ -479,10 +475,9 @@ function TeacherPage() {
   useEffect(() => {
     const checkGradeAnnouncement = async () => {
       try {
-        const token = localStorage.getItem('token');
         let schoolId = localStorage.getItem('school_id');
-        if (!schoolId && token) {
-          const userRes = await fetch(`${API_BASE_URL}/users/me`, { headers: { Authorization: `Bearer ${token}` } });
+        if (!schoolId && hasSessionMarker()) {
+          const userRes = await fetch(`${API_BASE_URL}/users/me`, { credentials: 'include' });
           if (userRes.ok) {
             const ud = await userRes.json();
             schoolId = ud.school_id || ud?.school?.id || null;
@@ -1186,7 +1181,7 @@ function TeacherPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-20">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-teal-50/20 to-emerald-50/20 pb-20">
       <FirstVisitOnboarding
         open={showTeacherOnboarding}
         onClose={handleCloseTeacherOnboarding}
@@ -1235,8 +1230,9 @@ function TeacherPage() {
 
           {/* Active Period Status Card */}
           {activePeriod && (
-            <div className="mt-6 bg-white rounded-3xl p-6 shadow-sm border border-slate-100 relative overflow-hidden group hover:shadow-md transition-all duration-500 z-10">
+            <div className="mt-6 bg-white rounded-3xl p-6 shadow-sm border border-emerald-100/60 relative overflow-hidden group hover:shadow-lg transition-all duration-500 z-10">
                <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-br from-emerald-50 to-teal-50 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 opacity-60 pointer-events-none group-hover:scale-110 transition-transform duration-700"></div>
+               <div className="absolute top-0 left-0 w-1.5 h-full bg-gradient-to-b from-emerald-400 to-teal-400 rounded-l-3xl"></div>
                
                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
                   <div>
@@ -1296,14 +1292,14 @@ function TeacherPage() {
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex flex-wrap gap-2 mb-8 bg-white p-2 rounded-2xl shadow-sm border border-slate-100">
+        <div className="flex flex-wrap gap-1.5 mb-8 bg-white/80 backdrop-blur-sm p-2 rounded-2xl shadow-sm border border-slate-100/80">
           {tabs.map(tab => (
             <button
               key={tab.id}
               onClick={() => tab.id === 'evaluations' ? navigate('/teacher/evaluations') : setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-sm transition-all active:scale-95 ${
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95 ${
                 (activeTab === tab.id && tab.id !== 'evaluations')
-                  ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200' 
+                  ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-md shadow-emerald-200/60' 
                   : 'text-slate-500 hover:bg-slate-50 hover:text-emerald-600'
               }`}
             >
@@ -1320,10 +1316,10 @@ function TeacherPage() {
               <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
                 <div>
                   <h3 className="text-3xl font-black text-slate-800 tracking-tight flex items-center gap-3">
-                    <span className="w-12 h-12 rounded-2xl bg-gradient-to-br from-slate-800 to-slate-700 text-white flex items-center justify-center text-xl shadow-lg shadow-slate-200/50">📚</span>
+                    <span className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 text-white flex items-center justify-center text-xl shadow-lg shadow-emerald-200/50">📚</span>
                     รายวิชาของฉัน
                   </h3>
-                  <p className="text-slate-500 font-bold mt-2 ml-1">จัดการคอร์สเรียนและการวัดผลนักเรียนประจำภาคเรียน</p>
+                  <p className="text-slate-500 font-medium mt-2 ml-1">จัดการคอร์สเรียนและการวัดผลนักเรียนประจำภาคเรียน</p>
                 </div>
               </div>
 
@@ -1534,8 +1530,11 @@ function TeacherPage() {
             <div className="space-y-6">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                  <h3 className="text-2xl font-black text-slate-800 tracking-tight">🏫 ชั้นที่ได้รับมอบหมาย</h3>
-                  <p className="text-slate-500 font-medium italic">ครูประจำชั้น: สรุปภาพรวมและติดตามความก้าวหน้า</p>
+                  <h3 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-3">
+                    <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-500 text-white flex items-center justify-center text-lg shadow-md shadow-blue-200/50">🏫</span>
+                    ชั้นที่ได้รับมอบหมาย
+                  </h3>
+                  <p className="text-slate-500 font-medium mt-1.5 ml-1">ครูประจำชั้น: สรุปภาพรวมและติดตามความก้าวหน้า</p>
                 </div>
                 {/* Homeroom semester/year filter */}
                 <div className="flex items-center gap-2 flex-wrap">
@@ -2044,7 +2043,7 @@ function TeacherPage() {
 
           {activeTab === 'absences' && (
             <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 min-h-[500px]">
-              <AbsenceApproval />
+              <AbsenceApproval academicYear={homeroomYear} semester={homeroomSemester} />
             </div>
           )}
 

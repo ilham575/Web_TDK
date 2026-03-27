@@ -52,6 +52,11 @@ class AbsenceResponse(BaseModel):
     student_name: Optional[str] = None  # ชื่อนักเรียน
     subject_id: Optional[int] = None
     subject_name: Optional[str] = None  # ชื่อวิชา
+    classroom_id: Optional[int] = None
+    classroom_name: Optional[str] = None
+    grade_level: Optional[str] = None
+    academic_year: Optional[str] = None
+    semester: Optional[int] = None
     absence_date: date
     absence_date_end: Optional[date] = None  # End date for multi-day
     days_count: int = 1  # Number of days

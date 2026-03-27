@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import ReactDOM from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { API_BASE_URL } from '../../../endpoints';
@@ -18,7 +18,7 @@ import {
   Inbox
 } from 'lucide-react';
 
-export default function AbsenceApproval() {
+export default function AbsenceApproval({ academicYear = '', semester = '' }) {
   const { t } = useTranslation();
   const [absences, setAbsences] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -30,13 +30,14 @@ export default function AbsenceApproval() {
   const [processingIds, setProcessingIds] = useState(new Set()); // Track which absences are being processed
 
   // Load absences
-  const loadAbsences = async () => {
+  const loadAbsences = useCallback(async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE_URL}/absences/`, {
-        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
-      });
+      const params = new URLSearchParams();
+      if (academicYear) params.set('academic_year', academicYear);
+      if (semester !== '' && semester !== null && semester !== undefined) params.set('semester', semester);
+      const queryString = params.toString() ? `?${params.toString()}` : '';
+      const res = await fetch(`${API_BASE_URL}/absences/${queryString}`);
       if (res.ok) {
         const data = await res.json();
         setAbsences(Array.isArray(data) ? data : []);
@@ -47,11 +48,11 @@ export default function AbsenceApproval() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [academicYear, semester, t]);
 
   useEffect(() => {
     loadAbsences();
-  }, []);
+  }, [loadAbsences]);
 
   // Filter absences
   const filteredAbsences = filter === 'all' 
@@ -69,12 +70,10 @@ export default function AbsenceApproval() {
     setProcessingIds(prev => new Set([...prev, absenceId]));
 
     try {
-      const token = localStorage.getItem('token');
       const res = await fetch(`${API_BASE_URL}/absences/${absenceId}`, {
         method: 'PUT',
         headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({ 
           status: 'approved',
@@ -128,12 +127,10 @@ export default function AbsenceApproval() {
     setProcessingIds(prev => new Set([...prev, selectedAbsenceId]));
 
     try {
-      const token = localStorage.getItem('token');
       const res = await fetch(`${API_BASE_URL}/absences/${selectedAbsenceId}`, {
         method: 'PUT',
         headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({ 
           status: 'rejected', 
@@ -245,7 +242,7 @@ export default function AbsenceApproval() {
   };
 
   return (
-    <section className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
+    <section className="bg-white/85 backdrop-blur-xl rounded-[2rem] border border-white/70 shadow-[0_24px_70px_-30px_rgba(15,23,42,0.32)] ring-1 ring-slate-200/40 overflow-hidden">
       <div className="p-6 md:p-8 border-b border-slate-50 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-slate-50 to-white">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 bg-emerald-500 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-emerald-200">
@@ -424,9 +421,9 @@ export default function AbsenceApproval() {
       </div>
 
       {showRejectModal && ReactDOM.createPortal(
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowRejectModal(false)} />
-          <div className="relative w-full max-w-md bg-white rounded-[2rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+          <div className="relative w-full max-w-md bg-white/95 border border-white/70 rounded-[2rem] shadow-[0_32px_90px_-28px_rgba(15,23,42,0.42)] ring-1 ring-slate-200/60 overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="p-6 border-b border-slate-50 flex items-center justify-between">
               <div className="flex items-center gap-3 text-rose-600">
                 <div className="w-10 h-10 bg-rose-50 rounded-xl flex items-center justify-center">

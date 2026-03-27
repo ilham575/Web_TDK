@@ -100,12 +100,12 @@ function AdminScheduleModal({ isOpen, editingSchedule, onClose, onSubmit }) {
   ];
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6">
       <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={handleClose} />
       
-      <div className="relative w-full max-w-lg bg-white rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-300">
+      <div className="relative w-full max-w-lg bg-white/95 border border-white/70 rounded-[2rem] shadow-[0_32px_90px_-28px_rgba(15,23,42,0.42)] ring-1 ring-slate-200/60 overflow-hidden flex flex-col animate-in zoom-in-95 duration-300">
         {/* Header */}
-        <div className="px-8 py-6 border-b border-slate-50 flex items-center justify-between bg-gradient-to-r from-slate-50 to-white">
+        <div className="px-8 py-6 border-b border-slate-100/80 flex items-center justify-between bg-gradient-to-r from-slate-50 via-white to-indigo-50/50">
           <div className="flex items-center gap-4">
             <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-lg ${editingSchedule ? 'bg-amber-500 shadow-amber-200' : 'bg-emerald-500 shadow-emerald-200'}`}>
               {editingSchedule ? <Edit3 className="w-6 h-6" /> : <Plus className="w-6 h-6" />}
@@ -126,7 +126,7 @@ function AdminScheduleModal({ isOpen, editingSchedule, onClose, onSubmit }) {
         </div>
 
         {/* Body */}
-        <div className="p-8 space-y-8">
+        <div className="p-8 space-y-8 bg-gradient-to-b from-white via-slate-50/35 to-indigo-50/20">
           {/* Day selection */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -258,7 +258,7 @@ function AdminScheduleModal({ isOpen, editingSchedule, onClose, onSubmit }) {
         </div>
 
         {/* Footer */}
-        <div className="px-8 py-6 border-t border-slate-50 bg-slate-50/30 flex items-center justify-between">
+        <div className="px-8 py-6 border-t border-slate-100/80 bg-gradient-to-r from-slate-50/90 via-white to-indigo-50/50 flex items-center justify-between">
           <button 
             type="button" 
             className="flex items-center gap-2 px-6 py-3 bg-white border border-slate-200 text-slate-600 rounded-xl font-black text-sm transition-all hover:bg-slate-50 active:scale-95"

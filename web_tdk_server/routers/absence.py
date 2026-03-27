@@ -3,9 +3,9 @@ import os
 import smtplib
 from email.message import EmailMessage
 from sqlalchemy.orm import Session
-from sqlalchemy import and_
+from sqlalchemy import and_, or_, desc
 from typing import List, Optional
-from datetime import date, datetime
+from datetime import date, datetime, time as dt_time
 
 from database.connection import get_db
 from routers.user import get_current_user
@@ -15,63 +15,172 @@ from models.homeroom import HomeroomTeacher
 from models.announcement import Announcement as AnnouncementModel
 from models.classroom import ClassroomStudent, Classroom
 from models.subject import Subject
+from models.semester_period import SemesterPeriod as SemesterPeriodModel
 from schemas.absence import AbsenceCreate, AbsenceUpdate, AbsenceResponse
 
 router = APIRouter(prefix="/absences", tags=["absences"])
 
 
-def get_student_grade_level(db: Session, student_id: int) -> Optional[str]:
-    """ดึง grade_level ของนักเรียนจาก classroom ที่ active"""
-    enrollment = db.query(ClassroomStudent).join(
+def academic_year_matches(left: Optional[str], right: Optional[str]) -> bool:
+    if not left or not right:
+        return False
+    left_value = str(left).strip()
+    right_value = str(right).strip()
+    return left_value == right_value or left_value.endswith(right_value) or right_value.endswith(left_value)
+
+
+def semester_matches(left: Optional[int], right: Optional[int], allow_null_left: bool = False) -> bool:
+    if right is None:
+        return True
+    if left is None:
+        return allow_null_left
+    return int(left) == int(right)
+
+
+def get_student_absence_context(
+    db: Session,
+    student_id: int,
+    *,
+    absence_date: Optional[date] = None,
+    subject_id: Optional[int] = None,
+):
+    """Resolve the student's classroom/year/semester context for a specific absence."""
+    enrollments = db.query(ClassroomStudent, Classroom).join(
         Classroom, ClassroomStudent.classroom_id == Classroom.id
     ).filter(
         ClassroomStudent.student_id == student_id,
         ClassroomStudent.is_active == True,
         Classroom.is_active == True
-    ).first()
-    
-    if enrollment:
-        classroom = db.query(Classroom).filter(Classroom.id == enrollment.classroom_id).first()
-        return classroom.grade_level if classroom else None
-    return None
+    ).all()
+
+    subject = None
+    if subject_id:
+        subject = db.query(Subject).filter(Subject.id == subject_id).first()
+
+    def to_context(classroom: Optional[Classroom]):
+        if classroom is None:
+            user = db.query(User).filter(User.id == student_id).first()
+            return {
+                'classroom_id': None,
+                'classroom_name': None,
+                'grade_level': getattr(user, 'grade_level', None),
+                'school_id': getattr(user, 'school_id', None),
+                'academic_year': None,
+                'semester': None,
+            }
+        return {
+            'classroom_id': classroom.id,
+            'classroom_name': classroom.name,
+            'grade_level': classroom.grade_level,
+            'school_id': classroom.school_id,
+            'academic_year': classroom.academic_year,
+            'semester': classroom.semester,
+        }
+
+    if subject:
+        for _, classroom in enrollments:
+            if (
+                classroom.school_id == subject.school_id
+                and academic_year_matches(classroom.academic_year, subject.academic_year)
+                and semester_matches(classroom.semester, getattr(subject, 'semester', None))
+            ):
+                return to_context(classroom)
+
+    if absence_date and enrollments:
+        school_id = enrollments[0][1].school_id
+        period = db.query(SemesterPeriodModel).filter(
+            SemesterPeriodModel.school_id == school_id,
+            or_(SemesterPeriodModel.start_date == None, SemesterPeriodModel.start_date <= datetime.combine(absence_date, dt_time.max)),
+            or_(SemesterPeriodModel.end_date == None, SemesterPeriodModel.end_date >= datetime.combine(absence_date, dt_time.min))
+        ).order_by(SemesterPeriodModel.academic_year.desc(), SemesterPeriodModel.semester.desc()).first()
+
+        if period:
+            for _, classroom in enrollments:
+                if academic_year_matches(classroom.academic_year, period.academic_year) and semester_matches(classroom.semester, period.semester):
+                    return to_context(classroom)
+
+    if enrollments:
+        ordered = sorted(
+            (classroom for _, classroom in enrollments),
+            key=lambda classroom: (
+                int(''.join(ch for ch in str(classroom.academic_year or '0') if ch.isdigit()) or '0'),
+                int(classroom.semester or 0),
+                classroom.id,
+            ),
+            reverse=True,
+        )
+        return to_context(ordered[0])
+
+    return to_context(None)
+
+
+def get_student_grade_level(db: Session, student_id: int) -> Optional[str]:
+    return get_student_absence_context(db, student_id).get('grade_level')
 
 
 def get_student_school_id(db: Session, student_id: int) -> Optional[int]:
-    """ดึง school_id ของนักเรียนจาก classroom ที่ active"""
-    enrollment = db.query(ClassroomStudent).join(
-        Classroom, ClassroomStudent.classroom_id == Classroom.id
-    ).filter(
-        ClassroomStudent.student_id == student_id,
-        ClassroomStudent.is_active == True,
-        Classroom.is_active == True
-    ).first()
-    
-    if enrollment:
-        classroom = db.query(Classroom).filter(Classroom.id == enrollment.classroom_id).first()
-        return classroom.school_id if classroom else None
-    return None
+    return get_student_absence_context(db, student_id).get('school_id')
 
 
-def is_homeroom_teacher_of_student(db: Session, teacher_id: int, student_id: int) -> bool:
-    """ตรวจสอบว่าครูเป็นครูประจำชั้นของนักเรียนหรือไม่"""
-    # ดึง grade_level และ school_id ของนักเรียน
-    grade_level = get_student_grade_level(db, student_id)
-    school_id = get_student_school_id(db, student_id)
-    
-    if not grade_level or not school_id:
-        return False
-    
-    # ตรวจสอบว่าครูเป็นครูประจำชั้นของ grade_level นี้ในโรงเรียนเดียวกันหรือไม่
-    homeroom = db.query(HomeroomTeacher).filter(
-        HomeroomTeacher.teacher_id == teacher_id,
-        HomeroomTeacher.grade_level == grade_level,
-        HomeroomTeacher.school_id == school_id
-    ).first()
-    
-    return homeroom is not None
+def find_matching_homeroom_assignments(
+    db: Session,
+    *,
+    school_id: Optional[int],
+    classroom_id: Optional[int],
+    grade_level: Optional[str],
+    academic_year: Optional[str],
+    semester: Optional[int],
+    teacher_id: Optional[int] = None,
+):
+    if not school_id:
+        return []
+
+    query = db.query(HomeroomTeacher).filter(HomeroomTeacher.school_id == school_id)
+    if teacher_id is not None:
+        query = query.filter(HomeroomTeacher.teacher_id == teacher_id)
+
+    candidates = query.all()
+    exact_matches = [
+        hr for hr in candidates
+        if classroom_id is not None
+        and hr.classroom_id == classroom_id
+        and (not academic_year or academic_year_matches(hr.academic_year, academic_year))
+        and semester_matches(getattr(hr, 'semester', None), semester, allow_null_left=True)
+    ]
+    if exact_matches:
+        return exact_matches
+
+    return [
+        hr for hr in candidates
+        if grade_level
+        and hr.grade_level == grade_level
+        and (not academic_year or academic_year_matches(hr.academic_year, academic_year))
+        and semester_matches(getattr(hr, 'semester', None), semester, allow_null_left=True)
+    ]
 
 
-def can_approve_absence(db: Session, current_user, student_id: int) -> tuple:
+def is_homeroom_teacher_of_student(db: Session, teacher_id: int, student_id: int, absence: Optional[AbsenceModel] = None) -> bool:
+    """ตรวจสอบว่าครูเป็นครูประจำชั้นของนักเรียนในปี/ภาคของรายการลาหรือไม่"""
+    context = get_student_absence_context(
+        db,
+        student_id,
+        absence_date=getattr(absence, 'absence_date', None),
+        subject_id=getattr(absence, 'subject_id', None),
+    )
+
+    homerooms = find_matching_homeroom_assignments(
+        db,
+        school_id=context.get('school_id'),
+        classroom_id=context.get('classroom_id'),
+        grade_level=context.get('grade_level'),
+        academic_year=context.get('academic_year'),
+        semester=context.get('semester'),
+        teacher_id=teacher_id,
+    )
+    return len(homerooms) > 0
+
+
+def can_approve_absence(db: Session, current_user, student_id: int, absence: Optional[AbsenceModel] = None) -> tuple:
     """
     ตรวจสอบว่าผู้ใช้มีสิทธิ์อนุมัติการลาของนักเรียนหรือไม่
     Returns: (can_approve, role)
@@ -90,7 +199,7 @@ def can_approve_absence(db: Session, current_user, student_id: int) -> tuple:
     
     # Teacher ต้องเป็นครูประจำชั้นของนักเรียนนั้น
     if role == 'teacher':
-        if is_homeroom_teacher_of_student(db, current_user.id, student_id):
+        if is_homeroom_teacher_of_student(db, current_user.id, student_id, absence):
             return True, 'teacher'
     
     return False, None
@@ -113,6 +222,13 @@ def absence_to_response(db: Session, absence: AbsenceModel) -> dict:
     if absence.approved_by:
         approver = db.query(User).filter(User.id == absence.approved_by).first()
         approver_name = approver.full_name if approver else None
+
+    context = get_student_absence_context(
+        db,
+        absence.student_id,
+        absence_date=absence.absence_date,
+        subject_id=absence.subject_id,
+    )
     
     return {
         "id": absence.id,
@@ -125,6 +241,11 @@ def absence_to_response(db: Session, absence: AbsenceModel) -> dict:
         "days_count": absence.days_count,
         "absence_type": absence.absence_type,
         "reason": absence.reason,
+        "classroom_id": context.get('classroom_id'),
+        "classroom_name": context.get('classroom_name'),
+        "grade_level": context.get('grade_level'),
+        "academic_year": context.get('academic_year'),
+        "semester": context.get('semester'),
         "status": absence.status,
         "approved_by": absence.approved_by,
         "approver_name": approver_name,
@@ -175,17 +296,25 @@ def create_absence(
     
     # Notify homeroom teacher(s) and admins via email (if SMTP is configured)
     try:
-        # Find student's school/grade
-        grade_level = get_student_grade_level(db, current_user.id)
-        school_id = get_student_school_id(db, current_user.id)
+        context = get_student_absence_context(
+            db,
+            current_user.id,
+            absence_date=new_absence.absence_date,
+            subject_id=new_absence.subject_id,
+        )
+        school_id = context.get('school_id')
 
-        # Find homeroom teachers for this grade/school
+        # Find homeroom teachers for the exact classroom/year/semester when possible
         homeroom_teachers = []
-        if grade_level and school_id:
-            homeroom_teachers = db.query(HomeroomTeacher).filter(
-                HomeroomTeacher.grade_level == grade_level,
-                HomeroomTeacher.school_id == school_id
-            ).all()
+        if school_id:
+            homeroom_teachers = find_matching_homeroom_assignments(
+                db,
+                school_id=school_id,
+                classroom_id=context.get('classroom_id'),
+                grade_level=context.get('grade_level'),
+                academic_year=context.get('academic_year'),
+                semester=context.get('semester'),
+            )
 
         # Collect recipient emails
         recipient_emails = []
@@ -197,7 +326,7 @@ def create_absence(
                 recipient_emails.append(teacher.email)
 
         if not homeroom_teachers:
-            print(f'No homeroom teacher found for student {current_user.id} (grade {grade_level}, school {school_id})')
+            print(f"No homeroom teacher found for student {current_user.id} (classroom {context.get('classroom_id')}, year {context.get('academic_year')}, semester {context.get('semester')})")
 
         # Also add admins in the same school
         if school_id:
@@ -272,6 +401,8 @@ def create_absence(
 def list_absences(
     student_id: int = None,
     status_filter: str = None,
+    academic_year: Optional[str] = None,
+    semester: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
@@ -289,29 +420,51 @@ def list_absences(
     if role == 'student':
         query = query.filter(AbsenceModel.student_id == current_user.id)
     elif role == 'teacher':
-        # Teacher sees absences from students in their homeroom grade level
-        homeroom = db.query(HomeroomTeacher).filter(
+        homerooms = db.query(HomeroomTeacher).filter(
             HomeroomTeacher.teacher_id == current_user.id
-        ).first()
-        
-        if homeroom:
-            # ดึงรายชื่อนักเรียนในชั้นเรียนที่ครูประจำ
-            student_ids = db.query(ClassroomStudent.student_id).join(
-                Classroom, ClassroomStudent.classroom_id == Classroom.id
-            ).filter(
-                Classroom.grade_level == homeroom.grade_level,
-                Classroom.school_id == homeroom.school_id,
-                ClassroomStudent.is_active == True
-            ).all()
-            student_ids = [s[0] for s in student_ids]
-            
-            if student_ids:
-                query = query.filter(AbsenceModel.student_id.in_(student_ids))
-            else:
-                # No students, return empty
-                return []
+        ).all()
+
+        filtered_homerooms = [
+            hr for hr in homerooms
+            if (not academic_year or academic_year_matches(hr.academic_year, academic_year))
+            and semester_matches(getattr(hr, 'semester', None), semester, allow_null_left=True)
+        ]
+
+        if not filtered_homerooms:
+            return []
+
+        student_ids = set()
+        for hr in filtered_homerooms:
+            if hr.classroom_id:
+                ids = db.query(ClassroomStudent.student_id).filter(
+                    ClassroomStudent.classroom_id == hr.classroom_id,
+                    ClassroomStudent.is_active == True
+                ).all()
+                student_ids.update(student_id_value for student_id_value, in ids)
+                continue
+
+            classrooms_query = db.query(Classroom.id).filter(
+                Classroom.school_id == hr.school_id,
+                Classroom.grade_level == hr.grade_level,
+                Classroom.is_active == True
+            )
+            if academic_year or hr.academic_year:
+                target_year = academic_year or hr.academic_year
+                classrooms_query = classrooms_query.filter(Classroom.academic_year == target_year)
+            if semester is not None or getattr(hr, 'semester', None) is not None:
+                classrooms_query = classrooms_query.filter(Classroom.semester == (semester if semester is not None else hr.semester))
+
+            classroom_ids = [classroom_id_value for classroom_id_value, in classrooms_query.all()]
+            if classroom_ids:
+                ids = db.query(ClassroomStudent.student_id).filter(
+                    ClassroomStudent.classroom_id.in_(classroom_ids),
+                    ClassroomStudent.is_active == True
+                ).all()
+                student_ids.update(student_id_value for student_id_value, in ids)
+
+        if student_ids:
+            query = query.filter(AbsenceModel.student_id.in_(student_ids))
         else:
-            # Teacher is not a homeroom teacher, return empty
             return []
     elif role in ['admin', 'owner']:
         # Admin sees all absences in their school
@@ -341,8 +494,14 @@ def list_absences(
             raise HTTPException(status_code=400, detail='Invalid status value')
     
     absences = query.order_by(AbsenceModel.absence_date.desc()).all()
-    
-    return [absence_to_response(db, a) for a in absences]
+    responses = [absence_to_response(db, a) for a in absences]
+
+    if academic_year:
+        responses = [item for item in responses if academic_year_matches(item.get('academic_year'), academic_year)]
+    if semester is not None:
+        responses = [item for item in responses if semester_matches(item.get('semester'), semester)]
+
+    return responses
 
 
 @router.get('/{absence_id}', response_model=AbsenceResponse)
@@ -365,7 +524,7 @@ def get_absence(
     
     # Teachers can only view absences of students in their homeroom
     if role == 'teacher':
-        if not is_homeroom_teacher_of_student(db, current_user.id, absence.student_id):
+        if not is_homeroom_teacher_of_student(db, current_user.id, absence.student_id, absence):
             raise HTTPException(status_code=403, detail='Not authorized to view this absence')
     
     return absence_to_response(db, absence)
@@ -428,7 +587,7 @@ def update_absence(
     # Handle status change (approval/rejection) - only for teachers/admins
     elif payload.status is not None:
         # Check authorization
-        can_approve, approver_role = can_approve_absence(db, current_user, absence.student_id)
+        can_approve, approver_role = can_approve_absence(db, current_user, absence.student_id, absence)
         
         if not can_approve:
             raise HTTPException(
@@ -514,7 +673,7 @@ def delete_absence(
     
     # Teachers can only delete absences of their homeroom students
     if role == 'teacher':
-        if not is_homeroom_teacher_of_student(db, current_user.id, absence.student_id):
+        if not is_homeroom_teacher_of_student(db, current_user.id, absence.student_id, absence):
             raise HTTPException(status_code=403, detail='Not authorized to delete this absence')
     
     db.delete(absence)

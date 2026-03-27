@@ -28,18 +28,17 @@ export default function ClassroomDetailModal({ isOpen, classroomId, onClose, onS
   useEffect(() => {
     if (!isOpen || !classroomId) return;
 
-    const token = localStorage.getItem('token');
     setIsLoading(true);
 
     // Fetch classroom details
-    fetch(`${API_BASE_URL}/classrooms/${classroomId}`, { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`${API_BASE_URL}/classrooms/${classroomId}`)
       .then(res => res.json())
       .then(data => setClassroom(data))
       .catch(err => {})
       .finally(() => {});
 
     // Fetch students
-    fetch(`${API_BASE_URL}/classrooms/${classroomId}/students`, { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`${API_BASE_URL}/classrooms/${classroomId}/students`)
       .then(res => res.json())
       .then(data => {
         const allStudents = data || [];
@@ -60,8 +59,7 @@ export default function ClassroomDetailModal({ isOpen, classroomId, onClose, onS
 
   const fetchStudents = useCallback(() => {
     if (!classroomId) return;
-    const token = localStorage.getItem('token');
-    fetch(`${API_BASE_URL}/classrooms/${classroomId}/students`, { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`${API_BASE_URL}/classrooms/${classroomId}/students`)
       .then(res => res.json())
       .then(data => {
         const allStudents = data || [];
@@ -76,11 +74,10 @@ export default function ClassroomDetailModal({ isOpen, classroomId, onClose, onS
     if (!classroomId) return;
     setSavingNumber(true);
     try {
-      const token = localStorage.getItem('token');
       const body = { student_number: editNumberValue === '' ? null : parseInt(editNumberValue) };
       const res = await fetch(`${API_BASE_URL}/classrooms/${classroomId}/students/${studentId}/student-number`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
       });
       if (res.ok) {
@@ -103,10 +100,8 @@ export default function ClassroomDetailModal({ isOpen, classroomId, onClose, onS
     if (!classroomId) return;
     setAutoAssigning(true);
     try {
-      const token = localStorage.getItem('token');
       const res = await fetch(`${API_BASE_URL}/classrooms/${classroomId}/auto-assign-student-numbers`, {
-        method: 'PUT',
-        headers: { Authorization: `Bearer ${token}` }
+        method: 'PUT'
       });
       if (res.ok) {
         toast.success('กำหนดเลขที่อัตโนมัติเรียบร้อย');

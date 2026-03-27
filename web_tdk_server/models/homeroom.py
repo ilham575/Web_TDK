@@ -13,14 +13,15 @@ class HomeroomTeacher(Base):
     classroom_id = Column(Integer, ForeignKey("classrooms.id"), nullable=True, index=True)
     school_id = Column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
     academic_year = Column(String(10), nullable=True)  # ปีการศึกษา เช่น "2567"
+    semester = Column(Integer, nullable=True, index=True)  # ภาคเรียน เช่น 1 หรือ 2
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     # Ensure one teacher can only be assigned to one homeroom per school per academic year
     # Also ensure a classroom can have at most one homeroom assignment per academic year
     __table_args__ = (
-        UniqueConstraint('teacher_id', 'school_id', 'academic_year', name='uq_homeroom_teacher_school_year'),
-        UniqueConstraint('classroom_id', 'academic_year', name='uq_homeroom_classroom_year'),
+        UniqueConstraint('teacher_id', 'school_id', 'academic_year', 'semester', name='uq_homeroom_teacher_school_year_semester'),
+        UniqueConstraint('classroom_id', 'academic_year', 'semester', name='uq_homeroom_classroom_year_semester'),
     )
 
     # Relationships

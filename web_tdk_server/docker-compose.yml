@@ -4,10 +4,10 @@ services:
     container_name: web_tdk_mysql
     restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: rootpassword
-      MYSQL_DATABASE: web_tdk_db
-      MYSQL_USER: admin_tdk
-      MYSQL_PASSWORD: Ihsan53295
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-local_root_password_change_me}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-web_tdk_db}
+      MYSQL_USER: ${MYSQL_USER:-web_tdk_app}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-local_app_password_change_me}
     ports:
       - "3307:3306"
     volumes:
@@ -25,12 +25,12 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - DATABASE_URL=mysql+pymysql://admin_tdk:Ihsan53295@mysql/web_tdk_db
-      - JWT_SECRET_KEY=your-super-secret-jwt-key-change-this-in-production
-      - JWT_ALGORITHM=HS256
-      - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=1440
-      - DEBUG=True
-      - CORS_ORIGINS=*
+      - DATABASE_URL=${DATABASE_URL}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
+      - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-1440}
+      - DEBUG=${DEBUG:-True}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
     depends_on:
       mysql:
         condition: service_healthy

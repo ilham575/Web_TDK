@@ -34,10 +34,7 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
     if (!studentId) return;
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE_URL}/absences/`, {
-        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
-      });
+      const res = await fetch(`${API_BASE_URL}/absences/`);
       if (res.ok) {
         const data = await res.json();
         setAbsences(Array.isArray(data) ? data : []);
@@ -64,7 +61,6 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
     // Validations... logic simplified for brevity but should match original constraints
     
     try {
-      const token = localStorage.getItem('token');
       const payload = {
         absence_date: formData.start_date,
         absence_date_end: formData.end_date || formData.start_date,
@@ -82,8 +78,7 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
       const res = await fetch(url, {
         method,
         headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify(payload)
       });
@@ -112,10 +107,8 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
   const handleDelete = async (id) => {
     if (!window.confirm('คุณต้องการลบรายการนี้ใช่หรือไม่?')) return;
     try {
-        const token = localStorage.getItem('token');
         const res = await fetch(`${API_BASE_URL}/absences/${id}`, {
-            method: 'DELETE',
-            headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
+        method: 'DELETE'
         });
         if (res.ok) {
             toast.success('ลบข้อมูลสำเร็จ');

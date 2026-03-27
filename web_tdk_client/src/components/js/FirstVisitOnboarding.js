@@ -77,7 +77,7 @@ function FirstVisitOnboarding({
   const styles = ACCENT_STYLES[accent] || ACCENT_STYLES.emerald;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-slate-900/60 p-2 backdrop-blur-sm sm:items-center sm:p-4 lg:p-6">
+    <div className="fixed inset-0 z-[9999] flex items-start justify-center overflow-y-auto bg-slate-900/60 p-2 backdrop-blur-sm sm:items-center sm:p-4 lg:p-6">
       <div className="relative my-2 flex max-h-[calc(100vh-1rem)] w-full max-w-5xl flex-col overflow-hidden rounded-[28px] border border-white/70 bg-white shadow-2xl shadow-slate-900/20 sm:my-4 sm:max-h-[calc(100vh-2rem)] sm:rounded-[32px] lg:max-h-[min(880px,calc(100vh-3rem))]">
         <div className={`absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r ${styles.banner}`}></div>
 

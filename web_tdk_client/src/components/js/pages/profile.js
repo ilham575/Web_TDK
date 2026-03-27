@@ -5,6 +5,7 @@ import Loading from '../Loading';
 import ChangePasswordModal from '../ChangePasswordModal';
 import ClassroomDetailModal from '../ClassroomDetailModal';
 import { API_BASE_URL } from '../../endpoints';
+import { fetchCurrentUser, hasSessionMarker } from '../../../utils/authUtils';
 
 function ProfilePage() {
   const navigate = useNavigate();
@@ -27,8 +28,7 @@ function ProfilePage() {
   // Refresh student count when modal opens
   useEffect(() => {
     if (showClassroomModal && selectedClassroomId) {
-      const token = localStorage.getItem('token');
-      fetch(`${API_BASE_URL}/classrooms/${selectedClassroomId}/students`, { headers: { Authorization: `Bearer ${token}` } })
+      fetch(`${API_BASE_URL}/classrooms/${selectedClassroomId}/students`)
         .then(res => res.json())
         .then(students => {
           setClassroomStudentCounts(prev => ({ ...prev, [selectedClassroomId]: Array.isArray(students) ? students.length : 0 }));
@@ -40,11 +40,9 @@ function ProfilePage() {
   }, [showClassroomModal, selectedClassroomId]);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) { navigate('/signin'); return; }
+    if (!hasSessionMarker()) { navigate('/signin'); return; }
 
-    fetch(`${API_BASE_URL}/users/me`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(res => res.json())
+    fetchCurrentUser()
       .then(data => {
         setUser(data);
         setEditData({
@@ -65,8 +63,7 @@ function ProfilePage() {
           // If teacher, fetch homeroom assignments and classrooms
           if (data.role === 'teacher') {
             setLoadingHomerooms(true);
-            const token = localStorage.getItem('token');
-            fetch(`${API_BASE_URL}/homeroom/?school_id=${data.school_id}`, { headers: { Authorization: `Bearer ${token}` } })
+            fetch(`${API_BASE_URL}/homeroom/?school_id=${data.school_id}`)
               .then(res => res.json())
               .then(homerooms => {
                 // Filter for this teacher only
@@ -74,13 +71,13 @@ function ProfilePage() {
                 setTeacherHomerooms(assigned || []);
                 // For each assigned grade_level, fetch classrooms
                 assigned.forEach(hr => {
-                  fetch(`${API_BASE_URL}/classrooms?school_id=${data.school_id}&grade_level=${encodeURIComponent(hr.grade_level)}`, { headers: { Authorization: `Bearer ${token}` } })
+                  fetch(`${API_BASE_URL}/classrooms?school_id=${data.school_id}&grade_level=${encodeURIComponent(hr.grade_level)}`)
                     .then(res => res.json())
                     .then(classrooms => {
                       setTeacherClassrooms(prev => ({ ...prev, [hr.grade_level]: classrooms }));
                       // Fetch actual student counts for each classroom
                       classrooms.forEach(classroom => {
-                        fetch(`${API_BASE_URL}/classrooms/${classroom.id}/students`, { headers: { Authorization: `Bearer ${token}` } })
+                        fetch(`${API_BASE_URL}/classrooms/${classroom.id}/students`)
                           .then(res => res.json())
                           .then(students => {
                             // Filter out deleted students (is_active === false)
@@ -103,7 +100,7 @@ function ProfilePage() {
         // If admin/teacher, fetch available grade levels for dropdown
         if (data.role === 'admin' || data.role === 'teacher') {
           setLoadingGradeLevels(true);
-          fetch(`${API_BASE_URL}/homeroom/grade-levels?school_id=${data.school_id}`, { headers: { Authorization: `Bearer ${token}` } })
+          fetch(`${API_BASE_URL}/homeroom/grade-levels?school_id=${data.school_id}`)
             .then(res => res.json())
             .then(g => setGradeLevels(g || []))
             .catch(() => setGradeLevels([]))
@@ -121,7 +118,6 @@ function ProfilePage() {
   const handleSave = async () => {
     try {
       setIsSaving(true);
-      const token = localStorage.getItem('token');
       const payload = {
         full_name: editData.full_name,
         email: editData.email || null
@@ -136,8 +132,7 @@ function ProfilePage() {
       const res = await fetch(`${API_BASE_URL}/users/me`, {
         method: 'PUT',
         headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify(payload)
       });
@@ -166,7 +161,7 @@ function ProfilePage() {
   if (loading) return <Loading />;
 
   if (!user) return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-violet-50/20 to-blue-50/20 flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl shadow-xl p-8 text-center max-w-sm w-full">
         <div className="text-5xl mb-4">🔍</div>
         <h1 className="text-2xl font-bold text-slate-800">ไม่พบข้อมูลผู้ใช้</h1>
@@ -214,7 +209,7 @@ function ProfilePage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-violet-50/20 to-blue-50/20 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-4xl mx-auto bg-white rounded-3xl shadow-xl shadow-slate-200/50 overflow-hidden">
         {/* Profile Header */}
         <div className="bg-gradient-to-r from-emerald-600 to-teal-600 px-8 py-12 text-center text-white relative">

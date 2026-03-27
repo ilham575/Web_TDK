@@ -64,10 +64,10 @@ function CreateUserModal({ isOpen, onClose, onSuccess }) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[10000] flex items-end sm:items-center justify-center p-0 sm:p-4 sm:sm:p-6 backdrop-blur-sm bg-slate-900/40 animate-in fade-in duration-300">
-      <div className="bg-white w-full max-w-xl rounded-t-[2.5rem] sm:rounded-[2.5rem] shadow-2xl shadow-slate-900/20 overflow-hidden flex flex-col animate-in slide-in-from-bottom sm:zoom-in-95 duration-300 max-h-[85vh] sm:max-h-[calc(100dvh-2rem)]">
+    <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-0 sm:p-4 sm:p-6 bg-slate-950/55 backdrop-blur-md animate-in fade-in duration-300">
+      <div className="bg-white/95 border border-white/70 w-full max-w-xl rounded-t-[2rem] sm:rounded-[2rem] shadow-[0_32px_90px_-28px_rgba(15,23,42,0.42)] ring-1 ring-slate-200/60 overflow-hidden flex flex-col animate-in slide-in-from-bottom sm:zoom-in-95 duration-300 max-h-[85vh] sm:max-h-[calc(100dvh-2rem)]">
         {/* Header */}
-        <div className="px-8 py-6 border-b border-slate-50 flex items-center justify-between bg-white sticky top-0 z-10">
+        <div className="px-8 py-6 border-b border-slate-100/80 flex items-center justify-between bg-gradient-to-r from-slate-50 via-white to-indigo-50/50 sticky top-0 z-10">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center">
               <UserPlus className="w-5 h-5" />
@@ -90,7 +90,7 @@ function CreateUserModal({ isOpen, onClose, onSuccess }) {
         </div>
 
         <form onSubmit={handleCreateUser} className="flex flex-col flex-1 overflow-hidden">
-          <div className="p-8 overflow-y-auto space-y-5 flex-1">
+          <div className="p-8 overflow-y-auto space-y-5 flex-1 bg-gradient-to-b from-white via-slate-50/35 to-indigo-50/20">
             <div className="space-y-1.5">
               <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 px-1">
                 <User className="w-3.5 h-3.5" />
@@ -184,7 +184,7 @@ function CreateUserModal({ isOpen, onClose, onSuccess }) {
             </div>
           </div>
           
-          <div className="px-8 py-6 bg-slate-50/50 flex flex-col sm:flex-row gap-3 mt-auto">
+          <div className="px-8 py-6 bg-gradient-to-r from-slate-50/90 via-white to-indigo-50/50 border-t border-slate-100/80 flex flex-col sm:flex-row gap-3 mt-auto">
             <button 
               type="button" 
               className="flex-1 h-12 bg-white hover:bg-slate-100 text-slate-600 rounded-xl font-black text-sm transition-all active:scale-95 border border-slate-100" 

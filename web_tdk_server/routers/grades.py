@@ -1399,8 +1399,12 @@ def get_classroom_ranking(classroom_id: int, academic_year: str = None, semester
 
     results = []
     for student in students:
-        # If grade_level/combined mode is used, pass classroom_id=None to get overall performance for that period
-        cid_for_transcript = None if (grade_level or is_combined_classroom_mode) else classroom_id
+        # When a specific academic year/semester is requested, ranking should follow the
+        # same transcript scope used by export and student views: all subjects in that period.
+        # Limiting by classroom_id here can drop valid grades whose rows were saved without
+        # the matching classroom reference and incorrectly force totals to 0.
+        has_period_filter = academic_year is not None or semester is not None
+        cid_for_transcript = None if (grade_level or is_combined_classroom_mode or has_period_filter) else classroom_id
         transcript = _get_student_transcript_internal(student.id, cid_for_transcript, db, academic_year=academic_year, semester=semester)
         
         total_score = 0.0

@@ -33,7 +33,7 @@ const AboutMe = () => {
 
     return (
         <div
-            className="min-h-screen bg-slate-50 py-12 px-4 sm:px-6 lg:px-8"
+            className="min-h-screen bg-gradient-to-br from-slate-50 via-violet-50/20 to-blue-50/20 py-12 px-4 sm:px-6 lg:px-8"
             style={{ fontFamily: 'Mali, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial', color: '#0f172a' }}
         >
             <div className="max-w-5xl mx-auto">

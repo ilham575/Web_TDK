@@ -15,7 +15,7 @@ import FirstVisitOnboarding, {
   shouldShowOnboarding
 } from '../../FirstVisitOnboarding';
 import { setSchoolFavicon } from '../../../../utils/faviconUtils';
-import { logout } from '../../../../utils/authUtils';
+import { fetchCurrentUser, hasSessionMarker, logout } from '../../../../utils/authUtils';
 
 import OwnerTabs from './OwnerTabs';
 
@@ -72,10 +72,8 @@ function OwnerPage() {
   const [loadingSettings, setLoadingSettings] = useState(false);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) { navigate('/signin'); return; }
-    fetch(`${API_BASE_URL}/users/me`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(res => res.json())
+    if (!hasSessionMarker()) { navigate('/signin'); return; }
+    fetchCurrentUser()
       .then(data => {
         if (data.role !== 'owner') {
           logout();
@@ -133,8 +131,7 @@ function OwnerPage() {
   const loadSchools = async () => {
     setLoadingSchools(true);
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE_URL}/owner/schools`, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(`${API_BASE_URL}/owner/schools`);
       if (res.ok) {
         const data = await res.json();
         setSchools(data);
@@ -152,8 +149,7 @@ function OwnerPage() {
   const loadActivities = async () => {
     setLoadingActivities(true);
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE_URL}/owner/activities`, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(`${API_BASE_URL}/owner/activities`);
       if (res.ok) {
         const data = await res.json();
         setActivities(data);
@@ -171,8 +167,7 @@ function OwnerPage() {
   const loadAdminRequests = async () => {
     setLoadingRequests(true);
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE_URL}/owner/admin_requests`, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(`${API_BASE_URL}/owner/admin_requests`);
       if (res.ok) {
         const data = await res.json();
         setAdminRequests(data);
@@ -189,13 +184,10 @@ function OwnerPage() {
 
   // Password Reset Request Functions
   const fetchPasswordResetRequests = async () => {
-    const token = localStorage.getItem('token');
-    if (!token) return;
+    if (!hasSessionMarker()) return;
     setLoadingResetRequests(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/users/password_reset_requests`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      const res = await fetch(`${API_BASE_URL}/users/password_reset_requests`);
       if (res.ok) {
         const data = await res.json();
         setPasswordResetRequests(data);
@@ -208,13 +200,11 @@ function OwnerPage() {
   };
 
   const approvePasswordReset = async (requestId, userId, newPassword) => {
-    const token = localStorage.getItem('token');
-    if (!token) { toast.error(t('owner.loginRequired')); return; }
+    if (!hasSessionMarker()) { toast.error(t('owner.loginRequired')); return; }
     try {
       const res = await fetch(`${API_BASE_URL}/users/password_reset_requests/${requestId}/approve`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ user_id: userId, new_password: newPassword })
@@ -236,12 +226,10 @@ function OwnerPage() {
   };
 
   const rejectPasswordReset = async (requestId) => {
-    const token = localStorage.getItem('token');
-    if (!token) { toast.error(t('owner.loginRequired')); return; }
+    if (!hasSessionMarker()) { toast.error(t('owner.loginRequired')); return; }
     try {
       const res = await fetch(`${API_BASE_URL}/users/password_reset_requests/${requestId}/reject`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
+        method: 'POST'
       });
       const data = await res.json();
       if (!res.ok) {
@@ -260,8 +248,7 @@ function OwnerPage() {
   const loadSchoolDeletionRequests = async () => {
     setLoadingDeletionRequests(true);
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE_URL}/owner/school_deletion_requests`, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(`${API_BASE_URL}/owner/school_deletion_requests`);
       if (res.ok) {
         const data = await res.json();
         setSchoolDeletionRequests(data);
@@ -277,12 +264,10 @@ function OwnerPage() {
   };
 
   const approveSchoolDeletionRequest = async (requestId) => {
-    const token = localStorage.getItem('token');
-    if (!token) { toast.error(t('owner.loginRequired')); return; }
+    if (!hasSessionMarker()) { toast.error(t('owner.loginRequired')); return; }
     try {
       const res = await fetch(`${API_BASE_URL}/owner/school_deletion_requests/${requestId}/approve`, {
-        method: 'PATCH',
-        headers: { Authorization: `Bearer ${token}` }
+        method: 'PATCH'
       });
       const data = await res.json();
       if (!res.ok) {
@@ -299,14 +284,12 @@ function OwnerPage() {
   };
 
   const rejectSchoolDeletionRequest = async (requestId, reviewNotes) => {
-    const token = localStorage.getItem('token');
-    if (!token) { toast.error(t('owner.loginRequired')); return; }
+    if (!hasSessionMarker()) { toast.error(t('owner.loginRequired')); return; }
     try {
       const res = await fetch(`${API_BASE_URL}/owner/school_deletion_requests/${requestId}/reject`, {
         method: 'PATCH',
         headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({ review_notes: reviewNotes })
       });
@@ -329,10 +312,8 @@ function OwnerPage() {
 
   const approveRequest = async (requestId) => {
     try {
-      const token = localStorage.getItem('token');
       const res = await fetch(`${API_BASE_URL}/owner/admin_requests/${requestId}/approve`, {
-        method: 'PATCH',
-        headers: { Authorization: `Bearer ${token}` }
+        method: 'PATCH'
       });
       if (res.ok) {
         toast.success(t('owner.requestApproveSuccess'));
@@ -349,12 +330,10 @@ function OwnerPage() {
   };
 
   const deleteSchool = async (schoolId) => {
-    const token = localStorage.getItem('token');
-    if (!token) { toast.error(t('owner.loginRequired')); return; }
+    if (!hasSessionMarker()) { toast.error(t('owner.loginRequired')); return; }
     try {
       const res = await fetch(`${API_BASE_URL}/owner/schools/${schoolId}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` }
+        method: 'DELETE'
       });
       if (res.status === 204 || res.ok) {
         toast.success(t('owner.deleteSchoolSuccess'));
@@ -371,10 +350,8 @@ function OwnerPage() {
 
   const rejectRequest = async (requestId) => {
     try {
-      const token = localStorage.getItem('token');
       const res = await fetch(`${API_BASE_URL}/owner/admin_requests/${requestId}/reject`, {
-        method: 'PATCH',
-        headers: { Authorization: `Bearer ${token}` }
+        method: 'PATCH'
       });
       if (res.ok) {
         toast.success(t('owner.rejectRequestSuccess'));
@@ -397,10 +374,9 @@ function OwnerPage() {
     }
     setCreatingSchool(true);
     try {
-      const token = localStorage.getItem('token');
       const res = await fetch(`${API_BASE_URL}/owner/create_school`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newSchoolName })
       });
       const data = await res.json();
@@ -428,10 +404,9 @@ function OwnerPage() {
     }
     setCreatingAdmin(true);
     try {
-      const token = localStorage.getItem('token');
       const res = await fetch(`${API_BASE_URL}/owner/create_admin`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           username: newUsername,
           email: newEmail,
@@ -470,10 +445,7 @@ function OwnerPage() {
     if (!schoolId) return;
     setLoadingSettings(true);
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE_URL}/owner/settings/${schoolId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await fetch(`${API_BASE_URL}/owner/settings/${schoolId}`);
       const data = await res.json();
       if (res.ok) {
         setSchoolSettings(data);
@@ -492,10 +464,9 @@ function OwnerPage() {
     if (!selectedSchoolForSettings) return;
     setLoadingSettings(true);
     try {
-      const token = localStorage.getItem('token');
       const res = await fetch(`${API_BASE_URL}/owner/settings/${selectedSchoolForSettings}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(settingsUpdate)
       });
       const data = await res.json();
@@ -536,7 +507,7 @@ function OwnerPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-purple-50/20 to-indigo-50/20 font-sans text-slate-900">
       <FirstVisitOnboarding
         open={showOwnerOnboarding}
         onClose={handleCloseOwnerOnboarding}

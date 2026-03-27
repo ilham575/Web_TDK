@@ -149,7 +149,6 @@ function GradeSummary() {
     if (studentWithManual.length === 0) return;
 
     try {
-      const token = localStorage.getItem('token');
       const requests = [];
 
       // For activity subjects, save manual as "คะแนนเก็บรวม" for students who still need manual scores
@@ -165,7 +164,7 @@ function GradeSummary() {
         if (activityGrades.length > 0) {
           requests.push(fetch(`${API_BASE_URL}/grades/bulk`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               subject_id: Number(id),
               title: "คะแนนเก็บรวม",
@@ -186,7 +185,7 @@ function GradeSummary() {
           if (collectedGrades.length > 0) {
             requests.push(fetch(`${API_BASE_URL}/grades/bulk`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+              headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 subject_id: Number(id),
                 title: "คะแนนเก็บรวม",
@@ -207,7 +206,7 @@ function GradeSummary() {
           if (examGrades.length > 0) {
             requests.push(fetch(`${API_BASE_URL}/grades/bulk`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+              headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 subject_id: Number(id),
                 title: "คะแนนสอบรวม",
@@ -237,11 +236,8 @@ function GradeSummary() {
   useEffect(() => {
     const loadSubjectData = async () => {
       try {
-        const token = localStorage.getItem('token');
-        const headers = { ...(token ? { Authorization: `Bearer ${token}` } : {}) };
-        
         // Load Subject Info
-        const subjectRes = await fetch(`${API_BASE_URL}/subjects/${id}`, { headers });
+        const subjectRes = await fetch(`${API_BASE_URL}/subjects/${id}`);
         if (subjectRes.ok) {
           const data = await subjectRes.json();
           setSubjectName(data.name || data.title || data.subject_name || '');
@@ -251,7 +247,7 @@ function GradeSummary() {
         }
 
         // Load Students
-        const studentsRes = await fetch(`${API_BASE_URL}/subjects/${id}/students`, { headers });
+        const studentsRes = await fetch(`${API_BASE_URL}/subjects/${id}/students`);
         if (studentsRes.ok) {
           const studentsData = await studentsRes.json();
           setStudents(studentsData);
@@ -273,7 +269,7 @@ function GradeSummary() {
         }
 
         // Load Assignments and Grades
-        const assignmentsRes = await fetch(`${API_BASE_URL}/grades/assignments/${id}`, { headers });
+        const assignmentsRes = await fetch(`${API_BASE_URL}/grades/assignments/${id}`);
         if (assignmentsRes.ok) {
           const assignmentsData = await assignmentsRes.json();
           setAssignments(assignmentsData.map(a => ({
@@ -284,7 +280,7 @@ function GradeSummary() {
           })));
         }
 
-        const gradesRes = await fetch(`${API_BASE_URL}/grades/?subject_id=${id}`, { headers });
+        const gradesRes = await fetch(`${API_BASE_URL}/grades/?subject_id=${id}`);
         if (gradesRes.ok) {
           const gradesData = await gradesRes.json();
           const gradesMap = {};

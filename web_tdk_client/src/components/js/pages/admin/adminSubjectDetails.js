@@ -22,7 +22,7 @@ import {
 
 import Loading from '../../Loading';
 import { API_BASE_URL } from '../../../endpoints';
-import { logout } from '../../../../utils/authUtils';
+import { fetchCurrentUser, hasSessionMarker, logout } from '../../../../utils/authUtils';
 
 function AdminSubjectDetails() {
   const { subjectId } = useParams();
@@ -42,10 +42,8 @@ function AdminSubjectDetails() {
   const [selectedClass, setSelectedClass] = useState(null);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) { navigate('/signin'); return; }
-    fetch(`${API_BASE_URL}/users/me`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(res => res.json())
+    if (!hasSessionMarker()) { navigate('/signin'); return; }
+    fetchCurrentUser()
       .then(data => {
         if (data.role !== 'admin') {
           logout();
@@ -158,8 +156,8 @@ function AdminSubjectDetails() {
   if (loading) return <Loading message="กำลังโหลดข้อมูลรายวิชา..." />;
 
   if (!subject) return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
-      <div className="w-full max-w-md bg-white rounded-[2.5rem] shadow-xl p-10 text-center animate-in zoom-in-95 duration-300">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/20 to-blue-50/20 flex flex-col items-center justify-center p-6">
+      <div className="w-full max-w-md bg-white/95 border border-white/70 rounded-[2rem] shadow-[0_24px_70px_-30px_rgba(15,23,42,0.32)] ring-1 ring-slate-200/50 p-10 text-center animate-in zoom-in-95 duration-300">
         <div className="w-20 h-20 bg-rose-50 rounded-full flex items-center justify-center mx-auto mb-6">
           <XCircle className="w-10 h-10 text-rose-500" />
         </div>
@@ -502,7 +500,7 @@ function AdminSubjectDetails() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50/50 pb-20">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/20 to-blue-50/20 pb-20">
       {/* Header section */}
       <div className="bg-white border-b border-slate-100 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -576,7 +574,7 @@ function AdminSubjectDetails() {
         </div>
 
         {/* Classroom Statistics Section */}
-        <section className="bg-white rounded-[2.5rem] border border-slate-100 shadow-lg shadow-slate-200/50 overflow-hidden">
+        <section className="bg-white/90 backdrop-blur-xl rounded-[2rem] border border-white/70 shadow-[0_24px_70px_-30px_rgba(15,23,42,0.32)] ring-1 ring-slate-200/40 overflow-hidden">
           <div className="px-8 pt-8 pb-6 border-b border-slate-50">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-purple-50 text-purple-500 rounded-xl flex items-center justify-center">
@@ -685,7 +683,7 @@ function AdminSubjectDetails() {
         )}
 
         {/* Student Summary Table Section */}
-        <section className="bg-white rounded-[2.5rem] border border-slate-100 shadow-lg shadow-slate-200/50 overflow-hidden">
+        <section className="bg-white/90 backdrop-blur-xl rounded-[2rem] border border-white/70 shadow-[0_24px_70px_-30px_rgba(15,23,42,0.32)] ring-1 ring-slate-200/40 overflow-hidden">
           <div className="px-8 py-6 border-b border-slate-50 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-emerald-50 text-emerald-500 rounded-xl flex items-center justify-center">
@@ -782,7 +780,7 @@ function AdminSubjectDetails() {
         </section>
 
         {/* Detailed Data Tabs Section */}
-        <section className="bg-white rounded-[2.5rem] border border-slate-100 shadow-lg shadow-slate-200/50 overflow-hidden">
+        <section className="bg-white/90 backdrop-blur-xl rounded-[2rem] border border-white/70 shadow-[0_24px_70px_-30px_rgba(15,23,42,0.32)] ring-1 ring-slate-200/40 overflow-hidden">
           <div className="px-8 pt-8 pb-0 border-b border-slate-50">
             <div className="flex items-center gap-3 mb-6">
               <div className="w-10 h-10 bg-blue-50 text-blue-500 rounded-xl flex items-center justify-center">
