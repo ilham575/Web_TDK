@@ -17,7 +17,7 @@ const loadSubjects = async () => {
   if (!currentUser?.school_id) return;
   setLoadingSubjects(true);
   try {
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
     const res = await fetch(`${API_BASE_URL}/subjects/school/${currentUser.school_id}/all`, {
       headers: { Authorization: `Bearer ${token}` }
     });
@@ -44,7 +44,7 @@ const handleDeleteSubject = async (subjectId) => {
     `ต้องการลบรายวิชา "${subject.name}" หรือไม่? โปรดทราบว่าโปรแกรมจะต้องสิ้นสุดรายวิชาก่อนที่จะลบได้`,
     async () => {
       try {
-        const token = localStorage.getItem('token');
+        const token = getStoredAccessToken();
         
         // First, end the subject if not already ended
         if (!subject.is_ended) {

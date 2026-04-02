@@ -69,7 +69,7 @@ DATABASE_URL: "mysql+pymysql://${EncodedDbUser}:${EncodedDbPassword}@/${DbName}?
 ENV: "production"
 DEBUG: "False"
 JWT_COOKIE_SECURE: "true"
-JWT_COOKIE_SAMESITE: "none"
+JWT_COOKIE_SAMESITE: "lax"
 FRONTEND_URL: "https://tdk-proj-489111.web.app"
 CORS_ORIGINS: "https://tdk-proj-489111.web.app,https://tdk-proj-489111.firebaseapp.com"
 "@ | Set-Content "env-prod.yaml"

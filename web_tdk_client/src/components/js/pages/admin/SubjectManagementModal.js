@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import { X, BookOpen, Target, CreditCard, Percent, Save, Trash2, Info } from 'lucide-react';
 import { API_BASE_URL } from '../../../endpoints';
+import { getStoredAccessToken } from '../../../../utils/authUtils';
 
 function SubjectManagementModal({ isOpen, onClose, onSave, subject, currentSchoolId, defaultYear, defaultSemester }) {
 
@@ -59,7 +60,7 @@ function SubjectManagementModal({ isOpen, onClose, onSave, subject, currentSchoo
 
     setSaving(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getStoredAccessToken();
       const method = currentSubject ? 'PATCH' : 'POST';
       const url = currentSubject
         ? `${API_BASE_URL}/subjects/${currentSubject.id}`

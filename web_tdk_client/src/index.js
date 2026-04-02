@@ -5,7 +5,7 @@ import App from './App';
 import reportWebVitals from './reportWebVitals';
 import './i18n';
 import { API_BASE_URL } from './components/endpoints';
-import { AUTH_MARKER } from './utils/authUtils';
+import { buildAuthHeaders } from './utils/authUtils';
 
 const nativeFetch = window.fetch.bind(window);
 
@@ -17,15 +17,11 @@ window.fetch = (input, init = {}) => {
     return nativeFetch(input, init);
   }
 
-  const nextInit = { ...init, credentials: init.credentials || 'include' };
-
-  if (nextInit.headers) {
-    const headers = new Headers(nextInit.headers);
-    if (headers.has('Authorization')) {
-      headers.delete('Authorization');
-    }
-    nextInit.headers = headers;
-  }
+  const baseHeaders = init.headers || (typeof Request !== 'undefined' && input instanceof Request ? input.headers : undefined);
+  const nextInit = {
+    ...init,
+    headers: buildAuthHeaders(baseHeaders),
+  };
 
   return nativeFetch(input, nextInit);
 };

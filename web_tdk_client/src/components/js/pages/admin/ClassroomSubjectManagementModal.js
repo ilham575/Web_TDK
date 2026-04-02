@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import { X, Plus, BookOpen, GraduationCap, Building2, Trash2, Loader2 } from 'lucide-react';
 import { API_BASE_URL } from '../../../endpoints';
+import { getStoredAccessToken } from '../../../../utils/authUtils';
 
 function ClassroomSubjectManagementModal({ isOpen, onClose, onSave, subject, classrooms }) {
   const [subjectClassrooms, setSubjectClassrooms] = useState([]);
@@ -19,7 +20,7 @@ function ClassroomSubjectManagementModal({ isOpen, onClose, onSave, subject, cla
     if (!subject?.id) return;
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getStoredAccessToken();
       const res = await fetch(`${API_BASE_URL}/subjects/${subject.id}/classrooms`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -41,7 +42,7 @@ function ClassroomSubjectManagementModal({ isOpen, onClose, onSave, subject, cla
 
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getStoredAccessToken();
       const res = await fetch(`${API_BASE_URL}/subjects/${subject.id}/assign-classroom`, {
         method: 'POST',
         headers: {
@@ -74,7 +75,7 @@ function ClassroomSubjectManagementModal({ isOpen, onClose, onSave, subject, cla
 
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getStoredAccessToken();
       const res = await fetch(`${API_BASE_URL}/subjects/${subject.id}/unassign-classroom/${classroomId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }

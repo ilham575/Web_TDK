@@ -46,7 +46,6 @@ def _normalize_cell_str(val) -> str:
 
 # สร้าง router พร้อมกำหนด prefix
 router = APIRouter(prefix="/users", tags=["users"])
-COOKIE_AUTH_MARKER = "cookie-authenticated"
 
 
 def _validate_no_null_classroom_student(db: Session):
@@ -63,6 +62,16 @@ def _validate_no_null_classroom_student(db: Session):
         if _CS and isinstance(obj, _CS):
             if getattr(obj, 'classroom_id', None) is None:
                 raise HTTPException(status_code=400, detail=f'พบการอัปเดต enrollment ที่ไม่มี classroom_id (id={getattr(obj, "id", None)})')
+
+
+def _normalize_grade_level(value) -> str:
+    return ''.join(str(value or '').split()).lower()
+
+
+def _grade_levels_match(left, right) -> bool:
+    if not left or not right:
+        return False
+    return _normalize_grade_level(left) == _normalize_grade_level(right)
 
 # กำหนด OAuth2 Security Scheme
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/users/login")
@@ -204,7 +213,7 @@ def login(response: Response, form_data: OAuth2PasswordRequestForm = Depends(), 
     expires_at = datetime.now(timezone.utc) + effective_expires_delta
     set_auth_cookie(response, access_token, expires_delta=effective_expires_delta, role=user.role)
     return {
-        "access_token": COOKIE_AUTH_MARKER,
+        "access_token": access_token,
         "token_type": "bearer",
         "user_info": user,
         "expires_at": expires_at,
@@ -1555,6 +1564,7 @@ def promote_students(
     new_academic_year: For end_of_year, auto +1 if not provided
     """
     from models.classroom import ClassroomStudent, Classroom
+    from models.school import School as SchoolModel
     
     # Only admins can promote students
     if getattr(current_user, 'role', None) != 'admin':
@@ -1581,6 +1591,7 @@ def promote_students(
     promoted_students = []
     source_classroom = None
     target_classroom = None
+    school = db.query(SchoolModel).filter(SchoolModel.id == current_user.school_id).first()
     
     try:
         if classroom_id is not None:
@@ -1696,6 +1707,17 @@ def promote_students(
                     continue
                 
                 old_grade = student.grade_level or 'ไม่ระบุ'
+
+                if (
+                    promotion_type == 'end_of_year'
+                    and _grade_levels_match(student.grade_level, getattr(school, 'graduation_grade_level', None))
+                    and not _grade_levels_match(new_grade_level, student.grade_level)
+                ):
+                    failed_count += 1
+                    errors.append(
+                        f'⚠️ นักเรียน ID {student_id} อยู่ชั้นจบ {student.grade_level} ของโรงเรียน จึงเลื่อนไปปีการศึกษาถัดไปได้เฉพาะแบบซ้ำชั้นเดิมเท่านั้น'
+                    )
+                    continue
                 
                 # ดึงข้อมูลชั้นเรียนปัจจุบันของนักเรียน - ดึงแค่ ID และข้อมูลที่จำเป็น
                 enrollment_data = db.query(
@@ -1864,6 +1886,8 @@ def promote_students_from_file(
     current_user: UserModel = Depends(get_current_user)
 ):
     """Promote students from Excel file"""
+    from models.school import School as SchoolModel
+
     if getattr(current_user, 'role', None) != 'admin':
         raise HTTPException(status_code=403, detail='Only admins can promote students')
     
@@ -1875,6 +1899,8 @@ def promote_students_from_file(
     
     if promotion_type == 'end_of_year' and not new_grade_level:
         raise HTTPException(status_code=400, detail='new_grade_level is required for end_of_year promotion')
+
+    school = db.query(SchoolModel).filter(SchoolModel.id == current_user.school_id).first()
     
     try:
         content = file.file.read()
@@ -1917,6 +1943,21 @@ def promote_students_from_file(
                     continue
                 
                 old_grade = student.grade_level or 'ไม่ระบุ'
+
+                target_grade = None
+                if promotion_type == 'end_of_year':
+                    target_grade = new_grade_level
+                    if 'new_grade_level' in idx and row[idx['new_grade_level']] is not None:
+                        target_grade = str(row[idx['new_grade_level']]).strip()
+
+                if (
+                    promotion_type == 'end_of_year'
+                    and _grade_levels_match(student.grade_level, getattr(school, 'graduation_grade_level', None))
+                    and not _grade_levels_match(target_grade, student.grade_level)
+                ):
+                    failed_count += 1
+                    errors.append({'row': r_i, 'error': f'นักเรียน ID {student_id} อยู่ชั้นจบ {student.grade_level} ของโรงเรียน จึงเลื่อนไปปีการศึกษาถัดไปได้เฉพาะแบบซ้ำชั้นเดิมเท่านั้น'})
+                    continue
                 
                 if promotion_type == 'mid_term':
                     # Move to semester 2
@@ -1928,9 +1969,7 @@ def promote_students_from_file(
                 
                 elif promotion_type == 'end_of_year':
                     # Set new grade level
-                    new_grade = new_grade_level
-                    if 'new_grade_level' in idx and row[idx['new_grade_level']] is not None:
-                        new_grade = str(row[idx['new_grade_level']]).strip()
+                    new_grade = target_grade
                     
                     student.grade_level = new_grade
                 

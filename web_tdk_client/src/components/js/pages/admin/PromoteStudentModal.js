@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, GraduationCap, School, Search, CheckCircle2, AlertCircle, RefreshCcw, ArrowUpCircle, Layers, Mail, User, Info, ChevronRight, Layout } from 'lucide-react';
+import { X, GraduationCap, School, Search, CheckCircle2, AlertCircle, RefreshCcw, ArrowUpCircle, Layers, Mail, User, Info, ChevronRight, Layout, Calendar } from 'lucide-react';
 
 const PromoteStudentModal = ({
   isOpen,
@@ -53,17 +53,19 @@ const PromoteStudentModal = ({
 
     const currentGradeNum = extractGradeNumber(classroom.grade_level);
     const allGrades = getClassroomGradeLevels();
+    const currentGrade = classroom.grade_level;
 
-    // For end_of_year, show all higher grades; for mid_term_with_promotion, show all higher grades
-    // If no higher grades exist, show all grades as fallback
-    let filtered = allGrades.filter(grade => extractGradeNumber(grade) > currentGradeNum);
+    let filtered = allGrades.filter(grade => grade === currentGrade || extractGradeNumber(grade) > currentGradeNum);
     
     if (filtered.length === 0) {
-      // If no higher grades exist, allow selecting from all grades (excluding current)
-      filtered = allGrades.filter(grade => grade !== classroom.grade_level);
+      filtered = currentGrade ? [currentGrade] : [];
     }
     
-    return filtered.sort((a, b) => extractGradeNumber(a) - extractGradeNumber(b));
+    return [...new Set(filtered)].sort((a, b) => {
+      if (a === currentGrade) return -1;
+      if (b === currentGrade) return 1;
+      return extractGradeNumber(a) - extractGradeNumber(b);
+    });
   }, [classroom, getClassroomGradeLevels]);
 
   const filteredStudents = useMemo(() => {
@@ -88,13 +90,17 @@ const PromoteStudentModal = ({
       return;
     }
 
+    const apiPromotionType = promotionType === 'repeat_year' ? 'end_of_year' : promotionType;
+
     const payload = {
       student_ids: Array.from(selectedStudents),
-      promotion_type: promotionType,
+      promotion_type: apiPromotionType,
       classroom_id: classroom?.id,
     };
 
-    if (promotionType === 'mid_term_with_promotion' || promotionType === 'end_of_year') {
+    if (promotionType === 'repeat_year') {
+      payload.new_grade_level = classroom?.grade_level;
+    } else if (promotionType === 'mid_term_with_promotion' || promotionType === 'end_of_year') {
       payload.new_grade_level = promotionNewGradeLevel;
       // Also send classroom names for the new grade so parent can display them
       if (typeof getClassroomNamesByGrade === 'function') {
@@ -103,7 +109,7 @@ const PromoteStudentModal = ({
       }
     }
 
-    if (promotionType === 'end_of_year') {
+    if (promotionType === 'end_of_year' || promotionType === 'repeat_year') {
       payload.new_academic_year = (parseInt(classroom?.academic_year || '0') + 1).toString();
     }
 
@@ -134,6 +140,8 @@ const PromoteStudentModal = ({
         return t('admin.promoteTermWithGrade');
       case 'end_of_year':
         return t('admin.promoteEndOfYear');
+      case 'repeat_year':
+        return t('admin.repeatYearStudent');
       default:
         return '';
     }
@@ -201,11 +209,12 @@ const PromoteStudentModal = ({
                 <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest px-1 block">
                   {t('admin.promotionType')} <span className="text-rose-500">*</span>
                 </label>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
                   {[
                     { id: 'mid_term', icon: RefreshCcw, color: 'blue', label: 'admin.promoteTermOnlyLabel', desc: 'admin.promoteTermOnlyDesc' },
                     { id: 'mid_term_with_promotion', icon: ArrowUpCircle, color: 'emerald', label: 'admin.promoteTermWithGradeLabel', desc: 'admin.promoteTermWithGradeDesc' },
-                    { id: 'end_of_year', icon: GraduationCap, color: 'purple', label: 'admin.promoteEndOfYearLabel', desc: 'admin.promoteEndOfYearDesc' }
+                    { id: 'end_of_year', icon: GraduationCap, color: 'purple', label: 'admin.promoteEndOfYearLabel', desc: 'admin.promoteEndOfYearDesc' },
+                    { id: 'repeat_year', icon: Calendar, color: 'amber', label: 'admin.repeatYearStudentLabel', desc: 'admin.repeatYearStudentDesc' }
                   ].map((type) => (
                     <label 
                       key={type.id}
@@ -243,14 +252,24 @@ const PromoteStudentModal = ({
                 </div>
               </div>
 
-              {(promotionType === 'mid_term_with_promotion' || promotionType === 'end_of_year') && (
+              {(promotionType === 'mid_term_with_promotion' || promotionType === 'end_of_year' || promotionType === 'repeat_year') && (
                 <div className="space-y-2 animate-in slide-in-from-top-2 duration-300">
                   <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 px-1">
                     <Layers className="w-3.5 h-3.5 text-blue-500" />
                     {t('admin.newGradeLevel')} <span className="text-rose-500">*</span>
                   </label>
                   
-                  {availableNextGrades.length > 0 ? (
+                  {promotionType === 'repeat_year' ? (
+                    <div className="rounded-2xl border border-amber-100 bg-amber-50 px-5 py-4 flex items-center justify-between gap-4">
+                      <div>
+                        <p className="text-xs font-black text-amber-800">{t('admin.repeatYearStudentLabel')}</p>
+                        <p className="text-[10px] font-bold text-amber-700 mt-1">{t('admin.repeatYearSelectedGrade')}</p>
+                      </div>
+                      <span className="inline-flex items-center px-3 py-1 rounded-full bg-white text-amber-700 text-xs font-black border border-amber-200">
+                        {classroom?.grade_level}
+                      </span>
+                    </div>
+                  ) : availableNextGrades.length > 0 ? (
                     <div className="relative">
                       <select 
                         className="w-full h-14 pl-6 pr-12 bg-slate-50 border-2 border-transparent focus:border-blue-500 focus:bg-white rounded-2xl text-slate-700 font-bold text-sm outline-none transition-all appearance-none cursor-pointer"
@@ -263,7 +282,7 @@ const PromoteStudentModal = ({
                           const namesList = classroomNames.length > 0 ? classroomNames.join(', ') : grade;
                           return (
                             <option key={grade} value={grade}>
-                              {grade} ({t('admin.gradeNumber')} {extractGradeNumber(grade)}) - {namesList}
+                              {grade} {grade === classroom?.grade_level ? `(${t('admin.repeatSameGrade')})` : `(${t('admin.gradeNumber')} ${extractGradeNumber(grade)})`} - {namesList}
                             </option>
                           );
                         })}
@@ -281,6 +300,9 @@ const PromoteStudentModal = ({
                       </div>
                     </div>
                   )}
+                  <p className="px-1 text-[10px] font-bold text-slate-400 italic">
+                    {promotionType === 'repeat_year' ? t('admin.repeatYearHelper') : t('admin.selectSameOrHigherGrade')}
+                  </p>
                 </div>
               )}
             </div>
@@ -391,7 +413,7 @@ const PromoteStudentModal = ({
             ) : (
               <>
                 <CheckCircle2 className="w-4 h-4" />
-                {t('admin.promoteCount')} {selectedStudents.size} {t('nav.students')}
+                {(promotionType === 'repeat_year' ? t('admin.repeatCount') : t('admin.promoteCount'))} {selectedStudents.size} {t('nav.students')}
               </>
             )}
           </button>

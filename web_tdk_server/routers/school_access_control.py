@@ -69,7 +69,8 @@ def create_access_control(
         academic_year=control_data.academic_year,
         semester=control_data.semester,
         allow_teacher_view_summary=control_data.allow_teacher_view_summary,
-        allow_student_view_grades=control_data.allow_student_view_grades
+        allow_student_view_grades=control_data.allow_student_view_grades,
+        allow_student_view_ranking=control_data.allow_student_view_ranking
     )
     
     db.add(new_control)

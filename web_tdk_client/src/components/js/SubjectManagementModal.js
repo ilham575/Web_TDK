@@ -3,8 +3,24 @@ import ReactDOM from 'react-dom';
 import { toast } from 'react-toastify';
 import { API_BASE_URL } from '../endpoints';
 import { X, BookOpen, Clock, Users, Hash, Info, Check, Target } from 'lucide-react';
+import { getStoredAccessToken } from '../../utils/authUtils';
 
-function SubjectManagementModal({ isOpen, onClose, onSave, subject, teachers, classrooms, currentSchoolId }) {
+const buildInitialFormData = (subject, defaultYear, defaultSemester) => ({
+  name: subject?.name || '',
+  code: subject?.code || '',
+  subject_type: subject?.subject_type || 'main',
+  teacher_id: subject?.teacher_id || '',
+  selected_classrooms: [],
+  credits: subject?.credits != null ? String(subject.credits) : '',
+  activity_percentage: subject?.activity_percentage != null ? String(subject.activity_percentage) : '',
+  max_collected_score: subject?.max_collected_score != null ? String(subject.max_collected_score) : '100',
+  max_exam_score: subject?.max_exam_score != null ? String(subject.max_exam_score) : '100',
+  academic_year: subject?.academic_year || defaultYear || '',
+  semester: subject?.semester != null ? String(subject.semester) : defaultSemester != null ? String(defaultSemester) : '1',
+  linked_subject_id: subject?.linked_subject_id || null
+});
+
+function SubjectManagementModal({ isOpen, onClose, onSave, subject, teachers, classrooms, currentSchoolId, defaultYear, defaultSemester }) {
   const [formData, setFormData] = useState({
     name: '',
     code: '',
@@ -14,13 +30,17 @@ function SubjectManagementModal({ isOpen, onClose, onSave, subject, teachers, cl
     credits: '',
     activity_percentage: '',
     max_collected_score: '100',
-    max_exam_score: '100'
+    max_exam_score: '100',
+    academic_year: '',
+    semester: '1',
+    linked_subject_id: null
   });
   
   const [saving, setSaving] = useState(false);
   const [localTeachers, setLocalTeachers] = useState([]);
   const [localClassrooms, setLocalClassrooms] = useState([]);
   const [selectedClassroomsForUI, setSelectedClassroomsForUI] = useState(new Set());
+  const isEditMode = Boolean(subject?.id);
 
   // Body Scroll Lock
   useEffect(() => {
@@ -41,41 +61,23 @@ function SubjectManagementModal({ isOpen, onClose, onSave, subject, teachers, cl
       setLocalClassrooms(classrooms || []);
       
       if (subject) {
-        // Edit mode
-        setFormData({
-          name: subject.name || '',
-          code: subject.code || '',
-          subject_type: subject.subject_type || 'main',
-          teacher_id: subject.teacher_id || '',
-          selected_classrooms: [],
-          credits: subject.credits != null ? String(subject.credits) : '',
-          activity_percentage: subject.activity_percentage != null ? String(subject.activity_percentage) : '',
-          max_collected_score: subject.max_collected_score != null ? String(subject.max_collected_score) : '100',
-          max_exam_score: subject.max_exam_score != null ? String(subject.max_exam_score) : '100'
-        });
-        // Fetch current classrooms for this subject
-        fetchSubjectClassrooms(subject.id);
+        setFormData(buildInitialFormData(subject, defaultYear, defaultSemester));
+
+        if (isEditMode) {
+          fetchSubjectClassrooms(subject.id);
+        } else {
+          setSelectedClassroomsForUI(new Set());
+        }
       } else {
-        // Create mode
-        setFormData({
-          name: '',
-          code: '',
-          subject_type: 'main',
-          teacher_id: '',
-          selected_classrooms: [],
-          credits: '',
-          activity_percentage: '',
-          max_collected_score: '100',
-          max_exam_score: '100'
-        });
+        setFormData(buildInitialFormData(null, defaultYear, defaultSemester));
         setSelectedClassroomsForUI(new Set());
       }
     }
-  }, [isOpen, subject, teachers, classrooms, currentSchoolId]);
+  }, [isOpen, subject, teachers, classrooms, currentSchoolId, defaultYear, defaultSemester, isEditMode]);
 
   const fetchSubjectClassrooms = async (subjectId) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getStoredAccessToken();
       const res = await fetch(`${API_BASE_URL}/subjects/${subjectId}/classrooms`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -125,6 +127,16 @@ function SubjectManagementModal({ isOpen, onClose, onSave, subject, teachers, cl
       return;
     }
 
+    if (!formData.academic_year.trim()) {
+      toast.error('กรุณาระบุปีการศึกษา');
+      return;
+    }
+
+    if (!formData.semester) {
+      toast.error('กรุณาเลือกภาคเรียน');
+      return;
+    }
+
     // validation for credits/activity percentage
     if (formData.subject_type === 'main') {
       if (formData.credits !== '' && (isNaN(Number(formData.credits)) || Number(formData.credits) < 0)) {
@@ -147,7 +159,7 @@ function SubjectManagementModal({ isOpen, onClose, onSave, subject, teachers, cl
 
     setSaving(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getStoredAccessToken();
       let subjectId = subject?.id;
       
       const payload = {
@@ -158,10 +170,13 @@ function SubjectManagementModal({ isOpen, onClose, onSave, subject, teachers, cl
         credits: formData.credits === '' ? null : Number(formData.credits),
         activity_percentage: formData.activity_percentage === '' ? null : Number(formData.activity_percentage),
         max_collected_score: formData.max_collected_score === '' ? 100 : Number(formData.max_collected_score),
-        max_exam_score: formData.max_exam_score === '' ? 100 : Number(formData.max_exam_score)
+        max_exam_score: formData.max_exam_score === '' ? 100 : Number(formData.max_exam_score),
+        academic_year: formData.academic_year.trim(),
+        semester: Number(formData.semester),
+        linked_subject_id: formData.linked_subject_id || null
       };
 
-      if (subject) {
+      if (isEditMode) {
         // Update existing subject
         const res = await fetch(`${API_BASE_URL}/subjects/${subject.id}`, {
           method: 'PATCH',
@@ -228,7 +243,7 @@ function SubjectManagementModal({ isOpen, onClose, onSave, subject, teachers, cl
         }
       }
       
-      toast.success(subject ? 'อัปเดตรายวิชาสำเร็จ' : 'สร้างรายวิชาสำเร็จ');
+      toast.success(isEditMode ? 'อัปเดตรายวิชาสำเร็จ' : 'สร้างรายวิชาสำเร็จ');
       onSave();
       onClose();
     } catch (err) {
@@ -258,7 +273,7 @@ function SubjectManagementModal({ isOpen, onClose, onSave, subject, teachers, cl
             </div>
             <div>
               <h2 className="text-lg font-bold text-slate-800 leading-tight">
-                {subject ? 'แก้ไขรายวิชา' : 'สร้างรายวิชาใหม่'}
+                {isEditMode ? 'แก้ไขรายวิชา' : 'สร้างรายวิชาใหม่'}
               </h2>
               <p className="text-xs text-slate-500">จัดการข้อมูลรายวิชาและชั้นเรียน</p>
             </div>
@@ -321,6 +336,41 @@ function SubjectManagementModal({ isOpen, onClose, onSave, subject, teachers, cl
                 >
                   <option value="main">รายวิชาหลัก</option>
                   <option value="activity">รายวิชากิจกรรม</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                  <Hash className="w-4 h-4 text-emerald-500" />
+                  ปีการศึกษา <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  name="academic_year"
+                  value={formData.academic_year}
+                  onChange={handleChange}
+                  placeholder="เช่น 2569"
+                  required
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all outline-none text-slate-800 placeholder:text-slate-400"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-emerald-500" />
+                  ภาคเรียน <span className="text-rose-500">*</span>
+                </label>
+                <select
+                  name="semester"
+                  value={formData.semester}
+                  onChange={handleChange}
+                  required
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all outline-none text-slate-800"
+                >
+                  <option value="1">ภาคเรียนที่ 1</option>
+                  <option value="2">ภาคเรียนที่ 2</option>
                 </select>
               </div>
             </div>

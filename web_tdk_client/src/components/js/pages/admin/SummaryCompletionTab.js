@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import Swal from 'sweetalert2';
 import { toast } from 'react-toastify';
 import { API_BASE_URL } from '../../../endpoints';
+import { getStoredAccessToken } from '../../../../utils/authUtils';
 
 const escapeHtml = (value) => String(value ?? '')
   .replace(/&/g, '&amp;')
@@ -40,7 +41,7 @@ function SummaryCompletionTab({ semesterPeriods = [], selectedYear, selectedSeme
   const loadReport = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getStoredAccessToken();
       const params = new URLSearchParams();
       if (academicYear) params.append('academic_year', academicYear);
       if (semester) params.append('semester', String(semester));

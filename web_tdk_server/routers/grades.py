@@ -23,6 +23,7 @@ from schemas.grade import (
     AssignmentResponse,
     SummaryCompletionReportItem,
 )
+from utils.semester_window_guard import enforce_admin_time_window
 
 router = APIRouter(prefix="/grades", tags=["grades"])
 
@@ -39,6 +40,79 @@ def _is_exam_title(title: str) -> bool:
         or 'midterm' in normalized
         or 'คะแนนสอบ' in normalized
     )
+
+
+def _get_student_access_periods(student: UserModel, school: SchoolModel, db: Session, academic_year: str = None, semester: int = None):
+    check_year = academic_year if academic_year else school.current_academic_year
+
+    if not check_year:
+        raise HTTPException(status_code=400, detail="Academic year must be specified")
+
+    if semester is not None:
+        return str(check_year), [int(semester)]
+
+    subject_semesters = db.query(SubjectModel.semester).join(
+        SubjectStudentModel, SubjectModel.id == SubjectStudentModel.subject_id
+    ).filter(
+        SubjectStudentModel.student_id == student.id,
+        SubjectModel.academic_year == check_year,
+        SubjectModel.semester.isnot(None)
+    ).distinct().all()
+
+    classroom_semesters = db.query(ClassroomModel.semester).join(
+        ClassroomStudentModel, ClassroomModel.id == ClassroomStudentModel.classroom_id
+    ).filter(
+        ClassroomStudentModel.student_id == student.id,
+        ClassroomStudentModel.is_active == True,
+        ClassroomModel.academic_year == check_year,
+        ClassroomModel.semester.isnot(None)
+    ).distinct().all()
+
+    semester_values = {
+        int(row[0]) for row in (subject_semesters + classroom_semesters) if row and row[0] is not None
+    }
+
+    if semester_values:
+        semesters_to_check = sorted(list(semester_values))
+    elif school.current_semester:
+        semesters_to_check = [int(school.current_semester)]
+    else:
+        semesters_to_check = []
+
+    if not semesters_to_check:
+        raise HTTPException(status_code=400, detail="Academic year and semester must be specified")
+
+    return str(check_year), semesters_to_check
+
+
+def _enforce_student_ranking_access(current_user: UserModel, db: Session, academic_year: str = None, semester: int = None):
+    if getattr(current_user, 'role', None) != 'student':
+        return
+
+    student = db.query(UserModel).filter(UserModel.id == current_user.id).first()
+    if not student:
+        raise HTTPException(status_code=404, detail='Student not found')
+
+    school = db.query(SchoolModel).filter(SchoolModel.id == student.school_id).first()
+    if not school:
+        raise HTTPException(status_code=404, detail='School not found')
+
+    check_year, semesters_to_check = _get_student_access_periods(student, school, db, academic_year=academic_year, semester=semester)
+    access_controls = db.query(SchoolAccessControlModel).filter(
+        and_(
+            SchoolAccessControlModel.school_id == student.school_id,
+            SchoolAccessControlModel.academic_year == check_year
+        )
+    ).all()
+    access_map = {int(a.semester): a for a in access_controls if a.semester is not None}
+
+    for check_semester in semesters_to_check:
+        access_control = access_map.get(int(check_semester))
+        if not access_control or not getattr(access_control, 'allow_student_view_ranking', False):
+            raise HTTPException(
+                status_code=403,
+                detail=f"ทางโรงเรียนยังไม่เปิดให้เข้าดูผลการจัดอันดับสำหรับปี {check_year} ภาคเรียนที่ {check_semester}"
+            )
 
 
 def _pick_preferred_classroom(classroom_rows, school_id, academic_year, semester):
@@ -563,6 +637,14 @@ def bulk_grades(payload: GradesBulk, db: Session = Depends(get_db), current_user
     subj = db.query(SubjectModel).filter(SubjectModel.id == payload.subject_id).first()
     if not subj:
         raise HTTPException(status_code=404, detail='Subject not found')
+
+    enforce_admin_time_window(
+        db,
+        school_id=subj.school_id,
+        academic_year=subj.academic_year,
+        semester=subj.semester,
+        action_label='ส่งคะแนน',
+    )
     # only admin or teacher assigned can submit grades
     is_authorized = False
     if getattr(current_user, 'role', None) == 'admin':
@@ -597,7 +679,7 @@ def bulk_grades(payload: GradesBulk, db: Session = Depends(get_db), current_user
             ).first()
         if g:
             # Admin cannot overwrite existing summary grades — only the teacher (or original creator) can
-            if getattr(current_user, 'role', None) == 'admin' and payload.title in {"\u0e04\u0e30\u0e41\u0e19\u0e19\u0e40\u0e01\u0e47\u0e1a\u0e23\u0e27\u0e21", "\u0e04\u0e30\u0e41\u0e19\u0e19\u0e2a\u0e2d\u0e1a\u0e23\u0e27\u0e21"}:
+            if getattr(current_user, 'role', None) == 'admin' and payload.title in {"\u0e04\u0e30\u0e41\u0e19\u0e19\u0e40\u0e01\u0e47\u0e1a\u0e23\u0e27\u0e21", "\u0e04\u0e30\u0e41\u0e19\u0e19\u0e2a\u0e2d\u0e1a\u0e23\u0e27\u0e21"} and g.grade is not None:
                 continue
             g.title = payload.title
             g.max_score = payload.max_score
@@ -748,6 +830,14 @@ def create_assignment(subject_id: int, assignment: AssignmentCreate, db: Session
     if not subj:
         raise HTTPException(status_code=404, detail='Subject not found')
 
+    enforce_admin_time_window(
+        db,
+        school_id=subj.school_id,
+        academic_year=subj.academic_year,
+        semester=subj.semester,
+        action_label='สร้างงานคะแนน',
+    )
+
     # Check authorization
     is_authorized = False
     if getattr(current_user, 'role', None) == 'admin':
@@ -834,6 +924,14 @@ def update_assignment(subject_id: int, assignment_title: str, assignment: Assign
     if not subj:
         raise HTTPException(status_code=404, detail='Subject not found')
 
+    enforce_admin_time_window(
+        db,
+        school_id=subj.school_id,
+        academic_year=subj.academic_year,
+        semester=subj.semester,
+        action_label='แก้ไขงานคะแนน',
+    )
+
     # Check authorization
     is_authorized = False
     if getattr(current_user, 'role', None) == 'admin':
@@ -917,6 +1015,14 @@ def delete_assignment(subject_id: int, assignment_title: str, classroom_id: int 
     subj = db.query(SubjectModel).filter(SubjectModel.id == subject_id).first()
     if not subj:
         raise HTTPException(status_code=404, detail='Subject not found')
+
+    enforce_admin_time_window(
+        db,
+        school_id=subj.school_id,
+        academic_year=subj.academic_year,
+        semester=subj.semester,
+        action_label='ลบงานคะแนน',
+    )
 
     # Check authorization
     is_authorized = False
@@ -1298,7 +1404,8 @@ def get_student_semester_list(student_id: int, db: Session = Depends(get_db), cu
             'academic_year': year,
             'semester': sem,
             'allow_student_view_grades': bool(getattr(access, 'allow_student_view_grades', False)),
-            'allow_teacher_view_summary': bool(getattr(access, 'allow_teacher_view_summary', False))
+            'allow_teacher_view_summary': bool(getattr(access, 'allow_teacher_view_summary', False)),
+            'allow_student_view_ranking': bool(getattr(access, 'allow_student_view_ranking', False))
         })
 
     result = sorted(result, key=lambda x: (x['academic_year'], x['semester']))
@@ -1312,6 +1419,8 @@ def get_classroom_ranking(classroom_id: int, academic_year: str = None, semester
     user_role = getattr(current_user, 'role', None)
     if user_role not in ['admin', 'teacher', 'student']:
         raise HTTPException(status_code=403, detail='Not authorized')
+
+    _enforce_student_ranking_access(current_user, db, academic_year=academic_year, semester=semester)
 
     # Get students in classroom or grade level
     query = db.query(UserModel).join(
@@ -1461,6 +1570,8 @@ def get_school_ranking(
     if user_role not in ['admin', 'teacher', 'student']:
         raise HTTPException(status_code=403, detail='Not authorized')
 
+    _enforce_student_ranking_access(current_user, db, academic_year=academic_year, semester=semester)
+
     # Start from all students in school
     students_query = db.query(UserModel).filter(
         UserModel.school_id == school_id,
@@ -1517,6 +1628,63 @@ def get_school_ranking(
     if not students:
         return []
 
+    student_ids = [student.id for student in students]
+    classroom_rows_query = db.query(
+        ClassroomStudentModel.student_id,
+        ClassroomModel.id.label('classroom_id'),
+        ClassroomModel.name.label('classroom_name'),
+        ClassroomModel.grade_level.label('grade_level'),
+        ClassroomModel.academic_year.label('academic_year'),
+        ClassroomModel.semester.label('semester'),
+    ).join(
+        ClassroomModel, ClassroomModel.id == ClassroomStudentModel.classroom_id
+    ).filter(
+        ClassroomStudentModel.student_id.in_(student_ids),
+        ClassroomStudentModel.is_active == True,
+        ClassroomModel.school_id == school_id,
+    )
+
+    if academic_year is not None:
+        q_year = str(academic_year).strip()
+        if len(q_year) <= 2:
+            classroom_rows_query = classroom_rows_query.filter(or_(
+                ClassroomModel.academic_year == academic_year,
+                func.right(ClassroomModel.academic_year, len(q_year)) == q_year
+            ))
+        else:
+            classroom_rows_query = classroom_rows_query.filter(ClassroomModel.academic_year == academic_year)
+
+    if semester is not None:
+        classroom_rows_query = classroom_rows_query.filter(ClassroomModel.semester == semester)
+
+    def _year_sort_value(raw_year):
+        year_text = str(raw_year or '').strip()
+        digits = ''.join(ch for ch in year_text if ch.isdigit())
+        if digits:
+            try:
+                return int(digits)
+            except ValueError:
+                return 0
+        return 0
+
+    classroom_map = {}
+    for row in classroom_rows_query.all():
+        current = classroom_map.get(row.student_id)
+        candidate_key = (
+            _year_sort_value(row.academic_year),
+            int(row.semester or 0),
+            int(row.classroom_id or 0),
+        )
+        current_key = current.get('_sort_key') if current else None
+        if current is None or candidate_key > current_key:
+            classroom_map[row.student_id] = {
+                'classroom_id': row.classroom_id,
+                'classroom_name': row.classroom_name,
+                'grade_level': row.grade_level,
+                'classroom_display': ' '.join(part for part in [row.grade_level, row.classroom_name] if part),
+                '_sort_key': candidate_key,
+            }
+
     results = []
     for student in students:
         # Pass classroom_id=None to get overall grades for the selected period
@@ -1539,6 +1707,7 @@ def get_school_ranking(
             total_max += float(m)
         
         final_percentage = (total_score / total_max * 100) if total_max > 0 else 0.0
+        classroom_info = classroom_map.get(student.id, {})
         
         results.append({
             'student_id': student.id,
@@ -1546,7 +1715,11 @@ def get_school_ranking(
             'username': student.username,
             'total_score': round(total_score, 2),
             'total_max_score': round(total_max, 2),
-            'average_score': round(final_percentage, 2)
+            'average_score': round(final_percentage, 2),
+            'classroom_id': classroom_info.get('classroom_id'),
+            'classroom_name': classroom_info.get('classroom_name'),
+            'grade_level': classroom_info.get('grade_level'),
+            'classroom_display': classroom_info.get('classroom_display') or None,
         })
 
     # Sort descending by average_score (percentage) for fair ranking

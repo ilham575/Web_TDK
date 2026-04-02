@@ -3,6 +3,7 @@ import { toast } from 'react-toastify';
 import { useTranslation } from 'react-i18next';
 import { X, UserPlus, Mail, User, Lock, ShieldCheck, Loader2 } from 'lucide-react';
 import { API_BASE_URL } from '../../../endpoints';
+import { getStoredAccessToken } from '../../../../utils/authUtils';
 
 function CreateUserModal({ isOpen, onClose, onSuccess }) {
   const { t } = useTranslation();
@@ -21,7 +22,7 @@ function CreateUserModal({ isOpen, onClose, onSuccess }) {
     }
     setCreatingUser(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getStoredAccessToken();
       const schoolId = localStorage.getItem('school_id');
       if (!schoolId) {
         toast.error(t('admin.schoolIdNotFound'));

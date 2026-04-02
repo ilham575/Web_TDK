@@ -18,7 +18,7 @@ import FirstVisitOnboarding, {
   shouldShowOnboarding
 } from '../../FirstVisitOnboarding';
 import { setSchoolFavicon } from '../../../../utils/faviconUtils';
-import { fetchCurrentUser, hasSessionMarker, logout } from '../../../../utils/authUtils';
+import { fetchCurrentUser, getStoredAccessToken, hasSessionMarker, logout } from '../../../../utils/authUtils';
 import { 
   BookOpen, 
   Home, 
@@ -272,7 +272,7 @@ function TeacherPage() {
         });
         setTeacherSubjects(mappedData);
         
-        const token = localStorage.getItem('token');
+        const token = getStoredAccessToken();
         const teachersMap = {};
         for (const subject of mappedData) {
           try {
@@ -297,7 +297,7 @@ function TeacherPage() {
   const fetchSemesterPeriods = async () => {
     if (!currentUser?.school_id) return;
     try {
-      const token = localStorage.getItem('token');
+      const token = getStoredAccessToken();
       const res = await fetch(`${API_BASE_URL}/semester-periods?school_id=${currentUser.school_id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -309,7 +309,7 @@ function TeacherPage() {
     if (!currentUser?.school_id) return;
     setLoadingAccessControls(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getStoredAccessToken();
       console.log('[fetchAccessControls] Starting fetch for school_id:', currentUser.school_id);
       const res = await fetch(`${API_BASE_URL}/schools/access-control/${currentUser.school_id}`, {
         headers: { Authorization: `Bearer ${token}` }
@@ -395,7 +395,7 @@ function TeacherPage() {
 
   const handleEndSubject = async (id) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getStoredAccessToken();
       const subject = teacherSubjects.find(s => s.id === id);
       if (!subject || !subject.subject_teachers) return;
       const schedule = subject.subject_teachers.find(t => t.teacher_id === currentUser.id);
@@ -419,7 +419,7 @@ function TeacherPage() {
 
   const handleUnendSubject = async (id) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getStoredAccessToken();
       const subject = teacherSubjects.find(s => s.id === id);
       if (!subject || !subject.subject_teachers) return;
       const schedule = subject.subject_teachers.find(t => t.teacher_id === currentUser.id);
@@ -477,7 +477,7 @@ function TeacherPage() {
       try {
         let schoolId = localStorage.getItem('school_id');
         if (!schoolId && hasSessionMarker()) {
-          const userRes = await fetch(`${API_BASE_URL}/users/me`, { credentials: 'include' });
+          const userRes = await fetch(`${API_BASE_URL}/users/me`);
           if (userRes.ok) {
             const ud = await userRes.json();
             schoolId = ud.school_id || ud?.school?.id || null;
@@ -530,7 +530,7 @@ function TeacherPage() {
 
   const uploadAnnouncementPdf = async (announcementId, pdfFile) => {
     if (!pdfFile || !announcementId) return null;
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
     const formData = new FormData();
     formData.append('file', pdfFile);
     try {
@@ -548,7 +548,7 @@ function TeacherPage() {
 
   const handleAnnouncement = async (e) => {
     e.preventDefault();
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
     const schoolId = localStorage.getItem('school_id');
     if (!title || !content) { toast.error('กรุณากรอกหัวข้อและเนื้อหา'); return; }
     if (!schoolId) { toast.error('ไม่พบโรงเรียน'); return; }
@@ -578,7 +578,7 @@ function TeacherPage() {
   };
 
   const deleteAnnouncement = async (id) => {
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
     try {
       const res = await fetch(`${API_BASE_URL}/announcements/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
       if (res.ok) { 
@@ -606,7 +606,7 @@ function TeacherPage() {
 
     setLoadingHomeroomSummary(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getStoredAccessToken();
       const headers = { Authorization: `Bearer ${token}` };
 
       // Helper to fetch one semester's summary
@@ -644,7 +644,7 @@ function TeacherPage() {
     const loadTeacherHomerooms = async () => {
       if (!currentUser) return;
       try {
-        const token = localStorage.getItem('token');
+        const token = getStoredAccessToken();
         const res = await fetch(`${API_BASE_URL}/homeroom/?school_id=${currentUser.school_id}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
@@ -668,13 +668,13 @@ function TeacherPage() {
       // In combined mode we compute ranking client-side; skip API call
       if (homeroomCombinedMode) { setHomeroomRanking([]); return; }
       try {
-        const token = localStorage.getItem('token');
+        const token = getStoredAccessToken();
         const params = new URLSearchParams();
         if (homeroomYear) params.append('academic_year', homeroomYear);
         if (homeroomSemester) params.append('semester', String(parseInt(homeroomSemester)));
         const queryString = params.toString();
         const url = `${API_BASE_URL}/grades/classroom/${selectedHomeroomClassroom.classroom_id}/ranking${queryString ? '?' + queryString : ''}`;
-        const res = await fetch(url, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
+        const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
         if (res.ok) {
           setHomeroomRanking(await res.json());
         } else {
@@ -1000,7 +1000,7 @@ function TeacherPage() {
 
   const saveAnnouncementFromModal = async ({ title: t, content: c, expiry: ex, pdfFile: pdf }) => {
     if (!modalAnnouncement?.id) return;
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
     try {
       const body = { title: t, content: c, expires_at: ex ? (ex.length === 16 ? ex + ':00' : ex).replace('T', ' ') : null };
       const res = await fetch(`${API_BASE_URL}/announcements/${modalAnnouncement.id}`, { 
@@ -1030,7 +1030,7 @@ function TeacherPage() {
   const saveExpiry = async (val) => {
     setShowExpiryModal(false);
     if (!expiryModalId) return;
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
     try {
       const body = { expires_at: val ? (val.length === 16 ? val + ':00' : val).replace('T', ' ') : null };
       const res = await fetch(`${API_BASE_URL}/announcements/${expiryModalId}`, { 
@@ -1058,7 +1058,7 @@ function TeacherPage() {
     const schoolId = localStorage.getItem('school_id');
     if (!schoolId) return;
     try {
-      const token = localStorage.getItem('token');
+      const token = getStoredAccessToken();
       const res = await fetch(`${API_BASE_URL}/schedule/slots?school_id=${schoolId}`, { headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) {
         const data = await res.json();
@@ -1071,7 +1071,7 @@ function TeacherPage() {
     const schoolId = localStorage.getItem('school_id');
     if (!schoolId) return;
     try {
-      const token = localStorage.getItem('token');
+      const token = getStoredAccessToken();
       const res = await fetch(`${API_BASE_URL}/classrooms/?school_id=${schoolId}`, { headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) {
         const data = await res.json();
@@ -1083,7 +1083,7 @@ function TeacherPage() {
   const loadSubjectSchedules = useCallback(async () => {
     if (!currentUser) return;
     try {
-      const token = localStorage.getItem('token');
+      const token = getStoredAccessToken();
       const params = new URLSearchParams();
       if (scheduleYear) params.set('academic_year', scheduleYear);
       if (scheduleSemester) params.set('semester', scheduleSemester);
@@ -1100,7 +1100,7 @@ function TeacherPage() {
     if (!selectedSubjectId || !scheduleDay || !scheduleStartTime || !scheduleEndTime) { toast.error('กรุณากรอกข้อมูลให้ครบถ้วน'); return; }
     if (scheduleStartTime >= scheduleEndTime) { toast.error('เวลาเริ่มต้นต้องน้อยกว่าเวลาสิ้นสุด'); return; }
     try {
-      const token = localStorage.getItem('token');
+      const token = getStoredAccessToken();
       const res = await fetch(`${API_BASE_URL}/schedule/assign`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -1126,7 +1126,7 @@ function TeacherPage() {
   const updateSubjectSchedule = useCallback(async () => {
     if (!selectedSubjectId || !scheduleDay || !scheduleStartTime || !scheduleEndTime || !editingAssignment?.id) { toast.error('ข้อมูลไม่ครบ'); return; }
     try {
-      const token = localStorage.getItem('token');
+      const token = getStoredAccessToken();
       const res = await fetch(`${API_BASE_URL}/schedule/assign/${editingAssignment.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -1151,7 +1151,7 @@ function TeacherPage() {
 
   const deleteSubjectSchedule = useCallback(async (scheduleId) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getStoredAccessToken();
       const res = await fetch(`${API_BASE_URL}/schedule/assign/${scheduleId}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) { toast.success('ยกเลิกเวลาเรียนเรียบร้อย'); loadSubjectSchedules(); }
       else { const data = await res.json(); toast.error(data.detail || 'ยกเลิกไม่สำเร็จ'); }

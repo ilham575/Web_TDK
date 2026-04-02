@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X, GraduationCap, Calendar, Hash, ClipboardList, Plus, Loader2 } from 'lucide-react';
 import { API_BASE_URL } from '../../../endpoints';
+import { getStoredAccessToken } from '../../../../utils/authUtils';
 
 const CreateClassroomModal = ({
   isOpen,
@@ -32,7 +33,7 @@ const CreateClassroomModal = ({
 
     setLoadingYears(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getStoredAccessToken();
       const res = await fetch(`${API_BASE_URL}/semester-periods?school_id=${schoolId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });

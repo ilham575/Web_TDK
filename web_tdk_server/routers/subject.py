@@ -177,17 +177,20 @@ def update_subject(subject_id: int, subject: SubjectUpdate, db: Session = Depend
     if subject.linked_subject_id is not None:
         update_data['linked_subject_id'] = subject.linked_subject_id
     
-    # Validate activity_percentage if set
-    new_percent = update_data.get('activity_percentage')
-    new_type = update_data.get('subject_type') or subj.subject_type
-    if new_percent is not None and new_type == 'activity':
+    effective_type = update_data.get('subject_type', subj.subject_type)
+    effective_percent = update_data.get('activity_percentage', subj.activity_percentage)
+    effective_school_id = update_data.get('school_id', subj.school_id)
+    effective_academic_year = update_data.get('academic_year', subj.academic_year)
+    effective_semester = update_data.get('semester', subj.semester)
+
+    if effective_type == 'activity' and effective_percent:
         validate_activity_percentage(
             db, 
             subject_id=subject_id, 
-            new_percentage=new_percent, 
-            school_id=subj.school_id,
-            academic_year=subj.academic_year,
-            semester=subj.semester
+            new_percentage=effective_percent, 
+            school_id=effective_school_id,
+            academic_year=effective_academic_year,
+            semester=effective_semester
         )
     
     # Apply updates
@@ -420,6 +423,16 @@ def get_subject_students(subject_id: int, db: Session = Depends(get_db), current
     # Classroom ids assigned to the subject (by admin)
     subj_classroom_ids = [r[0] for r in db.query(ClassroomSubjectModel.classroom_id).filter(ClassroomSubjectModel.subject_id == subject_id).all()]
 
+    # Guard against cross-term bleed: only keep classrooms that match this subject's year/semester when available
+    scoped_subj_classroom_ids = list(subj_classroom_ids)
+    if scoped_subj_classroom_ids and (subj.academic_year is not None or subj.semester is not None):
+        classroom_query = db.query(ClassroomModel.id).filter(ClassroomModel.id.in_(scoped_subj_classroom_ids))
+        if subj.academic_year is not None:
+            classroom_query = classroom_query.filter(ClassroomModel.academic_year == subj.academic_year)
+        if subj.semester is not None:
+            classroom_query = classroom_query.filter(ClassroomModel.semester == subj.semester)
+        scoped_subj_classroom_ids = [r[0] for r in classroom_query.all()]
+
     # Build student ID set based on scope
     student_id_set = set()
 
@@ -427,28 +440,32 @@ def get_subject_students(subject_id: int, db: Session = Depends(get_db), current
         # Admin or global teacher: include all enrolled students + students in subject classrooms
         student_id_set.update(enrolled_ids)
 
-        if subj_classroom_ids:
+        if scoped_subj_classroom_ids:
             classroom_student_ids = [r[0] for r in db.query(ClassroomStudentModel.student_id).filter(
-                ClassroomStudentModel.classroom_id.in_(subj_classroom_ids),
+                ClassroomStudentModel.classroom_id.in_(scoped_subj_classroom_ids),
                 ClassroomStudentModel.is_active == True
             ).all()]
             student_id_set.update(classroom_student_ids)
     else:
         # Teacher assigned to specific classrooms only: compute allowed classroom ids
         allowed_classroom_ids = [s.classroom_id for s in teacher_schedules if s.classroom_id is not None]
+        effective_allowed_classroom_ids = list(set(allowed_classroom_ids).intersection(set(scoped_subj_classroom_ids))) if scoped_subj_classroom_ids else allowed_classroom_ids
 
         # Include direct enrollments only if the student's active classroom is in allowed_classroom_ids
         for sid in enrolled_ids:
-            cs = db.query(ClassroomStudentModel).filter(
+            cs_query = db.query(ClassroomStudentModel).filter(
                 ClassroomStudentModel.student_id == sid,
                 ClassroomStudentModel.is_active == True
-            ).first()
+            )
+            if effective_allowed_classroom_ids:
+                cs_query = cs_query.filter(ClassroomStudentModel.classroom_id.in_(effective_allowed_classroom_ids))
+            cs = cs_query.first()
             if cs and cs.classroom_id in allowed_classroom_ids:
                 student_id_set.add(sid)
 
         # Include students who are in classrooms assigned to the subject AND that the teacher is responsible for
         # i.e., intersection of subj_classroom_ids and allowed_classroom_ids
-        classroom_ids = list(set(subj_classroom_ids).intersection(set(allowed_classroom_ids)))
+        classroom_ids = list(set(scoped_subj_classroom_ids).intersection(set(allowed_classroom_ids)))
         if classroom_ids:
             classroom_student_ids = [r[0] for r in db.query(ClassroomStudentModel.student_id).filter(
                 ClassroomStudentModel.classroom_id.in_(classroom_ids),
@@ -466,10 +483,15 @@ def get_subject_students(subject_id: int, db: Session = Depends(get_db), current
     result = []
     for student in student_rows:
         classroom_info = None
-        classroom_student = db.query(ClassroomStudentModel).filter(
+        classroom_student_query = db.query(ClassroomStudentModel).filter(
             ClassroomStudentModel.student_id == student.id,
             ClassroomStudentModel.is_active == True
-        ).first()
+        )
+        if scoped_subj_classroom_ids:
+            classroom_student_query = classroom_student_query.filter(
+                ClassroomStudentModel.classroom_id.in_(scoped_subj_classroom_ids)
+            )
+        classroom_student = classroom_student_query.first()
         if classroom_student:
             classroom = db.query(ClassroomModel).filter(ClassroomModel.id == classroom_student.classroom_id).first()
             if classroom:

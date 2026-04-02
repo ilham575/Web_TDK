@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { API_BASE_URL } from '../../../endpoints';
 import { toast } from 'react-toastify';
+import { getStoredAccessToken } from '../../../../utils/authUtils';
 import { 
   Search, 
   User, 
@@ -15,7 +16,8 @@ import {
   Loader2,
   Hash,
   ListOrdered,
-  Pencil
+  Pencil,
+  RotateCcw
 } from 'lucide-react';
 
 const AddStudentsModal = ({
@@ -45,11 +47,23 @@ const AddStudentsModal = ({
   const [editNumberValue, setEditNumberValue] = useState('');
   const [savingNumber, setSavingNumber] = useState(false);
 
+  // กู้คืนนักเรียนจากเทอมอื่น
+  const [showRestorePanel, setShowRestorePanel] = useState(false);
+  const [restoreStudents, setRestoreStudents] = useState([]);
+  const [restoreLoading, setRestoreLoading] = useState(false);
+  const [restoreSourceYear, setRestoreSourceYear] = useState('');
+  const [restoreSourceSemester, setRestoreSourceSemester] = useState('');
+  const [restoreSourceInfo, setRestoreSourceInfo] = useState(null);
+  const [selectedRestoreIds, setSelectedRestoreIds] = useState(new Set());
+  const [copyingStudents, setCopyingStudents] = useState(false);
+  const [restoreClassrooms, setRestoreClassrooms] = useState([]);
+  const [restoreSelectedClassroomId, setRestoreSelectedClassroomId] = useState('');
+
   // ดึงข้อมูลนักเรียนที่สามารถเพิ่มได้เมื่อ modal เปิด
   useEffect(() => {
     if (isOpen && selectedClassroom && classroomStep === 'add_students') {
       setLoadingAvailable(true);
-      const token = localStorage.getItem('token');
+      const token = getStoredAccessToken();
       fetch(`${API_BASE_URL}/classrooms/${selectedClassroom.id}/available-students`, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -71,7 +85,7 @@ const AddStudentsModal = ({
     // Fetch classroom students when in view mode
     if (isOpen && selectedClassroom && classroomStep === 'view_students') {
       setLoadingClassroomStudents(true);
-      const token = localStorage.getItem('token');
+      const token = getStoredAccessToken();
       fetch(`${API_BASE_URL}/classrooms/${selectedClassroom.id}/students`, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -117,8 +131,90 @@ const AddStudentsModal = ({
       setAvailableStudents([]);
       setClassroomStudents([]);
       setFilteredStudents([]);
+      setShowRestorePanel(false);
+      setRestoreStudents([]);
+      setSelectedRestoreIds(new Set());
+      setRestoreSourceInfo(null);
+      setRestoreClassrooms([]);
+      setRestoreSelectedClassroomId('');
     }
   }, [isOpen]);
+
+  const loadRestoreStudents = async (year, semester, sourceClassroomId) => {
+    if (!selectedClassroom) return;
+    setRestoreLoading(true);
+    try {
+      const token = getStoredAccessToken();
+      const paramsParts = [];
+      if (year) paramsParts.push(`source_academic_year=${encodeURIComponent(year)}`);
+      if (semester) paramsParts.push(`source_semester=${encodeURIComponent(semester)}`);
+      const classroomIdToUse = sourceClassroomId !== undefined ? sourceClassroomId : restoreSelectedClassroomId;
+      if (classroomIdToUse) paramsParts.push(`source_classroom_id=${encodeURIComponent(classroomIdToUse)}`);
+      const params = paramsParts.length ? `?${paramsParts.join('&')}` : '';
+      const res = await fetch(`${API_BASE_URL}/classrooms/${selectedClassroom.id}/students-from-other-semester${params}`, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) {
+        const data = await res.json();
+        setRestoreStudents(data.students || []);
+        setRestoreSourceInfo({ year: data.source_year, semester: data.source_semester });
+        setRestoreClassrooms(data.source_classrooms || []);
+        // ถ้าเลือกห้องเริ่มต้นยังว่าง ให้ตั้งเป็นค่าแรกถ้ามี
+        if (!restoreSelectedClassroomId && Array.isArray(data.source_classrooms) && data.source_classrooms.length > 0) {
+          setRestoreSelectedClassroomId(String(data.source_classrooms[0].id));
+        }
+      }
+    } catch (err) {
+      console.error('Error loading restore students:', err);
+    } finally {
+      setRestoreLoading(false);
+    }
+  };
+
+  const handleOpenRestorePanel = () => {
+    setShowRestorePanel(true);
+    setSelectedRestoreIds(new Set());
+    const y = restoreSourceYear || (selectedClassroom?.academic_year || '');
+    const s = restoreSourceSemester || '';
+    loadRestoreStudents(y || undefined, s || undefined);
+  };
+
+  const handleCopyStudents = async () => {
+    if (selectedRestoreIds.size === 0 || !selectedClassroom) return;
+    setCopyingStudents(true);
+    try {
+      const token = getStoredAccessToken();
+      const res = await fetch(
+        `${API_BASE_URL}/classrooms/${selectedClassroom.id}/copy-students-from`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ student_ids: Array.from(selectedRestoreIds) })
+        }
+      );
+      if (res.ok) {
+        const result = await res.json();
+        toast.success(`กู้คืนนักเรียนสำเร็จ ${result.added} คน`);
+        setShowRestorePanel(false);
+        setSelectedRestoreIds(new Set());
+        // Reload classroom students
+        const studentsRes = await fetch(`${API_BASE_URL}/classrooms/${selectedClassroom.id}/students`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (studentsRes.ok) {
+          const data = await studentsRes.json();
+          if (Array.isArray(data)) setClassroomStudents(data);
+        }
+        if (onStudentCountUpdate) onStudentCountUpdate(selectedClassroom.id);
+      } else {
+        const err = await res.json();
+        toast.error(err.detail || 'ไม่สามารถกู้คืนได้');
+      }
+    } catch (err) {
+      console.error('Error copying students:', err);
+      toast.error('เกิดข้อผิดพลาด');
+    } finally {
+      setCopyingStudents(false);
+    }
+  };
 
   const handleAddStudents = async () => {
     await onAddStudents(Array.from(selectedStudentIds));
@@ -130,7 +226,7 @@ const AddStudentsModal = ({
     if (!selectedClassroom) return;
     setAutoAssigning(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getStoredAccessToken();
       const res = await fetch(`${API_BASE_URL}/classrooms/${selectedClassroom.id}/auto-assign-student-numbers`, {
         method: 'PUT',
         headers: { 'Authorization': `Bearer ${token}` }
@@ -156,7 +252,7 @@ const AddStudentsModal = ({
     if (!selectedClassroom) return;
     setSavingNumber(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getStoredAccessToken();
       const body = { student_number: editNumberValue === '' ? null : parseInt(editNumberValue) };
       const res = await fetch(`${API_BASE_URL}/classrooms/${selectedClassroom.id}/students/${studentId}/student-number`, {
         method: 'PUT',
@@ -227,6 +323,165 @@ const AddStudentsModal = ({
             <X className="w-6 h-6" />
           </button>
         </div>
+
+        {/* Restore Panel Overlay */}
+        {showRestorePanel && (
+          <div className="absolute inset-0 z-10 bg-white/97 backdrop-blur-sm flex flex-col p-8 overflow-hidden">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h4 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                  <RotateCcw className="w-5 h-5 text-amber-500" />
+                  กู้คืนนักเรียนจากเทอมอื่น
+                </h4>
+                {restoreSourceInfo && (
+                  <p className="text-xs text-slate-400 mt-1">
+                    ดึงข้อมูลจาก: ปีการศึกษา {restoreSourceInfo.year} เทอม {restoreSourceInfo.semester}
+                  </p>
+                )}
+              </div>
+              <button onClick={() => setShowRestorePanel(false)} className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-slate-100 text-slate-400">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* เลือกปี/เทอมต้นทาง */}
+            <div className="flex flex-wrap items-end gap-3 mb-4 p-4 bg-amber-50 border border-amber-200 rounded-2xl">
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">ปีการศึกษาต้นทาง</label>
+                <input
+                  type="text"
+                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-28 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  placeholder={selectedClassroom?.academic_year || '2568'}
+                  value={restoreSourceYear}
+                  onChange={e => setRestoreSourceYear(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">เทอมต้นทาง</label>
+                <select
+                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  value={restoreSourceSemester}
+                  onChange={e => setRestoreSourceSemester(e.target.value)}
+                >
+                  <option value="">-- อัตโนมัติ --</option>
+                  <option value="1">เทอม 1</option>
+                  <option value="2">เทอม 2</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">ห้องต้นทาง (เลือกเพื่อกรอง)</label>
+                <select
+                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 w-56"
+                  value={restoreSelectedClassroomId}
+                  onChange={e => {
+                    const val = e.target.value;
+                    setRestoreSelectedClassroomId(val);
+                    // รีโหลดรายชื่อนักเรียนโดยกรองด้วยห้องที่เลือก
+                    const y = restoreSourceYear || undefined;
+                    const s = restoreSourceSemester || undefined;
+                    loadRestoreStudents(y, s, val || undefined);
+                  }}
+                >
+                  <option value="">-- ทุกห้อง (เริ่มต้น) --</option>
+                  {restoreClassrooms.map(rc => (
+                    <option key={rc.id} value={String(rc.id)}>{`${rc.name} (${rc.grade_level || ''}) — ${rc.student_count || 0} คน`}</option>
+                  ))}
+                </select>
+              </div>
+              <button
+                type="button"
+                className="flex items-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-lg font-bold text-sm hover:bg-amber-600 transition-all"
+                onClick={() => loadRestoreStudents(restoreSourceYear || undefined, restoreSourceSemester || undefined, restoreSelectedClassroomId || undefined)}
+                disabled={restoreLoading}
+              >
+                {restoreLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                ค้นหา
+              </button>
+            </div>
+
+            {/* รายชื่อนักเรียนที่กู้คืนได้ */}
+            <div className="flex-1 overflow-y-auto pr-1 border border-slate-100 rounded-2xl bg-slate-50/30 p-3">
+              {restoreLoading ? (
+                <div className="flex items-center justify-center py-16">
+                  <Loader2 className="w-8 h-8 text-amber-500 animate-spin" />
+                </div>
+              ) : restoreStudents.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-slate-400">
+                  <User className="w-12 h-12 mb-2 opacity-30" />
+                  <p className="font-bold">ไม่พบนักเรียนที่สามารถกู้คืนได้</p>
+                  <p className="text-xs mt-1">นักเรียนทั้งหมดอาจอยู่ในห้องนี้แล้ว หรือไม่มีข้อมูลในเทอมต้นทาง</p>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between mb-3 px-1">
+                    <span className="text-xs font-bold text-slate-500">พบ {restoreStudents.length} คน ที่สามารถกู้คืนได้</span>
+                    <button
+                      className="text-xs font-bold text-amber-600 hover:underline"
+                      onClick={() => setSelectedRestoreIds(
+                        selectedRestoreIds.size === restoreStudents.length
+                          ? new Set()
+                          : new Set(restoreStudents.map(s => s.id))
+                      )}
+                    >
+                      {selectedRestoreIds.size === restoreStudents.length ? 'ยกเลิกทั้งหมด' : 'เลือกทั้งหมด'}
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {restoreStudents.map(student => (
+                      <div
+                        key={student.id}
+                        onClick={() => {
+                          const newSet = new Set(selectedRestoreIds);
+                          if (newSet.has(student.id)) newSet.delete(student.id);
+                          else newSet.add(student.id);
+                          setSelectedRestoreIds(newSet);
+                        }}
+                        className={`flex items-center gap-3 p-3 rounded-2xl border cursor-pointer transition-all ${
+                          selectedRestoreIds.has(student.id)
+                            ? 'bg-amber-50 border-amber-300'
+                            : 'bg-white border-slate-100 hover:border-slate-200'
+                        }`}
+                      >
+                        <div className={`w-5 h-5 rounded flex items-center justify-center flex-shrink-0 ${
+                          selectedRestoreIds.has(student.id) ? 'bg-amber-500 text-white' : 'bg-slate-100 border border-slate-300'
+                        }`}>
+                          {selectedRestoreIds.has(student.id) && <Check className="w-3 h-3" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-bold text-sm text-slate-700 truncate">{student.full_name || '(ไม่ระบุชื่อ)'}</div>
+                          <div className="text-[10px] text-slate-400 truncate">{student.username} · {student.email}</div>
+                        </div>
+                        {student.student_number != null && (
+                          <span className="text-xs font-bold px-2 py-0.5 bg-amber-100 text-amber-700 rounded-lg flex-shrink-0">เลขที่ {student.student_number}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Footer of restore panel */}
+            <div className="mt-4 flex items-center justify-between">
+              <button
+                type="button"
+                className="px-5 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold text-sm hover:bg-slate-50 transition-all"
+                onClick={() => setShowRestorePanel(false)}
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="button"
+                disabled={selectedRestoreIds.size === 0 || copyingStudents}
+                className="flex items-center gap-2 px-6 py-2.5 bg-amber-500 text-white rounded-xl font-black text-sm shadow-lg shadow-amber-200 hover:bg-amber-600 transition-all disabled:opacity-50"
+                onClick={handleCopyStudents}
+              >
+                {copyingStudents ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+                กู้คืน {selectedRestoreIds.size > 0 ? `${selectedRestoreIds.size} คน` : ''}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Body */}
         <div className="flex-1 overflow-hidden flex flex-col p-8 bg-gradient-to-b from-white via-slate-50/35 to-indigo-50/20">
@@ -385,16 +640,28 @@ const AddStudentsModal = ({
             {t('common.close')}
           </button>
           
-          {isViewMode && classroomStudents.length > 0 && (
-            <button
-              type="button"
-              className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl font-black text-sm shadow-lg shadow-blue-200 transition-all hover:bg-blue-700 active:scale-95 disabled:opacity-50"
-              onClick={handleAutoAssignNumbers}
-              disabled={autoAssigning}
-            >
-              {autoAssigning ? <Loader2 className="w-4 h-4 animate-spin" /> : <ListOrdered className="w-4 h-4" />}
-              กำหนดเลขที่อัตโนมัติ
-            </button>
+          {isViewMode && (
+            <div className="flex items-center gap-2 flex-wrap">
+              {classroomStudents.length > 0 && (
+                <button
+                  type="button"
+                  className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl font-black text-sm shadow-lg shadow-blue-200 transition-all hover:bg-blue-700 active:scale-95 disabled:opacity-50"
+                  onClick={handleAutoAssignNumbers}
+                  disabled={autoAssigning}
+                >
+                  {autoAssigning ? <Loader2 className="w-4 h-4 animate-spin" /> : <ListOrdered className="w-4 h-4" />}
+                  กำหนดเลขที่อัตโนมัติ
+                </button>
+              )}
+              <button
+                type="button"
+                className="flex items-center gap-2 px-6 py-3 bg-amber-500 text-white rounded-xl font-black text-sm shadow-lg shadow-amber-200 transition-all hover:bg-amber-600 active:scale-95"
+                onClick={handleOpenRestorePanel}
+              >
+                <RotateCcw className="w-4 h-4" />
+                กู้คืนจากเทอมอื่น
+              </button>
+            </div>
           )}
           
           { !isViewMode && (

@@ -8,6 +8,7 @@ from models.user import User as UserModel
 from models.subject import Subject as SubjectModel
 from models.classroom import Classroom as ClassroomModel, ClassroomStudent as ClassroomStudentModel
 from schemas.evaluation import EvaluationCreate, EvaluationResponse, EvaluationUpdate, CharacteristicTopicCreate, CharacteristicTopicResponse, EvaluationSummaryResponse
+from utils.semester_window_guard import enforce_admin_time_window
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -27,6 +28,14 @@ async def create_evaluation(
     ).first()
     if not teacher_subject:
         raise HTTPException(status_code=404, detail="Subject not found")
+
+    enforce_admin_time_window(
+        db,
+        school_id=teacher_subject.school_id,
+        academic_year=teacher_subject.academic_year,
+        semester=teacher_subject.semester,
+        action_label='ส่งการประเมิน',
+    )
 
     # Prevent duplicate evaluation: one student per subject per term only
     query_existing = db.query(EvaluationModel).filter(
@@ -254,6 +263,18 @@ async def update_evaluation(
     # Check if user is authorized (teacher who created it or admin)
     if current_user.role != "admin" and current_user.id != db_evaluation.teacher_id:
         raise HTTPException(status_code=403, detail="Not authorized to update this evaluation")
+
+    subject = db.query(SubjectModel).filter(SubjectModel.id == db_evaluation.subject_id).first()
+    if not subject:
+        raise HTTPException(status_code=404, detail="Subject not found")
+
+    enforce_admin_time_window(
+        db,
+        school_id=subject.school_id,
+        academic_year=subject.academic_year,
+        semester=subject.semester,
+        action_label='แก้ไขการประเมิน',
+    )
     
     # Update main evaluation fields
     update_data = evaluation_update.dict(exclude_unset=True, exclude={'characteristic_scores'})
@@ -292,6 +313,18 @@ async def delete_evaluation(
     # Check if user is authorized (teacher who created it or admin)
     if current_user.role != "admin" and current_user.id != db_evaluation.teacher_id:
         raise HTTPException(status_code=403, detail="Not authorized to delete this evaluation")
+
+    subject = db.query(SubjectModel).filter(SubjectModel.id == db_evaluation.subject_id).first()
+    if not subject:
+        raise HTTPException(status_code=404, detail="Subject not found")
+
+    enforce_admin_time_window(
+        db,
+        school_id=subject.school_id,
+        academic_year=subject.academic_year,
+        semester=subject.semester,
+        action_label='ลบการประเมิน',
+    )
     
     # Delete characteristic scores first
     db.query(CharacteristicScoreModel).filter(CharacteristicScoreModel.evaluation_id == evaluation_id).delete()

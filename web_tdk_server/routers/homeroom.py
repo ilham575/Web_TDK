@@ -229,23 +229,8 @@ def create_homeroom_teacher(
         if not classroom:
             raise HTTPException(status_code=404, detail="ไม่พบห้องเรียนที่ระบุ หรือไม่อยู่ในโรงเรียนเดียวกัน")
 
-        # Check classroom is not already assigned for this academic year
-        existing_classroom = db.query(HomeroomTeacherModel).filter(
-            HomeroomTeacherModel.classroom_id == homeroom.classroom_id,
-            HomeroomTeacherModel.academic_year == classroom.academic_year,
-            HomeroomTeacherModel.semester == classroom.semester
-        ).first()
-        if existing_classroom:
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "code": "homeroom_classroom_conflict",
-                    "message": "ห้องเรียนนี้มีครูประจำชั้นในปีการศึกษาและภาคเรียนนี้แล้ว",
-                    "conflict": _serialize_homeroom_conflict(db, existing_classroom),
-                }
-            )
-
     # Check if this teacher is already assigned to another class for this school/year
+    # (One teacher can only manage ONE homeroom per academic year/semester)
     existing = db.query(HomeroomTeacherModel).filter(
         HomeroomTeacherModel.teacher_id == homeroom.teacher_id,
         HomeroomTeacherModel.school_id == homeroom.school_id,
@@ -348,23 +333,6 @@ def update_homeroom_teacher(
         ).first()
         if not new_classroom:
             raise HTTPException(status_code=404, detail="ไม่พบห้องเรียนที่ระบุ หรือไม่อยู่ในโรงเรียนเดียวกัน")
-
-        # Ensure new classroom is not already assigned in the same academic year
-        existing_room = db.query(HomeroomTeacherModel).filter(
-            HomeroomTeacherModel.classroom_id == update_data['classroom_id'],
-            HomeroomTeacherModel.academic_year == new_classroom.academic_year,
-            HomeroomTeacherModel.semester == new_classroom.semester,
-            HomeroomTeacherModel.id != homeroom_id
-        ).first()
-        if existing_room:
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "code": "homeroom_classroom_conflict",
-                    "message": "ห้องเรียนนี้มีครูประจำชั้นในปีการศึกษาและภาคเรียนนี้แล้ว",
-                    "conflict": _serialize_homeroom_conflict(db, existing_room),
-                }
-            )
 
         update_data['grade_level'] = new_classroom.grade_level
         update_data['academic_year'] = new_classroom.academic_year

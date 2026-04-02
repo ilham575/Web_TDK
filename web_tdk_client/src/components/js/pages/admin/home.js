@@ -38,10 +38,10 @@ import FirstVisitOnboarding, {
   shouldShowOnboarding
 } from '../../FirstVisitOnboarding';
 import { setSchoolFavicon } from '../../../../utils/faviconUtils';
-import { fetchCurrentUser, hasSessionMarker, logout } from '../../../../utils/authUtils';
+import { fetchCurrentUser, hasSessionMarker, logout, getStoredAccessToken } from '../../../../utils/authUtils';
 
 // ====== RankingTable helper component ======
-function RankingTable({ data, showAll = false }) {
+function RankingTable({ data, showAll = false, showClassroom = false }) {
   const [page, setPage] = React.useState(1);
   const PER_PAGE = showAll ? 20 : 50;
   const totalPages = Math.ceil(data.length / PER_PAGE);
@@ -103,6 +103,7 @@ function RankingTable({ data, showAll = false }) {
             <tr className="bg-gradient-to-r from-slate-700 to-slate-800 text-white">
               <th className="px-5 py-4 text-center w-16 rounded-tl-2xl font-bold">#</th>
               <th className="px-5 py-4 text-left font-bold">ชื่อนักเรียน</th>
+              {showClassroom && <th className="px-5 py-4 text-left font-bold">ชั้นเรียน</th>}
               <th className="px-5 py-4 text-right font-bold">คะแนนรวม</th>
               <th className="px-5 py-4 text-right font-bold">คะแนนเต็ม</th>
               <th className="px-5 py-4 text-center font-bold rounded-tr-2xl min-w-[160px]">เปอร์เซ็นต์</th>
@@ -133,6 +134,14 @@ function RankingTable({ data, showAll = false }) {
                     </div>
                   </div>
                 </td>
+                {showClassroom && (
+                  <td className="px-5 py-4">
+                    <div className="font-semibold text-slate-700">{s.classroom_display || s.classroom_name || '-'}</div>
+                    {s.grade_level && s.classroom_name && s.classroom_display !== s.classroom_name && (
+                      <div className="text-xs text-slate-400">{s.grade_level}</div>
+                    )}
+                  </td>
+                )}
                 <td className="px-5 py-4 text-right">
                   <span className="font-bold text-slate-800">{s.total_score.toFixed(1)}</span>
                 </td>
@@ -237,7 +246,7 @@ function AdminPage() {
 
   // Access control (year/semester based) management
   const [accessControls, setAccessControls] = useState([]);
-  const [accessControlForm, setAccessControlForm] = useState({ academic_year: '', semester: 1, allow_teacher_view_summary: false, allow_student_view_grades: false });
+  const [accessControlForm, setAccessControlForm] = useState({ academic_year: '', semester: 1, allow_teacher_view_summary: false, allow_student_view_grades: false, allow_student_view_ranking: false });
   const [savingAccessControl, setSavingAccessControl] = useState(false);
   const [loadingAccessControls, setLoadingAccessControls] = useState(false);
   const [availableAcademicYears, setAvailableAcademicYears] = useState([]);
@@ -265,7 +274,7 @@ function AdminPage() {
   const loadSemesterPeriods = async () => {
     if (!currentUser?.school_id) return;
     try {
-      const token = localStorage.getItem('token');
+      const token = getStoredAccessToken();
       const res = await fetch(`${API_BASE_URL}/semester-periods?school_id=${currentUser.school_id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -318,7 +327,7 @@ function AdminPage() {
     }
     setSavingSemesterPeriod(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getStoredAccessToken();
       const body = {
         school_id: currentUser.school_id,
         academic_year: semesterPeriodForm.academic_year,
@@ -355,7 +364,7 @@ function AdminPage() {
 
   const deleteSemesterPeriod = async (id) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getStoredAccessToken();
       const res = await fetch(`${API_BASE_URL}/semester-periods/${id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
@@ -366,7 +375,7 @@ function AdminPage() {
 
   const updateSchoolSetting = async (field, value) => {
     if (!currentUser || !currentUser.school_id) return;
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
     if (!token) return;
 
     // Determine the value type to send based on field name or current logic
@@ -408,7 +417,7 @@ function AdminPage() {
 
   const saveGraduationGradeLevel = async () => {
     if (!currentUser?.school_id) return;
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
     if (!token) return;
 
     setSavingGraduationGradeLevel(true);
@@ -444,7 +453,7 @@ function AdminPage() {
     if (!currentUser?.school_id) return;
     setLoadingAccessControls(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getStoredAccessToken();
       const res = await fetch(`${API_BASE_URL}/schools/access-control/${currentUser.school_id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -470,13 +479,14 @@ function AdminPage() {
     
     setSavingAccessControl(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getStoredAccessToken();
       const body = {
         school_id: currentUser.school_id,
         academic_year: accessControlForm.academic_year,
         semester: Number(accessControlForm.semester),
         allow_teacher_view_summary: accessControlForm.allow_teacher_view_summary,
-        allow_student_view_grades: accessControlForm.allow_student_view_grades
+        allow_student_view_grades: accessControlForm.allow_student_view_grades,
+        allow_student_view_ranking: accessControlForm.allow_student_view_ranking
       };
 
       const res = await fetch(`${API_BASE_URL}/schools/access-control/${currentUser.school_id}`, {
@@ -487,7 +497,7 @@ function AdminPage() {
 
       if (res.ok) {
         toast.success('เพิ่มการตั้งค่าสิทธิ์เรียบร้อย');
-        setAccessControlForm({ academic_year: '', semester: 1, allow_teacher_view_summary: false, allow_student_view_grades: false });
+        setAccessControlForm({ academic_year: '', semester: 1, allow_teacher_view_summary: false, allow_student_view_grades: false, allow_student_view_ranking: false });
         await loadAccessControls();
       } else {
         const err = await res.json();
@@ -504,7 +514,7 @@ function AdminPage() {
   const updateAccessControl = async (academic_year, semester, field, value) => {
     if (!currentUser?.school_id) return;
     try {
-      const token = localStorage.getItem('token');
+      const token = getStoredAccessToken();
       const res = await fetch(
         `${API_BASE_URL}/schools/access-control/${currentUser.school_id}/${academic_year}/${semester}`,
         {
@@ -534,7 +544,7 @@ function AdminPage() {
       `ลบการตั้งค่าสิทธิ์สำหรับปี ${academic_year} ภาคเรียนที่ ${semester} หรือไม่?`,
       async () => {
         try {
-          const token = localStorage.getItem('token');
+          const token = getStoredAccessToken();
           const res = await fetch(
             `${API_BASE_URL}/schools/access-control/${currentUser.school_id}/${academic_year}/${semester}`,
             {
@@ -887,7 +897,7 @@ function AdminPage() {
   const openStudentDetail = async (student) => {
     setLoadingStudentDetail(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getStoredAccessToken();
       const headers = { ...(token ? { Authorization: `Bearer ${token}` } : {}) };
       
       // Fetch everything for this student
@@ -1090,7 +1100,7 @@ function AdminPage() {
     fetch(`${API_BASE_URL}/announcements/?school_id=${schoolId}`).then(res=>res.json()).then(data=>{ if (Array.isArray(data)) setAnnouncements(data); else setAnnouncements([]); }).catch(()=>setAnnouncements([]));
     
     // โหลด classrooms
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
     fetch(`${API_BASE_URL}/classrooms/list/${schoolId}`, {
       headers: { ...(token ? { 'Authorization': `Bearer ${token}` } : {}) }
     }).then(res=>res.json()).then(data=>{ if (Array.isArray(data)) setClassrooms(data); else setClassrooms([]); }).catch(()=>setClassrooms([]));
@@ -1103,7 +1113,7 @@ function AdminPage() {
     // Only run when on tabs that need student counts (include homeroom list)
     if (activeTab !== 'classrooms' && activeTab !== 'promotions' && activeTab !== 'homeroom') return;
     
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
     classrooms.forEach(classroom => {
       // Add cache-busting timestamp to force fresh data from server
       fetch(`${API_BASE_URL}/classrooms/${classroom.id}/students?t=${Date.now()}`, {
@@ -1132,7 +1142,7 @@ function AdminPage() {
       if (!sid) return;
 
       try {
-        const token = localStorage.getItem('token');
+        const token = getStoredAccessToken();
         const res = await fetch(`${API_BASE_URL}/schools/${sid}`, {
           headers: { ...(token ? { 'Authorization': `Bearer ${token}` } : {}) }
         });
@@ -1159,7 +1169,7 @@ function AdminPage() {
       const sid = currentUser?.school_id || localStorage.getItem('school_id');
       if (!sid) return;
       try {
-        const token = localStorage.getItem('token');
+        const token = getStoredAccessToken();
         const res = await fetch(`${API_BASE_URL}/schools/${sid}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -1222,7 +1232,7 @@ function AdminPage() {
     if (!newUsername || !newFullName || !newPassword) { toast.error(t('admin.fillAllFields')); return; }
     setCreatingUser(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getStoredAccessToken();
       const body = { 
         username: newUsername, 
         email: newEmail || null, 
@@ -1246,7 +1256,7 @@ function AdminPage() {
 
   const handleAnnouncement = async (e) => {
     e.preventDefault();
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
     const schoolId = localStorage.getItem('school_id');
     if (!title || !content) { toast.error(t('admin.fillTitleContent')); return; }
     if (!announcementToStudents && !announcementToTeachers) { toast.error(t('admin.selectAnnouncementAudience')); return; }
@@ -1306,7 +1316,7 @@ function AdminPage() {
 
   const handleUpload = async () => {
     if (!uploadFile) { toast.error('Please select an Excel (.xlsx) file first'); return; }
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
     const form = new FormData(); form.append('file', uploadFile); setUploading(true);
     try {
       const res = await fetch(`${API_BASE_URL}/users/bulk_upload`, { method:'POST', headers:{ ...(token?{Authorization:`Bearer ${token}`}:{}) }, body:form });
@@ -1365,7 +1375,7 @@ function AdminPage() {
       return;
     }
 
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
     if (!token) {
       toast.error(t('admin.loginRequired'));
       return;
@@ -1406,7 +1416,7 @@ function AdminPage() {
   };
 
   const deleteAnnouncement = async (id) => {
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
     if (!token) { toast.error(t('admin.loginRequired')); return; }
     try {
       const res = await fetch(`${API_BASE_URL}/announcements/${id}`, { method:'DELETE', headers:{ 'Authorization': `Bearer ${token}` } });
@@ -1423,7 +1433,7 @@ function AdminPage() {
   };
 
   const checkDeletionStatus = async (userId) => {
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
     if (!token) return;
     try {
       const res = await fetch(`${API_BASE_URL}/users/${userId}/deletion_status`, { headers: { 'Authorization': `Bearer ${token}` } });
@@ -1437,7 +1447,7 @@ function AdminPage() {
   };
 
   const deactivateUser = async (userId, userName) => {
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
     if (!token) { toast.error(t('admin.loginRequired')); return; }
     try {
       const res = await fetch(`${API_BASE_URL}/users/${userId}/deactivate`, { method: 'PATCH', headers: { 'Authorization': `Bearer ${token}` } });
@@ -1452,7 +1462,7 @@ function AdminPage() {
   };
 
   const activateUser = async (userId, userName) => {
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
     if (!token) { toast.error(t('admin.loginRequired')); return; }
     try {
       const res = await fetch(`${API_BASE_URL}/users/${userId}/activate`, { method: 'PATCH', headers: { 'Authorization': `Bearer ${token}` } });
@@ -1467,7 +1477,7 @@ function AdminPage() {
   };
 
   const graduateUser = async (userId, userName) => {
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
     if (!token) { toast.error(t('admin.loginRequired')); return; }
     try {
       const res = await fetch(`${API_BASE_URL}/users/${userId}/graduate`, { method: 'PATCH', headers: { 'Authorization': `Bearer ${token}` } });
@@ -1478,7 +1488,7 @@ function AdminPage() {
   };
 
   const resignUser = async (userId, userName) => {
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
     if (!token) { toast.error(t('admin.loginRequired')); return; }
     try {
       const res = await fetch(`${API_BASE_URL}/users/${userId}/resign`, { method: 'PATCH', headers: { 'Authorization': `Bearer ${token}` } });
@@ -1489,7 +1499,7 @@ function AdminPage() {
   };
 
   const reinstateUser = async (userId, userName) => {
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
     if (!token) { toast.error(t('admin.loginRequired')); return; }
     try {
       const res = await fetch(`${API_BASE_URL}/users/${userId}/reinstate`, { method: 'PATCH', headers: { 'Authorization': `Bearer ${token}` } });
@@ -1500,7 +1510,7 @@ function AdminPage() {
   };
 
   const bulkGraduateStudents = async () => {
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
     if (!token) { toast.error(t('admin.loginRequired')); return; }
     try {
       const res = await fetch(`${API_BASE_URL}/users/bulk/graduate`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } });
@@ -1511,7 +1521,7 @@ function AdminPage() {
   };
 
   const deleteUser = async (userId, userName) => {
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
     if (!token) { toast.error(t('admin.loginRequired')); return; }
     try {
       const res = await fetch(`${API_BASE_URL}/users/${userId}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
@@ -1539,7 +1549,7 @@ function AdminPage() {
   // Bulk reset selected students' passwords
   const bulkResetSelectedStudents = async () => {
     if (!selectedStudentsForReset || selectedStudentsForReset.size === 0) { toast.error(t('admin.selectStudentsFirst')); return; }
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
     if (!token) { toast.error(t('admin.loginRequired')); return; }
     setBulkResetLoading(true);
     try {
@@ -1577,7 +1587,7 @@ function AdminPage() {
   // Bulk reset selected teachers' passwords
   const bulkResetSelectedTeachers = async () => {
     if (!selectedTeachersForReset || selectedTeachersForReset.size === 0) { toast.error(t('admin.selectTeachersFirst')); return; }
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
     if (!token) { toast.error(t('admin.loginRequired')); return; }
     setBulkResetTeachersLoading(true);
     try {
@@ -1615,7 +1625,7 @@ function AdminPage() {
   // Bulk disable users (teachers)
   const bulkDisableSelectedTeachers = async () => {
     if (!selectedTeachersForDisable || selectedTeachersForDisable.size === 0) return;
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
     if (!token) { toast.error(t('admin.loginRequired')); return; }
     setBulkDisableTeachersLoading(true);
     try {
@@ -1651,7 +1661,7 @@ function AdminPage() {
   // Bulk disable users (students)
   const bulkDisableSelectedStudents = async () => {
     if (!selectedStudentsForDisable || selectedStudentsForDisable.size === 0) return;
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
     if (!token) { toast.error(t('admin.loginRequired')); return; }
     setBulkDisableStudentsLoading(true);
     try {
@@ -1687,7 +1697,7 @@ function AdminPage() {
   // Bulk delete users (teachers)
   const bulkDeleteSelectedTeachers = async () => {
     if (!selectedTeachersForDelete || selectedTeachersForDelete.size === 0) return;
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
     if (!token) { toast.error(t('admin.loginRequired')); return; }
     setBulkDeleteTeachersLoading(true);
     try {
@@ -1723,7 +1733,7 @@ function AdminPage() {
   // Bulk delete users (students)
   const bulkDeleteSelectedStudents = async () => {
     if (!selectedStudentsForDelete || selectedStudentsForDelete.size === 0) return;
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
     if (!token) { toast.error(t('admin.loginRequired')); return; }
     setBulkDeleteStudentsLoading(true);
     try {
@@ -1758,7 +1768,7 @@ function AdminPage() {
 
   // Password Reset Request Functions
   const fetchPasswordResetRequests = async () => {
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
     if (!token) return;
     setLoadingResetRequests(true);
     try {
@@ -1777,7 +1787,7 @@ function AdminPage() {
   };
 
   const approvePasswordReset = async (requestId, userId, newPassword) => {
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
     if (!token) { toast.error(t('admin.pleaseLogin')); return; }
     try {
       const res = await fetch(`${API_BASE_URL}/users/password_reset_requests/${requestId}/approve`, {
@@ -1805,7 +1815,7 @@ function AdminPage() {
   };
 
   const rejectPasswordReset = async (requestId) => {
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
     if (!token) { toast.error(t('admin.pleaseLogin')); return; }
     try {
       const res = await fetch(`${API_BASE_URL}/users/password_reset_requests/${requestId}/reject`, {
@@ -1911,7 +1921,7 @@ function AdminPage() {
 
   const saveAnnouncementFromModal = async ({ title: t, content: c, expiry: ex, pdfFile: pdf, to_students, to_teachers }) => {
     if (!modalAnnouncement || !modalAnnouncement.id) { toast.error('Invalid announcement to update'); return; }
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
     try {
       const body = {
         title: t,
@@ -1954,7 +1964,7 @@ function AdminPage() {
   const saveExpiry = async (val) => {
     setShowExpiryModal(false);
     if (!expiryModalId) return;
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
     try {
       const localWithSec = val && val.length === 16 ? val + ':00' : val;
       const body = { expires_at: localWithSec ? localWithSec.replace('T', ' ') : null };
@@ -2001,7 +2011,7 @@ function AdminPage() {
     setLoadingTopics(true);
     try {
       const response = await fetch(`${API_BASE_URL}/evaluations/characteristic-topics?school_id=${schoolId}`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        headers: { 'Authorization': `Bearer ${getStoredAccessToken()}` }
       });
       if (response.ok) {
         const data = await response.json();
@@ -2023,7 +2033,7 @@ function AdminPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${getStoredAccessToken()}`
         },
         body: JSON.stringify({ name: newTopicName.trim() })
       });
@@ -2045,7 +2055,7 @@ function AdminPage() {
     try {
       const response = await fetch(`${API_BASE_URL}/evaluations/characteristic-topics/${id}`, {
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        headers: { 'Authorization': `Bearer ${getStoredAccessToken()}` }
       });
       if (response.ok) {
         toast.success('ลบหัวข้อประเมินสำเร็จ');
@@ -2062,7 +2072,7 @@ function AdminPage() {
     setLoadingSummary(true);
     try {
       const response = await fetch(`${API_BASE_URL}/evaluations/summary`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        headers: { 'Authorization': `Bearer ${getStoredAccessToken()}` }
       });
       if (response.ok) {
         const data = await response.json();
@@ -2084,7 +2094,7 @@ function AdminPage() {
     if (!schoolId) return;
     
     try {
-      const token = localStorage.getItem('token');
+      const token = getStoredAccessToken();
       const res = await fetch(`${API_BASE_URL}/schedule/slots?school_id=${schoolId}`, {
         headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
       });
@@ -2145,7 +2155,7 @@ function AdminPage() {
     }
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getStoredAccessToken();
 
       // If there are multiple days to create, create them in parallel and summarize results
       if (Array.isArray(daysArray) && daysArray.length > 0) {
@@ -2224,7 +2234,7 @@ function AdminPage() {
     }
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getStoredAccessToken();
       const body = {
         day_of_week: day,
         start_time: start,
@@ -2262,7 +2272,7 @@ function AdminPage() {
 
   const deleteAssignment = async (assignId) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getStoredAccessToken();
       const res = await fetch(`${API_BASE_URL}/schedule/assign/${assignId}`, {
         method: 'DELETE',
         headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
@@ -2283,7 +2293,7 @@ function AdminPage() {
 
   const deleteScheduleSlot = async (slotId) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getStoredAccessToken();
       const res = await fetch(`${API_BASE_URL}/schedule/slots/${slotId}`, {
         method: 'DELETE',
         headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
@@ -2321,7 +2331,7 @@ function AdminPage() {
     if (!schoolId) return;
     
     try {
-      const token = localStorage.getItem('token');
+      const token = getStoredAccessToken();
       const params = new URLSearchParams({ school_id: schoolId });
       if (selectedYear) params.set('academic_year', selectedYear);
       if (selectedSemester) params.set('semester', selectedSemester);
@@ -2401,9 +2411,10 @@ function AdminPage() {
     toast.error(detail.message || fallbackMessage);
   };
 
-  const createHomeroomTeacher = async (teacherId = null, classroomId = null, academicYear = null, gradeLevel = null, semester = null) => {
+  const createHomeroomTeacher = async (teacherId = null, classroomId = null, academicYear = null, gradeLevel = null, semester = null, options = {}) => {
     const schoolId = localStorage.getItem('school_id');
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
+    const { silent = false, skipClose = false, skipReload = false } = options;
     
     const teacher_id_to_use = teacherId ?? newHomeroomTeacherId;
     const classroom_id_to_use = classroomId ?? newHomeroomClassroomId;
@@ -2438,26 +2449,37 @@ function AdminPage() {
       const data = await res.json();
       
       if (res.ok) {
-        toast.success(t('admin.assignHomeroomSuccess'));
-        cancelHomeroomModal();
-        loadHomeroomTeachers();
+        if (!silent) {
+          toast.success(t('admin.assignHomeroomSuccess'));
+        }
+        if (!skipClose) {
+          cancelHomeroomModal();
+        }
+        if (!skipReload) {
+          loadHomeroomTeachers();
+        }
+        return { ok: true, data };
       } else {
-        if (data?.detail && typeof data.detail === 'object') {
+        if (!silent && data?.detail && typeof data.detail === 'object') {
           handleHomeroomConflict(data.detail, t('admin.assignHomeroomFailed'));
-        } else {
+        } else if (!silent) {
           toast.error(data.detail || t('admin.assignHomeroomFailed'));
         }
+        return { ok: false, data };
       }
     } catch (err) {
       console.error('Create homeroom teacher error:', err);
-      toast.error(t('admin.assignHomeroomError'));
+      if (!silent) {
+        toast.error(t('admin.assignHomeroomError'));
+      }
+      return { ok: false, error: err };
     }
   };
 
   const updateHomeroomTeacher = async (teacherId = null, classroomId = null, academicYear = null, semester = null) => {
     if (!editingHomeroom) return;
     
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
     
     const teacher_id_to_use = teacherId ?? newHomeroomTeacherId;
     const classroom_id_to_use = classroomId ?? newHomeroomClassroomId;
@@ -2506,7 +2528,7 @@ function AdminPage() {
   };
 
   const deleteHomeroomTeacher = async (homeroomId) => {
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
     
     try {
       const res = await fetch(`${API_BASE_URL}/homeroom/${homeroomId}`, {
@@ -2567,7 +2589,7 @@ function AdminPage() {
   React.useEffect(() => {
     if (activeTab === 'classrooms' || activeTab === 'promotions') {
       if (currentUser?.school_id) {
-        const token = localStorage.getItem('token');
+        const token = getStoredAccessToken();
         fetch(`${API_BASE_URL}/classrooms/list/${currentUser.school_id}`, {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -2595,7 +2617,7 @@ function AdminPage() {
     try {
       const schoolId = localStorage.getItem('school_id');
       if (!schoolId) return;
-      const token = localStorage.getItem('token');
+      const token = getStoredAccessToken();
       const params = new URLSearchParams({ school_id: schoolId });
       const year = yearOverride !== undefined ? yearOverride : adminScheduleYear;
       const sem = semesterOverride !== undefined ? semesterOverride : adminScheduleSemester;
@@ -2647,7 +2669,7 @@ function AdminPage() {
 
   // School deletion request functions
   const loadSchoolDeletionRequests = async () => {
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
     if (!token) return;
     setLoadingDeletionRequests(true);
     try {
@@ -2680,7 +2702,7 @@ function AdminPage() {
       return;
     }
 
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
     if (!token) {
       toast.error(t('admin.loginRequired'));
       return;
@@ -2745,7 +2767,7 @@ function AdminPage() {
       return;
     }
 
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
     const form = new FormData();
     form.append('file', gradeAssignmentFile);
     setAssigningGrades(true);
@@ -2779,7 +2801,7 @@ function AdminPage() {
   };
 
   const downloadGradeTemplate = async () => {
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
     try {
       const res = await fetch(`${API_BASE_URL}/users/bulk_template`, {
         headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
@@ -2824,7 +2846,7 @@ function AdminPage() {
       return;
     }
 
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
     setAssigningIndividualGrade(true);
 
     try {
@@ -2854,7 +2876,7 @@ function AdminPage() {
         setSelectedGradeLevel('');
         // Reload students
         if (currentUser?.school_id) {
-          const reloadToken = localStorage.getItem('token');
+          const reloadToken = getStoredAccessToken();
           fetch(`${API_BASE_URL}/users?limit=200`, {
             headers: { ...(reloadToken ? { 'Authorization': `Bearer ${reloadToken}` } : {}) }
           })
@@ -2900,7 +2922,7 @@ function AdminPage() {
       return;
     }
 
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
     if (!token) return;
 
     setPromotingStudents(true);
@@ -2950,7 +2972,7 @@ function AdminPage() {
   };
 
   const downloadPromoteTemplate = async () => {
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
     if (!token) return;
 
     try {
@@ -3010,7 +3032,7 @@ function AdminPage() {
       return;
     }
 
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
     if (!token) return;
 
     setPromotingStudents(true);
@@ -3060,7 +3082,7 @@ function AdminPage() {
   // ===== Classroom Management Functions =====
   const refreshClassrooms = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getStoredAccessToken();
       // Add cache-busting timestamp to force fresh data
       const response = await fetch(`${API_BASE_URL}/classrooms/list/${currentUser.school_id}?t=${Date.now()}`, {
         headers: { ...(token ? { 'Authorization': `Bearer ${token}` } : {}) }
@@ -3082,7 +3104,7 @@ function AdminPage() {
       return;
     }
 
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
     setCreatingClassroom(true);
     try {
       const response = await fetch(`${API_BASE_URL}/classrooms/create`, {
@@ -3128,7 +3150,7 @@ function AdminPage() {
       return;
     }
 
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
     setAddingStudentsToClassroom(true);
     try {
       const response = await fetch(`${API_BASE_URL}/classrooms/${selectedClassroom.id}/add-students`, {
@@ -3180,18 +3202,21 @@ function AdminPage() {
   };
 
   const promoteClassroom = async () => {
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
     setPromotingClassroom(true);
     try {
       if (selectedClassroom) {
         toast.info(`⏳ ${t('admin.startingPromotion')} ${selectedClassroom.name}...`);
       }
+      const effectivePromotionType = classroomPromotionType === 'repeat_year' ? 'end_of_year' : classroomPromotionType;
       const payload = {
-        promotion_type: classroomPromotionType,
+        promotion_type: effectivePromotionType,
         include_grades: true,
       };
 
-      if (classroomPromotionType === 'mid_term_with_promotion' || classroomPromotionType === 'end_of_year') {
+      if (classroomPromotionType === 'repeat_year') {
+        payload.new_grade_level = selectedClassroom.grade_level;
+      } else if (classroomPromotionType === 'mid_term_with_promotion' || classroomPromotionType === 'end_of_year') {
         if (!classroomPromotionNewGrade) {
           toast.error(t('admin.specifyNewGradeLevel'));
           setPromotingClassroom(false);
@@ -3200,7 +3225,7 @@ function AdminPage() {
         payload.new_grade_level = classroomPromotionNewGrade;
       }
 
-      if (classroomPromotionType === 'end_of_year') {
+      if (classroomPromotionType === 'end_of_year' || classroomPromotionType === 'repeat_year') {
         payload.new_academic_year = (parseInt(selectedClassroom.academic_year) + 1).toString();
       }
 
@@ -3215,9 +3240,10 @@ function AdminPage() {
 
       const data = await response.json();
       if (response.ok) {
-        toast.success(data.message || `✅ ${t('admin.promotionSuccess')} ${selectedClassroom?.name || ''}`);
+        toast.success(data.message || `✅ ${classroomPromotionType === 'repeat_year' ? t('admin.repeatYearSuccess') : t('admin.promotionSuccess')} ${selectedClassroom?.name || ''}`);
         setShowClassroomModal(false);
         setClassroomStep('select');
+        setClassroomPromotionType('end_of_year');
         setClassroomPromotionNewGrade('');
         // รีเฟรชรายการชั้นเรียน
         await refreshClassrooms();
@@ -3233,7 +3259,7 @@ function AdminPage() {
   };
 
   const promoteClassroomSemesterOnly = async (classroomParam) => {
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
     setPromotingClassroom(true);
     try {
       const classroomToUse = classroomParam || selectedClassroom;
@@ -3298,7 +3324,7 @@ function AdminPage() {
       return;
     }
 
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
     setCreatingClassroom(true);
     try {
       const payload = {
@@ -3346,7 +3372,7 @@ function AdminPage() {
       t('admin.deleteClassroomTitle'),
       `${t('admin.confirmDeleteClassroom')} "${classroom.name}" (${classroom.grade_level})? \n\n⚠️ ${t('admin.deleteClassroomWarning')}`,
       async () => {
-        const token = localStorage.getItem('token');
+        const token = getStoredAccessToken();
         try {
           const response = await fetch(`${API_BASE_URL}/classrooms/${classroom.id}`, {
             method: 'DELETE',
@@ -3382,7 +3408,7 @@ function AdminPage() {
       t('admin.removeStudentTitle'),
       `${t('admin.confirmRemoveStudent')} "${studentName}"?`,
       async () => {
-        const token = localStorage.getItem('token');
+        const token = getStoredAccessToken();
         try {
           const response = await fetch(`${API_BASE_URL}/classrooms/${classroomId}/students/${studentId}`, {
             method: 'DELETE',
@@ -3430,7 +3456,7 @@ function AdminPage() {
     if (!currentUser?.school_id) return;
     setLoadingSubjects(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getStoredAccessToken();
       const res = await fetch(`${API_BASE_URL}/subjects/school/${currentUser.school_id}/all`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -3453,7 +3479,7 @@ function AdminPage() {
     setRankingLoading(true);
     setRankingData([]);
     try {
-      const token = localStorage.getItem('token');
+      const token = getStoredAccessToken();
       let url = '';
       if (mode === 'school') {
         const params = new URLSearchParams();
@@ -3491,7 +3517,7 @@ function AdminPage() {
       `${t('admin.confirmDeleteSubject')} "${subject.name}"? ${t('admin.subjectMustBeEndedFirst')}`,
       async () => {
         try {
-          const token = localStorage.getItem('token');
+          const token = getStoredAccessToken();
           
           // First, end the subject if not already ended
           if (!subject.is_ended) {
@@ -3573,7 +3599,7 @@ function AdminPage() {
     setShowPromoteStudentModal(true);
     
     // ดึงข้อมูลนักเรียนในชั้นเรียน (guaranteed fresh data)
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
     try {
       const response = await fetch(`${API_BASE_URL}/classrooms/${classroom.id}/students?t=${Date.now()}`, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -3592,7 +3618,7 @@ function AdminPage() {
 
   // เลื่อนนักเรียนรายบุคคล
   const promoteIndividualStudents = async (payload) => {
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
     setPromotingIndividualStudents(true);
     try {
       const response = await fetch(`${API_BASE_URL}/users/promote_students`, {
@@ -4170,7 +4196,12 @@ function AdminPage() {
                                     <div className="flex flex-wrap gap-2">
                                       <button 
                                         className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-800 transition-all duration-200" 
-                                        onClick={() => navigate(`/admin/teacher/${teacher.id}`)}
+                                        onClick={() => {
+                                          const params = new URLSearchParams();
+                                          if (selectedYear) params.set('academic_year', String(selectedYear));
+                                          if (selectedSemester) params.set('semester', String(selectedSemester));
+                                          navigate(`/admin/teacher/${teacher.id}${params.toString() ? `?${params.toString()}` : ''}`);
+                                        }}
                                         title="ดูรายละเอียด"
                                       >
                                         👁️
@@ -4178,7 +4209,7 @@ function AdminPage() {
                                       <button 
                                         className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-amber-100 text-amber-600 hover:bg-amber-200 hover:text-amber-800 transition-all duration-200" 
                                         onClick={() => openConfirmModal(t('admin.resetTitle'), `${t('admin.resetPasswordOf')} "${teacher.full_name || teacher.username}"?`, async () => {
-                                          const token = localStorage.getItem('token');
+                                          const token = getStoredAccessToken();
                                           try {
                                             const res = await fetch(`${API_BASE_URL}/users/${teacher.id}/admin_reset`, { method:'POST', headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
                                             const data = await res.json();
@@ -4355,14 +4386,19 @@ function AdminPage() {
                                   <div className="flex flex-wrap gap-2 pt-3 border-t border-slate-50">
                                       <button 
                                         className="flex-1 inline-flex items-center justify-center gap-2 h-10 px-4 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-800 font-bold text-sm transition-all" 
-                                        onClick={() => navigate(`/admin/teacher/${teacher.id}`)}
+                                        onClick={() => {
+                                          const params = new URLSearchParams();
+                                          if (selectedYear) params.set('academic_year', String(selectedYear));
+                                          if (selectedSemester) params.set('semester', String(selectedSemester));
+                                          navigate(`/admin/teacher/${teacher.id}${params.toString() ? `?${params.toString()}` : ''}`);
+                                        }}
                                       >
                                         👁️ ดูข้อมูล
                                       </button>
                                       <button 
                                         className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-amber-100 text-amber-600 hover:bg-amber-200 hover:text-amber-800 transition-all" 
                                         onClick={() => openConfirmModal(t('admin.resetTitle'), `${t('admin.resetPasswordOf')} "${teacher.full_name || teacher.username}"?`, async () => {
-                                          const token = localStorage.getItem('token');
+                                          const token = getStoredAccessToken();
                                           try {
                                             const res = await fetch(`${API_BASE_URL}/users/${teacher.id}/admin_reset`, { method:'POST', headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
                                             const data = await res.json();
@@ -4766,7 +4802,7 @@ function AdminPage() {
                                       <button 
                                         className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-amber-100 text-amber-600 hover:bg-amber-200 hover:text-amber-800 transition-all duration-200" 
                                         onClick={() => openConfirmModal(t('admin.resetTitle'), `${t('admin.resetPasswordOf')} "${student.full_name || student.username}"?`, async () => {
-                                          const token = localStorage.getItem('token');
+                                          const token = getStoredAccessToken();
                                           try {
                                             const res = await fetch(`${API_BASE_URL}/users/${student.id}/admin_reset`, { method:'POST', headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
                                             const data = await res.json();
@@ -4958,7 +4994,7 @@ function AdminPage() {
                                       <button 
                                         className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-amber-100 text-amber-600 hover:bg-amber-200 hover:text-amber-800 transition-all" 
                                         onClick={() => openConfirmModal(t('admin.resetTitle'), `${t('admin.resetPasswordOf')} "${student.full_name || student.username}"?`, async () => {
-                                          const token = localStorage.getItem('token');
+                                          const token = getStoredAccessToken();
                                           try {
                                             const res = await fetch(`${API_BASE_URL}/users/${student.id}/admin_reset`, { method:'POST', headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
                                             const data = await res.json();
@@ -5178,7 +5214,7 @@ function AdminPage() {
                         type="button" 
                         className="flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-white border border-slate-200 text-slate-700 font-medium shadow-sm hover:bg-slate-50 hover:border-slate-300 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-300"
                         onClick={async ()=>{
-                          const token = localStorage.getItem('token');
+                          const token = getStoredAccessToken();
                           try {
                             const res = await fetch(`${API_BASE_URL}/users/bulk_template`, { headers: { ...(token?{Authorization:`Bearer ${token}`}:{}) } });
                             if (!res.ok) { let err = null; try { err = await res.json(); } catch(e){}; toast.error((err && err.detail) ? err.detail : 'Failed to download template'); return; }
@@ -5664,12 +5700,14 @@ function AdminPage() {
                                 className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-100 text-emerald-700 font-semibold hover:bg-emerald-200 hover:text-emerald-800 transition-all duration-200"
                                 onClick={() => {
                                   setSelectedClassroom(classroom);
+                                  setClassroomPromotionType('end_of_year');
+                                  setClassroomPromotionNewGrade('');
                                   setShowClassroomModal(true);
                                   setClassroomStep('promote');
                                 }}
                                 title="เลื่อนนักเรียนทั้งชั้น (ปลายปี)"
                               >
-                                🏫 เลื่อนทั้งชั้น
+                                🏫 ขึ้นชั้นทั้งห้อง
                               </button>
                               <button 
                                 className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-amber-100 text-amber-700 font-semibold hover:bg-amber-200 hover:text-amber-800 disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-200"
@@ -5688,7 +5726,7 @@ function AdminPage() {
                               <button
                                 className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-sky-100 text-sky-700 font-semibold hover:bg-sky-200 hover:text-sky-800 transition-all duration-200"
                                 onClick={() => openPromoteStudentModal(classroom)}
-                                title="เลื่อนนักเรียนรายบุคคล (เลือก 3 ประเภท)"
+                                title="เลื่อนนักเรียนรายบุคคล (รวมซ้ำชั้น)"
                               >
                                 👥 รายบุคคล
                               </button>
@@ -5737,11 +5775,13 @@ function AdminPage() {
                                 className="w-full inline-flex items-center justify-center gap-2 h-10 px-3 rounded-xl bg-emerald-100 text-emerald-700 font-bold text-sm hover:bg-emerald-200 transition-all"
                                 onClick={() => {
                                   setSelectedClassroom(classroom);
+                                  setClassroomPromotionType('end_of_year');
+                                  setClassroomPromotionNewGrade('');
                                   setShowClassroomModal(true);
                                   setClassroomStep('promote');
                                 }}
                               >
-                                🏫 เลื่อนทั้งชั้น (ปลายปี)
+                                🏫 ขึ้นชั้นทั้งห้อง
                               </button>
                               <div className="grid grid-cols-2 gap-2">
                                   <button 
@@ -7234,7 +7274,7 @@ function AdminPage() {
                   {/* Add New Access Control */}
                   <div className={`p-5 bg-white rounded-2xl border ${availableAcademicYears.length === 0 ? 'border-slate-200 bg-slate-50' : 'border-emerald-100'} shadow-sm mb-6`}>
                     <h4 className="font-semibold text-slate-700 mb-4">➕ เพิ่มการตั้งค่าสิทธิ์ใหม่</h4>
-                    <div className="grid grid-cols-4 gap-4 mb-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4 mb-4">
                       <div>
                         <label className="block text-xs font-semibold text-slate-600 mb-1">ปีการศึกษา (พ.ศ.)</label>
                         <select
@@ -7282,6 +7322,17 @@ function AdminPage() {
                           👨‍🎓 นักเรียนเห็นเกรด
                         </label>
                       </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-600 mb-1 flex items-center gap-1">
+                          <input
+                            type="checkbox"
+                            checked={accessControlForm.allow_student_view_ranking}
+                            onChange={e => setAccessControlForm(f => ({ ...f, allow_student_view_ranking: e.target.checked }))}
+                            className="w-4 h-4"
+                          />
+                          🏆 นักเรียนเห็นลำดับ
+                        </label>
+                      </div>
                     </div>
                     <button
                       onClick={saveAccessControl}
@@ -7310,6 +7361,7 @@ function AdminPage() {
                             <th className="px-4 py-3 text-left font-semibold text-slate-700">ภาคเรียน</th>
                             <th className="px-4 py-3 text-center font-semibold text-slate-700">👨‍🏫 ครูดูสรุป</th>
                             <th className="px-4 py-3 text-center font-semibold text-slate-700">👨‍🎓 นักเรียนดูเกรด</th>
+                            <th className="px-4 py-3 text-center font-semibold text-slate-700">🏆 นักเรียนดูลำดับ</th>
                             <th className="px-4 py-3 text-center font-semibold text-slate-700">การกระทำ</th>
                           </tr>
                         </thead>
@@ -7334,6 +7386,16 @@ function AdminPage() {
                                     type="checkbox"
                                     checked={control.allow_student_view_grades}
                                     onChange={(e) => updateAccessControl(control.academic_year, control.semester, 'allow_student_view_grades', e.target.checked)}
+                                    className="w-5 h-5 text-emerald-600 rounded"
+                                  />
+                                </label>
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                <label className="inline-flex items-center cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={control.allow_student_view_ranking}
+                                    onChange={(e) => updateAccessControl(control.academic_year, control.semester, 'allow_student_view_ranking', e.target.checked)}
                                     className="w-5 h-5 text-emerald-600 rounded"
                                   />
                                 </label>
@@ -7537,7 +7599,7 @@ function AdminPage() {
                       <p>ไม่พบข้อมูลนักเรียน</p>
                     </div>
                   ) : (
-                    <RankingTable data={rankingData} showAll />
+                    <RankingTable data={rankingData} showAll showClassroom />
                   )}
                 </div>
               )}
@@ -7705,17 +7767,120 @@ function AdminPage() {
       selectedYear={selectedYear}
       selectedSemester={selectedSemester}
       onClose={cancelHomeroomModal}
-      onSave={(teacherId, classroomId, academicYear, gradeLevel, semester) => {
-        setNewHomeroomTeacherId(teacherId);
-        setNewHomeroomClassroomId(classroomId || '');
-        setNewHomeroomGradeLevel(gradeLevel || '');
-        setNewHomeroomAcademicYear(academicYear || '');
-        setNewHomeroomSemester(semester || '');
+      onSave={async (payloadOrTeacherId, classroomId, academicYear, gradeLevel, semester) => {
+        const payload = typeof payloadOrTeacherId === 'object'
+          ? payloadOrTeacherId
+          : {
+              teacherId: payloadOrTeacherId,
+              classroomId,
+              academicYear,
+              gradeLevel,
+              semester,
+              semesterMode: 'single',
+              classroomIds: [],
+            };
+
+        const teacherIdToUse = payload.teacherId;
+        const classroomIdToUse = payload.classroomId || '';
+        const academicYearToUse = payload.academicYear || '';
+        const gradeLevelToUse = payload.gradeLevel || '';
+        const semesterToUse = payload.semester || '';
+
+        setNewHomeroomTeacherId(teacherIdToUse);
+        setNewHomeroomClassroomId(classroomIdToUse);
+        setNewHomeroomGradeLevel(gradeLevelToUse);
+        setNewHomeroomAcademicYear(academicYearToUse);
+        setNewHomeroomSemester(semesterToUse);
+
         if (editingHomeroom) {
-          updateHomeroomTeacher(teacherId, classroomId, academicYear, semester);
-        } else {
-          createHomeroomTeacher(teacherId, classroomId, academicYear, gradeLevel, semester);
+          updateHomeroomTeacher(teacherIdToUse, classroomIdToUse, academicYearToUse, semesterToUse);
+          return;
         }
+
+        if (payload.semesterMode === 'both' && Array.isArray(payload.classroomIds) && payload.classroomIds.length > 0) {
+          const selectedClassroom = classrooms.find((c) => Number(c.id) === Number(classroomIdToUse));
+          if (!selectedClassroom) {
+            toast.error('กรุณาเลือกชั้นเรียน');
+            return;
+          }
+
+          const selectedSemesterNumber = Number(selectedClassroom.semester || 0);
+          const fallbackYear = selectedClassroom.academic_year || academicYearToUse;
+          const fallbackGrade = selectedClassroom.grade_level || gradeLevelToUse;
+
+          const siblingClassroom = classrooms.find((c) =>
+            Number(c.id) !== Number(selectedClassroom.id)
+            && String(c.academic_year || '') === String(fallbackYear || '')
+            && String(c.grade_level || '') === String(fallbackGrade || '')
+            && String(c.name || '') === String(selectedClassroom.name || '')
+            && (Number(c.semester) === 1 || Number(c.semester) === 2)
+            && Number(c.semester) !== selectedSemesterNumber
+          );
+
+          const targetAssignments = [];
+          if (selectedSemesterNumber === 1 || selectedSemesterNumber === 2) {
+            targetAssignments.push({
+              semester: selectedSemesterNumber,
+              classroomId: selectedClassroom.id,
+              academicYear: selectedClassroom.academic_year || fallbackYear,
+              gradeLevel: selectedClassroom.grade_level || fallbackGrade,
+            });
+          }
+
+          if (siblingClassroom) {
+            targetAssignments.push({
+              semester: Number(siblingClassroom.semester),
+              classroomId: siblingClassroom.id,
+              academicYear: siblingClassroom.academic_year || fallbackYear,
+              gradeLevel: siblingClassroom.grade_level || fallbackGrade,
+            });
+          } else {
+            const missingSemester = selectedSemesterNumber === 1 ? 2 : 1;
+            if (missingSemester === 1 || missingSemester === 2) {
+              targetAssignments.push({
+                semester: missingSemester,
+                classroomId: null,
+                academicYear: fallbackYear,
+                gradeLevel: fallbackGrade,
+              });
+            }
+          }
+
+          const pickedClassrooms = targetAssignments.sort((a, b) => Number(a.semester || 0) - Number(b.semester || 0));
+
+          let successCount = 0;
+          let failCount = 0;
+
+          for (const room of pickedClassrooms) {
+            const result = await createHomeroomTeacher(
+              teacherIdToUse,
+              room.classroomId,
+              room.academicYear || academicYearToUse,
+              room.gradeLevel || gradeLevelToUse,
+              room.semester,
+              { silent: true, skipClose: true, skipReload: true }
+            );
+            if (result?.ok) {
+              successCount += 1;
+            } else {
+              failCount += 1;
+            }
+          }
+
+          if (successCount > 0 && failCount === 0) {
+            toast.success('กำหนดครูประจำชั้นสำหรับทั้งสองภาคเรียนเรียบร้อยแล้ว');
+          } else if (successCount > 0 && failCount > 0) {
+            toast.warn(`กำหนดสำเร็จ ${successCount} รายการ และไม่สำเร็จ ${failCount} รายการ`);
+          } else {
+            toast.error(t('admin.assignHomeroomFailed'));
+          }
+
+          cancelHomeroomModal();
+          loadHomeroomTeachers();
+          return;
+        }
+
+        createHomeroomTeacher(teacherIdToUse, classroomIdToUse, academicYearToUse, gradeLevelToUse, semesterToUse);
       }}
     />
 
@@ -7726,8 +7891,8 @@ function AdminPage() {
       onSave={loadSubjects}
       subject={selectedSubject}
       currentSchoolId={currentUser?.school_id}
-      defaultYear={systemYear}
-      defaultSemester={systemSemester}
+      defaultYear={selectedYear || systemYear}
+      defaultSemester={selectedSemester || systemSemester}
     />
 
     {/* Teacher Assignment Modal */}

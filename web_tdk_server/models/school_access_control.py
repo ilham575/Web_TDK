@@ -17,6 +17,7 @@ class SchoolAccessControl(Base):
     # Access flags for this year/semester combination
     allow_teacher_view_summary = Column(Boolean, default=False, nullable=False)  # Can homeroom teachers see student summary/ranking?
     allow_student_view_grades = Column(Boolean, default=False, nullable=False)  # Can students see grade transcript?
+    allow_student_view_ranking = Column(Boolean, default=False, nullable=False)  # Can students see ranking results?
     
     # Unique constraint: one record per school + year + semester
     __table_args__ = (

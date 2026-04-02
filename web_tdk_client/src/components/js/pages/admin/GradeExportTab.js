@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import html2pdf from 'html2pdf.js';
+import html2pdf from 'html2pdf.js/dist/html2pdf.bundle.min.js';
 import * as XLSX from 'xlsx';
 import { toast } from 'react-toastify';
 import { API_BASE_URL } from '../../../endpoints';
+import { getStoredAccessToken } from '../../../../utils/authUtils';
 
 // Bilingual translations
 const translations = {
@@ -92,6 +93,7 @@ function GradeExportTab({
   const [language, setLanguage] = useState('th');
   const [homeroomTeacher, setHomeroomTeacher] = useState(null);
   const [schoolInfo, setSchoolInfo] = useState(schoolData);
+  const [pdfBaseFontSize, setPdfBaseFontSize] = useState(18);
 
   const t = (key) => translations[language]?.[key] || key;
 
@@ -125,7 +127,7 @@ function GradeExportTab({
 
   const loadSchoolInfo = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getStoredAccessToken();
       const res = await fetch(`${API_BASE_URL}/schools/${currentUser.school_id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -140,7 +142,7 @@ function GradeExportTab({
 
   const loadHomeroomTeacher = async (classroom) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getStoredAccessToken();
       const yearStr = String(classroom?.academic_year || academicYear);
       const res = await fetch(
         `${API_BASE_URL}/homeroom?classroom_id=${classroom.id}&academic_year=${yearStr}`,
@@ -197,7 +199,7 @@ function GradeExportTab({
 
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getStoredAccessToken();
       
       await loadHomeroomTeacher(entry);
       
@@ -373,50 +375,77 @@ function GradeExportTab({
       const schoolName = schoolInfo?.name || 'School';
       const homeroomName = homeroomTeacher?.teacher_name || '-';
 
+      const baseFontSize = Number(pdfBaseFontSize) || 16;
+      const schoolNameSize = Math.round(baseFontSize * 1.8);
+      const reportTitleSize = Math.round(baseFontSize * 1.1);
+      const metaFontSize = baseFontSize;
+      const tableFontSize = Math.round(baseFontSize * 0.95);
+      const subjectHeaderSize = Math.round(baseFontSize * 0.85);
+      const summaryFontSize = Math.round(baseFontSize * 0.95);
+
       const htmlContent = `
-        <div style="font-family: 'Mali', 'Tajawal', 'Tahoma', 'Segoe UI', 'Arial Unicode MS', sans-serif; padding: 20px; color: #333;">
-          <div style="text-align: center; margin-bottom: 20px; border-bottom: 3px solid #2980b9; padding-bottom: 15px;">
-            <h1 style="margin: 0; color: #2980b9; font-size: 26px; font-weight: bold;">${escapeHtml(schoolName)}</h1>
-            <h2 style="margin: 5px 0 0 0; color: #555; font-size: 16px; font-weight: normal;">${t('gradeReport')}</h2>
-          </div>
+        <div style="font-family: 'Mali', 'Tajawal', 'Tahoma', 'Segoe UI', 'Arial Unicode MS', sans-serif; padding: 16px; color: #333;">
+          <style>
+            @page { size: A4 landscape; margin: 6mm; }
+            html, body { margin: 0; padding: 0; }
+            .report-container { width: 100%; box-sizing: border-box; }
+            .header { text-align: center; margin-bottom: 12px; padding-bottom: 14px; border-bottom: 3px solid #2980b9; }
+            .school-name { margin: 0; color: #2980b9; font-size: ${schoolNameSize}px; font-weight: 700; }
+            .report-title { margin: 5px 0 0 0; color: #555; font-size: ${reportTitleSize}px; font-weight: 500; }
+            .meta { margin-bottom: 18px; font-size: ${metaFontSize}px; background: #f5f5f5; padding: 14px; border-radius: 8px; border-left: 4px solid #2980b9; }
+            .meta .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 10px; font-size: ${metaFontSize}px; }
+            table.report-table { width: 100%; border-collapse: collapse; font-size: ${tableFontSize}px; }
+            table.report-table th, table.report-table td { border: 1px solid #ddd; padding: 8px; vertical-align: middle; }
+            table.report-table thead th { background-color: #2980b9; color: white; font-weight: 600; }
+            table.report-table thead th.subject { font-size: ${subjectHeaderSize}px; }
+            table.report-table tbody tr:nth-child(even) { background-color: #fafafa; }
+            .summary { margin-top: 18px; font-size: ${summaryFontSize}px; color: #666; }
+          </style>
 
-          <div style="margin-bottom: 20px; font-size: 12px; background: #f5f5f5; padding: 15px; border-radius: 8px; border-left: 4px solid #2980b9;">
-            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 10px;">
-              <div><strong>${t('selectClassroom')}:</strong> ${escapeHtml(classroomName)}</div>
-              <div><strong>${t('selectYear')}:</strong> ${escapeHtml(academicYear)}</div>
-              <div><strong>${t('selectSemester')}:</strong> ${t(`semester${semester}`)}</div>
+          <div class="report-container">
+            <div class="header">
+              <h1 class="school-name">${escapeHtml(schoolName)}</h1>
+              <h2 class="report-title">${t('gradeReport')}</h2>
             </div>
-            <div style="margin-bottom: 5px;"><strong>${t('homeroomTeacher')}:</strong> ${escapeHtml(homeroomName)}</div>
-            <div><strong>${t('printDate')}:</strong> ${escapeHtml(timestamp)}</div>
-          </div>
 
-          <table style="width: 100%; border-collapse: collapse; font-size: 10px;">
-            <thead>
-              <tr style="background-color: #2980b9; color: white;">
-                <th style="border: 1px solid #ddd; padding: 6px; text-align: center;"><strong>${language === 'th' ? 'เลขที่' : 'No.'}</strong></th>
-                <th style="border: 1px solid #ddd; padding: 6px; text-align: left;"><strong>${t('name')}</strong></th>
-                <th style="border: 1px solid #ddd; padding: 6px; text-align: center;"><strong>${t('rank')}</strong></th>
-                ${subjectsData.map(subj => `<th style="border: 1px solid #ddd; padding: 6px; text-align: center; font-size: 9px;"><strong>${escapeHtml(subj)}</strong></th>`).join('')}
-                <th style="border: 1px solid #ddd; padding: 6px; text-align: right;"><strong>${t('allSubjectsTotal')}</strong></th>
-                <th style="border: 1px solid #ddd; padding: 6px; text-align: right;"><strong>${t('overallPercent')} (%)</strong></th>
-              </tr>
-            </thead>
-            <tbody>
-              ${gradeData.map((student, idx) => `
-                <tr style="background-color: ${idx % 2 === 0 ? '#fafafa' : 'white'};">
-                  <td style="border: 1px solid #ddd; padding: 5px; text-align: center;">${escapeHtml(student.student_number ?? (idx + 1))}</td>
-                  <td style="border: 1px solid #ddd; padding: 5px;">${escapeHtml(student.full_name || '-')}</td>
-                  <td style="border: 1px solid #ddd; padding: 5px; text-align: center;"><strong>${escapeHtml(student.rank || '-')}</strong></td>
-                  ${subjectsData.map(subj => `<td style="border: 1px solid #ddd; padding: 5px; text-align: center;">${escapeHtml(getStudentSubjectScore(student, subj))}</td>`).join('')}
-                  <td style="border: 1px solid #ddd; padding: 5px; text-align: right; font-weight: bold; color: #1f4b99;">${formatNumberOrDash(getStudentAllSubjectsTotal(student), 2)}</td>
-                  <td style="border: 1px solid #ddd; padding: 5px; text-align: right; font-weight: bold; color: #27ae60;">${formatNumberOrDash(getStudentOverallPercent(student), 2)}</td>
+            <div class="meta">
+              <div class="grid">
+                <div><strong>${t('selectClassroom')}:</strong> ${escapeHtml(classroomName)}</div>
+                <div><strong>${t('selectYear')}:</strong> ${escapeHtml(academicYear)}</div>
+                <div><strong>${t('selectSemester')}:</strong> ${t(`semester${semester}`)}</div>
+              </div>
+              <div style="margin-bottom:5px;"><strong>${t('homeroomTeacher')}:</strong> ${escapeHtml(homeroomName)}</div>
+              <div><strong>${t('printDate')}:</strong> ${escapeHtml(timestamp)}</div>
+            </div>
+
+            <table class="report-table" role="table" aria-label="${escapeHtml(t('gradeReport'))}">
+              <thead>
+                <tr>
+                  <th style="text-align:center; width:5%"><strong>${language === 'th' ? 'เลขที่' : 'No.'}</strong></th>
+                  <th style="text-align:left; width:30%"><strong>${t('name')}</strong></th>
+                  ${subjectsData.map(subj => `<th class="subject" style="text-align:center; font-size:${subjectHeaderSize}px;"><strong>${escapeHtml(subj)}</strong></th>`).join('')}
+                  <th style="text-align:right; width:10%"><strong>${t('allSubjectsTotal')}</strong></th>
+                  <th style="text-align:right; width:10%"><strong>${t('overallPercent')} (%)</strong></th>
+                  <th style="text-align:center; width:8%"><strong>${t('rank')}</strong></th>
                 </tr>
-              `).join('')}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                ${gradeData.map((student, idx) => `
+                  <tr>
+                    <td style="text-align:center;">${escapeHtml(student.student_number ?? (idx + 1))}</td>
+                    <td>${escapeHtml(student.full_name || '-')}</td>
+                    ${subjectsData.map(subj => `<td style="text-align:center;">${escapeHtml(getStudentSubjectScore(student, subj))}</td>`).join('')}
+                    <td style="text-align:right; font-weight:bold; color:#1f4b99;">${formatNumberOrDash(getStudentAllSubjectsTotal(student), 2)}</td>
+                    <td style="text-align:right; font-weight:bold; color:#27ae60;">${formatNumberOrDash(getStudentOverallPercent(student), 2)}</td>
+                    <td style="text-align:center;"><strong>${escapeHtml(student.rank || '-')}</strong></td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
 
-          <div style="margin-top: 20px; font-size: 11px; color: #666;">
-            <p><strong>${t('totalScore')}:</strong> ${gradeData.length} ${t('students')}</p>
+            <div class="summary">
+              <p><strong>${t('totalScore')}:</strong> ${gradeData.length} ${t('students')}</p>
+            </div>
           </div>
         </div>
       `;
@@ -474,23 +503,23 @@ function GradeExportTab({
         [`${t('homeroomTeacher')}: ${homeroomName}`],
         [`${t('printDate')}: ${timestamp}`],
         [],
-        [language === 'th' ? 'เลขที่' : 'No.', t('name'), t('rank'), ...subjectsData, t('allSubjectsTotal'), `${t('overallPercent')} (%)`]
+        [language === 'th' ? 'เลขที่' : 'No.', t('name'), ...subjectsData, t('allSubjectsTotal'), `${t('overallPercent')} (%)`, t('rank')]
       ];
 
       gradeData.forEach((student, idx) => {
         const row = [
           student.student_number ?? (idx + 1),
           student.full_name || '-',
-          student.rank || '-',
           ...subjectsData.map(subj => getStudentSubjectScore(student, subj)),
           formatNumberOrDash(getStudentAllSubjectsTotal(student), 2),
-          formatNumberOrDash(getStudentOverallPercent(student), 2)
+          formatNumberOrDash(getStudentOverallPercent(student), 2),
+          student.rank || '-'
         ];
         worksheetData.push(row);
       });
 
       const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
-      const colWidths = [6, 20, 8, ...subjectsData.map(() => 12), 14, 14];
+      const colWidths = [6, 20, ...subjectsData.map(() => 12), 14, 14, 8];
       worksheet['!cols'] = colWidths.map(w => ({ wch: w }));
 
       const workbook = XLSX.utils.book_new();
@@ -616,12 +645,12 @@ function GradeExportTab({
                   <tr className="bg-slate-200">
                     <th className="px-3 py-2 text-left">#</th>
                     <th className="px-3 py-2 text-left">{t('name')}</th>
-                    <th className="px-3 py-2 text-center">{t('rank')}</th>
                     {subjectsData.slice(0, 8).map(subj => (
                       <th key={subj} className="px-3 py-2 text-center text-xs bg-blue-50">{subj}</th>
                     ))}
                     <th className="px-3 py-2 text-right">{t('allSubjectsTotal')}</th>
                     <th className="px-3 py-2 text-right">{t('overallPercent')} (%)</th>
+                    <th className="px-3 py-2 text-center">{t('rank')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
@@ -629,12 +658,12 @@ function GradeExportTab({
                     <tr key={idx} className="hover:bg-slate-100">
                       <td className="px-3 py-2">{item.student_number ?? (idx + 1)}</td>
                       <td className="px-3 py-2">{item.full_name || '-'}</td>
-                      <td className="px-3 py-2 text-center font-semibold">{item.rank || '-'}</td>
                       {subjectsData.slice(0, 8).map(subj => (
                         <td key={subj} className="px-3 py-2 text-center text-xs bg-blue-50">{getStudentSubjectScore(item, subj)}</td>
                       ))}
                       <td className="px-3 py-2 text-right font-semibold text-blue-700">{formatNumberOrDash(getStudentAllSubjectsTotal(item), 2)}</td>
                       <td className="px-3 py-2 text-right font-semibold text-green-600">{formatNumberOrDash(getStudentOverallPercent(item), 2)}%</td>
+                      <td className="px-3 py-2 text-center font-semibold">{item.rank || '-'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -676,6 +705,22 @@ function GradeExportTab({
                 </label>
               </div>
             </div>
+            {exportFormat === 'pdf' && (
+              <div className="flex flex-col items-start justify-end">
+                <label className="block text-sm font-semibold text-slate-700 mb-2">ขนาดตัวอักษรก่อนส่งออก (px)</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="range"
+                    min={12}
+                    max={32}
+                    value={pdfBaseFontSize}
+                    onChange={(e) => setPdfBaseFontSize(Number(e.target.value))}
+                    className="w-48"
+                  />
+                  <span className="text-sm font-medium">{pdfBaseFontSize}px</span>
+                </div>
+              </div>
+            )}
 
             <div className="flex items-end gap-3">
               <button

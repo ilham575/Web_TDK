@@ -17,6 +17,7 @@ from models.classroom import ClassroomStudent, Classroom
 from models.subject import Subject
 from models.semester_period import SemesterPeriod as SemesterPeriodModel
 from schemas.absence import AbsenceCreate, AbsenceUpdate, AbsenceResponse
+from utils.semester_window_guard import enforce_admin_time_window
 
 router = APIRouter(prefix="/absences", tags=["absences"])
 
@@ -269,6 +270,20 @@ def create_absence(
     """Create a new absence/leave request for the current student."""
     if getattr(current_user, 'role', None) != 'student':
         raise HTTPException(status_code=403, detail='Only students can request absences')
+
+    context = get_student_absence_context(
+        db,
+        current_user.id,
+        absence_date=payload.absence_date,
+        subject_id=payload.subject_id,
+    )
+    enforce_admin_time_window(
+        db,
+        school_id=context.get('school_id'),
+        academic_year=context.get('academic_year'),
+        semester=context.get('semester'),
+        action_label='ยื่นคำขอลาเรียน',
+    )
     
     # Check if already exists for this date
     existing = db.query(AbsenceModel).filter(
@@ -555,6 +570,20 @@ def update_absence(
             raise HTTPException(status_code=403, detail='Not authorized to update this absence')
         if absence.status not in [AbsenceStatus.PENDING, AbsenceStatus.REJECTED]:
             raise HTTPException(status_code=400, detail='Can only update pending or rejected absences')
+
+        context = get_student_absence_context(
+            db,
+            absence.student_id,
+            absence_date=payload.absence_date or absence.absence_date,
+            subject_id=payload.subject_id if payload.subject_id is not None else absence.subject_id,
+        )
+        enforce_admin_time_window(
+            db,
+            school_id=context.get('school_id'),
+            academic_year=context.get('academic_year'),
+            semester=context.get('semester'),
+            action_label='แก้ไขคำขอลาเรียน',
+        )
         
         # Students cannot explicitly change status - but we reset rejected to pending when they resubmit
         if payload.status is not None and payload.status != AbsenceStatus.PENDING:
@@ -586,6 +615,20 @@ def update_absence(
     
     # Handle status change (approval/rejection) - only for teachers/admins
     elif payload.status is not None:
+        context = get_student_absence_context(
+            db,
+            absence.student_id,
+            absence_date=absence.absence_date,
+            subject_id=absence.subject_id,
+        )
+        enforce_admin_time_window(
+            db,
+            school_id=context.get('school_id'),
+            academic_year=context.get('academic_year'),
+            semester=context.get('semester'),
+            action_label='อนุมัติหรือปฏิเสธการลาเรียน',
+        )
+
         # Check authorization
         can_approve, approver_role = can_approve_absence(db, current_user, absence.student_id, absence)
         
@@ -663,6 +706,20 @@ def delete_absence(
         raise HTTPException(status_code=404, detail='Absence not found')
     
     role = getattr(current_user, 'role', None)
+
+    context = get_student_absence_context(
+        db,
+        absence.student_id,
+        absence_date=absence.absence_date,
+        subject_id=absence.subject_id,
+    )
+    enforce_admin_time_window(
+        db,
+        school_id=context.get('school_id'),
+        academic_year=context.get('academic_year'),
+        semester=context.get('semester'),
+        action_label='จัดการคำขอลาเรียน',
+    )
     
     # Students can only delete their own pending absences
     if role == 'student':

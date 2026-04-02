@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../endpoints';
-import { logout } from '../../utils/authUtils';
+import { clearClientSession, getStoredAccessToken, logout } from '../../utils/authUtils';
 import { Shield, Clock, AlertTriangle } from 'lucide-react';
 
 const formatDuration = (seconds) => {
@@ -37,11 +37,13 @@ export default function Footer() {
 
     sessionFetchRef.current = true;
     try {
+      const token = getStoredAccessToken();
       const response = await fetch(`${API_BASE_URL}/users/session`, {
-        credentials: 'include',
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       });
 
       if (response.status === 401) {
+        clearClientSession();
         resetFooterState();
         return;
       }
@@ -70,7 +72,7 @@ export default function Footer() {
 
   useEffect(() => {
     const update = () => {
-      const sessionMarker = localStorage.getItem('token');
+      const sessionMarker = getStoredAccessToken();
       if (!sessionMarker) {
         resetFooterState();
         return;

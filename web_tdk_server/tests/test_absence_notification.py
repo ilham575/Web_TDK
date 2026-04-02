@@ -231,6 +231,7 @@ def create_semester_period(school_id, admin_headers, academic_year, semester, st
 def test_student_absence_creates_announcement_and_notifies_homeroom():
     school, admin_headers = create_school_and_admin()
     classroom = create_classroom(school['id'], admin_headers)
+    create_semester_period(school['id'], admin_headers, '2025', 1, '2020-01-01T00:00:00', '2030-12-31T23:59:59')
     teacher = create_teacher_and_assign_homeroom(school['id'], admin_headers, classroom_id=classroom['id'])
     student = create_student_and_enroll(school['id'], admin_headers, classroom['id'])
 
@@ -280,8 +281,8 @@ def test_absence_approval_respects_homeroom_semester_assignment():
     semester_1_classroom = create_classroom(school['id'], admin_headers, semester=1, academic_year='2025', name='Grade 1 / Sem 1')
     semester_2_classroom = create_classroom(school['id'], admin_headers, semester=2, academic_year='2025', name='Grade 1 / Sem 2')
 
-    create_semester_period(school['id'], admin_headers, '2025', 1, '2025-05-01T00:00:00', '2025-09-30T23:59:59')
-    create_semester_period(school['id'], admin_headers, '2025', 2, '2025-10-01T00:00:00', '2026-03-31T23:59:59')
+    create_semester_period(school['id'], admin_headers, '2025', 1, '2020-01-01T00:00:00', '2030-12-31T23:59:59')
+    create_semester_period(school['id'], admin_headers, '2025', 2, '2031-01-01T00:00:00', '2032-12-31T23:59:59')
 
     semester_1_teacher = create_teacher_and_assign_homeroom(
         school['id'],

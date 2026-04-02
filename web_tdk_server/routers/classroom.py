@@ -7,6 +7,7 @@ from database.connection import get_db
 from models.classroom import Classroom, ClassroomStudent
 from models.user import User
 from models.grade import Grade
+from models.school import School as SchoolModel
 from models.schedule import SubjectSchedule as SubjectScheduleModel
 from schemas.classroom import (
     ClassroomCreate,
@@ -61,6 +62,22 @@ def get_classroom_or_404(classroom_id: int, db: Session) -> Classroom:
             detail="ไม่พบชั้นเรียน"
         )
     return classroom
+
+
+def _normalize_grade_level(value: Optional[str]) -> str:
+    return ''.join(str(value or '').split()).lower()
+
+
+def _is_graduation_grade(grade_level: Optional[str], graduation_grade_level: Optional[str]) -> bool:
+    if not grade_level or not graduation_grade_level:
+        return False
+    return _normalize_grade_level(grade_level) == _normalize_grade_level(graduation_grade_level)
+
+
+def _grade_levels_match(left: Optional[str], right: Optional[str]) -> bool:
+    if not left or not right:
+        return False
+    return _normalize_grade_level(left) == _normalize_grade_level(right)
 
 
 # ===== Classroom CRUD =====
@@ -328,12 +345,14 @@ async def get_available_students(
         User.school_id == classroom.school_id
     ).all()
 
-    # ดึงรายชื่อนักเรียนที่ลงทะเบียนอยู่แล้ว (active) ในโรงเรียนเดียวกัน
-    # NOTE: เปลี่ยนเป็นไม่ตรวจสอบเฉพาะปีการศึกษา เพื่อบังคับให้นักเรียนมีได้เพียง 1 ชั้นเรียนเท่านั้น
+    # ดึงรายชื่อนักเรียนที่ลงทะเบียนอยู่แล้ว (active) ใน academic_year+semester เดียวกัน
+    # Fix: กรองเฉพาะปีและเทอมเดียวกัน ไม่ใช่ทั้งหมด เพื่อไม่ให้ปีเก่าถูกปนเปื้อน
     enrolled_student_ids = db.query(ClassroomStudent.student_id).join(
         Classroom, ClassroomStudent.classroom_id == Classroom.id
     ).filter(
         Classroom.school_id == classroom.school_id,
+        Classroom.academic_year == classroom.academic_year,
+        Classroom.semester == classroom.semester,
         ClassroomStudent.is_active == True
     ).all()
     
@@ -403,19 +422,20 @@ async def add_students_to_classroom(
                 added_count += 1
             continue
 
-        # ตรวจสอบว่านักเรียนมีชั้นเรียนอื่นในปีการศึกษาเดียวกันหรือไม่
-        # นักเรียน 1 คนสามารถมีชั้นเรียนได้แค่ 1 ชั้นต่อ academic year
+        # ตรวจสอบว่านักเรียนมีชั้นเรียนอื่นในปีการศึกษาและเทอมเดียวกันหรือไม่
+        # Fix: กรองทั้ง academic_year และ semester เพื่อไม่บล็อกกรณีข้ามเทอม
         existing_in_year = db.query(ClassroomStudent).join(
             Classroom, ClassroomStudent.classroom_id == Classroom.id
         ).filter(
             ClassroomStudent.student_id == student_id,
             Classroom.academic_year == classroom.academic_year,
+            Classroom.semester == classroom.semester,
             Classroom.school_id == classroom.school_id,
             ClassroomStudent.is_active == True
         ).first()
 
         if existing_in_year:
-            # นักเรียนมีชั้นเรียนอื่นแล้วในปีนี้
+            # นักเรียนมีชั้นเรียนอื่นแล้วในปีและเทอมนี้
             other_classroom = db.query(Classroom).filter(
                 Classroom.id == existing_in_year.classroom_id
             ).first()
@@ -599,11 +619,22 @@ async def promote_classroom(
     """
     verify_admin_or_owner(current_user)
     classroom = get_classroom_or_404(classroom_id, db)
+    school = db.query(SchoolModel).filter(SchoolModel.id == classroom.school_id).first()
 
     if data.promotion_type not in ["mid_term", "mid_term_with_promotion", "end_of_year"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="promotion_type ต้องเป็น 'mid_term', 'mid_term_with_promotion' หรือ 'end_of_year'"
+        )
+
+    if (
+        data.promotion_type == "end_of_year"
+        and _is_graduation_grade(classroom.grade_level, getattr(school, 'graduation_grade_level', None))
+        and not _grade_levels_match(data.new_grade_level, classroom.grade_level)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"ชั้น {classroom.grade_level} ถูกตั้งเป็นชั้นจบของโรงเรียน จึงเลื่อนไปปีการศึกษาถัดไปได้เฉพาะแบบซ้ำชั้นเดิมเท่านั้น"
         )
 
     # กำหนดค่าสำหรับชั้นเรียนใหม่
@@ -736,6 +767,192 @@ async def promote_classroom(
         promoted_students=promoted_students,
         grades_copied=grades_copied
     )
+
+
+# ===== Restore / Copy Students from Another Classroom =====
+
+@router.get("/{classroom_id}/students-from-other-semester")
+async def get_students_from_other_semester(
+    classroom_id: int,
+    source_academic_year: Optional[str] = None,
+    source_semester: Optional[int] = None,
+    source_classroom_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    ดึงนักเรียนจากห้องเรียนเทอม/ปีอื่นที่ยังไม่ได้ลงทะเบียนในห้องนี้
+    ใช้สำหรับกู้คืนรายชื่อนักเรียนที่ถูกลบออกโดยไม่ตั้งใจ
+    """
+    verify_admin_or_owner(current_user)
+    classroom = get_classroom_or_404(classroom_id, db)
+
+    # ปีและเทอมปลายทางของห้องนี้
+    target_year = classroom.academic_year
+    target_semester = classroom.semester
+
+    # ค่าเริ่มต้น: ดึงจากเทอมก่อนหน้าในปีเดียวกัน หรือปีก่อน
+    if source_academic_year is None and source_semester is None:
+        if target_semester == 2:
+            source_academic_year = target_year
+            source_semester = 1
+        else:
+            source_academic_year = str(int(target_year) - 1)
+            source_semester = 2
+
+    # หากระบุ source_classroom_id ให้ใช้ห้องนั้นเดียว
+    if source_classroom_id:
+        source_class = db.query(Classroom).filter(
+            Classroom.id == source_classroom_id,
+            Classroom.is_active == True
+        ).first()
+        if not source_class or source_class.school_id != classroom.school_id:
+            return {"students": [], "source_year": source_academic_year, "source_semester": source_semester, "source_classrooms": []}
+        source_classrooms = [source_class]
+        source_academic_year = source_class.academic_year
+        source_semester = source_class.semester
+    else:
+        # ดึง classroom IDs ที่ match โรงเรียน+ปี+เทอม
+        source_classrooms = db.query(Classroom).filter(
+            Classroom.school_id == classroom.school_id,
+            Classroom.academic_year == source_academic_year,
+            Classroom.semester == source_semester,
+            Classroom.is_active == True
+        ).all()
+
+    if not source_classrooms:
+        return {"students": [], "source_year": source_academic_year, "source_semester": source_semester, "source_classrooms": []}
+
+    source_classroom_ids = [c.id for c in source_classrooms]
+
+    # นักเรียนที่ลงทะเบียนในห้องแหล่ง (จำกัดตาม source_classroom_id ถ้ามี)
+    source_enrollments = db.query(ClassroomStudent, User).join(
+        User, ClassroomStudent.student_id == User.id
+    ).filter(
+        ClassroomStudent.classroom_id.in_(source_classroom_ids),
+        ClassroomStudent.is_active == True
+    ).all()
+
+    # นักเรียนที่อยู่ในห้องปลายทาง (active) แล้ว
+    already_in_target = set(
+        row.student_id
+        for row in db.query(ClassroomStudent).filter(
+            ClassroomStudent.classroom_id == classroom_id,
+            ClassroomStudent.is_active == True
+        ).all()
+    )
+
+    result = []
+    seen = set()
+    for enrollment, student in source_enrollments:
+        if student.id in already_in_target or student.id in seen:
+            continue
+        seen.add(student.id)
+        result.append({
+            "id": student.id,
+            "full_name": student.full_name,
+            "username": student.username,
+            "email": student.email,
+            "grade_level": student.grade_level,
+            "student_number": enrollment.student_number,
+            "source_classroom_id": enrollment.classroom_id
+        })
+
+    # เตรียมข้อมูลรายชื่อห้องแหล่งสำหรับ UI
+    source_classrooms_info = [
+        {
+            "id": c.id,
+            "name": c.name,
+            "grade_level": c.grade_level,
+            "student_count": db.query(ClassroomStudent).filter(ClassroomStudent.classroom_id == c.id, ClassroomStudent.is_active == True).count()
+        }
+        for c in source_classrooms
+    ]
+
+    return {
+        "students": result,
+        "source_year": source_academic_year,
+        "source_semester": source_semester,
+        "source_classrooms": source_classrooms_info
+    }
+
+
+@router.post("/{classroom_id}/copy-students-from")
+async def copy_students_from_classroom(
+    classroom_id: int,
+    data: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    คัดลอกนักเรียนจากห้องแหล่ง (source) มาใส่ห้องปลายทาง (target)
+    โดยไม่กระทบนักเรียนที่อยู่ในห้องแหล่งเดิม
+    body: { "student_ids": [int, ...] }
+    """
+    verify_admin_or_owner(current_user)
+    classroom = get_classroom_or_404(classroom_id, db)
+
+    student_ids = data.get("student_ids", [])
+    if not student_ids:
+        raise HTTPException(status_code=400, detail="ต้องระบุ student_ids")
+
+    added = 0
+    skipped = []
+
+    for student_id in student_ids:
+        student = db.query(User).filter(User.id == student_id, User.role == "student").first()
+        if not student:
+            skipped.append(student_id)
+            continue
+
+        # ตรวจสอบว่ามีในห้องนี้แล้วหรือไม่
+        existing = db.query(ClassroomStudent).filter(
+            ClassroomStudent.classroom_id == classroom_id,
+            ClassroomStudent.student_id == student_id
+        ).first()
+
+        if existing:
+            if not existing.is_active:
+                # Re-activate
+                db.query(ClassroomStudent).filter(
+                    ClassroomStudent.id == existing.id
+                ).update({ClassroomStudent.is_active: True}, synchronize_session=False)
+                added += 1
+            # ถ้า active อยู่แล้ว ข้าม
+            continue
+
+        # ตรวจสอบว่ามีในห้องอื่น ปี+เทอมเดียวกัน หรือไม่
+        conflict = db.query(ClassroomStudent).join(
+            Classroom, ClassroomStudent.classroom_id == Classroom.id
+        ).filter(
+            ClassroomStudent.student_id == student_id,
+            Classroom.academic_year == classroom.academic_year,
+            Classroom.semester == classroom.semester,
+            Classroom.school_id == classroom.school_id,
+            ClassroomStudent.classroom_id != classroom_id,
+            ClassroomStudent.is_active == True
+        ).first()
+
+        if conflict:
+            skipped.append(student_id)
+            continue
+
+        new_enrollment = ClassroomStudent(
+            classroom_id=classroom_id,
+            student_id=student_id
+        )
+        db.add(new_enrollment)
+        # อัปเดต grade_level ให้ตรงกับห้อง
+        student.grade_level = classroom.grade_level
+        added += 1
+
+    db.commit()
+
+    return {
+        "message": f"คัดลอกนักเรียนสำเร็จ {added} คน",
+        "added": added,
+        "skipped": skipped
+    }
 
 
 @router.get("/{classroom_id}/grades-from-previous")

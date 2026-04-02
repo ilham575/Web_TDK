@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { API_BASE_URL } from '../../../endpoints';
-import { fetchCurrentUser, hasSessionMarker, logout } from '../../../../utils/authUtils';
+import { fetchCurrentUser, hasSessionMarker, logout, getStoredAccessToken } from '../../../../utils/authUtils';
 
 function ChangePasswordPage() {
   const navigate = useNavigate();
@@ -79,7 +79,7 @@ function ChangePasswordPage() {
     }
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getStoredAccessToken();
       const bodyData = { new_password: newPassword };
       if (!isStudentFirstLogin || currentPassword) {
         bodyData.current_password = currentPassword || '';

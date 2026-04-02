@@ -63,14 +63,20 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
         const sem = Number(s.semester);
         if (!Number.isFinite(sem)) return;
 
-        const allow = s.allow_student_view_grades !== false;
+        const allowGrades = s.allow_student_view_grades !== false;
+        const allowRanking = s.allow_student_view_ranking === true;
         const existing = merged.get(sem);
         if (!existing) {
-          merged.set(sem, { semester: sem, allow_student_view_grades: allow });
+          merged.set(sem, {
+            semester: sem,
+            allow_student_view_grades: allowGrades,
+            allow_student_view_ranking: allowRanking
+          });
         } else {
           merged.set(sem, {
             semester: sem,
-            allow_student_view_grades: existing.allow_student_view_grades && allow
+            allow_student_view_grades: existing.allow_student_view_grades && allowGrades,
+            allow_student_view_ranking: existing.allow_student_view_ranking && allowRanking
           });
         }
       });
@@ -81,6 +87,13 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
   const selectedYearSemesters = getSemestersForYear(selectedAcademicYear);
   const selectedYearAllowedSemesters = selectedYearSemesters.filter(s => s.allow_student_view_grades);
   const canShowCombinedOption = selectedYearAllowedSemesters.length >= 2;
+  const selectedSemesterNumber = Number(selectedSemester);
+  const selectedSemesterMeta = selectedYearSemesters.find(s => s.semester === selectedSemesterNumber);
+  const isSelectedPeriodRankingVisible = selectedSemester
+    ? Boolean(selectedSemesterMeta?.allow_student_view_ranking)
+    : canShowCombinedOption
+      && selectedYearAllowedSemesters.length > 0
+      && selectedYearAllowedSemesters.every(s => s.allow_student_view_ranking);
 
   const allAcademicYears = [...new Set(availableSemesters.map(s => s.academic_year))].sort((a, b) => b - a);
   const allowedAcademicYears = [...new Set(
@@ -278,7 +291,10 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
         allGrades.forEach(gradeData => {
           if (gradeData.isActivity) {
             activitySubjectsCount++;
-            return; 
+            completedSubjects++;
+            totalScore += Number(gradeData.totalScore) || 0;
+            totalMaxScore += Number(gradeData.totalMaxScore) || 0;
+            return;
           }
 
           const hasTotalMax = Number(gradeData.totalMaxScore) > 0;
@@ -340,7 +356,8 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
             if (data.length > 0 && !academicYearInitialized) {
               const normalized = data.map(s => ({
                 ...s,
-                allow_student_view_grades: s.allow_student_view_grades !== false
+                allow_student_view_grades: s.allow_student_view_grades !== false,
+                allow_student_view_ranking: s.allow_student_view_ranking === true
               }));
 
               const allowedYears = [...new Set(
@@ -384,7 +401,11 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
 
   useEffect(() => {
     const loadRanking = async () => {
-      if (!studentId || !gradesAnnounced) return;
+      if (!studentId || !gradesAnnounced || !isSelectedPeriodRankingVisible) {
+        setRankingInfo(null);
+        setSchoolRankingInfo(null);
+        return;
+      }
 
       const requestId = ++rankingRequestRef.current;
       
@@ -397,9 +418,7 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
         let schoolId = localStorage.getItem('school_id');
         
         if (!schoolId && hasSessionMarker()) {
-          const userRes = await fetch(`${API_BASE_URL}/users/me`, {
-            credentials: 'include'
-          });
+          const userRes = await fetch(`${API_BASE_URL}/users/me`);
           if (userRes.ok) {
             const userData = await userRes.json();
             schoolId = userData.school_id;
@@ -489,7 +508,7 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
     if (gradesAnnounced) {
       loadRanking();
     }
-  }, [studentId, gradesAnnounced, selectedAcademicYear, selectedSemester]);
+  }, [studentId, gradesAnnounced, selectedAcademicYear, selectedSemester, isSelectedPeriodRankingVisible]);
 
   useEffect(() => {
     const checkGradeAnnouncement = async () => {
@@ -497,9 +516,7 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
       try {
         let schoolId = localStorage.getItem('school_id');
         if (!schoolId && hasSessionMarker()) {
-          const userRes = await fetch(`${API_BASE_URL}/users/me`, {
-            credentials: 'include'
-          });
+          const userRes = await fetch(`${API_BASE_URL}/users/me`);
           const userData = await userRes.json();
           schoolId = userData.school_id;
         }
@@ -747,7 +764,7 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
              <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:opacity-10 transition-opacity">
                  <BarChart2 className="w-24 h-24 text-blue-600" />
              </div>
-             <p className="text-slate-400 font-bold text-xs uppercase tracking-wider mb-3">คะแนนรวม (วิชาปกติ)</p>
+             <p className="text-slate-400 font-bold text-xs uppercase tracking-wider mb-3">คะแนนรวมภาพรวม (รวมกิจกรรม)</p>
              <div className="flex items-center gap-3 mb-4">
                  <div className="text-3xl font-black text-blue-600">
                     {Math.round(transcriptSummary.scorePercentage)}%
@@ -776,7 +793,9 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
                   <div className="absolute top-0 right-0 w-16 h-full bg-gradient-to-l from-indigo-50 to-transparent"></div>
                   <div>
                       <p className="text-slate-400 font-bold text-[10px] uppercase tracking-wider mb-1">อันดับในห้องเรียน</p>
-                      {rankingInfo ? (
+                       {!isSelectedPeriodRankingVisible ? (
+                         <span className="text-slate-300 font-bold italic text-sm">ยังไม่ประกาศ</span>
+                       ) : rankingInfo ? (
                          <div className="flex items-baseline gap-1">
                             <span className="text-2xl font-black text-indigo-600">{rankingInfo.rank}</span>
                             <span className="text-xs font-bold text-slate-400">/{rankingInfo.total}</span>
@@ -792,7 +811,9 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
                   <div className="absolute top-0 right-0 w-16 h-full bg-gradient-to-l from-amber-50 to-transparent"></div>
                   <div>
                       <p className="text-slate-400 font-bold text-[10px] uppercase tracking-wider mb-1">อันดับทั้งโรงเรียน</p>
-                      {schoolRankingInfo ? (
+                       {!isSelectedPeriodRankingVisible ? (
+                         <span className="text-slate-300 font-bold italic text-sm">ยังไม่ประกาศ</span>
+                       ) : schoolRankingInfo ? (
                          <div className="flex items-baseline gap-1">
                             <span className="text-2xl font-black text-amber-600">{schoolRankingInfo.rank}</span>
                             <span className="text-xs font-bold text-slate-400">/{schoolRankingInfo.total}</span>

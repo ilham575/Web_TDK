@@ -8,15 +8,23 @@ function HomeroomTeacherModal({ isOpen, editingHomeroom, teachers, availableGrad
   const [newHomeroomGradeLevel, setNewHomeroomGradeLevel] = useState('');
   const [newHomeroomAcademicYear, setNewHomeroomAcademicYear] = useState('');
   const [newHomeroomSemester, setNewHomeroomSemester] = useState('');
+  const [semesterMode, setSemesterMode] = useState('single');
   const [selectedClassroomId, setSelectedClassroomId] = useState('');
 
   // When grade level is selected, derive academic year from existing classrooms
+  // BUT: preserve user's year selection if they've already picked a classroom
   useEffect(() => {
     if (editingHomeroom) return; // keep existing value when editing
     if (!newHomeroomGradeLevel) {
       setNewHomeroomAcademicYear('');
       return;
     }
+    
+    // If a classroom is already selected, don't override the year
+    if (selectedClassroomId) {
+      return;
+    }
+    
     const years = Array.from(new Set(classrooms.filter(c => String(c.grade_level) === String(newHomeroomGradeLevel)).map(c => c.academic_year))).filter(y => y);
     if (years.length === 1) {
       setNewHomeroomAcademicYear(years[0]);
@@ -34,7 +42,7 @@ function HomeroomTeacherModal({ isOpen, editingHomeroom, teachers, availableGrad
       // No classrooms found for selected grade
       setNewHomeroomAcademicYear('');
     }
-  }, [newHomeroomGradeLevel, classrooms, editingHomeroom]);
+  }, [newHomeroomGradeLevel, classrooms, editingHomeroom, selectedClassroomId]);
 
   useEffect(() => {
     if (editingHomeroom) {
@@ -42,15 +50,17 @@ function HomeroomTeacherModal({ isOpen, editingHomeroom, teachers, availableGrad
       setNewHomeroomGradeLevel(editingHomeroom.grade_level);
       setNewHomeroomAcademicYear(editingHomeroom.academic_year || '');
       setNewHomeroomSemester(editingHomeroom.semester || '');
+      setSemesterMode('single');
       setSelectedClassroomId(editingHomeroom.classroom_id || '');
     } else {
       setNewHomeroomTeacherId('');
       setNewHomeroomGradeLevel('');
-      setNewHomeroomAcademicYear('');
-      setNewHomeroomSemester('');
+      setNewHomeroomAcademicYear(selectedYear || '');
+      setNewHomeroomSemester(selectedSemester ? String(selectedSemester) : '');
+      setSemesterMode('single');
       setSelectedClassroomId('');
     }
-  }, [editingHomeroom, isOpen]);
+  }, [editingHomeroom, isOpen, selectedYear, selectedSemester]);
 
   const currentTeacherName = editingHomeroom && teachers ? (
     teachers.find(t => t.id === editingHomeroom.teacher_id)?.full_name || editingHomeroom.teacher_name || ''
@@ -61,6 +71,7 @@ function HomeroomTeacherModal({ isOpen, editingHomeroom, teachers, availableGrad
     setNewHomeroomGradeLevel('');
     setNewHomeroomAcademicYear('');
     setNewHomeroomSemester('');
+    setSemesterMode('single');
     onClose();
   };
 
@@ -68,25 +79,113 @@ function HomeroomTeacherModal({ isOpen, editingHomeroom, teachers, availableGrad
     if (!newHomeroomTeacherId || (!editingHomeroom && !selectedClassroomId)) {
       return;
     }
-    onSave(newHomeroomTeacherId, selectedClassroomId, newHomeroomAcademicYear, newHomeroomGradeLevel, newHomeroomSemester);
+
+    if (!editingHomeroom && !newHomeroomAcademicYear) {
+      return;
+    }
+
+    if (!editingHomeroom && semesterMode === 'single' && !newHomeroomSemester) {
+      return;
+    }
+
+    let classroomIds = [];
+    let availableSemesters = [];
+    if (!editingHomeroom && semesterMode === 'both') {
+      const selected = classrooms.find((c) => String(c.id) === String(selectedClassroomId));
+      if (!selected) return;
+
+      classroomIds = classrooms
+        .filter((c) =>
+          String(c.academic_year || '') === String(newHomeroomAcademicYear || '')
+          && String(c.grade_level || '') === String(selected.grade_level || '')
+          && String(c.name || '') === String(selected.name || '')
+          && (Number(c.semester) === 1 || Number(c.semester) === 2)
+        )
+        .map((c) => c.id);
+
+      classroomIds = Array.from(new Set(classroomIds));
+      availableSemesters = Array.from(new Set(
+        classrooms
+          .filter((c) => classroomIds.includes(c.id))
+          .map((c) => Number(c.semester))
+          .filter((s) => s === 1 || s === 2)
+      )).sort();
+    }
+
+    onSave({
+      teacherId: newHomeroomTeacherId,
+      classroomId: selectedClassroomId,
+      classroomIds,
+      academicYear: newHomeroomAcademicYear,
+      gradeLevel: newHomeroomGradeLevel,
+      semester: semesterMode === 'single' ? newHomeroomSemester : null,
+      semesterMode,
+      availableSemesters,
+    });
     handleClose();
   };
 
   const visibleClassrooms = editingHomeroom
     ? classrooms
     : classrooms.filter((classroom) => {
-        const matchesYear = !selectedYear || String(classroom.academic_year || '') === String(selectedYear);
-        const matchesSemester = !selectedSemester || String(classroom.semester || '') === String(selectedSemester);
-        return matchesYear && matchesSemester;
+        const matchesYear = !newHomeroomAcademicYear || String(classroom.academic_year || '') === String(newHomeroomAcademicYear);
+        const matchesSemester = semesterMode === 'both'
+          ? true
+          : (!newHomeroomSemester || String(classroom.semester || '') === String(newHomeroomSemester));
+        
+        // Filter out classrooms that already have a homeroom teacher assigned
+        if (semesterMode === 'single') {
+          // In single mode: filter out if classroom has homeroom in this year + semester
+          const isAlreadyAssigned = homeroomTeachers.some(hr => 
+            String(hr.classroom_id) === String(classroom.id) &&
+            String(hr.academic_year) === String(classroom.academic_year) &&
+            String(hr.semester) === String(classroom.semester)
+          );
+          return matchesYear && matchesSemester && !isAlreadyAssigned;
+        } else {
+          // In both mode: filter out only if classroom has homeroom for BOTH semesters (1 and 2)
+          const hasSemester1 = homeroomTeachers.some(hr => 
+            String(hr.classroom_id) === String(classroom.id) &&
+            String(hr.academic_year) === String(classroom.academic_year) &&
+            (String(hr.semester) === '1' || hr.semester === 1)
+          );
+          const hasSemester2 = homeroomTeachers.some(hr => 
+            String(hr.classroom_id) === String(classroom.id) &&
+            String(hr.academic_year) === String(classroom.academic_year) &&
+            (String(hr.semester) === '2' || hr.semester === 2)
+          );
+          const isAlreadyAssignedBoth = hasSemester1 && hasSemester2;
+          return matchesYear && matchesSemester && !isAlreadyAssignedBoth;
+        }
       });
 
-  // Deduplicate classrooms: remove term-split duplicates (same grade+name+year) but keep different academic years
+  // Deduplicate classrooms for selector.
+  // In "both" mode, show one option per class/year (not separated by semester).
+  // In "single" mode, keep semester-specific options.
   const dedupedClassrooms = (() => {
     if (!Array.isArray(visibleClassrooms) || visibleClassrooms.length === 0) return [];
     const seen = new Set();
     const picks = [];
 
-    // Keep semester-specific classrooms separate so homeroom can be assigned per term.
+    if (semesterMode === 'both') {
+      const grouped = new Map();
+      visibleClassrooms.forEach((c) => {
+        const key = `B:${c.grade_level}::${c.name}::${c.academic_year}`;
+        const current = grouped.get(key);
+        if (!current) {
+          grouped.set(key, { representative: c, semesters: new Set([Number(c.semester)]) });
+          return;
+        }
+        current.semesters.add(Number(c.semester));
+      });
+
+      grouped.forEach(({ representative, semesters }) => {
+        picks.push({
+          ...representative,
+          _availableSemesters: Array.from(semesters).filter((s) => s === 1 || s === 2).sort(),
+        });
+      });
+    } else {
     visibleClassrooms.forEach(c => {
       const dedupKey = c.parent_classroom_id 
         ? `P:${c.parent_classroom_id}:${c.academic_year}:${c.semester ?? ''}`
@@ -97,6 +196,7 @@ function HomeroomTeacherModal({ isOpen, editingHomeroom, teachers, availableGrad
         picks.push(c);
       }
     });
+    }
 
     // Sort by grade level then name for stable order
     picks.sort((a, b) => {
@@ -163,6 +263,112 @@ function HomeroomTeacherModal({ isOpen, editingHomeroom, teachers, availableGrad
           <div className="space-y-4">
             <div className="space-y-1.5">
               <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 px-1">
+                <Calendar className="w-3.5 h-3.5" />
+                ปีการศึกษา
+              </label>
+              {editingHomeroom ? (
+                <input
+                  className="w-full h-14 px-6 bg-slate-50 border-2 border-transparent rounded-2xl text-slate-400 font-bold text-sm outline-none cursor-not-allowed"
+                  type="text"
+                  value={newHomeroomAcademicYear}
+                  readOnly
+                />
+              ) : (
+                <div className="relative">
+                  <select
+                    className="w-full h-14 px-6 bg-slate-50 border-2 border-transparent focus:border-emerald-500 focus:bg-white rounded-2xl text-slate-700 font-bold text-sm outline-none transition-all appearance-none cursor-pointer"
+                    value={newHomeroomAcademicYear}
+                    onChange={(e) => {
+                      setNewHomeroomAcademicYear(e.target.value);
+                      setSelectedClassroomId('');
+                      setNewHomeroomGradeLevel('');
+                    }}
+                    required
+                  >
+                    <option value="">เลือกปีการศึกษา</option>
+                    {Array.from(new Set(classrooms.map((c) => c.academic_year).filter(Boolean))).sort((a, b) => String(b).localeCompare(String(a))).map((year) => (
+                      <option key={year} value={year}>{year}</option>
+                    ))}
+                  </select>
+                  <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                    <Calendar className="w-4 h-4" />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 px-1">
+                <Calendar className="w-3.5 h-3.5" />
+                โหมดภาคการเรียน
+              </label>
+              {editingHomeroom ? (
+                <input
+                  className="w-full h-14 px-6 bg-slate-50 border-2 border-transparent rounded-2xl text-slate-400 font-bold text-sm outline-none cursor-not-allowed"
+                  type="text"
+                  value={newHomeroomSemester ? `ภาคเรียนที่ ${newHomeroomSemester}` : ''}
+                  readOnly
+                />
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    className={`h-12 rounded-xl font-black text-sm transition-all border ${semesterMode === 'both' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200'}`}
+                    onClick={() => {
+                      setSemesterMode('both');
+                      setNewHomeroomSemester('');
+                      setSelectedClassroomId('');
+                    }}
+                  >
+                    ทั้งสองภาค
+                  </button>
+                  <button
+                    type="button"
+                    className={`h-12 rounded-xl font-black text-sm transition-all border ${semesterMode === 'single' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-slate-600 border-slate-200'}`}
+                    onClick={() => {
+                      setSemesterMode('single');
+                      setSelectedClassroomId('');
+                    }}
+                  >
+                    ภาคเดียว
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {!editingHomeroom && semesterMode === 'single' && (
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 px-1">
+                  <Calendar className="w-3.5 h-3.5" />
+                  ภาคเรียน
+                </label>
+                <div className="relative">
+                  <select
+                    className="w-full h-14 px-6 bg-slate-50 border-2 border-transparent focus:border-emerald-500 focus:bg-white rounded-2xl text-slate-700 font-bold text-sm outline-none transition-all appearance-none cursor-pointer"
+                    value={newHomeroomSemester}
+                    onChange={(e) => {
+                      setNewHomeroomSemester(e.target.value);
+                      setSelectedClassroomId('');
+                    }}
+                    required
+                  >
+                    <option value="">เลือกภาคเรียน</option>
+                    {[...new Set(classrooms
+                      .filter((c) => !newHomeroomAcademicYear || String(c.academic_year || '') === String(newHomeroomAcademicYear))
+                      .map((c) => Number(c.semester))
+                      .filter((s) => !Number.isNaN(s)))].sort().map((s) => (
+                      <option key={s} value={String(s)}>ภาคเรียนที่ {s}</option>
+                    ))}
+                  </select>
+                  <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                    <Calendar className="w-4 h-4" />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 px-1">
                 <GraduationCap className="w-3.5 h-3.5" />
                 {t('admin.classroom')}
               </label>
@@ -175,14 +381,18 @@ function HomeroomTeacherModal({ isOpen, editingHomeroom, teachers, availableGrad
                           <select
                             className="w-full h-14 px-6 bg-slate-50 border-2 border-transparent focus:border-emerald-500 focus:bg-white rounded-2xl text-slate-700 font-bold text-sm outline-none transition-all appearance-none cursor-pointer"
                             value={selectedClassroomId}
+                            disabled={!newHomeroomAcademicYear || (semesterMode === 'single' && !newHomeroomSemester)}
                             onChange={e => {
                               setSelectedClassroomId(e.target.value);
                               setNewHomeroomTeacherId(''); // Reset teacher selection
                               const c = dedupedClassrooms.find(x => String(x.id) === String(e.target.value));
                               if (c) {
-                                setNewHomeroomAcademicYear(c.academic_year || '');
+                                // Don't override year - keep user's selection
+                                // setNewHomeroomAcademicYear(c.academic_year || '');
                                 setNewHomeroomGradeLevel(c.grade_level || '');
-                                setNewHomeroomSemester(c.semester || '');
+                                if (semesterMode === 'single') {
+                                  setNewHomeroomSemester(c.semester || '');
+                                }
                               }
                             }}
                             required
@@ -190,7 +400,9 @@ function HomeroomTeacherModal({ isOpen, editingHomeroom, teachers, availableGrad
                             <option value="">{t('admin.pleaseSelectClassroom')}</option>
                             {dedupedClassrooms.map((c) => (
                               <option key={c.id} value={c.id}>
-                                {`${c.grade_level || '-'} • ${c.name || c.id} ${c.academic_year ? `(${c.academic_year}` : ''}${c.semester ? ` / เทอม ${c.semester}` : ''}${c.academic_year ? `)` : ''}`}
+                                {semesterMode === 'both'
+                                  ? `${c.grade_level || '-'} • ${c.name || c.id} ${c.academic_year ? `(${c.academic_year} / ${Array.isArray(c._availableSemesters) && c._availableSemesters.length ? `มีเทอม ${c._availableSemesters.join(', ')}` : 'ทั้งสองเทอม'})` : ''}`
+                                  : `${c.grade_level || '-'} • ${c.name || c.id} ${c.academic_year ? `(${c.academic_year}` : ''}${c.semester ? ` / เทอม ${c.semester}` : ''}${c.academic_year ? `)` : ''}`}
                               </option>
                             ))}
                           </select>
@@ -208,9 +420,24 @@ function HomeroomTeacherModal({ isOpen, editingHomeroom, teachers, availableGrad
               {!editingHomeroom && availableGradeLevels.length > 0 && dedupedClassrooms.length === 0 && (
                 <p className="px-1 text-[10px] font-bold text-amber-600 flex items-center gap-1">
                   <AlertCircle className="w-3 h-3" />
-                  {`ไม่มีห้องเรียนในปี ${selectedYear || '-'} เทอม ${selectedSemester || '-'} สำหรับการกำหนดครูประจำชั้น`}
+                  {semesterMode === 'single'
+                    ? `ไม่มีชั้นเรียนในปี ${newHomeroomAcademicYear || '-'} ภาคเรียน ${newHomeroomSemester || '-'} สำหรับการกำหนดครูประจำชั้น`
+                    : `ไม่มีชั้นเรียนในปี ${newHomeroomAcademicYear || '-'} สำหรับการกำหนดครูประจำชั้น`}
                 </p>
               )}
+              {!editingHomeroom && semesterMode === 'both' && selectedClassroomId && (() => {
+                const selected = dedupedClassrooms.find((c) => String(c.id) === String(selectedClassroomId));
+                if (!selected || !Array.isArray(selected._availableSemesters)) return null;
+                if (selected._availableSemesters.length >= 2) return null;
+                const missing = [1, 2].filter((s) => !selected._availableSemesters.includes(s));
+                if (missing.length === 0) return null;
+                return (
+                  <p className="px-1 text-[10px] font-bold text-indigo-600 flex items-center gap-1">
+                    <Info className="w-3 h-3" />
+                    {`พบข้อมูลชั้นเรียนเทอม ${selected._availableSemesters.join(', ')} เท่านั้น ระบบจะสร้างการกำหนดเทอม ${missing.join(', ')} แบบไม่ผูกห้องเรียนให้อัตโนมัติ`}
+                  </p>
+                );
+              })()}
             </div>
 
             <div className="space-y-1.5">
@@ -231,7 +458,11 @@ function HomeroomTeacherModal({ isOpen, editingHomeroom, teachers, availableGrad
                     const assignedInSameYear = homeroomTeachers.some(hr => 
                       hr.teacher_id === teacher.id && 
                       String(hr.academic_year) === String(newHomeroomAcademicYear) &&
-                      String(hr.semester ?? '') === String(newHomeroomSemester ?? '') &&
+                      (
+                        semesterMode === 'both'
+                          ? (String(hr.semester ?? '') === '1' || String(hr.semester ?? '') === '2')
+                          : String(hr.semester ?? '') === String(newHomeroomSemester ?? '')
+                      ) &&
                       (!editingHomeroom || editingHomeroom.id !== hr.id)
                     );
                     return (
@@ -305,7 +536,12 @@ function HomeroomTeacherModal({ isOpen, editingHomeroom, teachers, availableGrad
               type="button"
               className={`px-8 h-12 text-white rounded-xl font-black text-sm transition-all active:scale-95 shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 ${editingHomeroom ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-200' : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200'}`}
               onClick={handleSave}
-              disabled={!newHomeroomTeacherId || (!editingHomeroom && !selectedClassroomId)}
+              disabled={
+                !newHomeroomTeacherId
+                || (!editingHomeroom && !newHomeroomAcademicYear)
+                || (!editingHomeroom && semesterMode === 'single' && !newHomeroomSemester)
+                || (!editingHomeroom && !selectedClassroomId)
+              }
             >
               {editingHomeroom ? <CheckCircle className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
               {editingHomeroom ? t('common.save') : t('admin.tabHomeroomLong')}

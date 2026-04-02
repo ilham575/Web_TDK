@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { API_BASE_URL } from '../endpoints';
 import { toast } from 'react-toastify';
+import { getStoredAccessToken } from '../../utils/authUtils';
 
 export default function ScheduleManagementModal({
   isOpen,
@@ -74,7 +75,7 @@ export default function ScheduleManagementModal({
         if (subjId && !availableSubjects.find(s => Number(s.id) === Number(subjId))) {
           (async () => {
             try {
-              const token = localStorage.getItem('token');
+              const token = getStoredAccessToken();
               const res = await fetch(`${API_BASE_URL}/subjects/${subjId}`, { headers: { ...(token?{ Authorization: `Bearer ${token}` }:{}) } });
               if (res.ok) {
                 const data = await res.json();
@@ -143,7 +144,7 @@ export default function ScheduleManagementModal({
   }, [isOpen]);
 
   const loadScheduleSlots = async () => {
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
     setSlotsLoading(true);
     try {
       const response = await fetch(`${API_BASE_URL}/schedule/slots`, {
@@ -232,7 +233,7 @@ export default function ScheduleManagementModal({
   };
 
   const getAllAdminSchedules = async () => {
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
     try {
       const response = await fetch(`${API_BASE_URL}/schedule/assignments`, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -343,7 +344,7 @@ export default function ScheduleManagementModal({
   };
 
   const handleAddSchedule = async () => {
-    const token = localStorage.getItem('token');
+    const token = getStoredAccessToken();
     
     try {
       if (!selectedAcademicYear) { toast.error('กรุณาเลือกปีการศึกษา'); return; }

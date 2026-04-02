@@ -32,7 +32,7 @@ export default function AnnouncementWatcher() {
               html: (newest.content ? String(newest.content).slice(0, 300) : ''),
               icon: 'info',
               showCancelButton: true,
-              confirmButtonText: 'ดู',
+              // confirmButtonText: 'ดู',
               cancelButtonText: 'ปิด',
               allowOutsideClick: true
             }).then((r) => {

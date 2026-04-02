@@ -1,13 +1,15 @@
 import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, ArrowUpCircle, Info, GraduationCap, Calendar, CheckCircle2, AlertCircle, School, Users, Layers, Layout, ChevronRight } from 'lucide-react';
+import { X, ArrowUpCircle, Info, GraduationCap, CheckCircle2, AlertCircle, School, Users, Layers, Layout, ChevronRight } from 'lucide-react';
 
 const PromoteClassroomModal = ({
   isOpen,
   selectedClassroom,
+  classroomPromotionType,
   classroomPromotionNewGrade,
   promotingClassroom,
   getClassroomGradeLevels,
+  setClassroomPromotionType,
   setClassroomPromotionNewGrade,
   onPromote,
   onClose,
@@ -30,15 +32,17 @@ const PromoteClassroomModal = ({
     const currentGradeNum = extractGradeNumber(selectedClassroom.grade_level);
     const allGrades = getClassroomGradeLevels();
 
-    // Filter grades with higher numeric values first
+    // End-of-year promotion for the whole classroom should show only higher grades.
     let filtered = allGrades.filter(grade => extractGradeNumber(grade) > currentGradeNum);
     
-    // If no higher grades exist, allow selecting from all grades (excluding current)
+    // If no matching grades exist, fall back to showing all other grades.
     if (filtered.length === 0) {
       filtered = allGrades.filter(grade => grade !== selectedClassroom.grade_level);
     }
-    
-    return filtered.sort((a, b) => extractGradeNumber(a) - extractGradeNumber(b));
+
+    return [...new Set(filtered)].sort((a, b) => {
+      return extractGradeNumber(a) - extractGradeNumber(b);
+    });
   }, [selectedClassroom, getClassroomGradeLevels]);
 
   if (!isOpen) return null;
@@ -168,7 +172,7 @@ const PromoteClassroomModal = ({
                   </div>
                 )}
                 <p className="px-1 text-[10px] font-bold text-slate-400 italic">
-                  * {t('admin.selectFromHigherGrades')}
+                  * {t('admin.selectSameOrHigherGrade')}
                 </p>
               </div>
             </div>

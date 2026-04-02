@@ -25,7 +25,7 @@ import EvaluationsPage from './components/js/pages/teacher/evaluations';
 import ProfilePage from './components/js/pages/profile';
 import OwnerPage from './components/js/pages/owner/home';
 import Footer from './components/js/Footer';
-import { fetchSessionInfo, hasSessionMarker, logout } from './utils/authUtils';
+import { fetchSessionInfo, getStoredAccessToken, hasSessionMarker, logout } from './utils/authUtils';
 import { setSchoolFavicon, resetFavicon } from './utils/faviconUtils';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -100,7 +100,7 @@ function FaviconHandler() {
         return;
       }
       const schoolId = localStorage.getItem('school_id');
-      const token = localStorage.getItem('token');
+      const token = getStoredAccessToken();
       const version = localStorage.getItem('school_logo_version');
 
       if (token && schoolId) {

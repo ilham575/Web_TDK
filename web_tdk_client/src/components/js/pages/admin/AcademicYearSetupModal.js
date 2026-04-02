@@ -3,6 +3,7 @@ import { toast } from 'react-toastify';
 import { useTranslation } from 'react-i18next';
 import { GraduationCap, Calendar, BookOpen, Loader2, Sparkles } from 'lucide-react';
 import { API_BASE_URL } from '../../../endpoints';
+import { getStoredAccessToken } from '../../../../utils/authUtils';
 
 /**
  * AcademicYearSetupModal — Full-screen blocking modal
@@ -27,7 +28,7 @@ function AcademicYearSetupModal({ schoolId, schoolName, onSetupComplete }) {
 
     setSaving(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getStoredAccessToken();
       const res = await fetch(`${API_BASE_URL}/schools/${schoolId}/setup-academic-year`, {
         method: 'POST',
         headers: {
