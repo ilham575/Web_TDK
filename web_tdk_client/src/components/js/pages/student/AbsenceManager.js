@@ -123,7 +123,7 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
 
   const getStatusColor = (status) => {
     switch(status) {
-      case 'approved': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+      case 'approved': return 'bg-blue-100 text-blue-700 border-blue-200';
       case 'rejected': return 'bg-rose-100 text-rose-700 border-rose-200';
       default: return 'bg-amber-100 text-amber-700 border-amber-200';
     }
@@ -157,7 +157,7 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
     <div className="space-y-6">
       <div className="flex items-center justify-between mb-6 px-2">
          <div className="flex items-center gap-3">
-             <div className="p-2 bg-rose-100 text-rose-600 rounded-xl">
+             <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
                <ClipboardList className="w-6 h-6" />
              </div>
              <div>
@@ -177,7 +177,7 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
              });
              setShowForm(true);
            }}
-           className="flex items-center gap-2 px-5 py-3 bg-emerald-600 text-white rounded-xl shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-all hover:-translate-y-0.5 font-bold text-sm"
+           className="flex items-center gap-2 px-5 py-3 bg-blue-600 text-white rounded-xl shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all hover:-translate-y-0.5 font-bold text-sm"
          >
            <Plus className="w-5 h-5" />
            <span className="hidden sm:inline">ยื่นใบลาใหม่</span>
@@ -185,7 +185,7 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
       </div>
 
       {absences.length === 0 ? (
-        <div className="p-12 text-center bg-white rounded-[2rem] border border-slate-100 shadow-sm">
+          <div className="p-12 text-center bg-white rounded-2xl border border-slate-100 shadow-sm">
           <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6">
              <FileText className="w-10 h-10 text-slate-300" />
           </div>
@@ -196,7 +196,7 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
           {absences.map((absence) => (
             <div 
               key={absence.id}
-              className="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-100/60 hover:shadow-lg transition-all group relative overflow-hidden"
+              className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100/60 hover:shadow-lg transition-all group relative overflow-hidden"
             >
               <div className="flex flex-col md:flex-row gap-6">
                  {/* Type Icon */}
@@ -260,7 +260,7 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
                                 });
                                 setShowForm(true);
                             }}
-                            className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all"
+                            className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
                             title="แก้ไข"
                         >
                             <Edit2 className="w-5 h-5" />
@@ -283,8 +283,8 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
       {/* Form Modal */}
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300" onClick={() => setShowForm(false)}></div>
-           <div className="relative w-full max-w-lg bg-white rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 p-8">
+           <div className="absolute inset-0 bg-slate-900/60 animate-in fade-in duration-300" onClick={() => setShowForm(false)}></div>
+           <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 p-8 border border-slate-100">
               <div className="flex items-center justify-between mb-8">
                   <h3 className="text-2xl font-black text-slate-800 tracking-tight">
                       {editingId ? 'แก้ไขการลา' : 'ยื่นใบลาใหม่'}
@@ -301,7 +301,7 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
                           <select 
                              value={formData.absence_type}
                              onChange={e => setFormData({...formData, absence_type: e.target.value})}
-                             className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 outline-none font-bold text-slate-700 appearance-none pointer-events-auto"
+                              className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none font-bold text-slate-700 appearance-none pointer-events-auto"
                           >
                               <option value="personal">ลากิจ</option>
                               <option value="sick">ลาป่วย</option>
@@ -313,7 +313,7 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
                           <select 
                              value={formData.subject_id}
                              onChange={e => setFormData({...formData, subject_id: e.target.value})}
-                             className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 outline-none font-bold text-slate-700 appearance-none"
+                              className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none font-bold text-slate-700 appearance-none"
                           >
                               <option value="">ทั้งวัน / ทุกวิชา</option>
                               {studentSubjects.map(s => (
@@ -330,7 +330,7 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
                               type="date" 
                               value={formData.start_date}
                               onChange={e => setFormData({...formData, start_date: e.target.value})}
-                              className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 outline-none font-bold text-slate-700"
+                                className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none font-bold text-slate-700"
                           />
                       </div>
                       <div className="space-y-2">
@@ -339,7 +339,7 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
                               type="date" 
                               value={formData.end_date}
                               onChange={e => setFormData({...formData, end_date: e.target.value})}
-                              className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 outline-none font-bold text-slate-700"
+                                className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none font-bold text-slate-700"
                               min={formData.start_date}
                           />
                       </div>
@@ -351,14 +351,14 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
                           value={formData.reason}
                           onChange={e => setFormData({...formData, reason: e.target.value})}
                           rows="3"
-                          className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 outline-none font-medium text-slate-700 resize-none"
+                            className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none font-medium text-slate-700 resize-none"
                           placeholder="ระบุสาเหตุ..."
                       ></textarea>
                   </div>
 
                   <button 
                       type="submit"
-                      className="w-full py-4 bg-emerald-600 text-white rounded-xl font-black text-sm shadow-xl shadow-emerald-200 hover:shadow-emerald-300 hover:bg-emerald-700 transition-all hover:-translate-y-0.5 mt-4"
+                        className="w-full py-4 bg-blue-600 text-white rounded-xl font-black text-sm shadow-xl shadow-blue-200 hover:shadow-blue-300 hover:bg-blue-700 transition-all hover:-translate-y-0.5 mt-4"
                   >
                       บันทึกข้อมูล
                   </button>

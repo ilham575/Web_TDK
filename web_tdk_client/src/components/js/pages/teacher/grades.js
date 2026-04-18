@@ -668,15 +668,15 @@ function GradesPage(){
     : 'All Classes';
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-teal-50/20 to-emerald-50/20 pb-20 font-sans selection:bg-emerald-100 selection:text-emerald-900">
+    <div className="min-h-screen bg-slate-50 pb-20 font-sans selection:bg-blue-100 selection:text-blue-900">
       {/* Top Navigation Bar */}
-      <div className="bg-white/80 backdrop-blur-md border-b border-slate-200/60 sticky top-0 z-30 transition-all duration-300">
+      <div className="bg-white border-b border-slate-200 sticky top-0 z-30 transition-colors duration-300">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-20">
             <div className="flex items-center gap-6">
               <button 
                 onClick={() => navigate(-1)}
-                className="group p-3 bg-white text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-2xl transition-all duration-300 active:scale-95 border border-slate-100 shadow-sm hover:shadow-md hover:border-emerald-100"
+                className="group p-3 bg-white text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all duration-300 active:scale-95 border border-slate-200 shadow-sm"
               >
                 <ArrowLeft className="w-5 h-5 group-hover:-translate-x-0.5 transition-transform" />
               </button>
@@ -685,7 +685,7 @@ function GradesPage(){
                   บันทึกคะแนน
                 </h1>
                 <div className="flex items-center gap-2 mt-2">
-                  <span className="bg-emerald-100 text-emerald-700 text-[10px] font-black px-2 py-0.5 rounded-lg uppercase tracking-wider">
+                  <span className="bg-blue-100 text-blue-700 text-[10px] font-black px-2 py-0.5 rounded-lg uppercase tracking-wider">
                     GRADES
                   </span>
                   <p className="text-xs font-bold text-slate-400 flex items-center gap-1.5 truncat max-w-[200px] sm:max-w-md">
@@ -698,7 +698,7 @@ function GradesPage(){
             
             <button 
               onClick={saveGrades}
-              className="group flex items-center gap-2.5 px-6 py-3.5 bg-emerald-600 text-white rounded-2xl font-black text-sm shadow-lg shadow-emerald-200 hover:bg-emerald-700 hover:shadow-emerald-300 hover:-translate-y-0.5 transition-all duration-300 active:scale-95"
+              className="group flex items-center gap-2.5 px-6 py-3.5 bg-blue-600 text-white rounded-lg font-black text-sm shadow-sm hover:bg-blue-700 transition-colors duration-300 active:scale-95"
             >
               <Save className="w-5 h-5 group-hover:scale-110 transition-transform" />
               <span className="hidden sm:inline">บันทึกคะแนน</span>
@@ -718,7 +718,7 @@ function GradesPage(){
             <div className="flex flex-col sm:flex-row gap-4">
               <button 
                 onClick={() => setShowSummaryModal(true)}
-                className="flex-1 bg-white rounded-[2rem] p-6 border border-slate-100/60 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group flex items-center gap-4"
+                className="flex-1 bg-white rounded-xl p-6 border border-slate-100 shadow-sm hover:shadow-md transition-all duration-300 group flex items-center gap-4"
               >
                  <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform">
                     <BarChart3 className="w-6 h-6" />
@@ -729,10 +729,10 @@ function GradesPage(){
                  </div>
               </button>
 
-              <div className="flex-[2] bg-white rounded-[2rem] p-6 border border-slate-100/60 shadow-sm flex items-center gap-4 relative overflow-hidden group">
+              <div className="flex-[2] bg-white rounded-xl p-6 border border-slate-100 shadow-sm flex items-center gap-4 relative overflow-hidden group">
                   <div className="relative z-10 flex-1">
                     <div className="flex items-center gap-3 mb-2">
-                        <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                        <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
                             <BookOpen className="w-4 h-4" />
                         </div>
                         <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest">ชั้นเรียนที่เลือก</h3>
@@ -745,7 +745,7 @@ function GradesPage(){
                              const cls = classes.find(c => String(c.id) === e.target.value) || classes.find(c => c.label === e.target.value);
                              setSelectedClass(cls);
                           }}
-                          className="w-full bg-slate-50 border-2 border-slate-100 text-slate-800 text-lg font-bold rounded-xl px-4 py-3 appearance-none cursor-pointer focus:border-emerald-500 focus:bg-white transition-colors outline-none pr-10"
+                          className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-lg font-bold rounded-lg px-4 py-3 appearance-none cursor-pointer focus:border-blue-500 focus:bg-white transition-colors outline-none pr-10"
                           >
                             <option value="">ทั้งหมด / เลือกห้อง</option>
                             {classes.map((cls) => (
@@ -764,7 +764,7 @@ function GradesPage(){
             </div>
 
             {/* Assignment Selector Card */}
-            <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100/60 p-8">
+            <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-8">
                <div className="flex items-center justify-between mb-6">
                  <div className="flex items-center gap-4">
                     <div className="w-12 h-12 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-600 shadow-inner">
@@ -777,7 +777,7 @@ function GradesPage(){
                  </div>
                  <button 
                   onClick={createNewAssignment}
-                  className="group flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-600 rounded-xl font-bold text-xs hover:bg-emerald-100 transition-all uppercase tracking-wider"
+                  className="group flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg font-bold text-xs hover:bg-blue-100 transition-colors uppercase tracking-wider"
                  >
                    <Plus className="w-4 h-4 group-hover:scale-110 transition-transform" /> เพิ่มงานใหม่
                  </button>
@@ -786,7 +786,7 @@ function GradesPage(){
                {assignments.length === 0 ? (
                  <div className="text-center py-12 bg-slate-50/50 rounded-3xl border-2 border-dashed border-slate-200">
                     <p className="text-slate-400 font-bold">ยังไม่มีหัวข้องานในระบบ</p>
-                    <button onClick={createNewAssignment} className="text-emerald-600 font-black text-sm mt-2 hover:underline">สร้างงานแรกของคุณเลย</button>
+                    <button onClick={createNewAssignment} className="text-blue-600 font-black text-sm mt-2 hover:underline">สร้างงานแรกของคุณเลย</button>
                  </div>
                ) : (
                 <div className="space-y-4">
@@ -794,7 +794,7 @@ function GradesPage(){
                     <select
                       value={selectedAssignmentId || ''}
                       onChange={(e) => selectAssignment(e.target.value)}
-                      className="w-full pl-6 pr-12 py-5 bg-white border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 text-base font-black text-slate-700 transition-all outline-none appearance-none cursor-pointer shadow-sm hover:border-emerald-200"
+                      className="w-full pl-6 pr-12 py-5 bg-white border border-slate-200 rounded-lg focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 text-base font-black text-slate-700 transition-all outline-none appearance-none cursor-pointer shadow-sm hover:border-blue-200"
                     >
                       <option value="">-- กรุณาเลือกหัวข้องาน --</option>
                       {assignments.map(a => (
@@ -803,7 +803,7 @@ function GradesPage(){
                         </option>
                       ))}
                     </select>
-                    <ChevronDown className="absolute right-6 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none group-hover/assign-select:text-emerald-500 transition-colors" />
+                    <ChevronDown className="absolute right-6 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none group-hover/assign-select:text-blue-500 transition-colors" />
                   </div>
 
                   {selectedAssignmentId && (
@@ -839,30 +839,27 @@ function GradesPage(){
 
           {/* Right Stats (Summary) */}
           <div className="lg:col-span-4">
-               <div className="h-full bg-slate-900 rounded-[2.5rem] shadow-xl shadow-slate-200 p-8 text-white overflow-hidden relative group">
-                  <div className="absolute inset-0 bg-gradient-to-br from-slate-800 to-slate-950"></div>
-                  <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 group-hover:bg-emerald-500/20 transition-colors duration-700"></div>
-                  
-                  <div className="relative z-10 flex flex-col h-full">
+              <div className="h-full bg-white rounded-xl shadow-sm border border-slate-100 p-8 text-slate-800 overflow-hidden relative">
+                <div className="relative z-10 flex flex-col h-full">
                      <div className="flex items-center gap-3 mb-8">
-                        <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center backdrop-blur-sm">
-                           <Award className="w-5 h-5 text-emerald-400" />
+                    <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
+                      <Award className="w-5 h-5 text-blue-600" />
                         </div>
                         <div>
-                           <h3 className="text-sm font-black uppercase tracking-widest text-emerald-400">ภาพรวมคะแนน</h3>
-                           <p className="text-xs text-slate-400 font-medium">สถิติห้องเรียนปัจจุบัน</p>
+                      <h3 className="text-sm font-black uppercase tracking-widest text-blue-600">ภาพรวมคะแนน</h3>
+                      <p className="text-xs text-slate-400 font-medium">สถิติห้องเรียนปัจจุบัน</p>
                         </div>
                      </div>
 
                      <div className="space-y-4 flex-1">
-                        <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-5 border border-white/5">
+                    <div className="bg-slate-50 rounded-xl p-5 border border-slate-100">
                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">จำนวนงานทั้งหมด</p>
-                           <p className="text-3xl font-black">{assignments.length} <span className="text-xs font-bold text-slate-500">Assignments</span></p>
+                      <p className="text-3xl font-black text-slate-800">{assignments.length} <span className="text-xs font-bold text-slate-500">Assignments</span></p>
                         </div>
                         
-                        <div className="bg-gradient-to-r from-emerald-500/20 to-teal-500/20 backdrop-blur-sm rounded-2xl p-5 border border-emerald-500/20">
-                            <p className="text-[10px] font-black text-emerald-300 uppercase tracking-widest mb-1">นักเรียนที่แสดงผล</p>
-                            <p className="text-3xl font-black text-emerald-400">{visibleStudents.length} <span className="text-xs font-bold text-emerald-500/50">Students</span></p>
+                    <div className="bg-blue-50 rounded-xl p-5 border border-blue-100">
+                       <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-1">นักเรียนที่แสดงผล</p>
+                       <p className="text-3xl font-black text-blue-700">{visibleStudents.length} <span className="text-xs font-bold text-blue-500/70">Students</span></p>
                         </div>
                      </div>
                   </div>
@@ -871,7 +868,7 @@ function GradesPage(){
         </div>
 
         {/* Grades Table */}
-        <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100/60 overflow-hidden flex flex-col min-h-[500px]">
+        <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden flex flex-col min-h-[500px]">
               
               {!selectedAssignmentId ? (
                 <div className="flex flex-col items-center justify-center flex-grow py-32 text-center px-8">
@@ -888,13 +885,13 @@ function GradesPage(){
                   <div className="p-8 border-b border-slate-50 bg-white sticky top-0 z-20">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                       <div className="flex items-center gap-5">
-                        <div className="w-16 h-16 bg-emerald-50 shadow-inner rounded-2xl flex items-center justify-center text-emerald-600 border border-emerald-100/50">
+                        <div className="w-16 h-16 bg-blue-50 shadow-inner rounded-xl flex items-center justify-center text-blue-600 border border-blue-100">
                           <CheckCircle2 className="w-8 h-8" />
                         </div>
                         <div>
                           <h2 className="text-xl font-black text-slate-800 tracking-tight leading-none mb-1">{title}</h2>
                           <div className="flex items-center gap-3">
-                             <span className="text-[10px] font-black text-white uppercase tracking-widest bg-emerald-500 px-2.5 py-1 rounded-lg shadow-sm shadow-emerald-200">
+                             <span className="text-[10px] font-black text-white uppercase tracking-widest bg-blue-600 px-2.5 py-1 rounded-lg shadow-sm">
                                Max Score: {maxScore}
                              </span>
                              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-100">
@@ -934,11 +931,11 @@ function GradesPage(){
                             <tr key={s.id} className="group hover:bg-slate-50/50 transition-colors">
                               <td className="px-8 py-5 align-middle">
                                 <div className="flex items-center gap-5">
-                                  <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-slate-400 font-black text-sm border border-slate-100 shadow-sm group-hover:border-emerald-200 group-hover:text-emerald-600 transition-all">
+                                  <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-slate-400 font-black text-sm border border-slate-100 shadow-sm group-hover:border-blue-200 group-hover:text-blue-600 transition-all">
                                     {studentNo !== '-' ? studentNo : idx + 1}
                                   </div>
                                   <div>
-                                    <h4 className="text-sm font-black text-slate-800 group-hover:text-emerald-700 transition-colors">
+                                    <h4 className="text-sm font-black text-slate-800 group-hover:text-blue-700 transition-colors">
                                       {s.full_name || s.username}
                                     </h4>
                                     <p className="text-[11px] font-bold text-slate-400 mt-1 uppercase tracking-tight bg-slate-100 px-1.5 py-0.5 rounded-md inline-block">ID: {s.id}</p>
@@ -958,12 +955,12 @@ function GradesPage(){
                                       className={`w-32 px-4 py-3 bg-white border-2 rounded-2xl text-center text-lg font-black transition-all outline-none focus:scale-105 shadow-sm ${
                                         isInvalid 
                                         ? 'border-rose-200 bg-rose-50 text-rose-600 focus:border-rose-400 focus:ring-4 focus:ring-rose-100' 
-                                        : 'border-slate-100 text-slate-700 focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100 hover:border-slate-300'
+                                        : 'border-slate-100 text-slate-700 focus:border-blue-400 focus:ring-4 focus:ring-blue-100 hover:border-slate-300'
                                       }`}
                                     />
                                     {gradeLetter && (
                                        <span className={`absolute -right-14 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center rounded-xl text-xs font-black border uppercase shadow-sm ${
-                                         percentage >= 80 ? 'bg-emerald-500 text-white border-emerald-500 shadow-emerald-200' :
+                                         percentage >= 80 ? 'bg-blue-600 text-white border-blue-600 shadow-blue-200' :
                                          percentage >= 70 ? 'bg-blue-500 text-white border-blue-500' :
                                          percentage >= 50 ? 'bg-amber-100 text-amber-600 border-amber-200' :
                                          'bg-rose-100 text-rose-600 border-rose-200'
@@ -983,7 +980,7 @@ function GradesPage(){
                                     <div className="w-32 h-1.5 bg-slate-100 rounded-full overflow-hidden">
                                       <div 
                                         className={`h-full transition-all duration-500 ${
-                                          percentage >= 80 ? 'bg-emerald-500' : percentage >= 50 ? 'bg-amber-500' : 'bg-rose-500'
+                                          percentage >= 80 ? 'bg-blue-500' : percentage >= 50 ? 'bg-amber-500' : 'bg-rose-500'
                                         }`}
                                         style={{ width: `${percentage}%` }}
                                       />
@@ -1039,7 +1036,7 @@ function GradesPage(){
                                             className={`w-32 px-4 py-3 bg-white border-2 rounded-xl text-center text-lg font-black transition-all outline-none focus:ring-4 shadow-sm ${
                                               isInvalid 
                                               ? 'border-rose-200 bg-rose-50 text-rose-600 focus:ring-rose-100' 
-                                              : 'border-slate-100 hover:border-slate-300 focus:border-emerald-500 focus:ring-emerald-100'
+                                              : 'border-slate-100 hover:border-slate-300 focus:border-blue-500 focus:ring-blue-100'
                                             }`}
                                           />
                                           {isInvalid && (
@@ -1053,7 +1050,7 @@ function GradesPage(){
                                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Grade</span>
                                         {gradeLetter ? (
                                            <div className={`w-14 h-14 flex items-center justify-center rounded-2xl text-xl font-black border uppercase shadow-sm ${
-                                             percentage >= 80 ? 'bg-emerald-500 text-white border-emerald-500 shadow-emerald-200' :
+                                             percentage >= 80 ? 'bg-blue-600 text-white border-blue-600 shadow-blue-200' :
                                              percentage >= 70 ? 'bg-blue-500 text-white border-blue-500' :
                                              percentage >= 50 ? 'bg-amber-100 text-amber-600 border-amber-200' :
                                              'bg-rose-100 text-rose-600 border-rose-200'
@@ -1085,8 +1082,8 @@ function GradesPage(){
         title="เพิ่มงานใหม่"
         footer={(
           <>
-            <button onClick={() => setShowCreateModal(false)} className="flex-1 py-4 bg-white border border-slate-200 text-slate-500 rounded-2xl font-black text-sm hover:bg-slate-50 transition-all">ยกเลิก</button>
-            <button onClick={handleCreateAssignment} className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-black text-sm shadow-xl shadow-emerald-200 hover:bg-emerald-700 transition-all">บันทึก</button>
+            <button onClick={() => setShowCreateModal(false)} className="flex-1 py-4 bg-white border border-slate-200 text-slate-500 rounded-lg font-black text-sm hover:bg-slate-50 transition-all">ยกเลิก</button>
+            <button onClick={handleCreateAssignment} className="flex-1 py-4 bg-blue-600 text-white rounded-lg font-black text-sm shadow-sm hover:bg-blue-700 transition-colors">บันทึก</button>
           </>
         )}
       >
@@ -1097,7 +1094,7 @@ function GradesPage(){
               type="text"
               value={newAssignmentTitle}
               onChange={(e) => setNewAssignmentTitle(e.target.value)}
-              className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 text-sm font-bold transition-all outline-none"
+              className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-lg focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 text-sm font-bold transition-all outline-none"
               placeholder="เช่น สอบย่อยบทที่ 1"
               autoFocus
             />
@@ -1114,7 +1111,7 @@ function GradesPage(){
               type="number"
               value={newAssignmentMaxScore}
               onChange={(e) => setNewAssignmentMaxScore(Number(e.target.value))}
-              className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 text-sm font-black transition-all outline-none"
+              className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-lg focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 text-sm font-black transition-all outline-none"
             />
           </div>
         </div>
@@ -1127,8 +1124,8 @@ function GradesPage(){
         title="แก้ไขงาน"
         footer={(
           <>
-            <button onClick={() => setShowEditModal(false)} className="flex-1 py-4 bg-white border border-slate-200 text-slate-500 rounded-2xl font-black text-sm hover:bg-slate-50 transition-all">ยกเลิก</button>
-            <button onClick={handleEditAssignment} className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-black text-sm shadow-xl shadow-emerald-200 hover:bg-emerald-700 transition-all">บันทึกการแก้ไข</button>
+            <button onClick={() => setShowEditModal(false)} className="flex-1 py-4 bg-white border border-slate-200 text-slate-500 rounded-lg font-black text-sm hover:bg-slate-50 transition-all">ยกเลิก</button>
+            <button onClick={handleEditAssignment} className="flex-1 py-4 bg-blue-600 text-white rounded-lg font-black text-sm shadow-sm hover:bg-blue-700 transition-colors">บันทึกการแก้ไข</button>
           </>
         )}
       >
@@ -1139,7 +1136,7 @@ function GradesPage(){
               type="text"
               value={editAssignmentTitle}
               onChange={(e) => setEditAssignmentTitle(e.target.value)}
-              className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 text-sm font-bold transition-all outline-none"
+              className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-lg focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 text-sm font-bold transition-all outline-none"
             />
           </div>
           <div className="space-y-2">
@@ -1148,7 +1145,7 @@ function GradesPage(){
               type="number"
               value={editAssignmentMaxScore}
               onChange={(e) => setEditAssignmentMaxScore(Number(e.target.value))}
-              className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 text-sm font-black transition-all outline-none"
+              className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-lg focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 text-sm font-black transition-all outline-none"
             />
           </div>
         </div>
@@ -1186,7 +1183,7 @@ function GradesPage(){
         title={`📊 สรุปผลการเรียน - ${subjectName || `#${id}`}`}
         type="summary"
         footer={(
-          <button onClick={() => setShowSummaryModal(false)} className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-black text-sm shadow-xl shadow-emerald-200 hover:bg-emerald-700 transition-all">ปิดหน้าต่าง</button>
+          <button onClick={() => setShowSummaryModal(false)} className="w-full py-4 bg-blue-600 text-white rounded-lg font-black text-sm shadow-sm hover:bg-blue-700 transition-colors">ปิดหน้าต่าง</button>
         )}
       >
         {(!selectedClass && classes.length > 1) ? (
@@ -1217,11 +1214,11 @@ function GradesPage(){
                     <BarChart3 className="w-6 h-6 text-slate-300 mb-1" />
                 </div>
               </div>
-              <div className="bg-emerald-50 rounded-[1.5rem] p-6 border border-emerald-100 flex flex-col justify-between">
-                <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">นักเรียนในกลุ่ม</p>
+              <div className="bg-blue-50 rounded-xl p-6 border border-blue-100 flex flex-col justify-between">
+                <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-1">นักเรียนในกลุ่ม</p>
                 <div className="flex items-end justify-between">
-                    <p className="text-3xl font-black text-emerald-700">{visibleStudents.length}</p>
-                    <User className="w-6 h-6 text-emerald-300 mb-1" />
+                    <p className="text-3xl font-black text-blue-700">{visibleStudents.length}</p>
+                    <User className="w-6 h-6 text-blue-300 mb-1" />
                 </div>
               </div>
             </div>
@@ -1242,7 +1239,7 @@ function GradesPage(){
                         </th>
                       ))}
                       {subjectType === 'activity' ? (
-                        <th className="px-6 py-5 text-center text-[10px] font-black text-emerald-800 uppercase tracking-widest bg-emerald-50/50">คะแนนรวม</th>
+                        <th className="px-6 py-5 text-center text-[10px] font-black text-blue-800 uppercase tracking-widest bg-blue-50/50">คะแนนรวม</th>
                       ) : (
                         <>
                           <th className="px-6 py-5 text-center text-[10px] font-black text-blue-700 uppercase tracking-widest bg-blue-50/50">
@@ -1286,7 +1283,7 @@ function GradesPage(){
                               </td>
                             ))}
                           {subjectType === 'activity' ? (
-                            <td className="px-6 py-4 text-center bg-emerald-50/10 font-black text-emerald-700 text-sm">
+                            <td className="px-6 py-4 text-center bg-blue-50/10 font-black text-blue-700 text-sm">
                               {summary.totalScore}
                             </td>
                           ) : (
@@ -1306,7 +1303,7 @@ function GradesPage(){
                                   <div className="text-xs font-black text-slate-800">{summary.totalScore}</div>
                               </div>
                               <span className={`w-10 h-10 flex items-center justify-center rounded-xl text-xs font-black border uppercase shadow-sm ${
-                                summary.overallGrade === 'A' ? 'bg-emerald-600 text-white border-emerald-600 shadow-emerald-200' :
+                                summary.overallGrade === 'A' ? 'bg-blue-600 text-white border-blue-600 shadow-blue-200' :
                                 summary.overallGrade.includes('B') ? 'bg-blue-500 text-white border-blue-500' :
                                 summary.overallGrade.includes('C') ? 'bg-amber-100 text-amber-600 border-amber-200' :
                                 'bg-rose-100 text-rose-600 border-rose-200'

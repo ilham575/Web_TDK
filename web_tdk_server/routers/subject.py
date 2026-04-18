@@ -436,6 +436,37 @@ def get_subject_students(subject_id: int, db: Session = Depends(get_db), current
     # Build student ID set based on scope
     student_id_set = set()
 
+    def resolve_student_classroom(student_id: int, restrict_classroom_ids=None):
+        """Pick the student's classroom in the same school and subject term when possible."""
+        def _query(base_restrict_ids=None, enforce_term=True, active_only=False):
+            q = db.query(ClassroomStudentModel, ClassroomModel).join(
+                ClassroomModel,
+                ClassroomModel.id == ClassroomStudentModel.classroom_id
+            ).filter(
+                ClassroomStudentModel.student_id == student_id,
+                ClassroomModel.school_id == subj.school_id
+            )
+            if active_only:
+                q = q.filter(ClassroomStudentModel.is_active == True)
+            if base_restrict_ids:
+                q = q.filter(ClassroomStudentModel.classroom_id.in_(base_restrict_ids))
+            if enforce_term:
+                if subj.academic_year is not None:
+                    q = q.filter(ClassroomModel.academic_year == subj.academic_year)
+                if subj.semester is not None:
+                    q = q.filter(ClassroomModel.semester == subj.semester)
+            return q.order_by(ClassroomStudentModel.is_active.desc(), ClassroomStudentModel.updated_at.desc()).first()
+
+        preferred = _query(base_restrict_ids=restrict_classroom_ids, enforce_term=True, active_only=False)
+        if preferred:
+            return preferred
+
+        fallback_active = _query(base_restrict_ids=restrict_classroom_ids, enforce_term=False, active_only=True)
+        if fallback_active:
+            return fallback_active
+
+        return _query(base_restrict_ids=restrict_classroom_ids, enforce_term=False, active_only=False)
+
     if is_admin or teacher_is_global:
         # Admin or global teacher: include all enrolled students + students in subject classrooms
         student_id_set.update(enrolled_ids)
@@ -443,7 +474,6 @@ def get_subject_students(subject_id: int, db: Session = Depends(get_db), current
         if scoped_subj_classroom_ids:
             classroom_student_ids = [r[0] for r in db.query(ClassroomStudentModel.student_id).filter(
                 ClassroomStudentModel.classroom_id.in_(scoped_subj_classroom_ids),
-                ClassroomStudentModel.is_active == True
             ).all()]
             student_id_set.update(classroom_student_ids)
     else:
@@ -453,13 +483,8 @@ def get_subject_students(subject_id: int, db: Session = Depends(get_db), current
 
         # Include direct enrollments only if the student's active classroom is in allowed_classroom_ids
         for sid in enrolled_ids:
-            cs_query = db.query(ClassroomStudentModel).filter(
-                ClassroomStudentModel.student_id == sid,
-                ClassroomStudentModel.is_active == True
-            )
-            if effective_allowed_classroom_ids:
-                cs_query = cs_query.filter(ClassroomStudentModel.classroom_id.in_(effective_allowed_classroom_ids))
-            cs = cs_query.first()
+            resolved = resolve_student_classroom(sid, effective_allowed_classroom_ids)
+            cs = resolved[0] if resolved else None
             if cs and cs.classroom_id in allowed_classroom_ids:
                 student_id_set.add(sid)
 
@@ -469,7 +494,6 @@ def get_subject_students(subject_id: int, db: Session = Depends(get_db), current
         if classroom_ids:
             classroom_student_ids = [r[0] for r in db.query(ClassroomStudentModel.student_id).filter(
                 ClassroomStudentModel.classroom_id.in_(classroom_ids),
-                ClassroomStudentModel.is_active == True
             ).all()]
             student_id_set.update(classroom_student_ids)
 
@@ -483,23 +507,18 @@ def get_subject_students(subject_id: int, db: Session = Depends(get_db), current
     result = []
     for student in student_rows:
         classroom_info = None
-        classroom_student_query = db.query(ClassroomStudentModel).filter(
-            ClassroomStudentModel.student_id == student.id,
-            ClassroomStudentModel.is_active == True
-        )
-        if scoped_subj_classroom_ids:
-            classroom_student_query = classroom_student_query.filter(
-                ClassroomStudentModel.classroom_id.in_(scoped_subj_classroom_ids)
-            )
-        classroom_student = classroom_student_query.first()
-        if classroom_student:
-            classroom = db.query(ClassroomModel).filter(ClassroomModel.id == classroom_student.classroom_id).first()
-            if classroom:
-                classroom_info = {
-                    'id': classroom.id, 
-                    'name': classroom.name,
-                    'student_number': classroom_student.student_number
-                }
+        resolved = resolve_student_classroom(student.id, scoped_subj_classroom_ids if scoped_subj_classroom_ids else None)
+        classroom_student = resolved[0] if resolved else None
+        classroom = resolved[1] if resolved else None
+        if classroom_student and classroom:
+            classroom_info = {
+                'id': classroom.id,
+                'name': classroom.name,
+                'grade_level': classroom.grade_level,
+                'academic_year': classroom.academic_year,
+                'semester': classroom.semester,
+                'student_number': classroom_student.student_number
+            }
 
         result.append({
             'id': student.id,

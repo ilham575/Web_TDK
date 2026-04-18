@@ -63,7 +63,6 @@ def _get_student_access_periods(student: UserModel, school: SchoolModel, db: Ses
         ClassroomStudentModel, ClassroomModel.id == ClassroomStudentModel.classroom_id
     ).filter(
         ClassroomStudentModel.student_id == student.id,
-        ClassroomStudentModel.is_active == True,
         ClassroomModel.academic_year == check_year,
         ClassroomModel.semester.isnot(None)
     ).distinct().all()
@@ -127,11 +126,7 @@ def _pick_preferred_classroom(classroom_rows, school_id, academic_year, semester
         ):
             return row
 
-    for row in classroom_rows:
-        if row.school_id == school_id:
-            return row
-
-    return classroom_rows[0]
+    return None
 
 
 def _build_summary_completion_report(db: Session, school_id: int, academic_year: str = None, semester: int = None):
@@ -199,7 +194,6 @@ def _build_summary_completion_report(db: Session, school_id: int, academic_year:
     if linked_classroom_ids:
         classroom_student_rows = db.query(ClassroomStudentModel).filter(
             ClassroomStudentModel.classroom_id.in_(list(linked_classroom_ids)),
-            ClassroomStudentModel.is_active == True
         ).all()
         for row in classroom_student_rows:
             linked_classroom_students.setdefault(row.classroom_id, []).append(row)
@@ -222,7 +216,6 @@ def _build_summary_completion_report(db: Session, school_id: int, academic_year:
             ClassroomModel.id == ClassroomStudentModel.classroom_id
         ).filter(
             ClassroomStudentModel.student_id.in_(list(directly_enrolled_student_ids)),
-            ClassroomStudentModel.is_active == True
         ).all()
 
         for row in direct_classroom_rows:
@@ -1302,7 +1295,6 @@ def get_student_transcript(student_id: int, classroom_id: int = None, academic_y
                 ClassroomStudentModel, ClassroomModel.id == ClassroomStudentModel.classroom_id
             ).filter(
                 ClassroomStudentModel.student_id == student_id,
-                ClassroomStudentModel.is_active == True,
                 ClassroomModel.academic_year == check_year,
                 ClassroomModel.semester.isnot(None)
             ).distinct().all()
@@ -1381,7 +1373,6 @@ def get_student_semester_list(student_id: int, db: Session = Depends(get_db), cu
         ClassroomStudentModel.student_id == student_id,
         ClassroomModel.academic_year.isnot(None),
         ClassroomModel.semester.isnot(None),
-        ClassroomStudentModel.is_active == True
     ).distinct().all()
 
     # Merge and deduplicate
@@ -1432,8 +1423,23 @@ def get_classroom_ranking(classroom_id: int, academic_year: str = None, semester
     
     if grade_level:
         # If grade_level is provided, find all students in any classroom of that grade level
+        # scoped to the correct school + year + semester so that students from other years
+        # (e.g. newly enrolled year-69 students) are not mixed into the year-68 ranking.
         query = query.join(ClassroomModel, ClassroomStudentModel.classroom_id == ClassroomModel.id)
         query = query.filter(ClassroomModel.grade_level == grade_level)
+        school_id_scope = getattr(current_user, 'school_id', None)
+        if school_id_scope:
+            query = query.filter(ClassroomModel.school_id == school_id_scope)
+        if q_year is not None:
+            if len(q_year) <= 2:
+                query = query.filter(or_(
+                    ClassroomModel.academic_year == academic_year,
+                    func.right(ClassroomModel.academic_year, len(q_year)) == q_year
+                ))
+            else:
+                query = query.filter(ClassroomModel.academic_year == academic_year)
+        if semester is not None:
+            query = query.filter(ClassroomModel.semester == semester)
     elif is_combined_classroom_mode:
         # Combined mode: merge same classroom across semesters in the selected academic year
         # (same school + same classroom name + same grade level)
@@ -1478,6 +1484,19 @@ def get_classroom_ranking(classroom_id: int, academic_year: str = None, semester
         enrollments_query = enrollments_query.join(
             ClassroomModel, ClassroomStudentModel.classroom_id == ClassroomModel.id
         ).filter(ClassroomModel.grade_level == grade_level)
+        school_id_scope = getattr(current_user, 'school_id', None)
+        if school_id_scope:
+            enrollments_query = enrollments_query.filter(ClassroomModel.school_id == school_id_scope)
+        if q_year is not None:
+            if len(q_year) <= 2:
+                enrollments_query = enrollments_query.filter(or_(
+                    ClassroomModel.academic_year == academic_year,
+                    func.right(ClassroomModel.academic_year, len(q_year)) == q_year
+                ))
+            else:
+                enrollments_query = enrollments_query.filter(ClassroomModel.academic_year == academic_year)
+        if semester is not None:
+            enrollments_query = enrollments_query.filter(ClassroomModel.semester == semester)
     elif is_combined_classroom_mode and target_classroom is not None:
         enrollments_query = enrollments_query.join(
             ClassroomModel, ClassroomStudentModel.classroom_id == ClassroomModel.id
@@ -1590,7 +1609,6 @@ def get_school_ranking(
             ClassroomModel, ClassroomModel.id == ClassroomStudentModel.classroom_id
         ).filter(
             ClassroomModel.school_id == school_id,
-            ClassroomStudentModel.is_active == True
         )
 
         if q_year is not None:
@@ -1640,7 +1658,6 @@ def get_school_ranking(
         ClassroomModel, ClassroomModel.id == ClassroomStudentModel.classroom_id
     ).filter(
         ClassroomStudentModel.student_id.in_(student_ids),
-        ClassroomStudentModel.is_active == True,
         ClassroomModel.school_id == school_id,
     )
 

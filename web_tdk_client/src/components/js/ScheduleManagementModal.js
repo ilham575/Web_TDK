@@ -53,6 +53,84 @@ export default function ScheduleManagementModal({
 
   const availableSemesters = getSemestersForYear(selectedAcademicYear);
 
+  const getTeacherLabel = (teacherId, fallbackName = '') => {
+    const matchedTeacher = teachers.find((teacher) => String(teacher.id) === String(teacherId));
+    return matchedTeacher?.full_name || matchedTeacher?.username || fallbackName || '';
+  };
+
+  const resolveTeacherForSubject = (subject, classroomId = '') => {
+    if (!subject) {
+      return { teacherId: '', teacherLabel: '' };
+    }
+
+    const teacherAssignments = Array.isArray(subject.teachers)
+      ? subject.teachers.filter((assignment) => assignment)
+      : [];
+    const activeTeacherAssignments = teacherAssignments.filter((assignment) => !assignment.is_ended);
+    const preferredAssignments = activeTeacherAssignments.length > 0
+      ? activeTeacherAssignments
+      : teacherAssignments;
+    const normalizedClassroomId = classroomId ? String(classroomId) : '';
+    const classroomMatches = normalizedClassroomId
+      ? preferredAssignments.filter((assignment) => String(assignment.classroom_id) === normalizedClassroomId)
+      : [];
+    const globalMatches = preferredAssignments.filter(
+      (assignment) => assignment.classroom_id === null || assignment.classroom_id === undefined
+    );
+
+    const primaryAssignment = normalizedClassroomId
+      ? (classroomMatches[0] || globalMatches[0] || null)
+      : (globalMatches[0] || (preferredAssignments.length === 1 ? preferredAssignments[0] : null));
+
+    if (primaryAssignment?.id != null) {
+      const teacherLabel = getTeacherLabel(primaryAssignment.id, primaryAssignment.name);
+      return {
+        teacherId: String(primaryAssignment.id),
+        teacherLabel: teacherLabel || 'ไม่พบข้อมูลครู'
+      };
+    }
+
+    if (subject.teacher_id != null && subject.teacher_id !== '') {
+      const teacherLabel = getTeacherLabel(subject.teacher_id, subject.teacher_name);
+      return {
+        teacherId: String(subject.teacher_id),
+        teacherLabel: teacherLabel || 'ไม่พบข้อมูลครู'
+      };
+    }
+
+    if (!normalizedClassroomId && preferredAssignments.length > 1) {
+      return {
+        teacherId: '',
+        teacherLabel: 'กรุณาเลือกชั้นเรียนเพื่อระบุครูผู้สอน'
+      };
+    }
+
+    if (normalizedClassroomId && preferredAssignments.length > 0) {
+      return {
+        teacherId: '',
+        teacherLabel: 'ไม่พบครูผู้สอนสำหรับชั้นเรียนนี้'
+      };
+    }
+
+    return {
+      teacherId: '',
+      teacherLabel: 'วิชานี้ไม่มีครูผู้สอน'
+    };
+  };
+
+  const applyResolvedTeacher = (subjectId, classroomId = selectedClassroom) => {
+    if (!subjectId) {
+      setSelectedTeacher('');
+      setTeacherName('');
+      return;
+    }
+
+    const subject = availableSubjects.find((item) => String(item.id) === String(subjectId));
+    const { teacherId, teacherLabel } = resolveTeacherForSubject(subject, classroomId);
+    setSelectedTeacher(teacherId);
+    setTeacherName(teacherLabel);
+  };
+
   // ดึง schedule slots เมื่อ modal เปิด
   useEffect(() => {
     if (isOpen) {
@@ -322,25 +400,7 @@ export default function ScheduleManagementModal({
 
   const handleSubjectChange = (subjectId) => {
     setSelectedSubject(subjectId);
-    if (subjectId) {
-      const subject = availableSubjects.find(s => s.id === parseInt(subjectId));
-      if (subject && subject.teacher_id) {
-        const teacher = teachers.find(t => t.id === subject.teacher_id);
-        if (teacher) {
-          setSelectedTeacher(subject.teacher_id);
-          setTeacherName(teacher.full_name || teacher.username);
-        } else {
-          setSelectedTeacher('');
-          setTeacherName('ไม่พบข้อมูลครู');
-        }
-      } else {
-        setSelectedTeacher('');
-        setTeacherName('วิชานี้ไม่มีครูผู้สอน');
-      }
-    } else {
-      setSelectedTeacher('');
-      setTeacherName('');
-    }
+    applyResolvedTeacher(subjectId, selectedClassroom);
   };
 
   const handleAddSchedule = async () => {
@@ -569,7 +629,13 @@ export default function ScheduleManagementModal({
                 <select
                     className="w-full bg-white border-2 border-slate-100 rounded-2xl px-5 py-4 font-bold text-slate-700 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all shadow-sm hover:border-slate-200 appearance-none"
                     value={selectedClassroom}
-                    onChange={e => setSelectedClassroom(e.target.value)}
+                    onChange={e => {
+                      const classroomId = e.target.value;
+                      setSelectedClassroom(classroomId);
+                      if (selectedSubject) {
+                        applyResolvedTeacher(selectedSubject, classroomId);
+                      }
+                    }}
                 >
                     <option value="">-- เลือกชั้นเรียน --</option>
                   {availableClassrooms.map(c => (

@@ -545,34 +545,36 @@ function GradeExportTab({
   };
 
   return (
-    <div className="bg-white/85 backdrop-blur-xl rounded-[2rem] border border-white/70 shadow-[0_24px_70px_-30px_rgba(15,23,42,0.32)] ring-1 ring-slate-200/40 overflow-hidden">
-      <div className="px-8 py-6 bg-gradient-to-r from-green-50 via-emerald-50 to-teal-50 border-b border-green-100 flex flex-wrap items-center gap-4">
-        <h2 className="flex items-center gap-3 text-2xl font-extrabold text-slate-800">
-          <span className="flex items-center justify-center w-12 h-12 rounded-2xl bg-gradient-to-br from-green-400 to-emerald-500 text-white text-2xl shadow-lg shadow-green-500/30">📊</span>
+    <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+      <div className="px-6 py-4 border-b border-slate-100 flex flex-wrap items-center gap-4">
+        <h2 className="flex items-center gap-3 text-xl font-semibold text-slate-800">
+          <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-lg">
+            <span className="text-lg">📊</span>
+          </div>
           {t('gradeReport')}
         </h2>
       </div>
 
-      <div className="p-8 space-y-6">
-        <div className="bg-purple-50 rounded-lg border border-purple-200 p-4">
-          <label className="block text-sm font-semibold text-slate-700 mb-3">{t('selectLanguage')}</label>
+      <div className="p-6 space-y-5">
+        <div className="bg-slate-50 rounded-lg border border-slate-200 p-4">
+          <label className="block text-sm font-medium text-slate-700 mb-3">{t('selectLanguage')}</label>
           <div className="flex gap-3">
             <button
               onClick={() => setLanguage('th')}
-              className={`px-4 py-2 rounded-lg font-semibold transition ${language === 'th' ? 'bg-purple-600 text-white' : 'bg-white border border-purple-300 text-purple-600 hover:bg-purple-100'}`}
+              className={`px-4 py-2 rounded-lg font-medium transition text-sm ${language === 'th' ? 'bg-blue-600 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}
             >
               🇹🇭 {t('thai')}
             </button>
             <button
               onClick={() => setLanguage('ms')}
-              className={`px-4 py-2 rounded-lg font-semibold transition ${language === 'ms' ? 'bg-purple-600 text-white' : 'bg-white border border-purple-300 text-purple-600 hover:bg-purple-100'}`}
+              className={`px-4 py-2 rounded-lg font-medium transition text-sm ${language === 'ms' ? 'bg-blue-600 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}
             >
               🇲🇾 {t('malay')}
             </button>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-5 bg-slate-50 rounded-2xl border border-slate-200">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-5 bg-slate-50 rounded-xl border border-slate-200">
           <div>
             <label className="block text-sm font-semibold text-slate-700 mb-2">{t('selectClassroom')}</label>
             <select
@@ -618,31 +620,31 @@ function GradeExportTab({
         </div>
 
         {loading && (
-          <div className="text-center py-8 bg-amber-50 border border-amber-200 rounded-lg">
+          <div className="text-center py-8 bg-blue-50 border border-blue-100 rounded-lg">
             <div className="inline-block animate-spin">⏳</div>
-            <p className="mt-2 text-slate-600">{t('loading')}</p>
+            <p className="mt-2 text-slate-500 text-sm">{t('loading')}</p>
           </div>
         )}
 
         {previewLoaded && gradeData.length === 0 && (
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-center">
             <span className="text-2xl">⚠️</span>
-            <p className="text-amber-800 font-semibold mt-2">{t('noData')}</p>
+            <p className="text-amber-700 font-medium mt-2 text-sm">{t('noData')}</p>
           </div>
         )}
 
         {previewLoaded && gradeData.length > 0 && (
-          <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
+          <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
             <h3 className="font-bold text-slate-800 mb-3">{t('previewData')} ({gradeData.length} {t('students')}) - {subjectsData.length} {language === 'th' ? 'วิชา' : 'Mata Pelajaran'}</h3>
             {subjectsData.length === 0 && (
               <div className="bg-blue-50 border border-blue-200 rounded p-3 mb-4">
                 <p className="text-sm text-blue-700">⚠️ {language === 'th' ? 'กำลังโหลดข้อมูลวิชา...' : 'Sedang memuat data mata pelajaran...'}</p>
               </div>
             )}
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto rounded-lg border border-slate-200">
               <table className="min-w-max text-sm">
                 <thead>
-                  <tr className="bg-slate-200">
+                  <tr className="bg-slate-50 text-slate-500 text-xs uppercase font-medium border-b border-slate-200">
                     <th className="px-3 py-2 text-left">#</th>
                     <th className="px-3 py-2 text-left">{t('name')}</th>
                     {subjectsData.slice(0, 8).map(subj => (
@@ -653,9 +655,9 @@ function GradeExportTab({
                     <th className="px-3 py-2 text-center">{t('rank')}</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-200">
+                <tbody className="divide-y divide-slate-100">
                   {gradeData.slice(0, 5).map((item, idx) => (
-                    <tr key={idx} className="hover:bg-slate-100">
+                    <tr key={idx} className="hover:bg-slate-50 transition-colors">
                       <td className="px-3 py-2">{item.student_number ?? (idx + 1)}</td>
                       <td className="px-3 py-2">{item.full_name || '-'}</td>
                       {subjectsData.slice(0, 8).map(subj => (
@@ -679,7 +681,7 @@ function GradeExportTab({
         )}
 
         {previewLoaded && gradeData.length > 0 && (
-          <div className="flex flex-wrap gap-4 p-5 bg-green-50 rounded-2xl border border-green-200">
+          <div className="flex flex-wrap gap-4 p-5 bg-slate-50 rounded-xl border border-slate-200">
             <div className="flex-1 min-w-[200px]">
               <label className="block text-sm font-semibold text-slate-700 mb-2">{t('selectFormat')}</label>
               <div className="flex gap-3">
@@ -726,7 +728,7 @@ function GradeExportTab({
               <button
                 onClick={handleExport}
                 disabled={exporting}
-                className="px-8 py-2.5 rounded-lg bg-gradient-to-r from-green-600 to-emerald-600 text-white font-bold hover:shadow-lg hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className={`px-8 py-2.5 rounded-lg bg-emerald-600 text-white font-medium hover:bg-emerald-700 hover:shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm`}
               >
                 {exporting ? (
                   <>

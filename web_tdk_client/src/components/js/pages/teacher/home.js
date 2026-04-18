@@ -110,7 +110,8 @@ function TeacherPage() {
 
   // Semester period filtering
   const [semesterPeriods, setSemesterPeriods] = useState([]);
-  const [showInactivePeriods, setShowInactivePeriods] = useState(false);
+  const [showExpiredPeriods, setShowExpiredPeriods] = useState(false);
+  const [showNotStartedPeriods, setShowNotStartedPeriods] = useState(false);
   
   // Access control settings (from admin)
   const [accessControls, setAccessControls] = useState([]);
@@ -337,10 +338,24 @@ function TeacherPage() {
     console.log('[checkTeacherAccess] year:', year, 'semester:', semester, 'accessControls:', accessControls);
     
     if (!year) return false;
+
+    // If access controls are not loaded/configured yet, do not block at client side.
+    // Backend still enforces final permission.
+    if (loadingAccessControls || !Array.isArray(accessControls) || accessControls.length === 0) {
+      return true;
+    }
     
     if (!semester || semester === '') {
+      // If there is no explicit control for this year, allow and let backend decide.
+      const controlsForYear = accessControls.filter(
+        ac => ac.academic_year === String(year)
+      );
+      if (controlsForYear.length === 0) {
+        return true;
+      }
+
       // Check if at least one semester is allowed for this year
-      const result = accessControls.some(
+      const result = controlsForYear.some(
         ac => ac.academic_year === String(year) && ac.allow_teacher_view_summary
       );
       console.log('[checkTeacherAccess] ทุกภาค result:', result);
@@ -353,7 +368,8 @@ function TeacherPage() {
     const control = accessControls.find(
       ac => ac.academic_year === String(year) && ac.semester === semesterNum
     );
-    const result = control ? control.allow_teacher_view_summary : false;
+    // If no explicit row for this term, allow and let backend enforce fallback policy.
+    const result = control ? control.allow_teacher_view_summary : true;
     console.log('[checkTeacherAccess] ภาคเรียนใดเรียนหนึ่ง control:', control, 'result:', result);
     return result;
   };
@@ -361,11 +377,19 @@ function TeacherPage() {
   const isPeriodActive = (subject) => {
     const year = String(subject?.academic_year || systemYear);
     const semester = Number(subject?.semester || systemSemester);
-    const period = semesterPeriods.find(p => 
+
+    // Subjects from the current/fallback period are always shown (teacher needs to see upcoming work)
+    const isCurrentPeriod = year === String(systemYear) && semester === Number(systemSemester);
+
+    const period = semesterPeriods.find(p =>
       p.academic_year === year && p.semester === semester
     );
-    if (!period) return true; // If no period set, assume active
-    if (!period.start_date) return true;
+
+    if (!period || !period.start_date) {
+      // No date constraints set: active only if it's the current/fallback period
+      return isCurrentPeriod;
+    }
+
     const now = new Date();
     const start = new Date(period.start_date);
     const end = period.end_date ? new Date(period.end_date) : new Date(8640000000000000);
@@ -375,10 +399,18 @@ function TeacherPage() {
   const getPeriodStatus = (subject) => {
     const year = String(subject?.academic_year || systemYear);
     const semester = Number(subject?.semester || systemSemester);
-    const period = semesterPeriods.find(p => 
+    const period = semesterPeriods.find(p =>
       p.academic_year === year && p.semester === semester
     );
-    if (!period || !period.start_date || !period.end_date) return 'active'; // No period = active
+    if (!period || !period.start_date || !period.end_date) {
+      // No date-based period: classify by comparing year/semester against current period
+      if (year === String(systemYear) && semester === Number(systemSemester)) return 'active';
+      const subYear = parseInt(year, 10) || 0;
+      const sysYear = parseInt(String(systemYear), 10) || 0;
+      if (subYear < sysYear) return 'expired';
+      if (subYear === sysYear && semester < Number(systemSemester)) return 'expired';
+      return 'not-started'; // same year future semester, or future year
+    }
     const now = new Date();
     const start = new Date(period.start_date);
     const end = new Date(period.end_date);
@@ -772,8 +804,8 @@ function TeacherPage() {
 
   const getLetterGrade = (percentage) => {
     percentage = parseFloat(percentage);
-    if (percentage >= 95) return { grade: 'A+', gpaValue: 4.0, color: 'text-emerald-600', bg: 'bg-emerald-50' };
-    if (percentage >= 80) return { grade: 'A', gpaValue: 4.0, color: 'text-emerald-600', bg: 'bg-emerald-50' };
+    if (percentage >= 95) return { grade: 'A+', gpaValue: 4.0, color: 'text-blue-600', bg: 'bg-blue-50' };
+    if (percentage >= 80) return { grade: 'A', gpaValue: 4.0, color: 'text-blue-600', bg: 'bg-blue-50' };
     if (percentage >= 75) return { grade: 'B+', gpaValue: 3.5, color: 'text-blue-600', bg: 'bg-blue-50' };
     if (percentage >= 70) return { grade: 'B', gpaValue: 3.0, color: 'text-blue-600', bg: 'bg-blue-50' };
     if (percentage >= 65) return { grade: 'C+', gpaValue: 2.5, color: 'text-orange-600', bg: 'bg-orange-50' };
@@ -1181,14 +1213,14 @@ function TeacherPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-teal-50/20 to-emerald-50/20 pb-20">
+    <div className="min-h-screen bg-slate-50 pb-20">
       <FirstVisitOnboarding
         open={showTeacherOnboarding}
         onClose={handleCloseTeacherOnboarding}
         badge="Teacher Onboarding"
         title="เริ่มงานสอนจากวิชา ตารางสอน และห้องโฮมรูม"
         description="หน้าครูรวมงานหลักที่ต้องใช้ทุกวันไว้แล้ว ถ้าเพิ่งเข้าระบบครั้งแรก ให้เริ่มจากการดูรายวิชาที่รับผิดชอบ แล้วค่อยตรวจตารางเรียนและข้อมูลนักเรียนในห้องโฮมรูม"
-        accent="emerald"
+        accent="blue"
         highlights={[
           'แท็บรายวิชาเป็นจุดเริ่มต้นสำหรับกรอกคะแนน เช็กข้อมูลวิชา และติดตามสถานะการสอน',
           'ตารางสอนช่วยดูเวลาสอนและจัดการช่วงเวลาเรียนของแต่ละวิชา',
@@ -1230,17 +1262,14 @@ function TeacherPage() {
 
           {/* Active Period Status Card */}
           {activePeriod && (
-            <div className="mt-6 bg-white rounded-3xl p-6 shadow-sm border border-emerald-100/60 relative overflow-hidden group hover:shadow-lg transition-all duration-500 z-10">
-               <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-br from-emerald-50 to-teal-50 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 opacity-60 pointer-events-none group-hover:scale-110 transition-transform duration-700"></div>
-               <div className="absolute top-0 left-0 w-1.5 h-full bg-gradient-to-b from-emerald-400 to-teal-400 rounded-l-3xl"></div>
-               
-               <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
+            <div className="mt-6 bg-white rounded-xl p-6 shadow-sm border border-slate-100 z-10">
+               <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                   <div>
                     <div className="flex items-center gap-3 mb-2">
                        <span className={`px-3 py-1 text-[10px] font-black uppercase tracking-widest rounded-full flex items-center gap-1.5 ${
                           remainingTime?.status === 'ended' 
                           ? 'bg-red-100 text-red-700' 
-                          : 'bg-emerald-100 text-emerald-700'
+                          : 'bg-blue-50 text-blue-700'
                        }`}>
                           <Calendar className="w-3 h-3" />
                           {remainingTime?.status === 'ended' ? 'Closed Term' : 'Current Term'}
@@ -1261,12 +1290,12 @@ function TeacherPage() {
                   <div className="flex gap-3 md:gap-4">
                      {remainingTime && remainingTime.status === 'active' ? (
                         <>
-                           <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-3 md:p-5 text-center min-w-[90px] md:min-w-[110px] border border-slate-100 shadow-sm flex flex-col justify-center items-center group-hover:-translate-y-1 transition-transform duration-300">
-                              <div className="text-3xl md:text-4xl font-black text-emerald-600 leading-none mb-1 tabular-nums">{remainingTime.days}</div>
+                           <div className="bg-slate-50 rounded-xl p-3 md:p-5 text-center min-w-[90px] md:min-w-[110px] border border-slate-200 flex flex-col justify-center items-center">
+                              <div className="text-3xl md:text-4xl font-black text-blue-600 leading-none mb-1 tabular-nums">{remainingTime.days}</div>
                               <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">วัน</div>
                            </div>
-                           <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-3 md:p-5 text-center min-w-[90px] md:min-w-[110px] border border-slate-100 shadow-sm flex flex-col justify-center items-center group-hover:-translate-y-1 transition-transform duration-300 delay-75">
-                              <div className="text-3xl md:text-4xl font-black text-emerald-600 leading-none mb-1 tabular-nums">{remainingTime.hours}</div>
+                           <div className="bg-slate-50 rounded-xl p-3 md:p-5 text-center min-w-[90px] md:min-w-[110px] border border-slate-200 flex flex-col justify-center items-center">
+                              <div className="text-3xl md:text-4xl font-black text-blue-600 leading-none mb-1 tabular-nums">{remainingTime.hours}</div>
                               <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">ชั่วโมง</div>
                            </div>
                            <div className="flex flex-col justify-center pl-2">
@@ -1275,7 +1304,7 @@ function TeacherPage() {
                            </div>
                         </>
                      ) : (
-                        <div className="flex items-center gap-5 bg-red-50/80 backdrop-blur-sm px-8 py-6 rounded-2xl border border-red-100 w-full md:w-auto">
+                        <div className="flex items-center gap-5 bg-red-50 px-8 py-6 rounded-xl border border-red-100 w-full md:w-auto">
                            <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-inner">
                               <Clock className="w-6 h-6 text-red-500" />
                            </div>
@@ -1292,15 +1321,15 @@ function TeacherPage() {
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex flex-wrap gap-1.5 mb-8 bg-white/80 backdrop-blur-sm p-2 rounded-2xl shadow-sm border border-slate-100/80">
+        <div className="flex flex-wrap gap-2 mb-6 bg-white p-2 rounded-xl border border-slate-200 shadow-sm">
           {tabs.map(tab => (
             <button
               key={tab.id}
               onClick={() => tab.id === 'evaluations' ? navigate('/teacher/evaluations') : setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95 ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
                 (activeTab === tab.id && tab.id !== 'evaluations')
-                  ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-md shadow-emerald-200/60' 
-                  : 'text-slate-500 hover:bg-slate-50 hover:text-emerald-600'
+                  ? 'bg-blue-50 text-blue-600 border border-blue-100' 
+                  : 'text-slate-600 hover:bg-slate-50 hover:text-blue-600 border border-transparent'
               }`}
             >
               <tab.icon className="w-4 h-4" />
@@ -1316,7 +1345,9 @@ function TeacherPage() {
               <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
                 <div>
                   <h3 className="text-3xl font-black text-slate-800 tracking-tight flex items-center gap-3">
-                    <span className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 text-white flex items-center justify-center text-xl shadow-lg shadow-emerald-200/50">📚</span>
+                    <span className="w-10 h-10 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center">
+                      <BookOpen className="w-5 h-5" />
+                    </span>
                     รายวิชาของฉัน
                   </h3>
                   <p className="text-slate-500 font-medium mt-2 ml-1">จัดการคอร์สเรียนและการวัดผลนักเรียนประจำภาคเรียน</p>
@@ -1324,10 +1355,10 @@ function TeacherPage() {
               </div>
 
               {teacherSubjects.length === 0 ? (
-                <div className="bg-white rounded-[2.5rem] p-16 text-center border border-slate-100 shadow-sm relative overflow-hidden group">
+                <div className="bg-white rounded-xl p-16 text-center border border-slate-100 shadow-sm relative overflow-hidden group">
                   <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px] opacity-20 pointer-events-none"></div>
                   <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform duration-500 shadow-inner">
-                    <BookOpen className="w-10 h-10 text-slate-300 group-hover:text-emerald-500 transition-colors duration-500" />
+                    <BookOpen className="w-10 h-10 text-slate-300 group-hover:text-blue-500 transition-colors duration-500" />
                   </div>
                   <h4 className="text-2xl font-black text-slate-400 mb-2">ยังไม่มีรายวิชาที่ถูกมอบหมาย</h4>
                   <p className="text-slate-400 font-medium">กรุณาติดต่อฝ่ายวิชาการเพื่อเพิ่มรายวิชาในระบบ</p>
@@ -1342,14 +1373,14 @@ function TeacherPage() {
                             <div className="relative flex items-center">
                               <input
                                 type="checkbox"
-                                checked={showInactivePeriods}
-                                onChange={(e) => setShowInactivePeriods(e.target.checked)}
+                                checked={showExpiredPeriods}
+                                onChange={(e) => setShowExpiredPeriods(e.target.checked)}
                                 className="peer appearance-none w-5 h-5 border-2 border-slate-300 rounded-md checked:bg-red-500 checked:border-red-500 transition-colors"
                               />
                               <CheckCircle2 className="w-3.5 h-3.5 text-white absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 peer-checked:opacity-100 pointer-events-none" />
                             </div>
                             <span className="text-sm font-bold text-red-600 group-hover:text-red-700">
-                              แสดงวิชาที่ปิดคอร์สแล้ว ({teacherSubjects.filter(s => getPeriodStatus(s) === 'expired' && !s.subject_teachers?.every(t => t.is_ended)).length})
+                              แสดงวิชาที่ปิดคอร์สแล้ว ({teacherSubjects.filter(s => getPeriodStatus(s) === 'expired').length})
                             </span>
                           </label>
                         )}
@@ -1358,14 +1389,14 @@ function TeacherPage() {
                             <div className="relative flex items-center">
                               <input
                                 type="checkbox"
-                                checked={showInactivePeriods}
-                                onChange={(e) => setShowInactivePeriods(e.target.checked)}
+                                checked={showNotStartedPeriods}
+                                onChange={(e) => setShowNotStartedPeriods(e.target.checked)}
                                 className="peer appearance-none w-5 h-5 border-2 border-slate-300 rounded-md checked:bg-blue-500 checked:border-blue-500 transition-colors"
                               />
                               <CheckCircle2 className="w-3.5 h-3.5 text-white absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 peer-checked:opacity-100 pointer-events-none" />
                             </div>
                             <span className="text-sm font-bold text-blue-600 group-hover:text-blue-700">
-                              แสดงวิชายังไม่เริ่ม ({teacherSubjects.filter(s => getPeriodStatus(s) === 'not-started' && !s.subject_teachers?.every(t => t.is_ended)).length})
+                              แสดงวิชายังไม่เริ่ม ({teacherSubjects.filter(s => getPeriodStatus(s) === 'not-started').length})
                             </span>
                           </label>
                         )}
@@ -1375,7 +1406,13 @@ function TeacherPage() {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-8">
                     {teacherSubjects
-                      .filter(sub => showInactivePeriods || isPeriodActive(sub))
+                      .filter(sub => {
+                        const status = getPeriodStatus(sub);
+                        if (status === 'active') return true;
+                        if (status === 'expired') return showExpiredPeriods;
+                        if (status === 'not-started') return showNotStartedPeriods;
+                        return false;
+                      })
                       .map(sub => {
                         const isAllEnded = sub.subject_teachers?.length > 0 && sub.subject_teachers.every(t => t.is_ended);
                         const periodStatus = getPeriodStatus(sub);
@@ -1384,16 +1421,16 @@ function TeacherPage() {
                         const isNotStarted = periodStatus === 'not-started';
                         
                         return (
-                          <div key={sub.id} className={`group relative bg-white rounded-[2rem] p-1 border transition-all duration-300 flex flex-col ${
+                          <div key={sub.id} className={`group relative bg-white rounded-xl p-1 border transition-all duration-300 flex flex-col ${
                             isInactivePeriod 
                               ? `border-${isExpired ? 'red' : 'blue'}-100 opacity-80 hover:opacity-100` 
-                              : 'border-slate-100 hover:border-emerald-100/50 hover:shadow-2xl hover:shadow-emerald-100/40 hover:-translate-y-2'
+                                : 'border-slate-100 hover:border-blue-100 hover:shadow-lg hover:-translate-y-1'
                           }`}>
-                            <div className="bg-white rounded-[1.8rem] p-6 h-full flex flex-col relative z-10">
+                            <div className="bg-white rounded-xl p-6 h-full flex flex-col relative z-10">
                                 {/* Header */}
                                 <div className="flex justify-between items-start mb-6">
                                     <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl shadow-sm border border-slate-50 transition-colors ${
-                                        isAllEnded ? 'bg-slate-100 text-slate-400' : isInactivePeriod ? 'bg-slate-50 text-slate-400' : 'bg-emerald-50 text-emerald-600 group-hover:bg-emerald-100'
+                                        isAllEnded ? 'bg-slate-100 text-slate-400' : isInactivePeriod ? 'bg-slate-50 text-slate-400' : 'bg-blue-50 text-blue-600 group-hover:bg-blue-100'
                                     }`}>
                                         {sub.subject_type === 'main' ? <BookOpen className="w-7 h-7" /> : <Award className="w-7 h-7" />}
                                     </div>
@@ -1403,7 +1440,7 @@ function TeacherPage() {
                                             isAllEnded ? 'bg-slate-50 text-slate-400 border-slate-100' : 
                                             isExpired ? 'bg-red-50 text-red-600 border-red-100' : 
                                             isNotStarted ? 'bg-blue-50 text-blue-600 border-blue-100' : 
-                                            'bg-emerald-50 text-emerald-600 border-emerald-100'
+                                            'bg-blue-50 text-blue-600 border-blue-100'
                                         }`}>
                                             {isExpired ? 'หมดเวลา' : isNotStarted ? 'ยังไม่เริ่ม' : (sub.subject_type === 'main' ? 'วิชาหลัก' : 'กิจกรรม')}
                                         </span>
@@ -1418,7 +1455,7 @@ function TeacherPage() {
                                     <h4 className={`text-xl font-black mb-2 line-clamp-2 leading-tight transition-colors ${
                                         isAllEnded || isInactivePeriod 
                                             ? 'text-slate-400' 
-                                            : 'text-slate-800 group-hover:text-emerald-700'
+                                            : 'text-slate-800 group-hover:text-blue-600'
                                     }`}>
                                         {sub.name}
                                     </h4>
@@ -1466,13 +1503,13 @@ function TeacherPage() {
                                             <>
                                                 <button 
                                                     onClick={() => navigate(`/teacher/subject/${sub.id}/attendance`)}
-                                                    className="col-span-1 py-3 bg-emerald-600 text-white rounded-xl text-xs font-black hover:bg-emerald-700 transition-all active:scale-95 flex items-center justify-center gap-2 shadow-lg shadow-emerald-200 hover:shadow-emerald-300 hover:-translate-y-0.5"
+                                                    className="col-span-1 py-3 bg-blue-600 text-white rounded-lg text-xs font-black hover:bg-blue-700 transition-colors active:scale-95 flex items-center justify-center gap-2 shadow-sm"
                                                 >
                                                     <CheckCircle2 className="w-4 h-4" /> เช็คชื่อ
                                                 </button>
                                                 <button 
                                                     onClick={() => navigate(`/teacher/subject/${sub.id}/grades`)}
-                                                    className="col-span-1 py-3 bg-white text-emerald-700 border border-emerald-100 rounded-xl text-xs font-black hover:bg-emerald-50 transition-all active:scale-95 flex items-center justify-center gap-2 hover:-translate-y-0.5"
+                                                    className="col-span-1 py-3 bg-white text-blue-700 border border-blue-100 rounded-xl text-xs font-black hover:bg-blue-50 transition-all active:scale-95 flex items-center justify-center gap-2 hover:-translate-y-0.5"
                                                 >
                                                     <Award className="w-4 h-4" /> ให้คะแนน
                                                 </button>
@@ -1531,7 +1568,9 @@ function TeacherPage() {
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                   <h3 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-3">
-                    <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-500 text-white flex items-center justify-center text-lg shadow-md shadow-blue-200/50">🏫</span>
+                    <span className="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+                      <Home className="w-5 h-5" />
+                    </span>
                     ชั้นที่ได้รับมอบหมาย
                   </h3>
                   <p className="text-slate-500 font-medium mt-1.5 ml-1">ครูประจำชั้น: สรุปภาพรวมและติดตามความก้าวหน้า</p>
@@ -1539,7 +1578,7 @@ function TeacherPage() {
                 {/* Homeroom semester/year filter */}
                 <div className="flex items-center gap-2 flex-wrap">
                   <select
-                    className={`h-10 pl-4 pr-8 bg-white border rounded-xl text-slate-700 font-bold text-xs outline-none appearance-none cursor-pointer shadow-sm transition-colors ${homeroomCombinedMode ? 'border-purple-300 focus:border-purple-500' : 'border-slate-200 focus:border-emerald-500'}`}
+                    className={`h-10 pl-4 pr-8 bg-white border rounded-xl text-slate-700 font-bold text-xs outline-none appearance-none cursor-pointer shadow-sm transition-colors ${homeroomCombinedMode ? 'border-purple-300 focus:border-purple-500' : 'border-slate-200 focus:border-blue-500'}`}
                     value={homeroomYear}
                     disabled={homeroomCombinedMode}
                     onChange={e => { 
@@ -1553,7 +1592,7 @@ function TeacherPage() {
                   </select>
                   {!homeroomCombinedMode && (
                     <select
-                      className="h-10 pl-4 pr-8 bg-white border border-slate-200 rounded-xl text-slate-700 font-bold text-xs outline-none focus:border-emerald-500 appearance-none cursor-pointer shadow-sm"
+                      className="h-10 pl-4 pr-8 bg-white border border-slate-200 rounded-xl text-slate-700 font-bold text-xs outline-none focus:border-blue-500 appearance-none cursor-pointer shadow-sm"
                       value={homeroomSemester}
                       onChange={e => setHomeroomSemester(e.target.value)}
                     >
@@ -1582,7 +1621,7 @@ function TeacherPage() {
               </div>
 
               {!gradesAnnounced ? (
-                <div className="bg-amber-50 border-2 border-amber-200 rounded-3xl p-8 text-center animate-pulse">
+                <div className="bg-amber-50 border-2 border-amber-200 rounded-xl p-8 text-center animate-pulse">
                   <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
                     <Clock className="w-8 h-8 text-amber-600" />
                   </div>
@@ -1591,7 +1630,7 @@ function TeacherPage() {
                   {countdown && <div className="mt-4 text-3xl font-black text-amber-900 tracking-tighter">{countdown}</div>}
                 </div>
               ) : !checkTeacherAccess(homeroomYear, homeroomSemester) ? (
-                <div className="bg-red-50 border-2 border-red-200 rounded-3xl p-8 text-center">
+                <div className="bg-red-50 border-2 border-red-200 rounded-xl p-8 text-center">
                   <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
                     <AlertCircle className="w-8 h-8 text-red-600" />
                   </div>
@@ -1602,7 +1641,7 @@ function TeacherPage() {
               ) : (
                 <>
                   {!teacherHomerooms.length ? (
-                    <div className="bg-white rounded-3xl p-16 text-center shadow-lg border border-slate-100">
+                    <div className="bg-white rounded-xl p-16 text-center shadow-lg border border-slate-100">
                       <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6 grayscale opacity-40">
                         <Users className="w-12 h-12 text-slate-400" />
                       </div>
@@ -1611,7 +1650,7 @@ function TeacherPage() {
                     </div>
                   ) : loadingHomeroomSummary ? (
                     <div className="flex flex-col items-center justify-center py-20">
-                      <div className="w-12 h-12 border-4 border-emerald-100 border-t-emerald-600 rounded-full animate-spin mb-4" />
+                      <div className="w-12 h-12 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin mb-4" />
                       <p className="text-slate-500 font-black animate-pulse uppercase tracking-widest">กำลังรวบรวมข้อมูลหลังบ้าน...</p>
                     </div>
                   ) : homeroomSummary?.classrooms?.length > 0 && (
@@ -1624,13 +1663,13 @@ function TeacherPage() {
                             onClick={() => setSelectedHomeroomClassroom(classroom)}
                             className={`px-6 py-4 rounded-2xl font-black text-left transition-all ${
                               selectedHomeroomClassroom?.classroom_id === classroom.classroom_id
-                                ? 'bg-emerald-600 text-white shadow-xl shadow-emerald-200 group'
-                                : 'bg-white text-slate-600 hover:bg-emerald-50 border border-slate-100'
+                                ? 'bg-blue-600 text-white shadow-xl group'
+                                : 'bg-white text-slate-600 hover:bg-blue-50 border border-slate-100'
                             }`}
                           >
                             <div className="text-lg leading-tight uppercase tracking-tight">{classroom.classroom_name}</div>
                             <div className={`text-[10px] font-bold transition-opacity ${
-                              selectedHomeroomClassroom?.classroom_id === classroom.classroom_id ? 'text-emerald-100' : 'text-slate-400'
+                              selectedHomeroomClassroom?.classroom_id === classroom.classroom_id ? 'text-blue-100' : 'text-slate-400'
                             }`}>
                               {classroom.student_count} สมาชิกในชั้น
                             </div>
@@ -1645,7 +1684,7 @@ function TeacherPage() {
                             <button
                               onClick={() => setHomeroomSubTab('grades')}
                               className={`py-3.5 rounded-2xl font-black text-sm transition-all flex items-center justify-center gap-2 ${
-                                homeroomSubTab === 'grades' ? 'bg-slate-800 text-white shadow-lg' : 'bg-white text-slate-500 hover:bg-slate-50 border border-slate-100'
+                                homeroomSubTab === 'grades' ? 'bg-blue-600 text-white' : 'bg-white text-slate-500 hover:bg-slate-50 border border-slate-100'
                               }`}
                             >
                               <TrendingUp className="w-4 h-4" /> สถิติคะแนน
@@ -1653,7 +1692,7 @@ function TeacherPage() {
                             <button
                               onClick={() => setHomeroomSubTab('attendance')}
                               className={`py-3.5 rounded-2xl font-black text-sm transition-all flex items-center justify-center gap-2 ${
-                                homeroomSubTab === 'attendance' ? 'bg-slate-800 text-white shadow-lg' : 'bg-white text-slate-500 hover:bg-slate-50 border border-slate-100'
+                                homeroomSubTab === 'attendance' ? 'bg-blue-600 text-white' : 'bg-white text-slate-500 hover:bg-slate-50 border border-slate-100'
                               }`}
                             >
                               <CheckCircle2 className="w-4 h-4" /> สถิติมาเรียน
@@ -1662,8 +1701,8 @@ function TeacherPage() {
 
                           {/* Stats Grid */}
                           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                            <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-5">
-                              <div className="w-14 h-14 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center">
+                            <div className="bg-white p-6 rounded-xl border border-slate-100 shadow-sm flex items-center gap-5">
+                              <div className="w-14 h-14 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center">
                                 <Users className="w-8 h-8" />
                               </div>
                               <div>
@@ -1673,7 +1712,7 @@ function TeacherPage() {
                             </div>
 
                             {homeroomSubTab === 'grades' ? (
-                              <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-5">
+                              <div className="bg-white p-6 rounded-xl border border-slate-100 shadow-sm flex items-center gap-5">
                                 <div className="w-14 h-14 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center">
                                   < TrendingUp className="w-8 h-8" />
                                 </div>
@@ -1700,7 +1739,7 @@ function TeacherPage() {
                                 </div>
                               </div>
                             ) : (
-                              <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-5">
+                              <div className="bg-white p-6 rounded-xl border border-slate-100 shadow-sm flex items-center gap-5">
                                 <div className="w-14 h-14 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center">
                                   <CheckCircle2 className="w-8 h-8" />
                                 </div>
@@ -1715,7 +1754,7 @@ function TeacherPage() {
                           </div>
 
                           {/* Students List */}
-                          <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+                          <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
                             {/* Desktop View: Table */}
                             <div className="hidden md:block overflow-x-auto">
                               <table className="w-full text-left">
@@ -1758,11 +1797,11 @@ function TeacherPage() {
                                           </td>
                                           <td className="px-6 py-4">
                                             <div className="flex items-center gap-3">
-                                              <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-xs font-black text-slate-400 group-hover:bg-emerald-600 group-hover:text-white transition-all duration-300">
+                                              <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-xs font-black text-slate-400 group-hover:bg-blue-600 group-hover:text-white transition-all duration-300">
                                                 {getInitials(student.full_name, 'S')}
                                               </div>
                                               <div>
-                                                <div className="text-sm font-black text-slate-800 group-hover:text-emerald-600 transition-colors">{student.full_name}</div>
+                                                <div className="text-sm font-black text-slate-800 group-hover:text-blue-600 transition-colors">{student.full_name}</div>
                                                 <div className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">@{student.username}</div>
                                               </div>
                                             </div>
@@ -1782,7 +1821,7 @@ function TeacherPage() {
                                           <td className="px-6 py-4 text-center">
                                             <button 
                                               onClick={() => viewStudentDetail(student, homeroomSubTab)}
-                                              className="px-4 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg text-xs font-black hover:border-emerald-500 hover:text-emerald-700 transition-all hover:bg-emerald-50 flex items-center justify-center gap-2 mx-auto"
+                                              className="px-4 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg text-xs font-black hover:border-blue-500 hover:text-blue-600 transition-all hover:bg-blue-50 flex items-center justify-center gap-2 mx-auto"
                                             >
                                               ดูรีพอร์ต <ChevronRight className="w-3 h-3" />
                                             </button>
@@ -1827,7 +1866,7 @@ function TeacherPage() {
                                                         <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-sm font-black text-slate-400 relative">
                                                           {getInitials(student.full_name, 'S')}
                                                           {student.student_number && (
-                                                            <div className="absolute -top-1 -right-1 w-6 h-6 bg-emerald-600 text-white text-[10px] rounded-lg flex items-center justify-center border-2 border-white shadow-sm">
+                                                            <div className="absolute -top-1 -right-1 w-6 h-6 bg-blue-600 text-white text-[10px] rounded-lg flex items-center justify-center border-2 border-white shadow-sm">
                                                               {student.student_number}
                                                             </div>
                                                           )}
@@ -1852,7 +1891,7 @@ function TeacherPage() {
                                                 <div className="pl-[3.75rem]">
                                                   <button 
                                                     onClick={() => viewStudentDetail(student, homeroomSubTab)}
-                                                    className="w-full py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-black hover:border-emerald-500 hover:text-emerald-700 transition-all hover:bg-emerald-50 flex items-center justify-center gap-2"
+                                                    className="w-full py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-black hover:border-blue-500 hover:text-blue-600 transition-all hover:bg-blue-50 flex items-center justify-center gap-2"
                                                   >
                                                     ดูรีพอร์ต <ChevronRight className="w-3 h-3" />
                                                   </button>
@@ -1877,9 +1916,9 @@ function TeacherPage() {
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {/* Announcement Form */}
                 <div className="lg:col-span-1">
-                  <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm sticky top-8">
+                  <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm sticky top-8">
                     <div className="flex items-center gap-3 mb-6">
-                      <div className="w-10 h-10 bg-emerald-100 text-emerald-600 rounded-xl flex items-center justify-center">
+                      <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center">
                         <Plus className="w-5 h-5" />
                       </div>
                       <h4 className="text-lg font-black text-slate-800 leading-tight">สร้างประกาศใหม่</h4>
@@ -1893,7 +1932,7 @@ function TeacherPage() {
                           placeholder="เช่น กำหนดการสอบปลายภาค..."
                           value={title}
                           onChange={e=>setTitle(e.target.value)}
-                          className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm font-bold transition-all outline-none"
+                          className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm font-bold transition-all outline-none"
                         />
                       </div>
                       <div className="space-y-1">
@@ -1902,7 +1941,7 @@ function TeacherPage() {
                           placeholder="รายละเอียดของประกาศ..."
                           value={content}
                           onChange={e=>setContent(e.target.value)}
-                          className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm font-medium transition-all outline-none min-h-[120px] resize-none"
+                          className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm font-medium transition-all outline-none min-h-[120px] resize-none"
                         />
                       </div>
                       <div className="space-y-1">
@@ -1911,14 +1950,14 @@ function TeacherPage() {
                           type="datetime-local"
                           value={expiry}
                           onChange={e => setExpiry(e.target.value)}
-                          className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm font-bold transition-all outline-none"
+                          className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm font-bold transition-all outline-none"
                         />
                       </div>
                       {/* PDF Attachment */}
                       <div className="space-y-1">
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">แนบไฟล์ PDF (ถ้ามี)</label>
                         <div
-                          className="border-2 border-dashed border-slate-200 rounded-2xl p-4 text-center cursor-pointer hover:border-emerald-400 hover:bg-slate-50 transition-all"
+                          className="border-2 border-dashed border-slate-200 rounded-xl p-4 text-center cursor-pointer hover:border-blue-400 hover:bg-slate-50 transition-all"
                           onClick={() => announcementPdfInputRef.current && announcementPdfInputRef.current.click()}
                         >
                           <input
@@ -1953,7 +1992,7 @@ function TeacherPage() {
 
                       <button 
                         type="submit" 
-                        className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-black text-sm shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-all active:scale-[0.98] flex items-center justify-center gap-2 mt-4"
+                        className="w-full py-4 bg-blue-600 text-white rounded-lg font-black text-sm shadow-sm hover:bg-blue-700 transition-colors active:scale-[0.98] flex items-center justify-center gap-2 mt-4"
                       >
                         <Bell className="w-4 h-4" /> ลงประกาศข่าว
                       </button>
@@ -1971,17 +2010,17 @@ function TeacherPage() {
                   </div>
 
                   {announcements.length === 0 ? (
-                    <div className="bg-white rounded-3xl p-12 text-center border-2 border-dashed border-slate-200 opacity-60">
+                    <div className="bg-white rounded-xl p-12 text-center border-2 border-dashed border-slate-200 opacity-60">
                       <Bell className="w-10 h-10 text-slate-300 mx-auto mb-3" />
                       <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">No active announcements</p>
                     </div>
                   ) : (
                     <div className="space-y-4">
                       {announcements.filter(item => !isExpired(item) || ownedBy(item)).map(item => (
-                        <div key={item.id} className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm hover:shadow-md transition-all group">
+                        <div key={item.id} className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm hover:shadow-md transition-all group">
                           <div className="flex justify-between items-start gap-4">
                             <div className="flex-1">
-                              <h5 className="font-black text-slate-800 text-lg mb-1 group-hover:text-emerald-600 transition-colors capitalize">
+                              <h5 className="font-black text-slate-800 text-lg mb-1 group-hover:text-blue-600 transition-colors capitalize">
                                 {item.title}
                               </h5>
                               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mb-4 text-[11px] font-bold text-slate-400">
@@ -2017,7 +2056,7 @@ function TeacherPage() {
                               <div className="flex flex-col gap-2 shrink-0">
                                 <button
                                   onClick={() => openAnnouncementModal(item)}
-                                  className="p-2 border border-slate-100 rounded-xl text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-all"
+                                  className="p-2 border border-slate-100 rounded-xl text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-all"
                                   title="แก้ไข"
                                 >
                                   <Settings className="w-4 h-4" />
@@ -2042,7 +2081,7 @@ function TeacherPage() {
           )}
 
           {activeTab === 'absences' && (
-            <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 min-h-[500px]">
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-100 min-h-[500px]">
               <AbsenceApproval academicYear={homeroomYear} semester={homeroomSemester} />
             </div>
           )}
@@ -2051,16 +2090,16 @@ function TeacherPage() {
             <div className="space-y-6">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                  <h3 className="text-2xl font-black text-slate-800 tracking-tight">🗓️ ระบบตารางเรียน</h3>
+                  <h3 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-3"><Calendar className="w-5 h-5 text-blue-600" /> ระบบตารางเรียน</h3>
                   <p className="text-slate-500 font-medium">จัดการเวลาเรียนและห้องเรียนสำหรับผู้สอน</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
                   {semesterPeriods.length > 0 && (
-                    <div className="flex items-center gap-2 bg-white p-1.5 rounded-2xl shadow-sm border border-slate-100/60">
+                    <div className="flex items-center gap-2 bg-white p-1.5 rounded-2xl shadow-sm border border-slate-200">
                       <select
                         value={scheduleYear}
                         onChange={e => setScheduleYear(e.target.value)}
-                        className="py-2 pl-4 pr-10 bg-slate-50 hover:bg-slate-100 border border-transparent rounded-xl text-slate-700 font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 appearance-none cursor-pointer transition-all"
+                        className="py-2 pl-4 pr-10 bg-slate-50 hover:bg-slate-100 border border-transparent rounded-xl text-slate-700 font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500/20 appearance-none cursor-pointer transition-all"
                       >
                         {[...new Set(semesterPeriods.map(p => p.academic_year))].sort((a, b) => parseInt(b) - parseInt(a)).map(y => (
                           <option key={y} value={y}>ปี {y}</option>
@@ -2069,7 +2108,7 @@ function TeacherPage() {
                       <select
                         value={scheduleSemester}
                         onChange={e => setScheduleSemester(e.target.value)}
-                        className="py-2 pl-4 pr-10 bg-slate-50 hover:bg-slate-100 border border-transparent rounded-xl text-slate-700 font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 appearance-none cursor-pointer transition-all"
+                        className="py-2 pl-4 pr-10 bg-slate-50 hover:bg-slate-100 border border-transparent rounded-xl text-slate-700 font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500/20 appearance-none cursor-pointer transition-all"
                       >
                         <option value="">ทุกภาคเรียน</option>
                         {[...new Set(semesterPeriods.filter(p => p.academic_year === scheduleYear).map(p => p.semester))].sort().map(s => (
@@ -2080,7 +2119,7 @@ function TeacherPage() {
                   )}
                   <button 
                     onClick={() => { loadScheduleSlots(); loadClassrooms(); setShowScheduleModal(true); }}
-                    className="px-6 py-3 bg-emerald-600 text-white rounded-2xl font-black text-sm shadow-xl shadow-emerald-200 hover:bg-emerald-700 active:scale-95 transition-all flex items-center justify-center gap-2"
+                    className="px-6 py-3 bg-blue-600 text-white rounded-lg font-black text-sm shadow-sm hover:bg-blue-700 active:scale-95 transition-colors flex items-center justify-center gap-2"
                   >
                     <Plus className="w-4 h-4" /> กำหนดเวลาสอน
                   </button>
@@ -2088,7 +2127,7 @@ function TeacherPage() {
               </div>
 
               {subjectSchedules.length === 0 ? (
-                <div className="bg-white rounded-3xl p-20 text-center shadow-lg border-2 border-dashed border-slate-100">
+                <div className="bg-white rounded-xl p-20 text-center shadow-lg border-2 border-dashed border-slate-100">
                   <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6 grayscale opacity-30">
                     <Calendar className="w-12 h-12 text-slate-400" />
                   </div>
@@ -2096,7 +2135,7 @@ function TeacherPage() {
                   <p className="text-slate-400 mt-2 font-medium">คลิกปุ่ม 'กำหนดเวลาสอน' เพื่อเริ่มสร้างตารางเรียน</p>
                 </div>
               ) : (
-                <div className="bg-white rounded-3xl p-4 sm:p-8 shadow-sm border border-slate-100 overflow-x-auto min-w-full">
+                <div className="bg-white rounded-xl p-4 sm:p-8 shadow-sm border border-slate-100 overflow-x-auto min-w-full">
                   <ScheduleGrid
                     operatingHours={scheduleSlots}
                     schedules={subjectSchedules}

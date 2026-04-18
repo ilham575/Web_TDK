@@ -107,8 +107,11 @@ function AdminSubjectDetails() {
         studentsArr.forEach(s => {
           let label = 'Default';
           if (s.classroom && (s.classroom.name || s.classroom.id)) {
-            label = s.classroom.name || String(s.classroom.id);
-          } else if (s.classroom_name) label = s.classroom_name;
+            label = (s.classroom.name || String(s.classroom.id));
+          } else if (s.classroom_name) {
+            label = s.classroom_name;
+          }
+          label = String(label).trim();
           const key = `label:${label}`;
           classMap[key] = { key, label };
         });
@@ -397,8 +400,8 @@ function AdminSubjectDetails() {
   const getClassKey = (s) => {
     // Always key by name so classrooms with the same name across different semesters merge.
     if (!s) return 'label:Default';
-    if (s.classroom && (s.classroom.name || s.classroom.id)) return `label:${s.classroom.name || String(s.classroom.id)}`;
-    if (s.classroom_name) return `label:${s.classroom_name}`;
+    if (s.classroom && (s.classroom.name || s.classroom.id)) return `label:${String(s.classroom.name || String(s.classroom.id)).trim()}`;
+    if (s.classroom_name) return `label:${String(s.classroom_name).trim()}`;
     return 'label:Default';
   };
 

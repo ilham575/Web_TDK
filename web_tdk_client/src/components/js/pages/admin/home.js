@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import '../../../css/pages/admin/admin-home.css';
 import { toast } from 'react-toastify';
+import { Users, GraduationCap, Megaphone } from 'lucide-react';
 
 import Loading from '../../Loading';
 import PageHeader, { getInitials } from '../../PageHeader';
@@ -30,7 +31,9 @@ import AdminTabs from './AdminTabs';
 import StudentDetailModal from '../../../modals/StudentDetailModal';
 import AcademicYearSetupModal from './AcademicYearSetupModal';
 import GradeExportTab from './GradeExportTab';
+import StudentGradeTab from './StudentGradeTab';
 import SummaryCompletionTab from './SummaryCompletionTab';
+import AdminTabIntro from './AdminTabIntro';
 import { API_BASE_URL } from '../../../endpoints';
 import FirstVisitOnboarding, {
   ONBOARDING_KEYS,
@@ -592,7 +595,7 @@ function AdminPage() {
 
   const [deletionStatuses, setDeletionStatuses] = useState({});
 
-  const [activeTab, setActiveTab] = useState('users');
+  const [activeTab, setActiveTab] = useState('home');
 
   // Rankings tab state
   const [rankingMode, setRankingMode] = useState('classroom'); // 'classroom' | 'school'
@@ -3742,16 +3745,17 @@ function AdminPage() {
         buttonLabel="เริ่มใช้งานหน้า Admin"
       />
 
-      <div className="relative bg-[radial-gradient(circle_at_top_left,_rgba(99,102,241,0.18),_transparent_28%),radial-gradient(circle_at_top_right,_rgba(168,85,247,0.14),_transparent_24%),linear-gradient(180deg,_rgba(248,250,252,1)_0%,_rgba(238,242,255,0.88)_45%,_rgba(241,245,249,1)_100%)]">
-        <PageHeader 
+      <div className="relative bg-white border-b border-slate-200">
+          <PageHeader 
           currentUser={currentUser}
           role="admin"
           displaySchool={displaySchool}
+          hideLogout={true}
           rightContent={
             <>
               {/* Mobile Menu Button */}
               <button
-                className="md:hidden p-2.5 rounded-xl bg-white/20 backdrop-blur-sm border border-white/30 text-slate-700 hover:bg-white/30 transition-all duration-300"
+                className="md:hidden p-2 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
                 onClick={() => setShowHeaderMenu(s => !s)}
                 aria-expanded={showHeaderMenu}
                 aria-label="Open header menu"
@@ -3762,16 +3766,16 @@ function AdminPage() {
               </button>
               
               {/* Mobile Dropdown Menu */}
-              <div className={`${showHeaderMenu ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 -translate-y-2 pointer-events-none'} md:hidden absolute right-4 top-16 bg-white/95 backdrop-blur-xl rounded-2xl border border-slate-200/60 shadow-xl shadow-slate-200/50 p-3 z-50 min-w-[200px] transition-all duration-300 ease-out`}>
-                <button role="menuitem" className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-gradient-to-r from-violet-500 to-purple-600 text-white font-semibold shadow-lg shadow-violet-500/30 hover:shadow-xl hover:shadow-violet-500/40 hover:-translate-y-0.5 transition-all duration-300 mb-2" onClick={() => { setShowModal(true); setShowHeaderMenu(false); }}>➕ {t('admin.addNewUser')}</button>
-                <button role="menuitem" className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-white/80 text-slate-700 font-medium border border-slate-200 hover:bg-slate-50 hover:border-slate-300 transition-all duration-300 mb-2" onClick={() => { navigate('/profile'); setShowHeaderMenu(false); }}>👤 {t('admin.profile')}</button>
-                <button role="menuitem" className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-gradient-to-r from-rose-500 to-pink-600 text-white font-semibold shadow-lg shadow-rose-500/30 hover:shadow-xl hover:shadow-rose-500/40 hover:-translate-y-0.5 transition-all duration-300" onClick={() => { handleSignout(); setShowHeaderMenu(false); }}>🚪 {t('admin.logout')}</button>
+              <div className={`${showHeaderMenu ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 -translate-y-2 pointer-events-none'} md:hidden absolute right-4 top-16 bg-white rounded-xl border border-slate-200 shadow-xl p-3 z-50 min-w-[200px] transition-all duration-200 ease-out`}>
+                <button role="menuitem" className="w-full flex items-center gap-3 px-4 py-3 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition-colors mb-2" onClick={() => { setShowModal(true); setShowHeaderMenu(false); }}>➕ {t('admin.addNewUser')}</button>
+                <button role="menuitem" className="w-full flex items-center gap-3 px-4 py-3 rounded-lg bg-white text-slate-700 font-medium border border-slate-200 hover:bg-slate-50 transition-colors mb-2" onClick={() => { navigate('/profile'); setShowHeaderMenu(false); }}>👤 {t('admin.profile')}</button>
+                <button role="menuitem" className="w-full flex items-center gap-3 px-4 py-3 rounded-lg bg-white text-slate-700 font-medium border border-slate-200 hover:bg-slate-50 transition-colors" onClick={() => { handleSignout(); setShowHeaderMenu(false); }}>🚪 {t('admin.logout')}</button>
               </div>
               
               {/* Desktop Actions */}
               <div className="hidden md:flex items-center gap-3">
                 <button 
-                  className="group flex items-center gap-2.5 px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 text-white font-semibold shadow-lg shadow-amber-500/30 hover:shadow-xl hover:shadow-amber-500/40 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-300"
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-slate-200 text-slate-700 font-medium hover:bg-slate-50 transition-colors text-sm"
                   onClick={() => setShowLogoUploadModal(true)}
                   title="อัพโหลดโลโก้"
                 >
@@ -3779,7 +3783,7 @@ function AdminPage() {
                   <span className="hidden lg:inline">อัพโหลดโลโก้</span>
                 </button>
                 <button 
-                  className="group flex items-center gap-2.5 px-5 py-2.5 rounded-xl bg-gradient-to-r from-violet-500 to-purple-600 text-white font-semibold shadow-lg shadow-violet-500/30 hover:shadow-xl hover:shadow-violet-500/40 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-300"
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition-colors text-sm"
                   onClick={() => setShowModal(true)}
                   title="สร้างผู้ใช้ใหม่"
                 >
@@ -3787,7 +3791,7 @@ function AdminPage() {
                   <span className="hidden lg:inline">เพิ่มผู้ใช้ใหม่</span>
                 </button>
                 <button 
-                  className="group flex items-center gap-2.5 px-5 py-2.5 rounded-xl bg-white/80 backdrop-blur-sm text-slate-700 font-semibold border border-slate-200/80 shadow-lg shadow-slate-200/50 hover:bg-white hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 transition-all duration-300"
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-slate-200 text-slate-700 font-medium hover:bg-slate-50 transition-colors text-sm"
                   onClick={() => navigate('/profile')}
                   title="ดูโปรไฟล์"
                 >
@@ -3795,7 +3799,7 @@ function AdminPage() {
                   <span className="hidden lg:inline">โปรไฟล์</span>
                 </button>
                 <button 
-                  className="group flex items-center gap-2.5 px-5 py-2.5 rounded-xl bg-gradient-to-r from-rose-500 to-pink-600 text-white font-semibold shadow-lg shadow-rose-500/30 hover:shadow-xl hover:shadow-rose-500/40 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-300"
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-slate-200 text-slate-700 font-medium hover:bg-slate-50 transition-colors text-sm"
                   onClick={handleSignout}
                   title="ออกจากระบบ"
                 >
@@ -3808,52 +3812,9 @@ function AdminPage() {
         />
       </div>
 
-      {/* Stats Section - Modern Glass Cards */}
-      <div className="relative min-h-screen bg-[linear-gradient(180deg,_rgba(238,242,255,0.35)_0%,_rgba(248,250,252,0.94)_18%,_rgba(248,250,252,1)_100%)]">
-      <div className="absolute inset-x-0 top-0 h-40 bg-[radial-gradient(circle_at_center,_rgba(99,102,241,0.12),_transparent_70%)] pointer-events-none"></div>
-      <div className="relative grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 px-4 sm:px-6 lg:px-8 py-8 mt-3 sm:-mt-6">
-        {/* Teachers Card */}
-        <div className="group relative overflow-hidden rounded-[2rem] bg-white/78 backdrop-blur-2xl border border-white/70 ring-1 ring-blue-100/60 shadow-[0_24px_60px_-28px_rgba(37,99,235,0.38)] hover:shadow-[0_30px_75px_-26px_rgba(37,99,235,0.42)] hover:-translate-y-1.5 transition-all duration-500" title={t('admin.teachers')}>
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.16),_transparent_38%),linear-gradient(135deg,_rgba(255,255,255,0.55),_transparent_65%)] opacity-80"></div>
-          <div className="relative p-6 flex items-center gap-5">
-            <div className="flex-shrink-0 w-16 h-16 rounded-[1.4rem] bg-gradient-to-br from-blue-500 via-cyan-500 to-sky-500 flex items-center justify-center text-3xl shadow-lg shadow-blue-500/40 group-hover:scale-110 group-hover:rotate-3 transition-transform duration-500">
-              👨‍🏫
-            </div>
-            <div>
-              <div className="text-[2.6rem] leading-none font-black bg-gradient-to-r from-blue-700 to-cyan-600 bg-clip-text text-transparent">{teachers.length}</div>
-              <div className="text-slate-500 font-semibold mt-2 tracking-wide">{t('admin.teachers')}</div>
-            </div>
-          </div>
-        </div>
-        
-        {/* Students Card */}
-        <div className="group relative overflow-hidden rounded-[2rem] bg-white/78 backdrop-blur-2xl border border-white/70 ring-1 ring-emerald-100/60 shadow-[0_24px_60px_-28px_rgba(16,185,129,0.34)] hover:shadow-[0_30px_75px_-26px_rgba(16,185,129,0.4)] hover:-translate-y-1.5 transition-all duration-500" title={t('admin.students')}>
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.16),_transparent_38%),linear-gradient(135deg,_rgba(255,255,255,0.55),_transparent_65%)] opacity-80"></div>
-          <div className="relative p-6 flex items-center gap-5">
-            <div className="flex-shrink-0 w-16 h-16 rounded-[1.4rem] bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-500 flex items-center justify-center text-3xl shadow-lg shadow-emerald-500/40 group-hover:scale-110 group-hover:rotate-3 transition-transform duration-500">
-              👨‍🎓
-            </div>
-            <div>
-              <div className="text-[2.6rem] leading-none font-black bg-gradient-to-r from-emerald-700 to-teal-600 bg-clip-text text-transparent">{students.length}</div>
-              <div className="text-slate-500 font-semibold mt-2 tracking-wide">{t('admin.students')}</div>
-            </div>
-          </div>
-        </div>
-        
-        {/* Announcements Card */}
-        <div className="group relative overflow-hidden rounded-[2rem] bg-white/78 backdrop-blur-2xl border border-white/70 ring-1 ring-amber-100/60 shadow-[0_24px_60px_-28px_rgba(245,158,11,0.34)] hover:shadow-[0_30px_75px_-26px_rgba(245,158,11,0.42)] hover:-translate-y-1.5 transition-all duration-500 sm:col-span-2 lg:col-span-1" title={t('nav.announcements')}>
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(245,158,11,0.16),_transparent_38%),linear-gradient(135deg,_rgba(255,255,255,0.55),_transparent_65%)] opacity-80"></div>
-          <div className="relative p-6 flex items-center gap-5">
-            <div className="flex-shrink-0 w-16 h-16 rounded-[1.4rem] bg-gradient-to-br from-amber-500 via-orange-500 to-rose-500 flex items-center justify-center text-3xl shadow-lg shadow-amber-500/40 group-hover:scale-110 group-hover:rotate-3 transition-transform duration-500">
-              📢
-            </div>
-            <div>
-              <div className="text-[2.6rem] leading-none font-black bg-gradient-to-r from-amber-700 to-orange-600 bg-clip-text text-transparent">{(Array.isArray(announcements) ? announcements.filter(a => !isExpired(a)).length : 0)}</div>
-              <div className="text-slate-500 font-semibold mt-2 tracking-wide">{t('nav.announcements')}</div>
-            </div>
-          </div>
-        </div>
-      </div>
+      {/* Stats Section - KPI Cards */}
+      <div className="relative min-h-screen bg-slate-50">
+
 
       {/* Responsive layout: Sidebar (tabs) + Main content — stacks on mobile */}
       <div className={`relative flex ${isMobile ? 'flex-col gap-4' : 'flex-row gap-8'} mt-1 px-4 sm:px-6 lg:px-8 pb-14`}>
@@ -3864,14 +3825,23 @@ function AdminPage() {
 
         {/* Right Content - Tab content */}
         <div className={`flex-1 ${isMobile ? 'min-w-0' : 'min-w-[640px]'}`}>
+          {activeTab === 'home' && (
+            <AdminTabIntro
+              teachers={teachers}
+              students={students}
+              classrooms={classrooms}
+              announcements={announcements}
+              setActiveTab={setActiveTab}
+              schoolData={schoolData}
+              selectedYear={selectedYear}
+              selectedSemester={selectedSemester}
+            />
+          )}
           {activeTab === 'users' && (
-            <div className="bg-white/86 backdrop-blur-2xl rounded-[2rem] border border-white/70 ring-1 ring-slate-200/45 shadow-[0_24px_70px_-30px_rgba(15,23,42,0.34)] overflow-hidden">
+            <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
               {/* Card Header */}
-              <div className="px-8 py-6 bg-gradient-to-r from-violet-50 via-white to-indigo-50/70 border-b border-slate-100/80">
-                <h2 className="flex items-center gap-3 text-2xl font-bold text-slate-800">
-                  <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 text-white text-xl shadow-lg shadow-violet-500/30">👥</span>
-                  {t('admin.userManagement')}
-                </h2>
+              <div className="px-6 py-4 border-b border-slate-100">
+                <h2 className="text-xl font-semibold text-slate-800">{t('admin.userManagement')}</h2>
               </div>
 
               {/* Sub-tabs for Users Section */}
@@ -5384,13 +5354,10 @@ function AdminPage() {
             </div>
         )}
         {activeTab === 'classrooms' && (
-          <div className="bg-white/86 backdrop-blur-2xl rounded-[2rem] border border-white/70 ring-1 ring-slate-200/45 shadow-[0_24px_70px_-30px_rgba(15,23,42,0.34)] overflow-hidden">
+          <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
             {/* Card Header */}
-            <div className="px-8 py-6 bg-gradient-to-r from-indigo-50 via-white to-sky-50/70 border-b border-slate-100/80">
-              <h2 className="flex items-center gap-3 text-2xl font-bold text-slate-800">
-                <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-blue-600 text-white text-xl shadow-lg shadow-indigo-500/30">🏫</span>
-                จัดการชั้นเรียน
-              </h2>
+            <div className="px-6 py-4 border-b border-slate-100">
+              <h2 className="text-xl font-semibold text-slate-800">จัดการชั้นเรียน</h2>
             </div>
             <div className="p-8">
               {/* คำอธิบาย */}
@@ -5600,12 +5567,9 @@ function AdminPage() {
           </div>
         )}
         {activeTab === 'promotions' && (
-          <div className="bg-white/86 backdrop-blur-2xl rounded-[2rem] border border-white/70 ring-1 ring-slate-200/45 shadow-[0_24px_70px_-30px_rgba(15,23,42,0.34)] overflow-hidden">
-            <div className="px-8 py-6 bg-gradient-to-r from-fuchsia-50 via-white to-pink-50/70 border-b border-slate-100/80">
-              <h2 className="flex items-center gap-3 text-2xl font-bold text-slate-800">
-                <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-600 text-white text-xl shadow-lg shadow-purple-500/30">⬆️</span>
-                เลื่อนชั้นเรียน
-              </h2>
+          <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100">
+              <h2 className="text-xl font-semibold text-slate-800">เลื่อนชั้นเรียน</h2>
             </div>
             <div className="p-8">
               {/* คำอธิบาย */}
@@ -5814,12 +5778,9 @@ function AdminPage() {
           </div>
         )}
         {activeTab === 'homeroom' && (
-          <div className="bg-white/86 backdrop-blur-2xl rounded-[2rem] border border-white/70 ring-1 ring-slate-200/45 shadow-[0_24px_70px_-30px_rgba(15,23,42,0.34)] overflow-hidden">
-            <div className="px-8 py-6 bg-gradient-to-r from-teal-50 via-white to-emerald-50/70 border-b border-slate-100/80">
-              <h2 className="flex items-center gap-3 text-2xl font-bold text-slate-800">
-                <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-teal-500 to-emerald-600 text-white text-xl shadow-lg shadow-teal-500/30">🏠</span>
-                ครูประจำชั้น
-              </h2>
+          <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100">
+              <h2 className="text-xl font-semibold text-slate-800">ครูประจำชั้น</h2>
             </div>
             <div className="p-8">
               <div className="space-y-6">
@@ -6002,7 +5963,7 @@ function AdminPage() {
           <AbsenceApproval academicYear={selectedYear} semester={selectedSemester} />
         )}
         {activeTab === 'evaluations' && (
-          <div className="bg-white/86 backdrop-blur-2xl rounded-[2rem] border border-white/70 ring-1 ring-slate-200/45 shadow-[0_24px_70px_-30px_rgba(15,23,42,0.34)] overflow-hidden">
+          <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
             <div className="px-8 py-8 border-b border-slate-100/80 bg-gradient-to-r from-emerald-50 via-white to-teal-50/70">
               <h2 className="flex items-center gap-4 text-2xl font-black text-slate-800 tracking-tight">
                 <div className="w-12 h-12 bg-emerald-500 text-white rounded-2xl flex items-center justify-center text-2xl">🧠</div>
@@ -6262,12 +6223,9 @@ function AdminPage() {
           </div>
         )}
         {activeTab === 'announcements' && (
-          <div className="bg-white/86 backdrop-blur-2xl rounded-[2rem] border border-white/70 ring-1 ring-slate-200/45 shadow-[0_24px_70px_-30px_rgba(15,23,42,0.34)] overflow-hidden">
-            <div className="px-8 py-6 bg-gradient-to-r from-amber-50 via-white to-orange-50/70 border-b border-slate-100/80">
-              <h2 className="flex items-center gap-3 text-2xl font-bold text-slate-800">
-                <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 text-white text-xl shadow-lg shadow-amber-500/30">📢</span>
-                จัดการประกาศข่าว
-              </h2>
+          <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100">
+              <h2 className="text-xl font-semibold text-slate-800">จัดการประกาศข่าว</h2>
             </div>
             <div className="p-8">
               {/* Announcement Form */}
@@ -6438,12 +6396,9 @@ function AdminPage() {
           </div>
         )}
         {activeTab === 'schedule' && (
-          <div className="bg-white/86 backdrop-blur-2xl rounded-[2rem] border border-white/70 ring-1 ring-slate-200/45 shadow-[0_24px_70px_-30px_rgba(15,23,42,0.34)] overflow-hidden">
-            <div className="px-8 py-6 bg-gradient-to-r from-cyan-50 via-white to-blue-50/70 border-b border-slate-100/80">
-              <h2 className="flex items-center gap-3 text-2xl font-bold text-slate-800">
-                <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 text-white text-xl shadow-lg shadow-cyan-500/30">🗓️</span>
-                {t('admin.manageSchedule')}
-              </h2>
+          <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100">
+              <h2 className="text-xl font-semibold text-slate-800">{t('admin.manageSchedule')}</h2>
             </div>
             <div className="p-8">
               <div className="mb-6">
@@ -6559,12 +6514,9 @@ function AdminPage() {
         )}
 
         {activeTab === 'school_deletion' && (
-          <div className="bg-white/86 backdrop-blur-2xl rounded-[2rem] border border-white/70 ring-1 ring-slate-200/45 shadow-[0_24px_70px_-30px_rgba(15,23,42,0.34)] overflow-hidden">
-            <div className="px-8 py-6 bg-gradient-to-r from-rose-50 via-white to-red-50/70 border-b border-slate-100/80">
-              <h2 className="flex items-center gap-3 text-2xl font-bold text-slate-800">
-                <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-red-500 to-rose-600 text-white text-xl shadow-lg shadow-red-500/30">🏫</span>
-                ขอลบโรงเรียน
-              </h2>
+          <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100">
+              <h2 className="text-xl font-semibold text-slate-800">ขอลบโรงเรียน</h2>
             </div>
             <div className="p-8">
               {/* Warning Box */}
@@ -6649,11 +6601,8 @@ function AdminPage() {
 
         {activeTab === 'schedules' && (
           <div className="bg-white/80 backdrop-blur-xl rounded-3xl border border-white/60 shadow-xl shadow-slate-200/50 overflow-hidden">
-            <div className="px-8 py-6 bg-gradient-to-r from-indigo-50 via-white to-violet-50/70 border-b border-slate-100/80 flex flex-wrap items-center justify-between gap-4">
-              <h2 className="flex items-center gap-3 text-2xl font-bold text-slate-800">
-                <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white text-xl shadow-lg shadow-indigo-500/30">📅</span>
-                เพิ่มตารางเรียนสำหรับครูและนักเรียน
-              </h2>
+            <div className="px-6 py-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-4">
+              <h2 className="text-xl font-semibold text-slate-800">เพิ่มตารางเรียนสำหรับครูและนักเรียน</h2>
               {semesterPeriods.length > 0 && (
                 <div className="flex items-center gap-2 bg-white p-1.5 rounded-2xl shadow-sm border border-slate-100/60">
                   <select
@@ -6718,12 +6667,9 @@ function AdminPage() {
         )}
 
         {activeTab === 'subjects' && (
-          <div className="bg-white/86 backdrop-blur-2xl rounded-[2rem] border border-white/70 ring-1 ring-slate-200/45 shadow-[0_24px_70px_-30px_rgba(15,23,42,0.34)] overflow-hidden">
-            <div className="px-8 py-6 bg-gradient-to-r from-emerald-50 via-white to-lime-50/70 border-b border-slate-100/80">
-              <h2 className="flex items-center gap-3 text-2xl font-bold text-slate-800">
-                <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-green-600 text-white text-xl shadow-lg shadow-emerald-500/30">📚</span>
-                {t('admin.manageSubjects')}
-              </h2>
+          <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100">
+              <h2 className="text-xl font-semibold text-slate-800">{t('admin.manageSubjects')}</h2>
             </div>
             <div className="p-8">
               {loadingSubjects && <Loading message={t('admin.loadingSubjects')} />}
@@ -7054,44 +7000,41 @@ function AdminPage() {
         )}
 
         {activeTab === 'settings' && (
-          <div className="bg-white/86 backdrop-blur-2xl rounded-[2rem] border border-white/70 ring-1 ring-slate-200/45 shadow-[0_24px_70px_-30px_rgba(15,23,42,0.34)] overflow-hidden">
-            <div className="px-8 py-6 bg-gradient-to-r from-slate-50 via-white to-blue-50/70 border-b border-slate-100/80">
-              <h2 className="flex items-center gap-3 text-2xl font-bold text-slate-800">
-                <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-slate-500 to-slate-600 text-white text-xl shadow-lg shadow-slate-500/30">⚙️</span>
-                ตั้งค่า
-              </h2>
+          <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+            <div className="px-4 py-4 sm:px-6 border-b border-slate-100">
+              <h2 className="text-xl font-semibold text-slate-800">ตั้งค่า</h2>
             </div>
-            <div className="p-8">
-              <div className="max-w-2xl">
-                <div className="p-8 bg-gradient-to-br from-blue-50 to-white rounded-2xl border border-blue-200 shadow-sm">
-                  <h3 className="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2">
+            <div className="p-4 sm:p-6 lg:p-8">
+              <div className="max-w-6xl mx-auto xl:mx-0 space-y-6">
+                <div className="p-5 sm:p-6 lg:p-8 bg-gradient-to-br from-blue-50 to-white rounded-2xl border border-blue-200 shadow-sm">
+                  <h3 className="mb-4 flex items-start gap-2 text-lg font-bold text-slate-800 sm:items-center sm:text-xl">
                     <span className="text-2xl">📌</span> ข้อมูลการตั้งค่า
                   </h3>
-                  <div className="space-y-3 text-slate-700">
-                    <p className="flex items-start gap-2">
+                  <div className="space-y-4 text-sm text-slate-700 sm:text-base">
+                    <p className="flex items-start gap-3">
                       <span className="text-xl">📊</span>
                       <span><strong>สรุปคะแนน/ลำดับที่ (Teacher Summary)</strong> - ควบคุมการเข้าถึงสำหรับแต่ละปีการศึกษาและภาคเรียนอย่างละเอียด ดูในส่วน "ควบคุมการเข้าถึงข้อมูลตามปี/ภาคเรียน"</span>
                     </p>
-                    <p className="flex items-start gap-2">
+                    <p className="flex items-start gap-3">
                       <span className="text-xl">📣</span>
                       <span><strong>ประกาศผลสอบ (Student Portal)</strong> - ควบคุมการเข้าถึงของนักเรียนสำหรับแต่ละปีการศึกษาและภาคเรียนอย่างละเอียด ดูในส่วน "ควบคุมการเข้าถึงข้อมูลตามปี/ภาคเรียน"</span>
                     </p>
-                    <p className="flex items-start gap-2">
+                    <p className="flex items-start gap-3">
                       <span className="text-xl">🔐</span>
                       <span><strong>ระบบควบคุมใหม่</strong> - เลื่อนลงไปที่ส่วน "ควบคุมการเข้าถึงข้อมูลตามปี/ภาคเรียน" เพื่อตั้งค่าสิทธิ์การเข้าถึงสำหรับแต่ละปีและภาคเรียนอย่างละเอียด</span>
                     </p>
                   </div>
                 </div>
 
-                <div className="mt-6 p-8 bg-gradient-to-br from-violet-50 to-white rounded-2xl border border-violet-200 shadow-sm">
-                  <h3 className="text-xl font-bold text-slate-800 mb-2 flex items-center gap-2">
+                <div className="p-5 sm:p-6 lg:p-8 bg-gradient-to-br from-violet-50 to-white rounded-2xl border border-violet-200 shadow-sm">
+                  <h3 className="mb-2 flex items-start gap-2 text-lg font-bold text-slate-800 sm:items-center sm:text-xl">
                     <span className="text-2xl">🎓</span> กำหนดชั้นจบ
                   </h3>
-                  <p className="text-sm text-slate-500 mb-5">
+                  <p className="mb-5 text-sm text-slate-500">
                     ตั้งค่าชั้นปลายทางของโรงเรียนเพื่อใช้จัดการข้อมูลนักเรียนในอนาคต (เช่น จบการศึกษา/ย้ายสถานะ)
                   </p>
-                  <div className="flex flex-col md:flex-row gap-3 md:items-end">
-                    <div className="flex-1 max-w-sm">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                    <div className="flex-1 sm:max-w-sm">
                       <label className="block text-xs font-semibold text-slate-600 mb-1">ชั้นจบ</label>
                       <select
                         value={graduationGradeLevelDraft}
@@ -7107,7 +7050,7 @@ function AdminPage() {
                     <button
                       onClick={saveGraduationGradeLevel}
                       disabled={savingGraduationGradeLevel}
-                      className="px-5 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-xl text-sm font-semibold transition-colors disabled:opacity-50"
+                      className="w-full px-5 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-xl text-sm font-semibold transition-colors disabled:opacity-50 sm:w-auto"
                     >
                       {savingGraduationGradeLevel ? 'กำลังบันทึก...' : 'บันทึกชั้นจบ'}
                     </button>
@@ -7118,18 +7061,18 @@ function AdminPage() {
                 </div>
 
                 {/* ── Semester Period Management ── */}
-                <div className="mt-6 p-8 bg-gradient-to-br from-indigo-50 to-white rounded-2xl border border-indigo-200 shadow-sm">
-                  <h3 className="text-xl font-bold text-slate-800 mb-2 flex items-center gap-2">
+                <div className="p-5 sm:p-6 lg:p-8 bg-gradient-to-br from-indigo-50 to-white rounded-2xl border border-indigo-200 shadow-sm">
+                  <h3 className="mb-2 flex items-start gap-2 text-lg font-bold text-slate-800 sm:items-center sm:text-xl">
                     <span className="text-2xl">🗓</span> กำหนดช่วงเวลาภาคเรียน
                   </h3>
-                  <p className="text-sm text-slate-500 mb-6">กำหนดวันเปิด-ปิดรายวิชาของแต่ละภาคเรียนโดยอัตโนมัติ เมื่อถึงวันสิ้นสุดระบบจะปิดรายวิชาทั้งหมดของภาคนั้น</p>
+                  <p className="mb-5 text-sm text-slate-500 sm:mb-6">กำหนดวันเปิด-ปิดรายวิชาของแต่ละภาคเรียนโดยอัตโนมัติ เมื่อถึงวันสิ้นสุดระบบจะปิดรายวิชาทั้งหมดของภาคนั้น</p>
 
                   {/* Form */}
-                  <div className="p-5 bg-white rounded-2xl border border-indigo-100 shadow-sm mb-6">
+                  <div className="p-4 sm:p-5 bg-white rounded-2xl border border-indigo-100 shadow-sm mb-6">
                     <h4 className="font-semibold text-slate-700 mb-4 flex items-center gap-2">
                       {editingSemesterPeriodId ? '✏️ แก้ไขช่วงเวลา' : '➕ เพิ่มช่วงเวลาภาคเรียน'}
                     </h4>
-                    <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div className="grid grid-cols-1 gap-4 mb-4 md:grid-cols-2">
                       <div>
                         <label className="block text-xs font-semibold text-slate-600 mb-1">ปีการศึกษา (พ.ศ.)</label>
                         <input
@@ -7172,11 +7115,11 @@ function AdminPage() {
                         />
                       </div>
                     </div>
-                    <div className="flex gap-3">
+                    <div className="flex flex-col gap-3 sm:flex-row">
                       <button
                         onClick={saveSemesterPeriod}
                         disabled={savingSemesterPeriod}
-                        className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold transition-colors disabled:opacity-50"
+                        className="w-full px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold transition-colors disabled:opacity-50 sm:w-auto"
                       >
                         {savingSemesterPeriod ? 'กำลังบันทึก...' : (editingSemesterPeriodId ? 'อัปเดต' : 'เพิ่ม')}
                       </button>
@@ -7186,7 +7129,7 @@ function AdminPage() {
                             setEditingSemesterPeriodId(null);
                             setSemesterPeriodForm({ academic_year: currentBEYear, semester: 1, start_date: '', end_date: '' });
                           }}
-                          className="px-5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-semibold transition-colors"
+                          className="w-full px-5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-semibold transition-colors sm:w-auto"
                         >
                           ยกเลิก
                         </button>
@@ -7209,21 +7152,24 @@ function AdminPage() {
                         const isPast = end ? now > end : false;
                         const isFuture = start ? now < start : false;
                         return (
-                          <div key={period.id} className={`p-4 rounded-2xl border ${isPast ? 'border-red-100 bg-red-50' : isActive ? 'border-green-200 bg-green-50' : 'border-slate-200 bg-white'} flex items-center justify-between gap-4`}>
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-1">
+                          <div
+                            key={period.id}
+                            className={`p-4 rounded-2xl border ${isPast ? 'border-red-100 bg-red-50' : isActive ? 'border-green-200 bg-green-50' : 'border-slate-200 bg-white'} flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between`}
+                          >
+                            <div className="flex-1 min-w-0">
+                              <div className="mb-2 flex flex-wrap items-center gap-2">
                                 <span className="font-bold text-slate-800">ปี {period.academic_year} ภาคเรียนที่ {period.semester}</span>
                                 {period.is_auto_closed && <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs font-semibold">ปิดอัตโนมัติแล้ว</span>}
                                 {isActive && !period.is_auto_closed && <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-semibold">กำลังเปิด</span>}
                                 {isFuture && <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs font-semibold">ยังไม่เริ่ม</span>}
                                 {isPast && !period.is_auto_closed && <span className="px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full text-xs font-semibold">สิ้นสุดแล้ว</span>}
                               </div>
-                              <div className="text-xs text-slate-500 flex gap-4">
+                              <div className="flex flex-col gap-2 text-xs text-slate-500 sm:flex-row sm:flex-wrap sm:gap-4">
                                 <span>📅 เปิด: {period.start_date ? new Date(period.start_date).toLocaleString('th-TH') : '-'}</span>
                                 <span>🔚 ปิด: {period.end_date ? new Date(period.end_date).toLocaleString('th-TH') : '-'}</span>
                               </div>
                             </div>
-                            <div className="flex gap-2">
+                            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:justify-end">
                               <button
                                 onClick={() => {
                                   setEditingSemesterPeriodId(period.id);
@@ -7234,13 +7180,13 @@ function AdminPage() {
                                     end_date: period.end_date ? period.end_date.slice(0, 16) : '',
                                   });
                                 }}
-                                className="px-3 py-1.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded-xl text-xs font-semibold transition-colors"
+                                className="inline-flex w-full items-center justify-center px-3 py-2 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded-xl text-xs font-semibold transition-colors sm:w-auto"
                               >
                                 ✏️ แก้ไข
                               </button>
                               <button
                                 onClick={() => deleteSemesterPeriod(period.id)}
-                                className="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 rounded-xl text-xs font-semibold transition-colors"
+                                className="inline-flex w-full items-center justify-center px-3 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-xl text-xs font-semibold transition-colors sm:w-auto"
                               >
                                 🗑 ลบ
                               </button>
@@ -7253,8 +7199,8 @@ function AdminPage() {
                 </div>
 
                 {/* -- Access Control Management -- */}
-                <div className="mt-6 p-8 bg-gradient-to-br from-emerald-50 to-white rounded-2xl border border-emerald-200 shadow-sm">
-                  <h3 className="text-xl font-bold text-slate-800 mb-2 flex items-center gap-2">
+                <div className="p-5 sm:p-6 lg:p-8 bg-gradient-to-br from-emerald-50 to-white rounded-2xl border border-emerald-200 shadow-sm">
+                  <h3 className="mb-2 flex items-start gap-2 text-lg font-bold text-slate-800 sm:items-center sm:text-xl">
                     <span className="text-2xl">🔐</span> ควบคุมการเข้าถึงข้อมูลตามปี/ภาคเรียน
                   </h3>
                   <p className="text-sm text-slate-500 mb-6">
@@ -7262,7 +7208,7 @@ function AdminPage() {
                   </p>
 
                   {availableAcademicYears.length === 0 && (
-                    <div className="p-4 mb-6 bg-amber-50 border border-amber-200 rounded-2xl flex gap-3 items-start">
+                    <div className="p-4 mb-6 bg-amber-50 border border-amber-200 rounded-2xl flex flex-col gap-3 sm:flex-row sm:items-start">
                       <span className="text-xl mt-0.5">⚠️</span>
                       <div className="flex-1">
                         <p className="font-semibold text-amber-800 text-sm mb-1">ยังไม่มีปีการศึกษา</p>
@@ -7272,9 +7218,9 @@ function AdminPage() {
                   )}
 
                   {/* Add New Access Control */}
-                  <div className={`p-5 bg-white rounded-2xl border ${availableAcademicYears.length === 0 ? 'border-slate-200 bg-slate-50' : 'border-emerald-100'} shadow-sm mb-6`}>
+                  <div className={`rounded-2xl border p-4 sm:p-5 shadow-sm mb-6 ${availableAcademicYears.length === 0 ? 'border-slate-200 bg-slate-50' : 'border-emerald-100 bg-white'}`}>
                     <h4 className="font-semibold text-slate-700 mb-4">➕ เพิ่มการตั้งค่าสิทธิ์ใหม่</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4 mb-4">
+                    <div className="grid grid-cols-1 gap-3 mb-4 sm:grid-cols-2 sm:gap-4 xl:grid-cols-5">
                       <div>
                         <label className="block text-xs font-semibold text-slate-600 mb-1">ปีการศึกษา (พ.ศ.)</label>
                         <select
@@ -7293,7 +7239,7 @@ function AdminPage() {
                         <label className="block text-xs font-semibold text-slate-600 mb-1">ภาคเรียน</label>
                         <select
                           value={accessControlForm.semester}
-                          onChange={e => setAccessControlForm(f => ({ ...f, semester: parseInt(e.target.value) }))}
+                          onChange={e => setAccessControlForm(f => ({ ...f, semester: parseInt(e.target.value, 10) }))}
                           className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-emerald-400"
                         >
                           <option value={1}>ภาคเรียนที่ 1</option>
@@ -7301,43 +7247,43 @@ function AdminPage() {
                         </select>
                       </div>
                       <div>
-                        <label className="block text-xs font-semibold text-slate-600 mb-1 flex items-center gap-1">
+                        <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
+                          <span className="flex items-center gap-2">👨‍🏫 ครูเห็นสรุป</span>
                           <input
                             type="checkbox"
                             checked={accessControlForm.allow_teacher_view_summary}
                             onChange={e => setAccessControlForm(f => ({ ...f, allow_teacher_view_summary: e.target.checked }))}
-                            className="w-4 h-4"
+                            className="w-5 h-5"
                           />
-                          👨‍🏫 ครูเห็นสรุป
                         </label>
                       </div>
                       <div>
-                        <label className="block text-xs font-semibold text-slate-600 mb-1 flex items-center gap-1">
+                        <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
+                          <span className="flex items-center gap-2">👨‍🎓 นักเรียนเห็นเกรด</span>
                           <input
                             type="checkbox"
                             checked={accessControlForm.allow_student_view_grades}
                             onChange={e => setAccessControlForm(f => ({ ...f, allow_student_view_grades: e.target.checked }))}
-                            className="w-4 h-4"
+                            className="w-5 h-5"
                           />
-                          👨‍🎓 นักเรียนเห็นเกรด
                         </label>
                       </div>
                       <div>
-                        <label className="block text-xs font-semibold text-slate-600 mb-1 flex items-center gap-1">
+                        <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
+                          <span className="flex items-center gap-2">🏆 นักเรียนเห็นลำดับ</span>
                           <input
                             type="checkbox"
                             checked={accessControlForm.allow_student_view_ranking}
                             onChange={e => setAccessControlForm(f => ({ ...f, allow_student_view_ranking: e.target.checked }))}
-                            className="w-4 h-4"
+                            className="w-5 h-5"
                           />
-                          🏆 นักเรียนเห็นลำดับ
                         </label>
                       </div>
                     </div>
                     <button
                       onClick={saveAccessControl}
                       disabled={savingAccessControl || availableAcademicYears.length === 0 || !accessControlForm.academic_year}
-                      className="w-full px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed sm:w-auto"
                     >
                       {savingAccessControl ? 'กำลังบันทึก...' : 'เพิ่มการตั้งค่า'}
                     </button>
@@ -7353,69 +7299,123 @@ function AdminPage() {
                       ยังไม่มีการตั้งค่าสิทธิ์
                     </div>
                   ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm border-collapse">
-                        <thead>
-                          <tr className="bg-emerald-50 border-b border-emerald-200">
-                            <th className="px-4 py-3 text-left font-semibold text-slate-700">ปีการศึกษา</th>
-                            <th className="px-4 py-3 text-left font-semibold text-slate-700">ภาคเรียน</th>
-                            <th className="px-4 py-3 text-center font-semibold text-slate-700">👨‍🏫 ครูดูสรุป</th>
-                            <th className="px-4 py-3 text-center font-semibold text-slate-700">👨‍🎓 นักเรียนดูเกรด</th>
-                            <th className="px-4 py-3 text-center font-semibold text-slate-700">🏆 นักเรียนดูลำดับ</th>
-                            <th className="px-4 py-3 text-center font-semibold text-slate-700">การกระทำ</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {accessControls.map((control) => (
-                            <tr key={`${control.academic_year}-${control.semester}`} className="border-b border-slate-100 hover:bg-slate-50">
-                              <td className="px-4 py-3 font-semibold text-slate-800">{control.academic_year}</td>
-                              <td className="px-4 py-3 text-slate-600">ภาคเรียนที่ {control.semester}</td>
-                              <td className="px-4 py-3 text-center">
-                                <label className="inline-flex items-center cursor-pointer">
-                                  <input
-                                    type="checkbox"
-                                    checked={control.allow_teacher_view_summary}
-                                    onChange={(e) => updateAccessControl(control.academic_year, control.semester, 'allow_teacher_view_summary', e.target.checked)}
-                                    className="w-5 h-5 text-emerald-600 rounded"
-                                  />
-                                </label>
-                              </td>
-                              <td className="px-4 py-3 text-center">
-                                <label className="inline-flex items-center cursor-pointer">
-                                  <input
-                                    type="checkbox"
-                                    checked={control.allow_student_view_grades}
-                                    onChange={(e) => updateAccessControl(control.academic_year, control.semester, 'allow_student_view_grades', e.target.checked)}
-                                    className="w-5 h-5 text-emerald-600 rounded"
-                                  />
-                                </label>
-                              </td>
-                              <td className="px-4 py-3 text-center">
-                                <label className="inline-flex items-center cursor-pointer">
-                                  <input
-                                    type="checkbox"
-                                    checked={control.allow_student_view_ranking}
-                                    onChange={(e) => updateAccessControl(control.academic_year, control.semester, 'allow_student_view_ranking', e.target.checked)}
-                                    className="w-5 h-5 text-emerald-600 rounded"
-                                  />
-                                </label>
-                              </td>
-                              <td className="px-4 py-3 text-center">
-                                <button
-                                  onClick={() => deleteAccessControl(control.academic_year, control.semester)}
-                                  className="inline-flex items-center gap-1 px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-xs font-semibold transition-colors"
-                                >
-                                  🗑 ลบ
-                                </button>
-                              </td>
+                    <>
+                      <div className="grid grid-cols-1 gap-4 md:hidden">
+                        {accessControls.map((control) => (
+                          <div key={`${control.academic_year}-${control.semester}`} className="rounded-2xl border border-emerald-100 bg-white p-4 shadow-sm">
+                            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                              <div>
+                                <span className="inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                                  ปีการศึกษา {control.academic_year}
+                                </span>
+                                <h4 className="mt-2 text-lg font-bold text-slate-800">ภาคเรียนที่ {control.semester}</h4>
+                              </div>
+                              <span className="text-xs font-medium text-slate-400">แตะเพื่อเปิด/ปิดสิทธิ์</span>
+                            </div>
+
+                            <div className="space-y-3">
+                              <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+                                <span className="text-sm font-semibold text-slate-700">👨‍🏫 ครูดูสรุป</span>
+                                <input
+                                  type="checkbox"
+                                  checked={control.allow_teacher_view_summary}
+                                  onChange={(e) => updateAccessControl(control.academic_year, control.semester, 'allow_teacher_view_summary', e.target.checked)}
+                                  className="w-5 h-5 text-emerald-600 rounded"
+                                />
+                              </label>
+                              <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+                                <span className="text-sm font-semibold text-slate-700">👨‍🎓 นักเรียนดูเกรด</span>
+                                <input
+                                  type="checkbox"
+                                  checked={control.allow_student_view_grades}
+                                  onChange={(e) => updateAccessControl(control.academic_year, control.semester, 'allow_student_view_grades', e.target.checked)}
+                                  className="w-5 h-5 text-emerald-600 rounded"
+                                />
+                              </label>
+                              <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+                                <span className="text-sm font-semibold text-slate-700">🏆 นักเรียนดูลำดับ</span>
+                                <input
+                                  type="checkbox"
+                                  checked={control.allow_student_view_ranking}
+                                  onChange={(e) => updateAccessControl(control.academic_year, control.semester, 'allow_student_view_ranking', e.target.checked)}
+                                  className="w-5 h-5 text-emerald-600 rounded"
+                                />
+                              </label>
+                            </div>
+
+                            <button
+                              onClick={() => deleteAccessControl(control.academic_year, control.semester)}
+                              className="mt-4 inline-flex w-full items-center justify-center gap-1 px-3 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl text-sm font-semibold transition-colors"
+                            >
+                              🗑 ลบรายการนี้
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="hidden md:block overflow-x-auto">
+                        <table className="w-full text-sm border-collapse">
+                          <thead>
+                            <tr className="bg-emerald-50 border-b border-emerald-200">
+                              <th className="px-4 py-3 text-left font-semibold text-slate-700">ปีการศึกษา</th>
+                              <th className="px-4 py-3 text-left font-semibold text-slate-700">ภาคเรียน</th>
+                              <th className="px-4 py-3 text-center font-semibold text-slate-700">👨‍🏫 ครูดูสรุป</th>
+                              <th className="px-4 py-3 text-center font-semibold text-slate-700">👨‍🎓 นักเรียนดูเกรด</th>
+                              <th className="px-4 py-3 text-center font-semibold text-slate-700">🏆 นักเรียนดูลำดับ</th>
+                              <th className="px-4 py-3 text-center font-semibold text-slate-700">การกระทำ</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                          </thead>
+                          <tbody>
+                            {accessControls.map((control) => (
+                              <tr key={`${control.academic_year}-${control.semester}`} className="border-b border-slate-100 hover:bg-slate-50">
+                                <td className="px-4 py-3 font-semibold text-slate-800">{control.academic_year}</td>
+                                <td className="px-4 py-3 text-slate-600">ภาคเรียนที่ {control.semester}</td>
+                                <td className="px-4 py-3 text-center">
+                                  <label className="inline-flex items-center cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={control.allow_teacher_view_summary}
+                                      onChange={(e) => updateAccessControl(control.academic_year, control.semester, 'allow_teacher_view_summary', e.target.checked)}
+                                      className="w-5 h-5 text-emerald-600 rounded"
+                                    />
+                                  </label>
+                                </td>
+                                <td className="px-4 py-3 text-center">
+                                  <label className="inline-flex items-center cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={control.allow_student_view_grades}
+                                      onChange={(e) => updateAccessControl(control.academic_year, control.semester, 'allow_student_view_grades', e.target.checked)}
+                                      className="w-5 h-5 text-emerald-600 rounded"
+                                    />
+                                  </label>
+                                </td>
+                                <td className="px-4 py-3 text-center">
+                                  <label className="inline-flex items-center cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={control.allow_student_view_ranking}
+                                      onChange={(e) => updateAccessControl(control.academic_year, control.semester, 'allow_student_view_ranking', e.target.checked)}
+                                      className="w-5 h-5 text-emerald-600 rounded"
+                                    />
+                                  </label>
+                                </td>
+                                <td className="px-4 py-3 text-center">
+                                  <button
+                                    onClick={() => deleteAccessControl(control.academic_year, control.semester)}
+                                    className="inline-flex items-center gap-1 px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-xs font-semibold transition-colors"
+                                  >
+                                    🗑 ลบ
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </>
                   )}
                 </div>
-
               </div>
             </div>
           </div>
@@ -7423,9 +7423,9 @@ function AdminPage() {
 
         {/* ===================== RANKINGS TAB ===================== */}
         {activeTab === 'rankings' && (
-          <div className="bg-white/86 backdrop-blur-2xl rounded-[2rem] border border-white/70 ring-1 ring-slate-200/45 shadow-[0_24px_70px_-30px_rgba(15,23,42,0.34)] overflow-hidden">
+          <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
             {/* Header */}
-            <div className="px-8 py-6 bg-gradient-to-r from-amber-50 via-orange-50 to-yellow-50 border-b border-amber-100 flex flex-wrap items-center justify-between gap-4">
+            <div className="px-6 py-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-4">
               <h2 className="flex items-center gap-3 text-2xl font-extrabold text-slate-800">
                 <span className="flex items-center justify-center w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 text-white text-2xl shadow-lg shadow-amber-500/30">🏆</span>
                 ตารางอันดับนักเรียน
@@ -7623,6 +7623,18 @@ function AdminPage() {
             semesterPeriods={semesterPeriods}
             selectedYear={selectedYear}
             selectedSemester={selectedSemester}
+          />
+        )}
+
+        {activeTab === 'studentGrade' && (
+          <StudentGradeTab
+            students={students}
+            classrooms={classrooms}
+            currentUser={currentUser}
+            semesterPeriods={semesterPeriods}
+            selectedYear={selectedYear}
+            selectedSemester={selectedSemester}
+            schoolData={schoolData}
           />
         )}
 

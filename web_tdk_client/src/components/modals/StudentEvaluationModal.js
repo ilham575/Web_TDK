@@ -19,6 +19,7 @@ function StudentEvaluationModal({ isOpen, subject, students, onClose, teacherId,
   const [filteredStudents, setFilteredStudents] = useState([]);
   const [evaluatedStudentIds, setEvaluatedStudentIds] = useState([]);
   const [activeTab, setActiveTab] = useState('rwa'); // 'rwa' or 'characteristics'
+  const [targetSubjectId, setTargetSubjectId] = useState(null);
 
   useEffect(() => {
     const fetchTopics = async () => {
@@ -86,6 +87,18 @@ function StudentEvaluationModal({ isOpen, subject, students, onClose, teacherId,
     if (isOpen) {
       fetchTopics();
       loadExistingEvaluation();
+      // Set default targetSubjectId to the subject for the current/latest period
+      const allSubs = subject?.all_subjects || (subject ? [subject] : []);
+      if (!isEditing) {
+        // Default to the subject with highest year, then highest semester
+        const latest = [...allSubs].sort((a, b) => {
+          if (Number(b.academic_year) !== Number(a.academic_year)) return Number(b.academic_year) - Number(a.academic_year);
+          return Number(b.semester) - Number(a.semester);
+        })[0];
+        setTargetSubjectId(latest?.id || subject?.id || null);
+      } else if (existingEvaluation) {
+        setTargetSubjectId(existingEvaluation.subject_id || subject?.id || null);
+      }
       fetchEvaluatedIds();
     }
   }, [isOpen, isEditing, existingEvaluation, students]);
@@ -140,6 +153,12 @@ function StudentEvaluationModal({ isOpen, subject, students, onClose, teacherId,
     }
   }, [isOpen, isEditing, existingEvaluation, characteristicTopics]);
 
+  // Derive target subject object from targetSubjectId
+  const targetSubject = (() => {
+    const allSubs = subject?.all_subjects || (subject ? [subject] : []);
+    return allSubs.find(s => s.id === targetSubjectId) || allSubs[0] || subject;
+  })();
+
   const criteria = [
     { value: 'excellent', label: 'ดีเยี่ยม', color: 'text-emerald-600 bg-emerald-50' },
     { value: 'good', label: 'ดี', color: 'text-blue-600 bg-blue-50' },
@@ -178,18 +197,18 @@ function StudentEvaluationModal({ isOpen, subject, students, onClose, teacherId,
           writing: evaluation.writing,
           analysis: evaluation.analysis,
           characteristic_scores: scores,
-          academic_year: subject.academic_year || systemYear || String(new Date().getFullYear() + 543),
-          semester: subject.semester || systemSemester || 1
+          academic_year: targetSubject?.academic_year || subject.academic_year || systemYear || String(new Date().getFullYear() + 543),
+          semester: targetSubject?.semester || subject.semester || systemSemester || 1
         } : {
           student_id: selectedStudent.id,
-          subject_id: subject.id,
+          subject_id: targetSubjectId || subject.id,
           teacher_id: teacherId,
           reading: evaluation.reading,
           writing: evaluation.writing,
           analysis: evaluation.analysis,
           characteristic_scores: scores,
-          academic_year: subject.academic_year || systemYear || String(new Date().getFullYear() + 543),
-          semester: subject.semester || systemSemester || 1
+          academic_year: targetSubject?.academic_year || subject.academic_year || systemYear || String(new Date().getFullYear() + 543),
+          semester: targetSubject?.semester || subject.semester || systemSemester || 1
         })
       });
 
@@ -210,6 +229,21 @@ function StudentEvaluationModal({ isOpen, subject, students, onClose, teacherId,
       setLoading(false);
     }
   };
+
+  // Re-fetch evaluated IDs when targetSubjectId changes
+  useEffect(() => {
+    if (!isOpen || !targetSubjectId) return;
+    const fetchEvaluated = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/evaluations/subject/${targetSubjectId}`);
+        if (res.ok) {
+          const data = await res.json();
+          setEvaluatedStudentIds(data.map(e => e.student_id));
+        }
+      } catch (e) {}
+    };
+    fetchEvaluated();
+  }, [isOpen, targetSubjectId]);
 
   const getUniqueClassrooms = () => {
     if (!students || students.length === 0) return [];
@@ -260,6 +294,41 @@ function StudentEvaluationModal({ isOpen, subject, students, onClose, teacherId,
         <div className="flex-1 overflow-y-auto p-5 sm:p-8">
           {(!selectedStudent && !isEditing) ? (
             <div>
+              {/* Year/Semester Selector */}
+              {(() => {
+                const allSubs = subject?.all_subjects || (subject ? [subject] : []);
+                const uniquePairs = [];
+                const seen = new Set();
+                allSubs.forEach(s => {
+                  const key = `${s.academic_year}_${s.semester}`;
+                  if (!seen.has(key)) { seen.add(key); uniquePairs.push(s); }
+                });
+                uniquePairs.sort((a, b) => {
+                  if (Number(b.academic_year) !== Number(a.academic_year)) return Number(b.academic_year) - Number(a.academic_year);
+                  return Number(b.semester) - Number(a.semester);
+                });
+                if (uniquePairs.length <= 1) return null;
+                return (
+                  <div className="mb-5">
+                    <label className="block text-sm font-bold text-slate-700 mb-2">ปีการศึกษา / ภาคเรียน</label>
+                    <div className="relative">
+                      <select
+                        value={targetSubjectId || ''}
+                        onChange={(e) => setTargetSubjectId(Number(e.target.value))}
+                        className="w-full appearance-none bg-white border-2 border-emerald-200 rounded-xl px-4 py-3 pr-10 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      >
+                        {uniquePairs.map(s => (
+                          <option key={s.id} value={s.id}>
+                            ปีการศึกษา {s.academic_year} / ภาคเรียนที่ {s.semester}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-500 pointer-events-none" />
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Classroom Filter */}
               <div className="mb-6">
                 <label className="block text-sm font-bold text-slate-700 mb-2">กรองตามชั้นเรียน</label>
@@ -305,7 +374,7 @@ function StudentEvaluationModal({ isOpen, subject, students, onClose, teacherId,
                           )}
                         </div>
                         {evaluatedStudentIds.includes(student.id) && !isEditing && (
-                           <div className="ml-auto text-[10px] sm:text-xs font-bold text-rose-500 bg-rose-50 px-2 py-1 rounded-lg border border-rose-100">มีนาประเมินแล้ว</div>
+                           <div className="ml-auto text-[10px] sm:text-xs font-bold text-rose-500 bg-rose-50 px-2 py-1 rounded-lg border border-rose-100">มีการประเมินแล้ว</div>
                         )}
                       </div>
                     </button>
@@ -345,13 +414,46 @@ function StudentEvaluationModal({ isOpen, subject, students, onClose, teacherId,
                  <div className="p-2 rounded-lg bg-white border border-slate-100 shadow-sm">
                     <span className="text-lg">🗓</span>
                  </div>
-                 <div className="flex flex-col">
+                 <div className="flex flex-col flex-1">
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-0.5">ประจำปีการศึกษา</p>
-                    <div className="flex items-center gap-3 text-sm font-bold text-slate-700">
-                      <span>ปี {subject?.academic_year || systemYear || (new Date().getFullYear() + 543)}</span>
-                      <span className="w-1 h-4 bg-slate-200 rounded-full"></span>
-                      <span>ภาคเรียนที่ {subject?.semester || systemSemester || 1}</span>
-                    </div>
+                    {(() => {
+                      const allSubs = subject?.all_subjects || (subject ? [subject] : []);
+                      const uniquePairs = [];
+                      const seen = new Set();
+                      allSubs.forEach(s => {
+                        const key = `${s.academic_year}_${s.semester}`;
+                        if (!seen.has(key)) { seen.add(key); uniquePairs.push(s); }
+                      });
+                      uniquePairs.sort((a, b) => {
+                        if (Number(b.academic_year) !== Number(a.academic_year)) return Number(b.academic_year) - Number(a.academic_year);
+                        return Number(b.semester) - Number(a.semester);
+                      });
+                      if (uniquePairs.length <= 1 || isEditing) {
+                        return (
+                          <div className="flex items-center gap-3 text-sm font-bold text-slate-700">
+                            <span>ปี {targetSubject?.academic_year || subject?.academic_year || systemYear || (new Date().getFullYear() + 543)}</span>
+                            <span className="w-1 h-4 bg-slate-200 rounded-full"></span>
+                            <span>ภาคเรียนที่ {targetSubject?.semester || subject?.semester || systemSemester || 1}</span>
+                          </div>
+                        );
+                      }
+                      return (
+                        <div className="relative mt-1">
+                          <select
+                            value={targetSubjectId || ''}
+                            onChange={(e) => setTargetSubjectId(Number(e.target.value))}
+                            className="w-full appearance-none bg-white border border-slate-200 rounded-xl px-3 py-2 pr-8 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                          >
+                            {uniquePairs.map(s => (
+                              <option key={s.id} value={s.id}>
+                                ปี {s.academic_year} / ภาคเรียนที่ {s.semester}
+                              </option>
+                            ))}
+                          </select>
+                          <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                        </div>
+                      );
+                    })()}
                  </div>
               </div>
 

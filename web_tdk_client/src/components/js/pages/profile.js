@@ -6,6 +6,22 @@ import ChangePasswordModal from '../ChangePasswordModal';
 import ClassroomDetailModal from '../ClassroomDetailModal';
 import { API_BASE_URL } from '../../endpoints';
 import { fetchCurrentUser, hasSessionMarker } from '../../../utils/authUtils';
+import {
+  ArrowLeft,
+  BadgeCheck,
+  Building2,
+  Calendar,
+  Camera,
+  Edit2,
+  Info,
+  KeyRound,
+  Save,
+  School,
+  ShieldCheck,
+  User,
+  Users,
+  X
+} from 'lucide-react';
 
 function ProfilePage() {
   const navigate = useNavigate();
@@ -167,7 +183,7 @@ function ProfilePage() {
         <h1 className="text-2xl font-bold text-slate-800">ไม่พบข้อมูลผู้ใช้</h1>
         <button 
           onClick={() => navigate('/signin')}
-          className="mt-6 w-full py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all"
+          className="mt-6 w-full py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all"
         >
           ไปหน้าเข้าสู่ระบบ
         </button>
@@ -181,24 +197,6 @@ function ProfilePage() {
     return name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
   };
 
-  const getRoleIcon = (role) => {
-    switch (role) {
-      case 'admin': return '👑';
-      case 'teacher': return '👨‍🏫';
-      case 'student': return '🎓';
-      default: return '👤';
-    }
-  };
-
-  const getRoleBadgeClass = (role) => {
-    switch (role) {
-      case 'admin': return 'bg-purple-100 text-purple-700 border-purple-200';
-      case 'teacher': return 'bg-blue-100 text-blue-700 border-blue-200';
-      case 'student': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
-      default: return 'bg-slate-100 text-slate-700 border-slate-200';
-    }
-  };
-
   const getRoleText = (role) => {
     switch (role) {
       case 'admin': return 'ผู้ดูแลระบบ';
@@ -208,257 +206,413 @@ function ProfilePage() {
     }
   };
 
+  const getRoleSummary = (role) => {
+    switch (role) {
+      case 'admin': return 'ดูแลการตั้งค่าระบบและข้อมูลส่วนกลางของโรงเรียน';
+      case 'teacher': return 'จัดการรายวิชา ห้องเรียน และข้อมูลนักเรียนที่รับผิดชอบ';
+      case 'student': return 'ติดตามข้อมูลบัญชีและสถานะการใช้งานของตนเอง';
+      default: return 'ข้อมูลส่วนตัวและการตั้งค่าบัญชี';
+    }
+  };
+
+  const splitName = (name) => {
+    if (!name) {
+      return { firstName: '', lastName: '' };
+    }
+
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    return {
+      firstName: parts[0] || '',
+      lastName: parts.slice(1).join(' ')
+    };
+  };
+
+  const handleNamePartChange = (part, value) => {
+    const current = splitName(editData.full_name || user.full_name || user.username || '');
+    const next = {
+      ...current,
+      [part]: value
+    };
+    handleEditChange('full_name', [next.firstName, next.lastName].filter(Boolean).join(' ').trim());
+  };
+
+  const displayName = user.full_name || user.username || '-';
+  const displayNameParts = splitName(editData.full_name || displayName);
+  const joinDateSummary = user.created_at
+    ? new Date(user.created_at).toLocaleDateString('th-TH', { year: 'numeric', month: 'short' })
+    : '-';
+  const createdAtLabel = user.created_at
+    ? new Date(user.created_at).toLocaleDateString('th-TH', {
+        year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+      })
+    : '-';
+  const updatedAtLabel = user.updated_at
+    ? new Date(user.updated_at).toLocaleDateString('th-TH', {
+        year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+      })
+    : '-';
+  const teacherHomeroomCount = teacherHomerooms.length;
+  const totalHomeroomStudents = teacherHomerooms.reduce((total, hr) => {
+    return total + (teacherClassrooms[hr.grade_level]?.reduce((subTotal, classroom) => {
+      return subTotal + (classroomStudentCounts[classroom.id] !== undefined ? classroomStudentCounts[classroom.id] : 0);
+    }, 0) || 0);
+  }, 0);
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-violet-50/20 to-blue-50/20 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-4xl mx-auto bg-white rounded-3xl shadow-xl shadow-slate-200/50 overflow-hidden">
-        {/* Profile Header */}
-        <div className="bg-gradient-to-r from-emerald-600 to-teal-600 px-8 py-12 text-center text-white relative">
-          <div className="absolute top-0 right-0 p-4 opacity-10 text-9xl pointer-events-none">
-            {getRoleIcon(user.role)}
+    <div className="min-h-screen bg-slate-50 py-6 sm:py-8 lg:py-10 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-5xl mx-auto space-y-6">
+        <div className="bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 overflow-hidden">
+          <div className="h-40 sm:h-56 w-full bg-gradient-to-r from-blue-400 via-indigo-500 to-purple-500 relative group">
+            <button
+              type="button"
+              onClick={() => setIsEditing(true)}
+              className="absolute top-4 right-4 p-2 bg-black/20 hover:bg-black/40 text-white rounded-full backdrop-blur-sm transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+            >
+              <Camera className="w-4 h-4" />
+            </button>
           </div>
-          
-          <div className="relative z-10">
-            <div className="w-24 h-24 bg-white text-emerald-600 rounded-full flex items-center justify-center text-3xl font-bold mx-auto mb-4 shadow-lg border-4 border-emerald-500/30">
-              {initials(user.full_name || user.username)}
+
+          <div className="px-6 sm:px-10 pb-8 relative">
+            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 -mt-12 sm:-mt-16 mb-4">
+              <div className="relative inline-block group">
+                <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-white shadow-md bg-slate-100 text-slate-700 flex items-center justify-center text-3xl sm:text-4xl font-black">
+                  {initials(displayName)}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsEditing(true)}
+                  className="absolute bottom-0 right-0 p-1.5 sm:p-2 bg-white border border-slate-200 text-slate-600 rounded-full hover:text-blue-600 shadow-sm transition-colors"
+                >
+                  <Edit2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                </button>
+              </div>
+
+              <div className="flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowChangePasswordModal(true)}
+                  className="px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-medium hover:bg-slate-50 transition-colors shadow-sm flex items-center gap-2"
+                >
+                  <KeyRound className="w-4 h-4" />
+                  เปลี่ยนรหัสผ่าน
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate(-1)}
+                  className="px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-medium hover:bg-slate-50 transition-colors shadow-sm flex items-center gap-2"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  กลับ
+                </button>
+              </div>
             </div>
-            <h1 className="text-3xl font-bold mb-2">โปรไฟล์ของฉัน</h1>
-            <p className="text-emerald-50 opacity-90">ข้อมูลส่วนตัวและการตั้งค่าบัญชี</p>
+
+            <div>
+              <h2 className="text-2xl font-bold text-slate-800">{displayName}</h2>
+              <p className="text-blue-600 font-medium">{getRoleText(user.role)}</p>
+              <div className="flex flex-wrap items-center gap-4 mt-3 text-sm text-slate-500">
+                <span className="flex items-center gap-1.5"><Building2 className="w-4 h-4" /> {schoolName || 'ไม่ระบุโรงเรียน'}</span>
+                <span className="flex items-center gap-1.5"><BadgeCheck className="w-4 h-4" /> {getRoleSummary(user.role)}</span>
+                <span className="flex items-center gap-1.5"><Calendar className="w-4 h-4" /> เข้าร่วมเมื่อ {joinDateSummary}</span>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Profile Details */}
-        <div className="p-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Field: Full Name */}
-            <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 flex items-start gap-4 transition-all hover:bg-slate-100/50">
-              <div className="bg-white p-3 rounded-xl shadow-sm text-xl shrink-0">👤</div>
-              <div className="flex-1 min-w-0">
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">ชื่อเต็ม</label>
-                {isEditing ? (
-                  <input
-                    type="text"
-                    className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:ring-2 focus:ring-emerald-500 outline-none"
-                    value={editData.full_name}
-                    onChange={(e) => handleEditChange('full_name', e.target.value)}
-                  />
-                ) : (
-                  <div className="text-lg font-bold text-slate-700 truncate">{user.full_name}</div>
-                )}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-1 space-y-6">
+            <div className="bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 p-6 sm:p-8">
+              <h3 className="text-lg font-semibold text-slate-800 mb-5 flex items-center gap-2">
+                <Info className="w-5 h-5 text-blue-500" /> ข้อมูลติดต่อ
+              </h3>
+
+              <div className="space-y-4">
+                <div>
+                  <p className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">ชื่อผู้ใช้</p>
+                  <p className="text-sm text-slate-700 font-medium break-all">{user.username}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">อีเมลแอดเดรส</p>
+                  <p className="text-sm text-slate-700 break-all">{user.email || 'ไม่ได้ระบุ'}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">โรงเรียน</p>
+                  <p className="text-sm text-slate-700 font-medium">{schoolName || 'ไม่ระบุ'}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">สถานะบัญชี</p>
+                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${
+                    user.is_active
+                      ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
+                      : 'bg-red-100 text-red-700 border-red-200'
+                  }`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${user.is_active ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
+                    {user.is_active ? 'ใช้งานปกติ' : 'ปิดใช้งาน'}
+                  </span>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">{user.role === 'student' ? 'ชั้นปี' : 'บทบาท'}</p>
+                  <p className="text-sm text-slate-700 font-medium">{user.role === 'student' ? (user.grade_level || 'ไม่ระบุ') : getRoleText(user.role)}</p>
+                </div>
               </div>
             </div>
 
-            {/* Field: Username */}
-            <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 flex items-start gap-4 transition-all hover:bg-slate-100/50 opacity-80">
-              <div className="bg-white p-3 rounded-xl shadow-sm text-xl shrink-0">🆔</div>
-              <div className="flex-1 min-w-0">
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">ชื่อผู้ใช้</label>
-                <div className="text-lg font-bold text-slate-500 truncate">{user.username}</div>
-                <span className="text-[10px] text-slate-400 font-medium italic">(อ่านอย่างเดียว)</span>
-              </div>
-            </div>
-
-            {/* Field: Email */}
-            <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 flex items-start gap-4 transition-all hover:bg-slate-100/50">
-              <div className="bg-white p-3 rounded-xl shadow-sm text-xl shrink-0">📧</div>
-              <div className="flex-1 min-w-0">
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                  อีเมล {isEditing && <span className="text-slate-400 normal-case">(ถ้ามี)</span>}
-                </label>
-                {isEditing ? (
-                  <input
-                    type="email"
-                    className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:ring-2 focus:ring-emerald-500 outline-none"
-                    placeholder="example@mail.com"
-                    value={editData.email}
-                    onChange={(e) => handleEditChange('email', e.target.value)}
-                  />
-                ) : (
-                  <div className="text-lg font-bold text-slate-700 truncate">{user.email || 'ไม่ได้ระบุ'}</div>
-                )}
-              </div>
-            </div>
-
-            {/* Field: Role */}
-            <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 flex items-start gap-4 transition-all hover:bg-slate-100/50">
-              <div className="bg-white p-3 rounded-xl shadow-sm text-xl shrink-0">{getRoleIcon(user.role)}</div>
-              <div className="flex-1 min-w-0">
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">บทบาท</label>
-                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold border ${getRoleBadgeClass(user.role)}`}>
-                  {getRoleText(user.role)}
-                </span>
-              </div>
-            </div>
-
-            {/* Field: School */}
-            <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 flex items-start gap-4 transition-all hover:bg-slate-100/50">
-              <div className="bg-white p-3 rounded-xl shadow-sm text-xl shrink-0">🏫</div>
-              <div className="flex-1 min-w-0">
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">โรงเรียน</label>
-                <div className="text-lg font-bold text-slate-700 truncate">{schoolName || 'ไม่ระบุ'}</div>
-              </div>
-            </div>
-
-            {/* Teacher: Homeroom assignments */}
             {user.role === 'teacher' && (
-              <div className="md:col-span-2 bg-slate-50 p-5 rounded-2xl border border-slate-100 flex items-start gap-4 transition-all hover:bg-slate-100/50">
-                <div className="bg-white p-3 rounded-xl shadow-sm text-xl shrink-0">🏷️</div>
-                <div className="flex-1">
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">ครูประจำชั้น</label>
-                  <div className="text-slate-700 font-medium mt-2">
-                    {loadingHomerooms ? (
-                      <div className="flex items-center gap-2 animate-pulse text-slate-400">
-                        <div className="w-4 h-4 bg-slate-300 rounded-full"></div>
-                        <span>กำลังโหลดข้อมูล...</span>
+              <div className="bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 p-6 sm:p-8">
+                <h3 className="text-lg font-semibold text-slate-800 mb-5 flex items-center gap-2">
+                  <Users className="w-5 h-5 text-blue-500" /> ครูประจำชั้น
+                </h3>
+
+                {loadingHomerooms ? (
+                  <div className="flex items-center gap-3 text-sm text-slate-400 animate-pulse">
+                    <div className="h-3 w-3 rounded-full bg-slate-300"></div>
+                    <span>กำลังโหลดข้อมูลห้องเรียน...</span>
+                  </div>
+                ) : teacherHomerooms.length > 0 ? (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                        <p className="text-xs font-medium uppercase tracking-wider text-slate-400">ห้องที่ดูแล</p>
+                        <p className="mt-2 text-2xl font-black text-slate-800">{teacherHomeroomCount}</p>
                       </div>
-                    ) : (
-                      teacherHomerooms.length > 0 ? (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          {teacherHomerooms.map(hr => (
-                            <div key={hr.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm relative group">
-                              <div className="flex justify-between items-start mb-2">
-                                <span className="text-emerald-600 font-bold text-lg">{hr.grade_level}</span>
-                                <span className="bg-slate-100 text-slate-500 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase">{hr.academic_year || 'N/A'}</span>
-                              </div>
-                              
-                              {teacherClassrooms[hr.grade_level] && teacherClassrooms[hr.grade_level].length > 0 && (
-                                <div className="text-sm flex flex-wrap gap-x-3 gap-y-1 mb-3">
-                                  {teacherClassrooms[hr.grade_level].map((c) => (
-                                    <button 
-                                      key={c.id} 
-                                      className="text-emerald-600 hover:text-emerald-700 hover:underline font-bold"
-                                      onClick={() => { setSelectedClassroomId(c.id); setShowClassroomModal(true); }}
-                                    >
-                                      ห้อง {c.name}
-                                    </button>
-                                  ))}
-                                </div>
-                              )}
-                              
-                              <div className="flex items-center gap-1.5 text-xs text-slate-500 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">
-                                <span>👥 นักเรียนทั้งหมด:</span>
-                                <span className="font-bold text-slate-800">
-                                  {teacherClassrooms[hr.grade_level]?.reduce((total, c) => total + (classroomStudentCounts[c.id] !== undefined ? classroomStudentCounts[c.id] : 0), 0) || 0}
-                                </span>
-                              </div>
+                      <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                        <p className="text-xs font-medium uppercase tracking-wider text-slate-400">นักเรียนรวม</p>
+                        <p className="mt-2 text-2xl font-black text-blue-600">{totalHomeroomStudents}</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      {teacherHomerooms.map(hr => (
+                        <div key={hr.id} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                          <div className="flex items-start justify-between gap-3 mb-3">
+                            <div>
+                              <p className="text-sm font-black text-slate-800">{hr.grade_level}</p>
+                              <p className="text-xs text-slate-400 font-medium">ปีการศึกษา {hr.academic_year || '-'}</p>
                             </div>
-                          ))}
+                            <span className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-blue-600">
+                              Homeroom
+                            </span>
+                          </div>
+
+                          {teacherClassrooms[hr.grade_level] && teacherClassrooms[hr.grade_level].length > 0 ? (
+                            <div className="flex flex-wrap gap-2">
+                              {teacherClassrooms[hr.grade_level].map((classroom) => (
+                                <button
+                                  key={classroom.id}
+                                  type="button"
+                                  onClick={() => { setSelectedClassroomId(classroom.id); setShowClassroomModal(true); }}
+                                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:border-blue-200 hover:text-blue-600"
+                                >
+                                  <School className="w-4 h-4" />
+                                  ห้อง {classroom.name}
+                                  <span className="text-xs text-slate-400">
+                                    {classroomStudentCounts[classroom.id] !== undefined ? classroomStudentCounts[classroom.id] : 0} คน
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-sm text-slate-400">ยังไม่พบห้องเรียนในระดับชั้นนี้</p>
+                          )}
                         </div>
-                      ) : (
-                        <div className="text-slate-400 italic bg-white p-4 rounded-xl border border-dashed border-slate-300 text-center">
-                          ยังไม่ได้ประจำชั้นใดๆ ในขณะนี้
-                        </div>
-                      )
-                    )}
+                      ))}
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm font-medium text-slate-400">
+                    ยังไม่ได้ประจำชั้นใดๆ ในขณะนี้
+                  </div>
+                )}
               </div>
             )}
 
-            {/* Field: Grade Level - Only for students */}
-            {user.role === 'student' && (
-              <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 flex items-start gap-4 transition-all hover:bg-slate-100/50">
-                <div className="bg-white p-3 rounded-xl shadow-sm text-xl shrink-0">📚</div>
-                <div className="flex-1 min-w-0">
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">ชั้นปี</label>
-                  <div className="text-lg font-bold text-slate-700">{user.grade_level || 'ไม่ระบุ'}</div>
-                </div>
-              </div>
-            )}
+            <div className="bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 p-6 sm:p-8">
+              <h3 className="text-lg font-semibold text-slate-800 mb-5 flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-blue-500" /> ข้อมูลเวลาใช้งาน
+              </h3>
 
-            {/* Field: Status */}
-            <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 flex items-start gap-4 transition-all hover:bg-slate-100/50">
-              <div className="bg-white p-3 rounded-xl shadow-sm text-xl shrink-0">⚡</div>
-              <div className="flex-1 min-w-0">
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">สถานะ</label>
-                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold border ${
-                  user.is_active 
-                    ? 'bg-emerald-100 text-emerald-700 border-emerald-200' 
-                    : 'bg-red-100 text-red-700 border-red-200'
-                }`}>
-                  <span className={`w-2 h-2 rounded-full mr-2 ${user.is_active ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}></span>
-                  {user.is_active ? 'ใช้งานปกติ' : 'ปิดใช้งาน'}
-                </span>
-              </div>
-            </div>
-
-            {/* Field: Dates Section Container */}
-            <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
-              <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100 flex items-center gap-3">
-                <div className="text-2xl opacity-50">📅</div>
+              <div className="space-y-4">
                 <div>
-                  <div className="text-[10px] font-bold text-emerald-600 uppercase tracking-tighter">วันที่สร้างบัญชี</div>
-                  <div className="text-sm font-bold text-emerald-800">
-                    {new Date(user.created_at).toLocaleDateString('th-TH', {
-                      year: 'numeric', month: 'short', day: 'numeric',
-                      hour: '2-digit', minute: '2-digit'
-                    })}
-                  </div>
+                  <p className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">วันที่สร้างบัญชี</p>
+                  <p className="text-sm text-slate-700 font-medium">{createdAtLabel}</p>
                 </div>
-              </div>
-
-              <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 flex items-center gap-3">
-                <div className="text-2xl opacity-50">🔄</div>
                 <div>
-                  <div className="text-[10px] font-bold text-blue-600 uppercase tracking-tighter">อัปเดตล่าสุดเมื่อ</div>
-                  <div className="text-sm font-bold text-blue-800">
-                    {new Date(user.updated_at).toLocaleDateString('th-TH', {
-                      year: 'numeric', month: 'short', day: 'numeric',
-                      hour: '2-digit', minute: '2-digit'
-                    })}
-                  </div>
+                  <p className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">อัปเดตล่าสุด</p>
+                  <p className="text-sm text-slate-700 font-medium">{updatedAtLabel}</p>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Action Buttons */}
-          <div className="mt-12 flex flex-wrap gap-4 items-center justify-center border-t border-slate-100 pt-8">
-            {isEditing ? (
-              <>
-                <button 
-                  className="px-8 py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-200 active:scale-95 disabled:opacity-50" 
-                  onClick={handleSave}
-                  disabled={isSaving}
-                >
-                  {isSaving ? '⏳ กำลังบันทึก...' : '💾 บันทึกข้อมูล'}
-                </button>
-                <button 
-                  className="px-8 py-3 bg-slate-200 text-slate-700 rounded-xl font-bold hover:bg-slate-300 transition-all active:scale-95 disabled:opacity-50" 
-                  onClick={() => {
-                    setIsEditing(false);
-                    setEditData({
-                      full_name: user.full_name || '',
-                      email: user.email || '',
-                      grade_level: user.grade_level || ''
-                    });
-                  }}
-                  disabled={isSaving}
-                >
-                  ยกเลิก
-                </button>
-              </>
-            ) : (
-              <>
-                <button 
-                  className="px-8 py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-200 active:scale-95" 
-                  onClick={() => setIsEditing(true)}
-                >
-                  ✏️ แก้ไขข้อมูล
-                </button>
-                <button 
-                  className="px-8 py-3 bg-amber-500 text-white rounded-xl font-bold hover:bg-amber-600 transition-all shadow-lg shadow-amber-200 active:scale-95" 
-                  onClick={() => setShowChangePasswordModal(true)}
-                >
-                  🔐 เปลี่ยนรหัสผ่าน
-                </button>
-                <button 
-                  className="px-8 py-3 bg-slate-200 text-slate-700 rounded-xl font-bold hover:bg-slate-300 transition-all active:scale-95" 
-                  onClick={() => navigate(-1)}
-                >
-                  ← กลับ
-                </button>
-              </>
-            )}
+          <div className="lg:col-span-2">
+            <div className="bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 p-6 sm:p-8">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                <h3 className="text-lg font-semibold text-slate-800">แก้ไขข้อมูลส่วนตัว</h3>
+                {!isEditing && (
+                  <button
+                    type="button"
+                    onClick={() => setIsEditing(true)}
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm transition-colors hover:bg-slate-50 hover:text-blue-600"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                    เริ่มแก้ไข
+                  </button>
+                )}
+              </div>
+
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  <div className="space-y-1.5">
+                    <label className="block text-sm font-medium text-slate-700">ชื่อจริง</label>
+                    <input
+                      type="text"
+                      value={displayNameParts.firstName}
+                      disabled={!isEditing}
+                      onChange={(e) => handleNamePartChange('firstName', e.target.value)}
+                      className={`block w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none transition-all ${
+                        isEditing
+                          ? 'focus:bg-white focus:ring-4 focus:ring-blue-50 focus:border-blue-500 text-slate-800'
+                          : 'text-slate-700 cursor-default'
+                      }`}
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="block text-sm font-medium text-slate-700">นามสกุล</label>
+                    <input
+                      type="text"
+                      value={displayNameParts.lastName}
+                      disabled={!isEditing}
+                      onChange={(e) => handleNamePartChange('lastName', e.target.value)}
+                      className={`block w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none transition-all ${
+                        isEditing
+                          ? 'focus:bg-white focus:ring-4 focus:ring-blue-50 focus:border-blue-500 text-slate-800'
+                          : 'text-slate-700 cursor-default'
+                      }`}
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="block text-sm font-medium text-slate-700">อีเมล</label>
+                    <input
+                      type="email"
+                      value={editData.email || ''}
+                      disabled={!isEditing}
+                      placeholder="example@mail.com"
+                      onChange={(e) => handleEditChange('email', e.target.value)}
+                      className={`block w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none transition-all ${
+                        isEditing
+                          ? 'focus:bg-white focus:ring-4 focus:ring-blue-50 focus:border-blue-500 text-slate-800'
+                          : 'text-slate-700 cursor-default'
+                      }`}
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="block text-sm font-medium text-slate-700">{user.role === 'student' ? 'ชั้นปี' : 'ระดับชั้นที่ดูแล'}</label>
+                    {user.role === 'admin' || user.role === 'teacher' ? (
+                      <select
+                        value={editData.grade_level || ''}
+                        disabled={!isEditing || loadingGradeLevels}
+                        onChange={(e) => handleEditChange('grade_level', e.target.value)}
+                        className={`block w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none transition-all appearance-none ${
+                          isEditing
+                            ? 'focus:bg-white focus:ring-4 focus:ring-blue-50 focus:border-blue-500 text-slate-800'
+                            : 'text-slate-700 cursor-default'
+                        }`}
+                      >
+                        <option value="">ไม่ระบุ</option>
+                        {gradeLevels.map((level) => (
+                          <option key={level} value={level}>{level}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        value={user.grade_level || 'ไม่ระบุ'}
+                        disabled
+                        className="block w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 outline-none cursor-default"
+                      />
+                    )}
+                  </div>
+                </div>
+
+                <hr className="border-slate-100" />
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  <div className="space-y-1.5">
+                    <label className="block text-sm font-medium text-slate-700">บทบาท</label>
+                    <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                      <ShieldCheck className="w-4 h-4 text-blue-500" />
+                      <span className="font-medium">{getRoleText(user.role)}</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="block text-sm font-medium text-slate-700">โรงเรียน</label>
+                    <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                      <Building2 className="w-4 h-4 text-blue-500" />
+                      <span className="font-medium">{schoolName || 'ไม่ระบุ'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-100 bg-slate-50 p-5">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600 shrink-0">
+                      <User className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800">สรุปข้อมูลบัญชี</p>
+                      <p className="mt-1 text-sm leading-6 text-slate-500">
+                        บัญชีนี้อยู่ภายใต้บทบาท {getRoleText(user.role)} ของ {schoolName || 'โรงเรียนที่กำหนดไว้'} และสามารถแก้ไขข้อมูลพื้นฐานได้เฉพาะชื่อ อีเมล และข้อมูลระดับชั้นที่ระบบอนุญาตเท่านั้น
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-3 pt-4">
+                  {isEditing ? (
+                    <>
+                      <button
+                        type="button"
+                        className="px-5 py-2.5 text-sm font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition-colors inline-flex items-center justify-center gap-2"
+                        onClick={() => {
+                          setIsEditing(false);
+                          setEditData({
+                            full_name: user.full_name || '',
+                            email: user.email || '',
+                            grade_level: user.grade_level || ''
+                          });
+                        }}
+                        disabled={isSaving}
+                      >
+                        <X className="w-4 h-4" />
+                        ยกเลิก
+                      </button>
+                      <button
+                        type="button"
+                        className="px-5 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/30 rounded-xl transition-all transform hover:-translate-y-0.5 inline-flex items-center justify-center gap-2 disabled:opacity-50"
+                        onClick={handleSave}
+                        disabled={isSaving}
+                      >
+                        <Save className="w-4 h-4" />
+                        {isSaving ? 'กำลังบันทึก...' : 'บันทึกข้อมูล'}
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      className="px-5 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/30 rounded-xl transition-all transform hover:-translate-y-0.5 inline-flex items-center justify-center gap-2"
+                      onClick={() => setIsEditing(true)}
+                    >
+                      <Edit2 className="w-4 h-4" />
+                      แก้ไขข้อมูล
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>

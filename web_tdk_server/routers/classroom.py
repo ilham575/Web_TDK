@@ -262,7 +262,6 @@ async def get_classrooms(
     for c in classrooms:
         student_count = db.query(ClassroomStudent).filter(
             ClassroomStudent.classroom_id == c.id,
-            ClassroomStudent.is_active == True
         ).count()
 
         result.append(ClassroomListResponse(
@@ -830,7 +829,6 @@ async def get_students_from_other_semester(
         User, ClassroomStudent.student_id == User.id
     ).filter(
         ClassroomStudent.classroom_id.in_(source_classroom_ids),
-        ClassroomStudent.is_active == True
     ).all()
 
     # นักเรียนที่อยู่ในห้องปลายทาง (active) แล้ว
@@ -864,7 +862,7 @@ async def get_students_from_other_semester(
             "id": c.id,
             "name": c.name,
             "grade_level": c.grade_level,
-            "student_count": db.query(ClassroomStudent).filter(ClassroomStudent.classroom_id == c.id, ClassroomStudent.is_active == True).count()
+            "student_count": db.query(ClassroomStudent).filter(ClassroomStudent.classroom_id == c.id).count()
         }
         for c in source_classrooms
     ]
@@ -1032,7 +1030,6 @@ async def get_teacher_classrooms(
     for classroom in classrooms:
         student_count = db.query(ClassroomStudent).filter(
             ClassroomStudent.classroom_id == classroom.id,
-            ClassroomStudent.is_active == True
         ).count()
         
         results.append(ClassroomResponse(
@@ -1063,14 +1060,12 @@ async def get_my_classrooms(
         ClassroomStudent, Classroom.id == ClassroomStudent.classroom_id
     ).filter(
         ClassroomStudent.student_id == current_user.id,
-        ClassroomStudent.is_active == True
     ).all()
 
     results = []
     for classroom in classrooms:
         student_count = db.query(ClassroomStudent).filter(
             ClassroomStudent.classroom_id == classroom.id,
-            ClassroomStudent.is_active == True
         ).count()
         
         results.append(ClassroomResponse(
@@ -1104,7 +1099,6 @@ async def get_classroom(
 
     student_count = db.query(ClassroomStudent).filter(
         ClassroomStudent.classroom_id == classroom.id,
-        ClassroomStudent.is_active == True
     ).count()
 
     return ClassroomResponse(
@@ -1153,7 +1147,6 @@ async def update_classroom_put(
 
         student_count = db.query(ClassroomStudent).filter(
             ClassroomStudent.classroom_id == classroom.id,
-            ClassroomStudent.is_active == True
         ).count()
 
         return ClassroomResponse(
@@ -1213,7 +1206,6 @@ async def update_classroom(
 
         student_count = db.query(ClassroomStudent).filter(
             ClassroomStudent.classroom_id == classroom.id,
-            ClassroomStudent.is_active == True
         ).count()
 
         return ClassroomResponse(

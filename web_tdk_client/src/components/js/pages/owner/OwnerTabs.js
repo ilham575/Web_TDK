@@ -1,40 +1,116 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import {
+  Activity,
+  Building2,
+  Clock3,
+  KeyRound,
+  Mail,
+  PlusCircle
+} from 'lucide-react';
 
-function OwnerTabs({ activeTab, setActiveTab, passwordResetCount = 0 }) {
+function OwnerTabs({ activeTab, setActiveTab, counts = {}, orientation = 'horizontal' }) {
   const { t } = useTranslation();
+  const isVertical = orientation === 'vertical';
 
   const tabs = [
-    { id: 'schools', label: t('owner.manageSchools'), icon: '🏫' },
-    { id: 'activities', label: t('owner.recentActivities'), icon: '📋' },
-    { id: 'create_admin', label: t('owner.addAdmin'), icon: '➕' },
-    { id: 'admin_requests', label: t('owner.adminRequests'), icon: '📩' },
-    { id: 'token_settings', label: 'Token Settings', icon: '⏱️' },
-    { id: 'password_reset_requests', label: t('owner.passwordResetRequests'), icon: '🔐', count: passwordResetCount },
+    {
+      id: 'schools',
+      label: t('owner.manageSchools'),
+      description: 'จัดการข้อมูลโรงเรียน',
+      icon: Building2
+    },
+    {
+      id: 'activities',
+      label: t('owner.recentActivities'),
+      description: 'ติดตามกิจกรรมล่าสุด',
+      icon: Activity
+    },
+    {
+      id: 'create_admin',
+      label: t('owner.addAdmin'),
+      description: 'สร้างผู้ดูแลโรงเรียน',
+      icon: PlusCircle
+    },
+    {
+      id: 'admin_requests',
+      label: t('owner.adminRequests'),
+      description: 'คำขอที่รออนุมัติ',
+      icon: Mail
+    },
+    {
+      id: 'token_settings',
+      label: 'Token Settings',
+      description: 'ปรับอายุการใช้งาน token',
+      icon: Clock3
+    },
+    {
+      id: 'password_reset_requests',
+      label: t('owner.passwordResetRequests'),
+      description: 'ตอบกลับคำขอรีเซ็ตทันที',
+      icon: KeyRound
+    }
   ];
 
   return (
-    <div className="flex flex-wrap gap-2 p-2 bg-slate-200/50 backdrop-blur-md rounded-2xl mb-8 border border-slate-100 shadow-inner">
-      {tabs.map((tab) => (
-        <button
-          key={tab.id}
-          onClick={() => setActiveTab(tab.id)}
-          className={`flex items-center gap-2 px-5 py-2.5 text-sm font-bold rounded-xl transition-all duration-300 ${
-            activeTab === tab.id
-              ? 'bg-white text-indigo-600 shadow-sm ring-1 ring-slate-200/50 scale-105'
-              : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
-          }`}
-        >
-          <span className="text-lg">{tab.icon}</span>
-          {tab.label}
-          {tab.count > 0 && (
-            <span className="ml-1.5 inline-flex items-center justify-center px-2 py-0.5 rounded-full text-[10px] font-black bg-gradient-to-r from-red-500 to-rose-500 text-white animate-pulse shadow-sm">
-              {tab.count}
+    <nav className={isVertical ? 'space-y-2' : 'flex gap-3 overflow-x-auto pb-1'}>
+      {tabs.map((tab) => {
+        const Icon = tab.icon;
+        const isActive = activeTab === tab.id;
+        const badgeCount = counts[tab.id] || 0;
+
+        return (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setActiveTab(tab.id)}
+            className={[
+              'group relative transition-all',
+              isVertical
+                ? 'flex w-full items-start gap-3 rounded-2xl px-4 py-3 text-left'
+                : 'min-w-[15rem] rounded-2xl border px-4 py-3 text-left',
+              isActive
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+            ].join(' ')}
+            aria-pressed={isActive}
+          >
+            <span
+              className={[
+                'mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl transition-colors',
+                isActive ? 'bg-white/15 text-white' : 'bg-slate-100 text-slate-600 group-hover:bg-slate-200'
+              ].join(' ')}
+            >
+              <Icon className="h-5 w-5" />
             </span>
-          )}
-        </button>
-      ))}
-    </div>
+
+            <span className="min-w-0 flex-1">
+              <span className="flex items-center gap-2">
+                <span className="truncate text-sm font-medium">{tab.label}</span>
+                {badgeCount > 0 ? (
+                  <span
+                    className={[
+                      'inline-flex min-w-6 items-center justify-center rounded-full px-2 py-0.5 text-[11px] font-medium',
+                      isActive ? 'bg-white/20 text-white' : 'bg-rose-50 text-rose-700'
+                    ].join(' ')}
+                  >
+                    {badgeCount}
+                  </span>
+                ) : null}
+              </span>
+              <span
+                className={[
+                  'mt-1 block truncate text-xs',
+                  isActive ? 'text-white/80' : 'text-slate-500'
+                ].join(' ')}
+              >
+                {tab.description}
+              </span>
+            </span>
+          </button>
+        );
+      })}
+    </nav>
   );
 }
 

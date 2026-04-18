@@ -323,7 +323,7 @@ function StudentPage() {
   }, [displaySchool]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-emerald-50/20 to-sky-50/30 font-sans selection:bg-emerald-100 selection:text-emerald-900 pb-20">
+    <div className="min-h-screen bg-slate-50 font-sans selection:bg-blue-100 selection:text-blue-900 pb-20">
       <FirstVisitOnboarding
         open={showStudentOnboarding}
         onClose={handleCloseStudentOnboarding}
@@ -392,14 +392,14 @@ function StudentPage() {
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl p-5 shadow-sm border-l-4 border-l-emerald-400 border border-slate-100/60 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group">
+          <div className="bg-white rounded-2xl p-5 shadow-sm border-l-4 border-l-slate-300 border border-slate-100/60 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-base font-bold text-slate-800 group-hover:text-emerald-600 transition-colors truncate max-w-[160px]">{currentUser?.full_name || currentUser?.username || '-'}</p>
+                <p className="text-base font-bold text-slate-800 group-hover:text-blue-600 transition-colors truncate max-w-[160px]">{currentUser?.full_name || currentUser?.username || '-'}</p>
                 <p className="text-[11px] text-slate-400 font-semibold bg-slate-100 px-2 py-0.5 rounded-md inline-block mt-1">ID: {currentUser?.id || '-'}</p>
                 <p className="text-xs text-slate-500 font-semibold mt-2">ข้อมูลผู้ใช้</p>
               </div>
-              <div className="w-14 h-14 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-500 group-hover:bg-emerald-100 group-hover:scale-105 transition-all">
+              <div className="w-14 h-14 bg-slate-100 rounded-xl flex items-center justify-center text-slate-600 group-hover:bg-blue-50 group-hover:text-blue-600 group-hover:scale-105 transition-all">
                 <User className="w-7 h-7" />
               </div>
             </div>
@@ -415,7 +415,7 @@ function StudentPage() {
           <section className="space-y-6">
             <div className="flex flex-col md:flex-row md:items-center gap-4 mb-6">
                <div className="flex items-center gap-3">
-                 <div className="p-2 bg-emerald-100 text-emerald-600 rounded-xl">
+                 <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
                    <BookOpen className="w-6 h-6" />
                  </div>
                  <h3 className="text-xl font-black text-slate-800 tracking-tight">รายวิชาของฉัน</h3>
@@ -426,7 +426,7 @@ function StudentPage() {
                   <div className="flex items-center gap-2 bg-white p-1.5 rounded-2xl shadow-sm border border-slate-100/60 ml-auto">
                       <div className="relative">
                           <select
-                              className="py-2 pl-4 pr-10 bg-slate-50 hover:bg-slate-100 border border-transparent rounded-xl text-slate-700 font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 appearance-none cursor-pointer transition-all"
+                              className="py-2 pl-4 pr-10 bg-slate-50 hover:bg-slate-100 border border-transparent rounded-xl text-slate-700 font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500/20 appearance-none cursor-pointer transition-all"
                               value={selectedAcademicYear}
                               onChange={e => { setSelectedAcademicYear(e.target.value); setSelectedSemester(''); }}
                           >
@@ -439,7 +439,7 @@ function StudentPage() {
                       {selectedAcademicYear && (
                           <div className="relative">
                               <select
-                                  className="py-2 pl-4 pr-10 bg-slate-50 hover:bg-slate-100 border border-transparent rounded-xl text-slate-700 font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 appearance-none cursor-pointer transition-all"
+                                  className="py-2 pl-4 pr-10 bg-slate-50 hover:bg-slate-100 border border-transparent rounded-xl text-slate-700 font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500/20 appearance-none cursor-pointer transition-all"
                                   value={selectedSemester}
                                   onChange={e => setSelectedSemester(e.target.value)}
                               >
@@ -464,7 +464,7 @@ function StudentPage() {
             </div>
             
             {studentSubjects.length === 0 ? (
-              <div className="p-12 text-center bg-white rounded-[2rem] border border-slate-100 shadow-sm">
+                <div className="p-12 text-center bg-white rounded-2xl border border-slate-100 shadow-sm">
                 <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6">
                    <AlertCircle className="w-10 h-10 text-slate-300" />
                 </div>
@@ -496,26 +496,26 @@ function StudentPage() {
                       return (
                         <div 
                           key={displaySubject.code || displaySubject.id} 
-                          className="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-100/60 hover:shadow-lg hover:border-emerald-100 transition-all duration-300 group cursor-pointer relative overflow-hidden"
+                          className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100/60 hover:shadow-lg hover:border-blue-100 transition-all duration-300 group cursor-pointer relative overflow-hidden"
                         >
-                          <div className="absolute top-0 right-0 w-32 h-32 bg-slate-50 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 group-hover:bg-emerald-50 transition-colors duration-500"></div>
+                          <div className="absolute top-0 right-0 w-32 h-32 bg-slate-50 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 group-hover:bg-blue-50 transition-colors duration-500"></div>
                           
                           <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
                             <div className="flex items-start gap-5">
-                              <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400 font-black text-xl shadow-inner group-hover:text-emerald-500 group-hover:bg-white group-hover:shadow-lg transition-all">
+                              <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400 font-black text-xl shadow-inner group-hover:text-blue-500 group-hover:bg-white group-hover:shadow-lg transition-all">
                                  {displaySubject.code ? displaySubject.code.charAt(0) : 'S'}
                               </div>
                               <div>
                                 <div className="flex items-center gap-2 mb-1">
-                                   <h4 className="text-xl font-black text-slate-800 group-hover:text-emerald-700 transition-colors">{displaySubject.name}</h4>
+                                   <h4 className="text-xl font-black text-slate-800 group-hover:text-blue-700 transition-colors">{displaySubject.name}</h4>
                                    {isMerged && (
-                                     <span className="text-[10px] font-black bg-emerald-100 text-emerald-600 px-2 py-0.5 rounded-full uppercase tracking-wider">(รวม 2 ภาค)</span>
+                                     <span className="text-[10px] font-black bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full uppercase tracking-wider">(รวม 2 ภาค)</span>
                                    )}
                                    {isAllEnded && (
                                      <span className="text-[10px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full uppercase tracking-wider">Ended</span>
                                    )}
                                 </div>
-                                <p className="text-xs font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded-lg inline-block group-hover:bg-emerald-50/50 group-hover:text-emerald-600/70 transition-colors">
+                                  <p className="text-xs font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded-lg inline-block group-hover:bg-blue-50 group-hover:text-blue-600/70 transition-colors">
                                    CODE: {displaySubject.code || 'N/A'}
                                 </p>
                                 
@@ -540,7 +540,7 @@ function StudentPage() {
                                <span className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider shadow-sm border
                                   ${isAllEnded 
                                     ? 'bg-slate-100 text-slate-500 border-slate-200'
-                                    : 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                                    : 'bg-blue-50 text-blue-600 border-blue-100'
                                   }
                                 `}>
                                   {isAllEnded ? <XCircle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
@@ -558,23 +558,23 @@ function StudentPage() {
                       return (
                         <div 
                           key={sub.id} 
-                          className="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-100/60 hover:shadow-lg hover:border-emerald-100 transition-all duration-300 group cursor-pointer relative overflow-hidden"
+                          className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100/60 hover:shadow-lg hover:border-blue-100 transition-all duration-300 group cursor-pointer relative overflow-hidden"
                         >
-                          <div className="absolute top-0 right-0 w-32 h-32 bg-slate-50 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 group-hover:bg-emerald-50 transition-colors duration-500"></div>
+                          <div className="absolute top-0 right-0 w-32 h-32 bg-slate-50 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 group-hover:bg-blue-50 transition-colors duration-500"></div>
                           
                           <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
                             <div className="flex items-start gap-5">
-                              <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400 font-black text-xl shadow-inner group-hover:text-emerald-500 group-hover:bg-white group-hover:shadow-lg transition-all">
+                              <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400 font-black text-xl shadow-inner group-hover:text-blue-500 group-hover:bg-white group-hover:shadow-lg transition-all">
                                  {sub.code ? sub.code.charAt(0) : 'S'}
                               </div>
                               <div>
                                 <div className="flex items-center gap-2 mb-1">
-                                   <h4 className="text-xl font-black text-slate-800 group-hover:text-emerald-700 transition-colors">{sub.name}</h4>
+                                  <h4 className="text-xl font-black text-slate-800 group-hover:text-blue-700 transition-colors">{sub.name}</h4>
                                    {isAllEnded && (
                                      <span className="text-[10px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full uppercase tracking-wider">Ended</span>
                                    )}
                                 </div>
-                                <p className="text-xs font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded-lg inline-block group-hover:bg-emerald-50/50 group-hover:text-emerald-600/70 transition-colors">
+                                <p className="text-xs font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded-lg inline-block group-hover:bg-blue-50 group-hover:text-blue-600/70 transition-colors">
                                    CODE: {sub.code || 'N/A'}
                                 </p>
                                 
@@ -599,7 +599,7 @@ function StudentPage() {
                                <span className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider shadow-sm border
                                   ${isAllEnded 
                                     ? 'bg-slate-100 text-slate-500 border-slate-200'
-                                    : 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                                    : 'bg-blue-50 text-blue-600 border-blue-100'
                                   }
                                 `}>
                                   {isAllEnded ? <XCircle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
@@ -627,7 +627,7 @@ function StudentPage() {
             </div>
 
             {visibleAnnouncements.length === 0 ? (
-              <div className="p-12 text-center bg-white rounded-[2rem] border border-slate-100 shadow-sm">
+                <div className="p-12 text-center bg-white rounded-2xl border border-slate-100 shadow-sm">
                 <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6">
                    <AlertCircle className="w-10 h-10 text-slate-300" />
                 </div>
@@ -638,10 +638,10 @@ function StudentPage() {
                 {visibleAnnouncements.map(item => (
                   <div 
                     key={item.id} 
-                    className={`bg-white rounded-[2rem] overflow-hidden shadow-sm border transition-all duration-300 ${
+                    className={`bg-white rounded-2xl overflow-hidden shadow-sm border transition-all duration-300 ${
                         expandedAnnouncement === item.id 
-                        ? 'border-emerald-200 shadow-md ring-4 ring-emerald-50' 
-                        : 'border-slate-100/60 hover:shadow-lg hover:border-emerald-100'
+                      ? 'border-blue-200 shadow-md ring-4 ring-blue-50' 
+                      : 'border-slate-100/60 hover:shadow-lg hover:border-blue-100'
                     }`}
                   >
                     <div 
@@ -649,17 +649,17 @@ function StudentPage() {
                         onClick={() => toggleAnnouncement(item.id)}
                     >
                         <div className={`w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 transition-colors ${
-                            expandedAnnouncement === item.id ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-50 text-slate-400 group-hover:text-emerald-500'
+                          expandedAnnouncement === item.id ? 'bg-blue-100 text-blue-600' : 'bg-slate-50 text-slate-400 group-hover:text-blue-500'
                         }`}>
                             <Megaphone className="w-6 h-6" />
                         </div>
                         <div className="flex-1">
                             <div className="flex items-center justify-between mb-1">
                                 <h4 className={`text-lg font-black transition-colors ${
-                                    expandedAnnouncement === item.id ? 'text-emerald-700' : 'text-slate-800'
+                              expandedAnnouncement === item.id ? 'text-blue-700' : 'text-slate-800'
                                 }`}>{item.title}</h4>
                                 <ChevronRight className={`w-5 h-5 text-slate-300 transition-transform duration-300 ${
-                                    expandedAnnouncement === item.id ? 'rotate-90 text-emerald-500' : ''
+                              expandedAnnouncement === item.id ? 'rotate-90 text-blue-500' : ''
                                 }`} />
                             </div>
                             <p className="text-xs font-bold text-slate-400 flex items-center gap-1.5 uppercase tracking-wide">
@@ -741,7 +741,7 @@ function StudentPage() {
                   </div>
                )}
             </div>
-            <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100/60 p-1 md:p-6 overflow-hidden">
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-100/60 p-1 md:p-6 overflow-hidden">
               {renderScheduleTable()}
             </div>
           </section>

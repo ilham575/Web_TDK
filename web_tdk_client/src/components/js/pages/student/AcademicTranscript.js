@@ -605,10 +605,43 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
     return Number((totalWeighted / totalCredits).toFixed(2));
   };
 
+  const gradeLegendItems = [
+    { grade: 'A+', range: '95 - 100%', desc: 'ดีเยี่ยม (Excellent)', gpa: '4.0', sampleScore: 97 },
+    { grade: 'A', range: '80 - 94%', desc: 'ดีมาก (Very Good)', gpa: '4.0', sampleScore: 85 },
+    { grade: 'B+', range: '75 - 79%', desc: 'ดี (Good)', gpa: '3.5', sampleScore: 77 },
+    { grade: 'B', range: '70 - 74%', desc: 'ค่อนข้างดี (Above Average)', gpa: '3.0', sampleScore: 72 },
+    { grade: 'C+', range: '65 - 69%', desc: 'ปานกลาง (Average)', gpa: '2.5', sampleScore: 67 },
+    { grade: 'C', range: '60 - 64%', desc: 'พอใช้ (Fair)', gpa: '2.0', sampleScore: 62 },
+    { grade: 'D+', range: '55 - 59%', desc: 'ผ่าน (Pass)', gpa: '1.5', sampleScore: 57 },
+    { grade: 'D', range: '50 - 54%', desc: 'ผ่านเกณฑ์ขั้นต่ำ (Poor)', gpa: '1.0', sampleScore: 52 },
+    { grade: 'F', range: '< 50%', desc: 'ไม่ผ่าน (Fail)', gpa: '0.0', sampleScore: 40 }
+  ];
+
+  const transcriptGradeItems = grades.map((subjectData, index) => {
+    const letterGrade = getLetterGrade(subjectData.scorePercentage);
+    const isActivity = subjectData.isActivity;
+    const credit = subjectData.subject?.credits || 1;
+    const numericPercentage = Number(subjectData.scorePercentage);
+    const roundedPercentage = Number.isFinite(numericPercentage) ? Math.round(numericPercentage) : 0;
+
+    return {
+      key: isActivity
+        ? `activity-${subjectData.subject?.name || 'item'}-${index}`
+        : subjectData.subject?.id || `subject-${subjectData.subject?.name || 'item'}-${index}`,
+      subjectData,
+      letterGrade,
+      isActivity,
+      credit,
+      roundedPercentage,
+      isPassingActivity: numericPercentage >= 50,
+      scoreLabel: `${roundedPercentage}%`
+    };
+  });
+
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center p-12 bg-white rounded-[2rem] border border-slate-100 min-h-[400px]">
-        <div className="w-16 h-16 border-4 border-emerald-100 border-t-emerald-500 rounded-full animate-spin mb-4"></div>
+      <div className="flex flex-col items-center justify-center p-12 bg-white rounded-2xl border border-slate-100 min-h-[400px]">
+        <div className="w-16 h-16 border-4 border-blue-100 border-t-blue-500 rounded-full animate-spin mb-4"></div>
         <p className="text-slate-400 font-bold animate-pulse">กำลังโหลดข้อมูลการเรียน...</p>
       </div>
     );
@@ -616,10 +649,10 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
 
   if (!gradesAnnounced) {
     return (
-      <div className="bg-white rounded-[2rem] shadow-lg shadow-slate-100/50 border border-slate-100 overflow-hidden">
-        <div className="p-8 border-b border-slate-100 bg-slate-50/50">
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+        <div className="p-5 sm:p-8 border-b border-slate-100 bg-slate-50/50">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-indigo-100 text-indigo-600 rounded-xl">
+            <div className="p-2 bg-blue-100 text-blue-600 rounded-xl">
                <GraduationCap className="w-6 h-6" />
             </div>
             <div>
@@ -629,9 +662,9 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
           </div>
         </div>
 
-        <div className="p-8">
+        <div className="p-5 sm:p-8">
           <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 mb-8 max-w-2xl mx-auto">
-            <div className="flex items-start gap-4">
+          <div className="flex flex-col items-start gap-4 sm:flex-row">
                 <div className="mt-1 p-2 bg-amber-100 text-amber-600 rounded-full">
                     <Clock className="w-6 h-6" />
                 </div>
@@ -653,8 +686,8 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
                       </span>
                     </p>
                     {countdown && (
-                      <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/50 rounded-xl">
-                         <span className="text-amber-800 font-black text-lg">
+                       <div className="inline-flex max-w-full items-center gap-2 px-4 py-2 bg-white/50 rounded-xl">
+                         <span className="text-amber-800 font-black text-sm sm:text-lg break-words">
                            นับถอยหลัง: {countdown}
                          </span>
                       </div>
@@ -675,11 +708,11 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header Section */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 px-2">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 px-0 sm:px-2">
          <div className="flex items-center gap-3">
-             <div className="p-3 bg-indigo-100 text-indigo-600 rounded-2xl shadow-sm">
+           <div className="p-3 bg-blue-100 text-blue-600 rounded-2xl shadow-sm">
                 <GraduationCap className="w-8 h-8" />
              </div>
              <div>
@@ -690,10 +723,10 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
          
          {/* Semester Filter */}
          {availableSemesters.length > 0 && (
-            <div className="flex items-center gap-2 bg-white p-1.5 rounded-2xl shadow-sm border border-slate-100/60">
-                <div className="relative">
+            <div className="flex w-full flex-col items-stretch gap-2 bg-white p-1.5 rounded-2xl shadow-sm border border-slate-100/60 sm:w-auto sm:flex-row sm:items-center">
+              <div className="relative flex-1 sm:flex-none">
                     <select
-                        className="py-2 pl-4 pr-10 bg-slate-50 hover:bg-slate-100 border border-transparent rounded-xl text-slate-700 font-bold text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 appearance-none cursor-pointer transition-all"
+                  className="w-full py-2 pl-4 pr-10 bg-slate-50 hover:bg-slate-100 border border-transparent rounded-xl text-slate-700 font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500/20 appearance-none cursor-pointer transition-all"
                         value={selectedAcademicYear}
                         onChange={e => { setSelectedAcademicYear(e.target.value); setSelectedSemester(''); }}
                     >
@@ -705,9 +738,9 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
                 </div>
                 
                 {selectedAcademicYear && (
-                    <div className="relative">
+                    <div className="relative flex-1 sm:flex-none">
                         <select
-                            className="py-2 pl-4 pr-10 bg-slate-50 hover:bg-slate-100 border border-transparent rounded-xl text-slate-700 font-bold text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 appearance-none cursor-pointer transition-all"
+                        className="w-full py-2 pl-4 pr-10 bg-slate-50 hover:bg-slate-100 border border-transparent rounded-xl text-slate-700 font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500/20 appearance-none cursor-pointer transition-all"
                             value={selectedSemester}
                             onChange={e => setSelectedSemester(e.target.value)}
                         >
@@ -723,7 +756,7 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
                 {(selectedAcademicYear || selectedSemester) && (
                     <button
                         onClick={() => { setSelectedAcademicYear(''); setSelectedSemester(''); }}
-                        className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-all"
+                        className="flex h-10 items-center justify-center rounded-xl p-2 text-rose-500 hover:bg-rose-50 transition-all sm:h-auto"
                         title="ล้างตัวกรอง"
                     >
                         <X className="w-5 h-5" />
@@ -734,33 +767,42 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           {/* GPA Card */}
           <div 
             onClick={() => setShowGPAModal(true)}
-            className="group relative overflow-hidden bg-gradient-to-br from-emerald-500 to-teal-600 rounded-[2rem] p-6 text-white shadow-xl shadow-emerald-200 hover:shadow-2xl hover:shadow-emerald-300 hover:-translate-y-1 transition-all cursor-pointer"
+            className="group relative overflow-hidden bg-white rounded-2xl p-6 shadow-sm border border-slate-100 hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer"
           >
-             <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+             <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity text-blue-600">
                 <Award className="w-24 h-24" />
              </div>
-             <p className="text-emerald-100 font-bold text-sm uppercase tracking-wider mb-2">เกรดเฉลี่ย (GPA)</p>
-             <div className="flex items-baseline gap-2 mb-2">
-                 <h2 className="text-5xl font-black tracking-tight">{typeof transcriptSummary.gpa === 'number' ? transcriptSummary.gpa.toFixed(2) : transcriptSummary.gpa}</h2>
-                 <span className="text-emerald-100 font-bold">/ 4.00</span>
-             </div>
-             <div className="flex items-center gap-2 text-sm font-medium text-emerald-50 bg-white/10 w-fit px-3 py-1 rounded-full backdrop-blur-sm">
-                 {transcriptSummary.gpa >= 3.0 ? <Trophy className="w-4 h-4 text-yellow-300" /> : <BookOpen className="w-4 h-4" />}
+             <div className="relative z-10">
+               <div className="mb-4 flex items-center justify-between">
+                 <div>
+                   <p className="text-slate-400 font-bold text-sm uppercase tracking-wider mb-2">เกรดเฉลี่ย (GPA)</p>
+                   <div className="flex items-baseline gap-2">
+                     <h2 className="text-5xl font-black tracking-tight text-slate-800">{typeof transcriptSummary.gpa === 'number' ? transcriptSummary.gpa.toFixed(2) : transcriptSummary.gpa}</h2>
+                     <span className="text-slate-400 font-bold">/ 4.00</span>
+                   </div>
+                 </div>
+                 <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+                   <Award className="w-6 h-6" />
+                 </div>
+               </div>
+               <div className="flex items-center gap-2 text-sm font-medium text-blue-700 bg-blue-50 w-fit px-3 py-1 rounded-full">
+                 {transcriptSummary.gpa >= 3.0 ? <Trophy className="w-4 h-4 text-blue-600" /> : <BookOpen className="w-4 h-4 text-blue-600" />}
                  <span>
                     {transcriptSummary.gpa >= 3.6 && 'ยอดเยี่ยม'}
                     {transcriptSummary.gpa >= 3.0 && transcriptSummary.gpa < 3.6 && 'ดีมาก'}
                     {transcriptSummary.gpa >= 2.0 && transcriptSummary.gpa < 3.0 && 'พอใช้'}
                     {transcriptSummary.gpa < 2.0 && 'พยายามอีกนิด'}
                  </span>
+               </div>
              </div>
           </div>
 
           {/* Regular Score Card */}
-          <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-100 relative group overflow-hidden">
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 relative group overflow-hidden">
              <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:opacity-10 transition-opacity">
                  <BarChart2 className="w-24 h-24 text-blue-600" />
              </div>
@@ -788,26 +830,26 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
           </div>
 
           {/* Ranking Cards */}
-          <div className="grid grid-rows-2 gap-4">
-              <div className="bg-white rounded-[1.5rem] p-4 shadow-sm border border-indigo-100 flex items-center justify-between relative overflow-hidden group">
-                  <div className="absolute top-0 right-0 w-16 h-full bg-gradient-to-l from-indigo-50 to-transparent"></div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-1">
+                <div className="bg-white rounded-2xl p-4 shadow-sm border border-blue-100 flex items-center justify-between relative overflow-hidden group">
+                  <div className="absolute top-0 right-0 w-16 h-full bg-gradient-to-l from-blue-50 to-transparent"></div>
                   <div>
                       <p className="text-slate-400 font-bold text-[10px] uppercase tracking-wider mb-1">อันดับในห้องเรียน</p>
                        {!isSelectedPeriodRankingVisible ? (
                          <span className="text-slate-300 font-bold italic text-sm">ยังไม่ประกาศ</span>
                        ) : rankingInfo ? (
                          <div className="flex items-baseline gap-1">
-                            <span className="text-2xl font-black text-indigo-600">{rankingInfo.rank}</span>
+                      <span className="text-2xl font-black text-blue-600">{rankingInfo.rank}</span>
                             <span className="text-xs font-bold text-slate-400">/{rankingInfo.total}</span>
                          </div>
                       ) : <span className="text-slate-300 font-bold italic text-sm">รอผล...</span>}
                   </div>
-                  <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-500 group-hover:scale-110 transition-transform">
+                  <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center text-blue-500 group-hover:scale-110 transition-transform">
                       <Target className="w-5 h-5" />
                   </div>
               </div>
 
-              <div className="bg-white rounded-[1.5rem] p-4 shadow-sm border border-amber-100 flex items-center justify-between relative overflow-hidden group">
+              <div className="bg-white rounded-2xl p-4 shadow-sm border border-amber-100 flex items-center justify-between relative overflow-hidden group">
                   <div className="absolute top-0 right-0 w-16 h-full bg-gradient-to-l from-amber-50 to-transparent"></div>
                   <div>
                       <p className="text-slate-400 font-bold text-[10px] uppercase tracking-wider mb-1">อันดับทั้งโรงเรียน</p>
@@ -827,38 +869,38 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
           </div>
           
            {/* Summary Stats */}
-           <div className="bg-slate-900 rounded-[2rem] p-6 text-white shadow-lg flex flex-col justify-between relative overflow-hidden">
-              <div className="absolute top-0 right-0 p-8 opacity-5">
-                 <Activity className="w-32 h-32 text-white" />
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-col justify-between relative overflow-hidden">
+              <div className="absolute top-0 right-0 p-8 opacity-5 text-blue-600">
+                <Activity className="w-32 h-32" />
               </div>
               <div className="space-y-4 relative z-10">
-                  <div className="flex items-center justify-between">
-                     <span className="text-slate-400 text-xs font-bold uppercase">วิชาเรียนทั้งหมด</span>
-                     <span className="text-xl font-black">{transcriptSummary.totalSubjects}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                     <span className="text-slate-400 text-xs font-bold uppercase">หน่วยกิตรวม</span>
-                     <span className="text-xl font-black text-emerald-400">{transcriptSummary.totalCredits}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                     <span className="text-slate-400 text-xs font-bold uppercase">ผ่าน/ไม่ผ่าน</span>
-                     <span className="text-xl font-black text-blue-400">{transcriptSummary.activitySubjectsCount}</span>
-                  </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400 text-xs font-bold uppercase">วิชาเรียนทั้งหมด</span>
+                  <span className="text-xl font-black text-slate-800">{transcriptSummary.totalSubjects}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400 text-xs font-bold uppercase">หน่วยกิตรวม</span>
+                  <span className="text-xl font-black text-blue-600">{transcriptSummary.totalCredits}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400 text-xs font-bold uppercase">ผ่าน/ไม่ผ่าน</span>
+                  <span className="text-xl font-black text-slate-800">{transcriptSummary.activitySubjectsCount}</span>
+                </div>
               </div>
               <button 
-                onClick={() => setShowGradeModal(true)}
-                className="mt-4 w-full py-2 bg-white/10 hover:bg-white/20 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2"
+               onClick={() => setShowGradeModal(true)}
+               className="mt-4 w-full py-2 bg-blue-50 hover:bg-blue-100 rounded-xl text-xs font-bold text-blue-700 transition-all flex items-center justify-center gap-2"
               >
-                <Info className="w-3 h-3" /> ดูเกณฑ์การให้คะแนน
+               <Info className="w-3 h-3" /> ดูเกณฑ์การให้คะแนน
               </button>
-           </div>
+            </div>
       </div>
 
       {/* Grades Table */}
-      <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
          <div className="p-6 border-b border-slate-100 flex items-center justify-between">
              <h4 className="text-lg font-black text-slate-800 flex items-center gap-2">
-                 <BookOpen className="w-5 h-5 text-indigo-500" />
+             <BookOpen className="w-5 h-5 text-blue-500" />
                  รายละเอียดคะแนนรายวิชา
              </h4>
          </div>
@@ -871,131 +913,217 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
                  <p className="text-slate-400 font-bold">ไม่พบข้อมูลรายวิชา</p>
              </div>
          ) : (
-             <div className="overflow-x-auto">
-                 <table className="w-full">
-                     <thead>
-                         <tr className="bg-slate-50/50 border-b border-slate-100">
-                             <th className="px-6 py-4 text-left text-xs font-black text-slate-500 uppercase tracking-wider">รายวิชา</th>
-                             <th className="px-6 py-4 text-center text-xs font-black text-slate-500 uppercase tracking-wider">ประเภท</th>
-                             <th className="px-6 py-4 text-center text-xs font-black text-slate-500 uppercase tracking-wider">หน่วยกิต</th>
-                             <th className="px-6 py-4 text-center text-xs font-black text-slate-500 uppercase tracking-wider">คะแนน</th>
-                             <th className="px-6 py-4 text-center text-xs font-black text-slate-500 uppercase tracking-wider">เกรด</th>
-                             <th className="px-6 py-4 text-center text-xs font-black text-slate-500 uppercase tracking-wider">GPA</th>
-                             <th className="px-6 py-4 text-right text-xs font-black text-slate-500 uppercase tracking-wider"></th>
-                         </tr>
-                     </thead>
-                     <tbody className="divide-y divide-slate-100">
-                     {grades.map((subjectData) => {
-                         const letterGrade = getLetterGrade(subjectData.scorePercentage);
-                         const isActivity = subjectData.isActivity;
-                         const credit = subjectData.subject?.credits || 1;
-                         const tableKey = isActivity ? `activity-${Math.random()}` : subjectData.subject.id;
+             <>
+               <div className="space-y-3 p-4 sm:p-6 lg:hidden">
+                 {transcriptGradeItems.map(({ key, subjectData, letterGrade, isActivity, credit, scoreLabel, isPassingActivity }) => (
+                   <div key={key} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+                     <div className="flex items-start gap-3">
+                       <div className={`flex h-11 w-11 items-center justify-center rounded-xl text-lg font-bold flex-shrink-0 ${
+                         isActivity ? 'bg-purple-100 text-purple-600' : 'bg-blue-100 text-blue-600'
+                       }`}>
+                         {isActivity ? '🎯' : '📚'}
+                       </div>
+                       <div className="min-w-0 flex-1">
+                         <div className="flex flex-wrap items-center gap-2">
+                           <h5 className="text-sm font-black text-slate-800 break-words">{subjectData.subject.name}</h5>
+                           {subjectData._isMerged && (
+                             <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-black text-blue-600">(รวม {subjectData._mergedCount} ภาค)</span>
+                           )}
+                         </div>
+                         {!isActivity && (
+                           <p className="mt-1 text-xs font-medium text-slate-400">รหัสวิชา: {subjectData.subject.code || '-'}</p>
+                         )}
+                       </div>
+                       {isActivity && (
+                         <button
+                           onClick={() => {
+                             setSelectedActivityData({
+                               activity_subjects: subjectData.activityBreakdown,
+                               total_activity_score: subjectData.totalScore,
+                               total_activity_percent: subjectData.totalActivityPercent
+                             });
+                             setShowActivityModal(true);
+                           }}
+                           className="rounded-xl p-2 text-purple-500 transition-all hover:bg-purple-50 hover:text-purple-600"
+                         >
+                           <Info className="w-5 h-5" />
+                         </button>
+                       )}
+                     </div>
 
-                         return (
-                             <tr key={tableKey} className="group hover:bg-slate-50/50 transition-colors">
-                                 <td className="px-6 py-4">
-                                     <div className="flex items-center gap-3">
-                                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 font-bold text-lg
-                                            ${isActivity ? 'bg-purple-100 text-purple-600' : 'bg-blue-100 text-blue-600'}
-                                         `}>
-                                            {isActivity ? '🎯' : '📚'}
-                                         </div>
-                                         <div>
-                                             <div className="font-bold text-slate-800 text-sm flex items-center gap-2">
-                                               {subjectData.subject.name}
-                                               {subjectData._isMerged && (
-                                                 <span className="text-[10px] font-black bg-emerald-100 text-emerald-600 px-2 py-0.5 rounded-full">(รวม {subjectData._mergedCount} ภาค)</span>
-                                               )}
-                                             </div>
-                                             {!isActivity && (
-                                                <div className="text-xs text-slate-400 font-medium mt-0.5">
-                                                    รหัสวิชา: {subjectData.subject.code || '-'}
-                                                </div>
-                                             )}
-                                         </div>
-                                     </div>
-                                 </td>
-                                 <td className="px-6 py-4 text-center">
-                                     <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${
-                                         isActivity ? 'bg-purple-50 text-purple-600' : 'bg-blue-50 text-blue-600'
-                                     }`}>
-                                         {isActivity ? 'กิจกรรม' : 'วิชาการ'}
-                                     </span>
-                                 </td>
-                                 <td className="px-6 py-4 text-center text-sm font-bold text-slate-600">
-                                     {isActivity ? '-' : credit}
-                                 </td>
-                                 <td className="px-6 py-4 text-center">
-                                     <div className="font-black text-slate-700">{Math.round(subjectData.scorePercentage)}%</div>
-                                 </td>
-                                 <td className="px-6 py-4 text-center">
-                                     {isActivity ? (
-                                        <span className={`inline-block px-3 py-1 rounded-lg font-bold text-xs text-white ${
-                                            Number(subjectData.scorePercentage) >= 50 
-                                            ? 'bg-emerald-500' 
-                                            : 'bg-rose-500'
-                                        }`}>
-                                            {Number(subjectData.scorePercentage) >= 50 ? 'ผ่าน' : 'ไม่ผ่าน'}
-                                        </span>
-                                     ) : (
-                                        <span 
-                                            className="inline-block px-3 py-1 rounded-lg font-bold text-xs text-white shadow-sm"
-                                            style={{ backgroundColor: letterGrade.color }}
-                                        >
-                                            {letterGrade.grade}
-                                        </span>
-                                     )}
-                                 </td>
-                                 <td className="px-6 py-4 text-center font-bold text-slate-700">
-                                     {isActivity ? '-' : letterGrade.gpaValue.toFixed(1)}
-                                 </td>
-                                 <td className="px-6 py-4 text-right">
-                                    <button 
-                                      onClick={() => {
-                                        if (isActivity) {
-                                            setSelectedActivityData({
-                                                activity_subjects: subjectData.activityBreakdown,
-                                                total_activity_score: subjectData.totalScore,
-                                                total_activity_percent: subjectData.totalActivityPercent
-                                            });
-                                            setShowActivityModal(true);
-                                        } else {
-                                           // For now, no detail modal for regular subjects implemented in original fully either 
-                                           // (was simpler expand), maybe toast or implement later
-                                        }
-                                      }}
-                                      className={`p-2 rounded-xl transition-all ${
-                                          isActivity 
-                                          ? 'text-purple-400 hover:text-purple-600 hover:bg-purple-50' 
-                                          : 'text-slate-300 cursor-default'
-                                      }`}
-                                      disabled={!isActivity}
-                                    >
-                                        <Info className="w-5 h-5" />
-                                    </button>
-                                 </td>
-                             </tr>
-                         );
-                     })}
-                     </tbody>
+                     <div className="mt-4 grid grid-cols-2 gap-3">
+                       <div className="rounded-xl bg-slate-50 p-3">
+                         <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">ประเภท</p>
+                         <div className={`mt-2 inline-flex rounded-lg px-2.5 py-1 text-[10px] font-black uppercase tracking-wider ${
+                           isActivity ? 'bg-purple-50 text-purple-600' : 'bg-blue-50 text-blue-600'
+                         }`}>
+                           {isActivity ? 'กิจกรรม' : 'วิชาการ'}
+                         </div>
+                       </div>
+                       <div className="rounded-xl bg-slate-50 p-3">
+                         <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">คะแนน</p>
+                         <p className="mt-2 text-lg font-black text-slate-800">{scoreLabel}</p>
+                         <p className="text-xs font-medium text-slate-400">
+                           {Math.round(Number(subjectData.totalScore) || 0)} / {Math.round(Number(subjectData.totalMaxScore) || 0)}
+                         </p>
+                       </div>
+                       <div className="rounded-xl bg-slate-50 p-3">
+                         <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">เกรด</p>
+                         <div className="mt-2">
+                           {isActivity ? (
+                             <span className={`inline-block rounded-lg px-3 py-1 text-xs font-bold text-white ${
+                               isPassingActivity ? 'bg-blue-500' : 'bg-rose-500'
+                             }`}>
+                               {isPassingActivity ? 'ผ่าน' : 'ไม่ผ่าน'}
+                             </span>
+                           ) : (
+                             <span
+                               className="inline-block rounded-lg px-3 py-1 text-xs font-bold text-white shadow-sm"
+                               style={{ backgroundColor: letterGrade.color }}
+                             >
+                               {letterGrade.grade}
+                             </span>
+                           )}
+                         </div>
+                       </div>
+                       <div className="rounded-xl bg-slate-50 p-3">
+                         <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">GPA</p>
+                         <p className="mt-2 text-lg font-black text-slate-800">{isActivity ? '-' : letterGrade.gpaValue.toFixed(1)}</p>
+                       </div>
+                       <div className="col-span-2 rounded-xl bg-slate-50 p-3">
+                         <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">หน่วยกิต</p>
+                         <p className="mt-2 text-lg font-black text-slate-800">{isActivity ? '-' : credit}</p>
+                       </div>
+                     </div>
+                   </div>
+                 ))}
+               </div>
+
+               <div className="hidden overflow-x-auto lg:block">
+                 <table className="min-w-[880px] w-full">
+                   <thead>
+                     <tr className="bg-slate-50/50 border-b border-slate-100">
+                       <th className="px-6 py-4 text-left text-xs font-black text-slate-500 uppercase tracking-wider">รายวิชา</th>
+                       <th className="px-6 py-4 text-center text-xs font-black text-slate-500 uppercase tracking-wider">ประเภท</th>
+                       <th className="px-6 py-4 text-center text-xs font-black text-slate-500 uppercase tracking-wider">หน่วยกิต</th>
+                       <th className="px-6 py-4 text-center text-xs font-black text-slate-500 uppercase tracking-wider">คะแนน</th>
+                       <th className="px-6 py-4 text-center text-xs font-black text-slate-500 uppercase tracking-wider">เกรด</th>
+                       <th className="px-6 py-4 text-center text-xs font-black text-slate-500 uppercase tracking-wider">GPA</th>
+                       <th className="px-6 py-4 text-right text-xs font-black text-slate-500 uppercase tracking-wider"></th>
+                     </tr>
+                   </thead>
+                   <tbody className="divide-y divide-slate-100">
+                     {transcriptGradeItems.map(({ key, subjectData, letterGrade, isActivity, credit, scoreLabel, isPassingActivity }) => (
+                       <tr key={key} className="group hover:bg-slate-50/50 transition-colors">
+                         <td className="px-6 py-4">
+                           <div className="flex items-center gap-3">
+                             <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 font-bold text-lg ${
+                               isActivity ? 'bg-purple-100 text-purple-600' : 'bg-blue-100 text-blue-600'
+                             }`}>
+                               {isActivity ? '🎯' : '📚'}
+                             </div>
+                             <div>
+                               <div className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                                 {subjectData.subject.name}
+                                 {subjectData._isMerged && (
+                                   <span className="text-[10px] font-black bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full">(รวม {subjectData._mergedCount} ภาค)</span>
+                                 )}
+                               </div>
+                               {!isActivity && (
+                                 <div className="text-xs text-slate-400 font-medium mt-0.5">รหัสวิชา: {subjectData.subject.code || '-'}</div>
+                               )}
+                             </div>
+                           </div>
+                         </td>
+                         <td className="px-6 py-4 text-center">
+                           <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${
+                             isActivity ? 'bg-purple-50 text-purple-600' : 'bg-blue-50 text-blue-600'
+                           }`}>
+                             {isActivity ? 'กิจกรรม' : 'วิชาการ'}
+                           </span>
+                         </td>
+                         <td className="px-6 py-4 text-center text-sm font-bold text-slate-600">{isActivity ? '-' : credit}</td>
+                         <td className="px-6 py-4 text-center">
+                           <div className="font-black text-slate-700">{scoreLabel}</div>
+                         </td>
+                         <td className="px-6 py-4 text-center">
+                           {isActivity ? (
+                             <span className={`inline-block px-3 py-1 rounded-lg font-bold text-xs text-white ${
+                               isPassingActivity ? 'bg-blue-500' : 'bg-rose-500'
+                             }`}>
+                               {isPassingActivity ? 'ผ่าน' : 'ไม่ผ่าน'}
+                             </span>
+                           ) : (
+                             <span
+                               className="inline-block px-3 py-1 rounded-lg font-bold text-xs text-white shadow-sm"
+                               style={{ backgroundColor: letterGrade.color }}
+                             >
+                               {letterGrade.grade}
+                             </span>
+                           )}
+                         </td>
+                         <td className="px-6 py-4 text-center font-bold text-slate-700">{isActivity ? '-' : letterGrade.gpaValue.toFixed(1)}</td>
+                         <td className="px-6 py-4 text-right">
+                           <button
+                             onClick={() => {
+                               if (isActivity) {
+                                 setSelectedActivityData({
+                                   activity_subjects: subjectData.activityBreakdown,
+                                   total_activity_score: subjectData.totalScore,
+                                   total_activity_percent: subjectData.totalActivityPercent
+                                 });
+                                 setShowActivityModal(true);
+                               }
+                             }}
+                             className={`p-2 rounded-xl transition-all ${
+                               isActivity
+                                 ? 'text-purple-400 hover:text-purple-600 hover:bg-purple-50'
+                                 : 'text-slate-300 cursor-default'
+                             }`}
+                             disabled={!isActivity}
+                           >
+                             <Info className="w-5 h-5" />
+                           </button>
+                         </td>
+                       </tr>
+                     ))}
+                   </tbody>
                  </table>
-             </div>
+               </div>
+             </>
          )}
       </div>
 
         {/* Grade Legend Modal */}
         {showGradeModal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300" onClick={() => setShowGradeModal(false)}></div>
-                <div className="relative w-full max-w-2xl bg-white rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
-                    <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                        <h3 className="text-xl font-black text-slate-800">เกณฑ์การให้คะแนน</h3>
+            <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4">
+                <div className="absolute inset-0 bg-slate-900/60 animate-in fade-in duration-300" onClick={() => setShowGradeModal(false)}></div>
+                <div className="relative w-full max-w-2xl bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 border border-slate-100 max-h-[92vh] sm:max-h-[85vh]">
+                    <div className="p-4 sm:p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                        <h3 className="text-lg sm:text-xl font-black text-slate-800">เกณฑ์การให้คะแนน</h3>
                         <button onClick={() => setShowGradeModal(false)} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-full transition-all">
                             <X className="w-6 h-6" />
                         </button>
                     </div>
-                    <div className="p-6 overflow-y-auto max-h-[70vh]">
-                        <table className="w-full">
+                    <div className="p-4 sm:p-6 overflow-y-auto max-h-[calc(92vh-73px)] sm:max-h-[70vh]">
+                        <div className="space-y-3 sm:hidden">
+                          {gradeLegendItems.map((item) => (
+                            <div key={item.grade} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                              <div className="flex items-center justify-between gap-3">
+                                <span
+                                  className="inline-block rounded-lg px-3 py-1 text-xs font-bold text-white shadow-sm"
+                                  style={{ backgroundColor: getLetterGrade(item.sampleScore).color }}
+                                >
+                                  {item.grade}
+                                </span>
+                                <span className="text-sm font-black text-slate-700">GPA {item.gpa}</span>
+                              </div>
+                              <p className="mt-3 text-sm font-bold text-slate-700">{item.range}</p>
+                              <p className="mt-1 text-sm text-slate-500">{item.desc}</p>
+                            </div>
+                          ))}
+                        </div>
+                        <table className="hidden w-full sm:table">
                             <thead>
                                 <tr className="border-b border-slate-100">
                                     <th className="text-left py-3 font-black text-slate-500 text-xs uppercase">เกรด</th>
@@ -1005,22 +1133,12 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
-                                {[
-                                    { grade: 'A+', range: '95 - 100%', desc: 'ดีเยี่ยม (Excellent)', gpa: '4.0' },
-                                    { grade: 'A', range: '80 - 94%', desc: 'ดีมาก (Very Good)', gpa: '4.0' },
-                                    { grade: 'B+', range: '75 - 79%', desc: 'ดี (Good)', gpa: '3.5' },
-                                    { grade: 'B', range: '70 - 74%', desc: 'ค่อนข้างดี (Above Average)', gpa: '3.0' },
-                                    { grade: 'C+', range: '65 - 69%', desc: 'ปานกลาง (Average)', gpa: '2.5' },
-                                    { grade: 'C', range: '60 - 64%', desc: 'พอใช้ (Fair)', gpa: '2.0' },
-                                    { grade: 'D+', range: '55 - 59%', desc: 'ผ่าน (Pass)', gpa: '1.5' },
-                                    { grade: 'D', range: '50 - 54%', desc: 'ผ่านเกณฑ์ขั้นต่ำ (Poor)', gpa: '1.0' },
-                                    { grade: 'F', range: '< 50%', desc: 'ไม่ผ่าน (Fail)', gpa: '0.0' }
-                                ].map((item, idx) => (
-                                    <tr key={idx} className="hover:bg-slate-50/50">
+                              {gradeLegendItems.map((item) => (
+                                <tr key={item.grade} className="hover:bg-slate-50/50">
                                         <td className="py-3">
                                             <span 
                                                 className="inline-block px-3 py-1 rounded-lg font-bold text-xs text-white shadow-sm"
-                                                style={{ backgroundColor: getLetterGrade(item.grade === 'F' ? 40 : 95).color }}
+                                      style={{ backgroundColor: getLetterGrade(item.sampleScore).color }}
                                             >
                                                 {item.grade}
                                             </span>
@@ -1039,22 +1157,22 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
 
       {/* GPA Modal */}
       {showGPAModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300" onClick={() => setShowGPAModal(false)}></div>
-           <div className="relative w-full max-w-lg bg-white rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
-               <div className="bg-gradient-to-br from-emerald-500 to-teal-600 p-8 text-center relative overflow-hidden">
-                   <div className="absolute top-0 right-0 p-4 opacity-10"><Award className="w-32 h-32 text-white" /></div>
-                   <button onClick={() => setShowGPAModal(false)} className="absolute top-4 right-4 p-2 text-white/60 hover:text-white hover:bg-white/20 rounded-full transition-all">
+        <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4">
+           <div className="absolute inset-0 bg-slate-900/60 animate-in fade-in duration-300" onClick={() => setShowGPAModal(false)}></div>
+             <div className="relative w-full max-w-lg bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 border border-slate-100 max-h-[92vh] sm:max-h-[85vh]">
+               <div className="bg-slate-50 p-5 sm:p-8 text-center relative overflow-hidden border-b border-slate-100">
+                 <div className="absolute top-0 right-0 p-4 opacity-5 text-blue-600"><Award className="w-32 h-32" /></div>
+                 <button onClick={() => setShowGPAModal(false)} className="absolute top-4 right-4 p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-all">
                       <X className="w-6 h-6" />
                    </button>
                    
-                   <p className="text-emerald-100 font-bold uppercase tracking-wider text-sm mb-2">เกรดเฉลี่ยสะสม</p>
-                   <h2 className="text-7xl font-black text-white tracking-tighter mb-2">
+                 <p className="text-blue-600 font-bold uppercase tracking-wider text-sm mb-2">เกรดเฉลี่ยสะสม</p>
+                 <h2 className="text-5xl sm:text-7xl font-black text-slate-800 tracking-tighter mb-2">
                        {typeof transcriptSummary.gpa === 'number' ? transcriptSummary.gpa.toFixed(2) : transcriptSummary.gpa}
                    </h2>
-                   <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-white/20 backdrop-blur-md rounded-full text-white font-bold text-sm">
-                       {transcriptSummary.gpa >= 3.0 ? <Trophy className="w-4 h-4 text-yellow-300" /> : <BookOpen className="w-4 h-4" />}
-                       <span>
+                 <div className="inline-flex max-w-full items-center gap-2 px-4 py-1.5 bg-blue-50 rounded-full text-blue-700 font-bold text-sm">
+                   {transcriptSummary.gpa >= 3.0 ? <Trophy className="w-4 h-4 text-blue-600" /> : <BookOpen className="w-4 h-4 text-blue-600" />}
+                       <span className="break-words">
                             {transcriptSummary.gpa >= 3.6 && 'ผลการเรียนยอดเยี่ยม'}
                             {transcriptSummary.gpa >= 3.0 && transcriptSummary.gpa < 3.6 && 'ผลการเรียนดีมาก'}
                             {transcriptSummary.gpa >= 2.0 && transcriptSummary.gpa < 3.0 && 'ผลการเรียนพอใช้'}
@@ -1063,12 +1181,12 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
                    </div>
                </div>
                
-               <div className="p-8">
+               <div className="overflow-y-auto p-5 sm:p-8 max-h-[calc(92vh-213px)] sm:max-h-none">
                    <h4 className="font-black text-slate-800 mb-4 flex items-center gap-2">
-                       <BarChart2 className="w-5 h-5 text-emerald-500" />
+                     <BarChart2 className="w-5 h-5 text-blue-500" />
                        สถิติการเรียน
                    </h4>
-                   <div className="grid grid-cols-2 gap-4">
+                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                        <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
                            <p className="text-xs font-bold text-slate-400 uppercase">หน่วยกิตรวม</p>
                            <p className="text-2xl font-black text-slate-700">{transcriptSummary.totalCredits}</p>
@@ -1087,7 +1205,7 @@ export default function AcademicTranscript({ studentId, studentSubjects, onGrade
                        </div>
                    </div>
                    
-                   <div className="mt-6 p-4 bg-amber-50 rounded-2xl border border-amber-100 text-sm text-amber-800 font-medium leading-relaxed">
+                     <div className="mt-6 p-4 bg-blue-50 rounded-2xl border border-blue-100 text-sm text-blue-800 font-medium leading-relaxed">
                        💡 เคล็ดลับ: รักษาเกรดเฉลี่ยให้สูงกว่า 3.00 เพื่อโอกาสใรการศึกษาต่อและทุนการศึกษาที่มากขึ้น
                    </div>
                </div>

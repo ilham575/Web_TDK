@@ -101,7 +101,6 @@ def get_homeroom_teachers(
         if getattr(hr, 'classroom_id', None):
             student_count = db.query(ClassroomStudentModel).filter(
                 ClassroomStudentModel.classroom_id == hr.classroom_id,
-                ClassroomStudentModel.is_active == True
             ).count()
             classroom = db.query(ClassroomModel).filter(ClassroomModel.id == hr.classroom_id).first()
             classroom_name = classroom.name if classroom else None
@@ -170,7 +169,6 @@ def get_homeroom_teacher(
     if getattr(hr, 'classroom_id', None):
         student_count = db.query(ClassroomStudentModel).filter(
             ClassroomStudentModel.classroom_id == hr.classroom_id,
-            ClassroomStudentModel.is_active == True
         ).count()
         classroom = db.query(ClassroomModel).filter(ClassroomModel.id == hr.classroom_id).first()
         classroom_name = classroom.name if classroom else None
@@ -628,13 +626,23 @@ def get_homeroom_summary(
         classrooms = classrooms_query.all()
         
         for classroom in classrooms:
-            # Get students in this classroom
-            enrollments = db.query(ClassroomStudentModel, UserModel).join(
+            # Get students in this classroom.
+            # Do NOT filter by is_active here — students from past terms have is_active=False
+            # (they were promoted to the next year's classroom) but are still valid members of
+            # this historical classroom. The classroom itself is already scoped to a specific
+            # academic_year / semester via classrooms_query above.
+            seen_student_ids: set = set()
+            _raw_enrollments = db.query(ClassroomStudentModel, UserModel).join(
                 UserModel, ClassroomStudentModel.student_id == UserModel.id
             ).filter(
-                ClassroomStudentModel.classroom_id == classroom.id,
-                ClassroomStudentModel.is_active == True
-            ).all()
+                ClassroomStudentModel.classroom_id == classroom.id
+            ).order_by(ClassroomStudentModel.is_active.desc()).all()
+            # Deduplicate: keep the first (most-active) record per student
+            enrollments = []
+            for _enr, _stu in _raw_enrollments:
+                if _stu.id not in seen_student_ids:
+                    seen_student_ids.add(_stu.id)
+                    enrollments.append((_enr, _stu))
             
             students_data = []
             for enrollment, student in enrollments:
@@ -812,7 +820,6 @@ def get_homeroom_classroom_students(
         UserModel, ClassroomStudentModel.student_id == UserModel.id
     ).filter(
         ClassroomStudentModel.classroom_id == classroom_id,
-        ClassroomStudentModel.is_active == True
     ).all()
     
     students_data = []

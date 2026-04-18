@@ -150,22 +150,22 @@ function StudentSubjectDetails() {
   }
 
   if (loading) return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-sky-50/20 to-emerald-50/20 flex flex-col items-center justify-center p-6">
-       <div className="w-16 h-16 border-4 border-emerald-100 border-t-emerald-500 rounded-full animate-spin mb-4"></div>
+    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
+       <div className="w-16 h-16 border-4 border-blue-100 border-t-blue-500 rounded-full animate-spin mb-4"></div>
        <p className="text-slate-400 font-bold animate-pulse">กำลังโหลดข้อมูล...</p>
     </div>
   );
 
   if (!subject) return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-sky-50/20 to-emerald-50/20 p-6 flex items-center justify-center">
-      <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100 p-12 text-center max-w-md w-full">
+    <div className="min-h-screen bg-slate-50 p-6 flex items-center justify-center">
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-12 text-center max-w-md w-full">
          <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6">
             <AlertCircle className="w-10 h-10 text-slate-300" />
          </div>
          <h3 className="text-xl font-black text-slate-800 mb-2">ไม่พบข้อมูลรายวิชา</h3>
          <p className="text-slate-500 mb-8">ข้อมูลอาจถูกลบหรือคุณไม่มีสิทธิ์เข้าถึง</p>
          <button 
-           className="w-full py-3 bg-emerald-600 text-white rounded-xl font-bold shadow-lg shadow-emerald-200 hover:shadow-emerald-300 hover:bg-emerald-700 transition-all hover:-translate-y-0.5"
+                className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold shadow-lg shadow-blue-200 hover:shadow-blue-300 hover:bg-blue-700 transition-all hover:-translate-y-0.5"
            onClick={() => navigate('/student/home')}
          >
            กลับสู่หน้าหลัก
@@ -177,7 +177,7 @@ function StudentSubjectDetails() {
   const isAllEnded = subject.teachers?.length > 0 && subject.teachers.every(t => t.is_ended);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-sky-50/20 to-emerald-50/20 pb-20 selection:bg-emerald-100 selection:text-emerald-900">
+      <div className="min-h-screen bg-slate-50 pb-20 selection:bg-blue-100 selection:text-blue-900">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
         
         {/* Header */}
@@ -185,7 +185,7 @@ function StudentSubjectDetails() {
           <div className="flex items-start gap-4">
              <button 
                 onClick={() => navigate('/student/home')}
-                className="p-3 bg-white border border-slate-100 rounded-2xl text-slate-400 hover:text-emerald-600 hover:border-emerald-100 hover:shadow-lg transition-all group"
+                className="p-3 bg-white border border-slate-200 rounded-xl text-slate-500 hover:text-blue-600 hover:border-blue-100 hover:shadow-md transition-all group"
              >
                 <ArrowLeft className="w-6 h-6 group-hover:-translate-x-1 transition-transform" />
              </button>
@@ -195,7 +195,7 @@ function StudentSubjectDetails() {
                    <span className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border shadow-sm
                       ${isAllEnded 
                         ? 'bg-slate-100 text-slate-500 border-slate-200'
-                        : 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                                    : 'bg-blue-50 text-blue-600 border-blue-100'
                       }
                     `}>
                       {isAllEnded ? <XCircle className="w-3 h-3" /> : <CheckCircle2 className="w-3 h-3" />}
@@ -213,8 +213,8 @@ function StudentSubjectDetails() {
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
            {/* Attendance Stat */}
-           <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-100 relative overflow-hidden group hover:shadow-lg transition-all">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-50 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 group-hover:bg-emerald-100 transition-colors"></div>
+           <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 relative overflow-hidden group hover:shadow-lg transition-all">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 group-hover:bg-blue-100 transition-colors"></div>
               <div className="relative z-10 flex items-start justify-between mb-6">
                  <div>
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">การเข้าเรียน</p>
@@ -223,7 +223,7 @@ function StudentSubjectDetails() {
                        <span className="text-sm font-bold text-slate-400">เข้าเรียน</span>
                     </h3>
                  </div>
-                 <div className="w-12 h-12 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600">
+                 <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600">
                     <Clock className="w-6 h-6" />
                  </div>
               </div>
@@ -231,7 +231,7 @@ function StudentSubjectDetails() {
               <div className="w-full bg-slate-100 rounded-full h-2 mb-4 overflow-hidden">
                  <div 
                     className={`h-full rounded-full transition-all duration-1000 ${
-                       attendancePercentage >= 80 ? 'bg-emerald-500' :
+                       attendancePercentage >= 80 ? 'bg-blue-500' :
                        attendancePercentage >= 60 ? 'bg-amber-500' : 'bg-rose-500'
                     }`}
                     style={{ width: `${attendancePercentage}%` }}
@@ -239,7 +239,7 @@ function StudentSubjectDetails() {
               </div>
 
               <div className="grid grid-cols-3 gap-2 text-center text-xs font-bold">
-                 <div className="bg-emerald-50 text-emerald-700 py-2 rounded-xl">
+                 <div className="bg-blue-50 text-blue-700 py-2 rounded-xl">
                     <span className="block text-lg">{presentCount}</span>
                     มาเรียน
                  </div>
@@ -255,7 +255,7 @@ function StudentSubjectDetails() {
            </div>
 
            {/* Grade Stat */}
-           <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-100 relative overflow-hidden group hover:shadow-lg transition-all">
+           <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 relative overflow-hidden group hover:shadow-lg transition-all">
               <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 group-hover:bg-blue-100 transition-colors"></div>
               <div className="relative z-10 flex items-start justify-between mb-6">
                  <div>
@@ -273,7 +273,7 @@ function StudentSubjectDetails() {
               <div className="flex items-center gap-4">
                  <div className={`w-20 h-20 rounded-2xl flex items-center justify-center text-3xl font-black shadow-inner
                     ${
-                       gradePercentage >= 80 ? 'bg-emerald-100 text-emerald-600' :
+                       gradePercentage >= 80 ? 'bg-blue-100 text-blue-600' :
                        gradePercentage >= 60 ? 'bg-blue-100 text-blue-600' :
                        gradePercentage >= 50 ? 'bg-amber-100 text-amber-600' : 'bg-rose-100 text-rose-600'
                     }
@@ -289,31 +289,31 @@ function StudentSubjectDetails() {
         </div>
 
         {/* content tabs */}
-        <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden min-h-[500px]">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden min-h-[500px]">
            <div className="flex border-b border-slate-100">
               <button 
                  onClick={() => setActiveTab('attendance')}
                  className={`flex-1 py-5 text-sm font-black uppercase tracking-wider transition-all relative
-                    ${activeTab === 'attendance' ? 'text-emerald-600 bg-emerald-50/50' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}
+                    ${activeTab === 'attendance' ? 'text-blue-600 bg-blue-50/50' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}
                  `}
               >
                  <div className="flex items-center justify-center gap-2">
                     <Calendar className="w-5 h-5" />
                     การมาเรียน
                  </div>
-                 {activeTab === 'attendance' && <div className="absolute bottom-0 left-0 w-full h-1 bg-emerald-500 rounded-t-full"></div>}
+                 {activeTab === 'attendance' && <div className="absolute bottom-0 left-0 w-full h-1 bg-blue-500 rounded-t-full"></div>}
               </button>
               <button 
                  onClick={() => setActiveTab('grades')}
                  className={`flex-1 py-5 text-sm font-black uppercase tracking-wider transition-all relative
-                    ${activeTab === 'grades' ? 'text-emerald-600 bg-emerald-50/50' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}
+                    ${activeTab === 'grades' ? 'text-blue-600 bg-blue-50/50' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}
                  `}
               >
                  <div className="flex items-center justify-center gap-2">
                     <BarChart2 className="w-5 h-5" />
                     คะแนนเก็บ
                  </div>
-                 {activeTab === 'grades' && <div className="absolute bottom-0 left-0 w-full h-1 bg-emerald-500 rounded-t-full"></div>}
+                 {activeTab === 'grades' && <div className="absolute bottom-0 left-0 w-full h-1 bg-blue-500 rounded-t-full"></div>}
               </button>
            </div>
 
@@ -322,14 +322,14 @@ function StudentSubjectDetails() {
                  <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
                     <div className="flex items-center justify-between mb-6">
                         <h4 className="text-xl font-black text-slate-800 flex items-center gap-2">
-                           <Clock className="w-6 h-6 text-emerald-500" />
+                           <Clock className="w-6 h-6 text-blue-500" />
                            ประวัติการเข้าเรียน
                         </h4>
                         <span className="text-sm font-bold text-slate-400">{attendanceDates.length} รายการ</span>
                     </div>
 
                     {attendanceDates.length === 0 ? (
-                       <div className="text-center py-20 bg-slate-50 rounded-[2rem] border border-slate-100 border-dashed">
+                       <div className="text-center py-20 bg-slate-50 rounded-2xl border border-slate-100 border-dashed">
                           <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
                              <Calendar className="w-10 h-10 text-slate-300" />
                           </div>
@@ -340,10 +340,10 @@ function StudentSubjectDetails() {
                           {attendanceDates.map(date => {
                              const isPresent = attendanceMap[date] && attendanceMap[date][currentUser.id];
                              return (
-                                <div key={date} className="group flex items-center justify-between p-4 bg-white border border-slate-100 rounded-2xl hover:border-emerald-100 hover:shadow-md transition-all">
+                                <div key={date} className="group flex items-center justify-between p-4 bg-white border border-slate-100 rounded-2xl hover:border-blue-100 hover:shadow-md transition-all">
                                    <div className="flex items-center gap-4">
                                       <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-black text-lg
-                                         ${isPresent ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}
+                                         ${isPresent ? 'bg-blue-100 text-blue-600' : 'bg-rose-100 text-rose-600'}
                                       `}>
                                          {new Date(date).getDate()}
                                       </div>
@@ -360,7 +360,7 @@ function StudentSubjectDetails() {
                                    </div>
                                    
                                    <div className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2
-                                      ${isPresent ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}
+                                      ${isPresent ? 'bg-blue-50 text-blue-600' : 'bg-rose-50 text-rose-600'}
                                    `}>
                                       {isPresent ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
                                       <span className="hidden sm:inline">{isPresent ? 'มาเรียน' : 'ขาดเรียน'}</span>
@@ -384,7 +384,7 @@ function StudentSubjectDetails() {
                     </div>
 
                     {assignments.length === 0 ? (
-                       <div className="text-center py-20 bg-slate-50 rounded-[2rem] border border-slate-100 border-dashed">
+                       <div className="text-center py-20 bg-slate-50 rounded-2xl border border-slate-100 border-dashed">
                           <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
                              <FileText className="w-10 h-10 text-slate-300" />
                           </div>
@@ -397,7 +397,7 @@ function StudentSubjectDetails() {
                              const percentage = g && g.max_score > 0 ? Math.round((g.grade / g.max_score) * 100) : 0;
                              
                              return (
-                                <div key={ass.id} className="bg-white rounded-[1.5rem] p-5 border border-slate-100 shadow-sm hover:shadow-lg hover:border-emerald-100 transition-all group relative overflow-hidden">
+                                <div key={ass.id} className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm hover:shadow-lg hover:border-blue-100 transition-all group relative overflow-hidden">
                                    <div className="absolute top-0 right-0 w-24 h-24 bg-slate-50 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2 group-hover:bg-blue-50 transition-colors"></div>
                                    <div className="relative z-10">
                                       <div className="flex items-start justify-between mb-4">
@@ -406,7 +406,7 @@ function StudentSubjectDetails() {
                                          </div>
                                          {g ? (
                                             <span className={`px-2 py-1 rounded-lg text-xs font-black
-                                               ${percentage >= 80 ? 'bg-emerald-100 text-emerald-600' :
+                                                                      ${percentage >= 80 ? 'bg-blue-100 text-blue-600' :
                                                  percentage >= 60 ? 'bg-blue-100 text-blue-600' : 'bg-rose-100 text-rose-600'}
                                             `}>
                                                {percentage}%

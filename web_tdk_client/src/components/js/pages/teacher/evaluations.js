@@ -72,6 +72,7 @@ function TeacherEvaluationsPage() {
   // Filter states
   const [selectedSubject, setSelectedSubject] = useState('');
   const [selectedClassroom, setSelectedClassroom] = useState('');
+  const [selectedYear, setSelectedYear] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState('newest');
   const [teacherClassrooms, setTeacherClassrooms] = useState([]);
@@ -324,6 +325,10 @@ function TeacherEvaluationsPage() {
       filtered = filtered.filter(ev => ev.classroom_id === parseInt(selectedClassroom));
     }
 
+    if (selectedYear) {
+      filtered = filtered.filter(ev => String(ev.academic_year) === selectedYear);
+    }
+
     if (searchTerm) {
       filtered = filtered.filter(ev =>
         ev.student_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -347,7 +352,7 @@ function TeacherEvaluationsPage() {
     });
 
     setFilteredEvaluations(filtered);
-  }, [allEvaluations, selectedSubject, selectedClassroom, searchTerm, sortBy]);
+  }, [allEvaluations, selectedSubject, selectedClassroom, selectedYear, searchTerm, sortBy]);
 
   const handleOpenEvaluationModal = async (subject) => {
     try {
@@ -473,9 +478,9 @@ function TeacherEvaluationsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-teal-50/20 to-emerald-50/20 flex items-center justify-center">
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-4 border-emerald-200 border-t-emerald-600 mx-auto mb-6"></div>
+          <div className="animate-spin rounded-full h-16 w-16 border-4 border-blue-200 border-t-blue-600 mx-auto mb-6"></div>
           <p className="text-slate-400 font-black tracking-widest uppercase text-xs">Loading Resources...</p>
         </div>
       </div>
@@ -483,15 +488,15 @@ function TeacherEvaluationsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-teal-50/20 to-emerald-50/20 pb-20 font-sans selection:bg-emerald-100 selection:text-emerald-900">
+    <div className="min-h-screen bg-slate-50 pb-20 font-sans selection:bg-blue-100 selection:text-blue-900">
       {/* Top Navigation Bar */}
-      <div className="bg-white/80 backdrop-blur-md border-b border-slate-200/60 sticky top-0 z-30 transition-all duration-300">
+      <div className="bg-white border-b border-slate-200 sticky top-0 z-30 transition-colors duration-300">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-20">
             <div className="flex items-center gap-6">
               <button 
                 onClick={() => navigate('/teacher/home')}
-                className="group p-3 bg-white text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-2xl transition-all duration-300 active:scale-95 border border-slate-100 shadow-sm hover:shadow-md hover:border-emerald-100"
+                className="group p-3 bg-white text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all duration-300 active:scale-95 border border-slate-200 shadow-sm"
               >
                 <ArrowLeft className="w-5 h-5 group-hover:-translate-x-0.5 transition-transform" />
               </button>
@@ -500,7 +505,7 @@ function TeacherEvaluationsPage() {
                   ประเมินนักเรียน
                 </h1>
                 <div className="flex items-center gap-2 mt-2">
-                  <span className="bg-emerald-100 text-emerald-700 text-[10px] font-black px-2 py-0.5 rounded-lg uppercase tracking-wider">
+                  <span className="bg-blue-100 text-blue-700 text-[10px] font-black px-2 py-0.5 rounded-lg uppercase tracking-wider">
                     EVALUATIONS
                   </span>
                   <p className="text-xs font-bold text-slate-400 flex items-center gap-1.5 overflow-hidden text-ellipsis whitespace-nowrap max-w-[200px] sm:max-w-md">
@@ -520,7 +525,7 @@ function TeacherEvaluationsPage() {
                      toast.error('ไม่พบรายวิชาที่รับผิดชอบ');
                    }
                 }}
-                className="group flex items-center gap-2.5 px-5 py-3 bg-emerald-600 text-white rounded-2xl font-black text-sm shadow-lg shadow-emerald-200 hover:bg-emerald-700 hover:shadow-emerald-300 hover:-translate-y-0.5 transition-all duration-300 active:scale-95"
+                className="group flex items-center gap-2.5 px-5 py-3 bg-blue-600 text-white rounded-lg font-black text-sm shadow-sm hover:bg-blue-700 transition-colors duration-300 active:scale-95"
               >
                 <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform" />
                 <span className="hidden sm:inline">เพิ่มการประเมิน</span>
@@ -536,7 +541,7 @@ function TeacherEvaluationsPage() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-8">
           {/* Stats Cards */}
           <div className="lg:col-span-12 grid grid-cols-1 md:grid-cols-3 gap-6">
-             <div className="bg-white rounded-[2rem] p-6 border border-slate-100/60 shadow-sm hover:shadow-md transition-all group">
+             <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm hover:shadow-md transition-all group">
                 <div className="flex items-center justify-between mb-4">
                    <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform">
                       <Brain className="w-6 h-6" />
@@ -549,9 +554,9 @@ function TeacherEvaluationsPage() {
                 </div>
              </div>
 
-             <div className="bg-white rounded-[2rem] p-6 border border-slate-100/60 shadow-sm hover:shadow-md transition-all group">
+             <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm hover:shadow-md transition-all group">
                 <div className="flex items-center justify-between mb-4">
-                   <div className="w-12 h-12 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform">
+                   <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform">
                       <BookOpen className="w-6 h-6" />
                    </div>
                    <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest bg-slate-50 px-2 py-1 rounded-lg">SUBJECTS</span>
@@ -562,7 +567,7 @@ function TeacherEvaluationsPage() {
                 </div>
              </div>
 
-             <div className="bg-white rounded-[2rem] p-6 border border-slate-100/60 shadow-sm hover:shadow-md transition-all group">
+             <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm hover:shadow-md transition-all group">
                 <div className="flex items-center justify-between mb-4">
                    <div className="w-12 h-12 bg-purple-50 rounded-2xl flex items-center justify-center text-purple-600 group-hover:scale-110 transition-transform">
                       <User className="w-6 h-6" />
@@ -578,7 +583,7 @@ function TeacherEvaluationsPage() {
           
           {/* Filters Bar */}
           <div className="lg:col-span-12">
-            <div className="bg-white rounded-[2.5rem] p-6 shadow-sm border border-slate-100/60 flex flex-col md:flex-row gap-4 items-center">
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-100 flex flex-col md:flex-row gap-4 items-center">
                <div className="relative flex-1 w-full md:w-auto group">
                   <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
                      <Search className="w-5 h-5" />
@@ -588,16 +593,34 @@ function TeacherEvaluationsPage() {
                     placeholder="ค้นหาชื่อนักเรียน..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 text-sm font-bold transition-all outline-none"
+                    className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-lg focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 text-sm font-bold transition-all outline-none"
                   />
                </div>
                
-               <div className="flex gap-4 w-full md:w-auto overflow-x-auto pb-2 md:pb-0">
-                  <div className="relative min-w-[200px]">
+               <div className="flex gap-4 w-full md:w-auto overflow-x-auto pb-2 md:pb-0">                  {/* Year filter */}
+                  {(() => {
+                    const availableYears = [...new Set(allEvaluations.map(ev => ev.academic_year).filter(Boolean))].sort((a, b) => Number(b) - Number(a));
+                    if (availableYears.length < 1) return null;
+                    return (
+                      <div className="relative min-w-[160px]">
+                        <select
+                          value={selectedYear}
+                          onChange={(e) => setSelectedYear(e.target.value)}
+                          className="w-full pl-4 pr-10 py-4 bg-slate-50 border border-slate-200 rounded-lg focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 text-sm font-bold transition-all outline-none appearance-none cursor-pointer text-slate-600"
+                        >
+                          <option value="">ทุกปีการศึกษา</option>
+                          {availableYears.map(year => (
+                            <option key={year} value={String(year)}>ปีการศึกษา {year}</option>
+                          ))}
+                        </select>
+                        <Calendar className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                      </div>
+                    );
+                  })()}                  <div className="relative min-w-[200px]">
                        <select
                         value={selectedSubject}
                         onChange={(e) => setSelectedSubject(e.target.value)}
-                        className="w-full pl-4 pr-10 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 text-sm font-bold transition-all outline-none appearance-none cursor-pointer text-slate-600"
+                        className="w-full pl-4 pr-10 py-4 bg-slate-50 border border-slate-200 rounded-lg focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 text-sm font-bold transition-all outline-none appearance-none cursor-pointer text-slate-600"
                        >
                          {teacherSubjects.map(subject => (
                            <option key={subject.id} value={subject.id}>
@@ -613,7 +636,7 @@ function TeacherEvaluationsPage() {
                       <select
                         value={sortBy}
                         onChange={(e) => setSortBy(e.target.value)}
-                        className="w-full pl-4 pr-10 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 text-sm font-bold transition-all outline-none appearance-none cursor-pointer text-slate-600"
+                        className="w-full pl-4 pr-10 py-4 bg-slate-50 border border-slate-200 rounded-lg focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 text-sm font-bold transition-all outline-none appearance-none cursor-pointer text-slate-600"
                       >
                         <option value="newest">ใหม่ที่สุด</option>
                         <option value="oldest">เก่าที่สุด</option>
@@ -637,17 +660,40 @@ function TeacherEvaluationsPage() {
           </div>
 
           {filteredEvaluations.length === 0 ? (
-            <div className="bg-white rounded-[2.5rem] p-16 text-center border-2 border-dashed border-slate-100">
+            <div className="bg-white rounded-xl p-16 text-center border-2 border-dashed border-slate-100">
               <div className="w-20 h-20 bg-slate-50 rounded-3xl flex items-center justify-center mx-auto mb-6">
                 <Brain className="w-10 h-10 text-slate-300" />
               </div>
               <h3 className="text-xl font-black text-slate-800 mb-2">ยังไม่มีข้อมูลการประเมิน</h3>
               <p className="text-slate-400 font-medium">เริ่มสร้างการประเมินแรกของคุณโดยคลิกที่ปุ่ม "เพิ่มการประเมิน"</p>
             </div>
-          ) : (
-            <div className="grid grid-cols-1 gap-4">
-              {filteredEvaluations.map((evaluation) => (
-                <div key={evaluation.id} className="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-100 hover:shadow-md hover:border-emerald-100 transition-all group">
+          ) : (() => {
+            // Group filteredEvaluations by academic_year
+            const yearGroups = filteredEvaluations.reduce((acc, ev) => {
+              const yr = String(ev.academic_year || 'ไม่ระบุ');
+              if (!acc[yr]) acc[yr] = [];
+              acc[yr].push(ev);
+              return acc;
+            }, {});
+            const sortedGroupYears = Object.keys(yearGroups).sort((a, b) => Number(b) - Number(a));
+            return (
+              <div className="space-y-8">
+                {sortedGroupYears.map(yr => (
+                  <div key={yr}>
+                    {sortedGroupYears.length > 1 && (
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 border border-blue-100 rounded-lg">
+                          <Calendar className="w-4 h-4 text-blue-600" />
+                          <span className="text-sm font-black text-blue-700">ปีการศึกษา {yr}</span>
+                          <span className="ml-1 px-2 py-0.5 rounded-lg bg-blue-100 text-blue-600 text-[10px] font-black">{yearGroups[yr].length} รายการ</span>
+                        </div>
+                        <div className="flex-1 h-px bg-slate-100" />
+                      </div>
+                    )}
+                    <div className="grid grid-cols-1 gap-4">
+                    {yearGroups[yr].map((evaluation) => (
+
+                <div key={evaluation.id} className="bg-white rounded-xl p-6 shadow-sm border border-slate-100 hover:shadow-md hover:border-blue-100 transition-all group">
                    <div className="flex flex-col xl:flex-row xl:items-start gap-6">
                       
                       {/* Left: Student Info */}
@@ -656,11 +702,11 @@ function TeacherEvaluationsPage() {
                              {getInitials(evaluation.student_name)}
                           </div>
                           <div>
-                              <h3 className="text-lg font-black text-slate-800 group-hover:text-emerald-700 transition-colors">
+                              <h3 className="text-lg font-black text-slate-800 group-hover:text-blue-700 transition-colors">
                                  {evaluation.student_name || 'ไม่ระบุชื่อ'}
                               </h3>
                               <div className="flex flex-wrap items-center gap-2 mt-2">
-                                 <span className="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 text-[10px] font-black uppercase tracking-wider border border-emerald-100">
+                                <span className="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 text-[10px] font-black uppercase tracking-wider border border-blue-100">
                                     {evaluation.subject_code}
                                  </span>
                                  <span className="text-xs font-bold text-slate-400 flex items-center gap-1">
@@ -745,8 +791,12 @@ function TeacherEvaluationsPage() {
                    </div>
                 </div>
               ))}
-            </div>
-          )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
         </div>
       </div>
 

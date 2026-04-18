@@ -1,6 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-toastify';
+import {
+  BookOpen,
+  CalendarDays,
+  ChevronDown,
+  CircleHelp,
+  Eye,
+  EyeOff,
+  GraduationCap,
+  Lock,
+  School,
+  ShieldCheck,
+  User,
+  UserRound
+} from 'lucide-react';
 import { API_BASE_URL } from '../../../endpoints';
 import FirstVisitOnboarding, {
   ONBOARDING_KEYS,
@@ -47,14 +61,14 @@ function SigninPage() {
   useEffect(() => {
     document.title = 'เข้าสู่ระบบ - TDK Learning System';
   }, []);
-  // ensure Mali font is loaded for this page
+  // ensure Kanit font is loaded for this page
   useEffect(() => {
-    const id = 'google-font-mali';
+    const id = 'google-font-kanit';
     if (!document.getElementById(id)) {
       const link = document.createElement('link');
       link.id = id;
       link.rel = 'stylesheet';
-      link.href = 'https://fonts.googleapis.com/css2?family=Mali:wght@300;400;700;800&display=swap';
+      link.href = 'https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600&display=swap';
       document.head.appendChild(link);
     }
   }, []);
@@ -406,12 +420,43 @@ function SigninPage() {
     }
   };
 
+  const fieldClassWithIcon = 'block w-full rounded-xl border border-slate-200 bg-white py-3 pl-11 pr-4 text-sm text-slate-700 outline-none transition-all placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-50';
+  const selectClass = 'block w-full appearance-none rounded-xl border border-slate-200 bg-white py-3 pl-4 pr-10 text-sm text-slate-700 outline-none transition-all focus:border-blue-500 focus:ring-4 focus:ring-blue-50 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400';
+
+  const roleMeta = {
+    admin: {
+      label: 'Admin / Owner',
+      icon: ShieldCheck,
+      description: 'เข้าสู่ระบบด้วยชื่อผู้ใช้และรหัสผ่านโดยตรง'
+    },
+    teacher: {
+      label: 'ครู / บุคลากร',
+      icon: School,
+      description: 'เลือกโรงเรียนและชื่อของคุณก่อนกรอกรหัสผ่าน'
+    },
+    student: {
+      label: 'นักเรียน',
+      icon: GraduationCap,
+      description: 'เลือกโรงเรียน ปีการศึกษา ชั้นเรียน และชื่อนักเรียน'
+    }
+  };
+
+  const activeRoleMeta = roleMeta[loginType];
+
 
   return (
     <div
-      className="min-h-screen bg-gradient-to-br from-slate-50 to-emerald-50/30 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden"
-      style={{ fontFamily: 'Mali, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial' }}
+      className="relative flex min-h-screen items-center justify-center overflow-hidden bg-slate-50 px-4 py-6 text-slate-800 sm:px-6 sm:py-10 lg:px-8"
+      style={{ fontFamily: 'Kanit, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial' }}
     >
+      <style>{`
+        @keyframes auth-blob {
+          0% { transform: translate(0px, 0px) scale(1); }
+          33% { transform: translate(28px, -44px) scale(1.08); }
+          66% { transform: translate(-18px, 18px) scale(0.94); }
+          100% { transform: translate(0px, 0px) scale(1); }
+        }
+      `}</style>
       <FirstVisitOnboarding
         open={showLoginOnboarding}
         onClose={handleCloseLoginOnboarding}
@@ -445,352 +490,366 @@ function SigninPage() {
         buttonLabel="เริ่มเข้าสู่ระบบ"
       />
 
-      {/* Decorative Ornaments */}
-      <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-500"></div>
-      <div className="absolute -top-32 -left-32 w-96 h-96 bg-emerald-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30"></div>
-      <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-teal-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30"></div>
-
-      <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10">
-        <div className="flex justify-center mb-6">
-          <div className="w-20 h-20 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl flex items-center justify-center text-4xl shadow-lg shadow-emerald-500/30 text-white transform rotate-3 hover:rotate-0 transition-transform duration-300">
-            🕌
-          </div>
-        </div>
-        <h2 className="text-center text-3xl font-extrabold text-slate-900 tracking-tight">
-          เข้าสู่ระบบ
-        </h2>
-        <p className="mt-2 text-center text-sm text-slate-500">
-          ยินดีต้อนรับกลับ — <span className="font-semibold text-emerald-600">
-            {loginType === 'admin' ? '🛡️ Admin / Owner' : loginType === 'teacher' ? '👨‍🏫 ครู/บุคลากร' : '👨‍🎓 นักเรียน'}
-          </span>
-        </p>
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute -left-20 -top-16 h-96 w-96 rounded-full bg-blue-200/60 blur-3xl opacity-70 [animation:auth-blob_16s_infinite]" />
+        <div className="absolute right-[-6rem] top-[18%] h-72 w-72 rounded-full bg-indigo-200/60 blur-3xl opacity-70 [animation:auth-blob_18s_infinite]" style={{ animationDelay: '2s' }} />
+        <div className="absolute bottom-[-7rem] left-[18%] h-80 w-80 rounded-full bg-cyan-200/60 blur-3xl opacity-70 [animation:auth-blob_20s_infinite]" style={{ animationDelay: '4s' }} />
       </div>
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md relative z-10 px-4 sm:px-0">
-        <div className="bg-white/90 backdrop-blur-xl py-8 px-4 shadow-2xl shadow-slate-200/50 sm:rounded-3xl sm:px-10 border border-white">
-          
-          {/* Login Type Selector (3 main buttons) */}
-          <div className="grid grid-cols-3 gap-2 mb-8">
+      <div className="relative z-10 w-full max-w-md">
+        <div className="mb-6 flex flex-col items-center text-center sm:mb-8">
+          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-slate-100 bg-white text-blue-600 shadow-sm">
+            <GraduationCap className="h-9 w-9" />
+          </div>
+          <h1 className="text-[1.7rem] font-semibold tracking-wide text-slate-800 sm:text-2xl">TDK Learning System</h1>
+          <p className="mt-1 text-sm text-slate-500">ระบบบริหารจัดการสถานศึกษาแบบครบวงจร</p>
+        </div>
+
+        <div className="overflow-hidden rounded-[2rem] border border-white/70 bg-white/70 shadow-[0_8px_30px_rgb(0,0,0,0.06)] backdrop-blur-xl transition-all duration-500">
+          <div className="flex border-b border-slate-200/60">
             <button
               type="button"
-              onClick={() => { setLoginType('admin'); setError(''); }}
-              className={`flex flex-col items-center justify-center gap-1 py-3 px-2 text-xs font-bold rounded-xl transition-all duration-300 ${
-                loginType === 'admin' 
-                  ? 'bg-white text-emerald-600 shadow-md border border-slate-100 scale-100' 
-                  : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/30 scale-95'
-              }`}
+              className="flex-1 border-b-2 border-blue-500 px-3 py-4 text-xs font-medium text-blue-600 transition-colors sm:text-sm"
             >
-              <span className="text-xl">🛡️</span>
-              <span>Admin</span>
+              เข้าสู่ระบบ
             </button>
             <button
               type="button"
-              onClick={() => { setLoginType('teacher'); setError(''); }}
-              className={`flex flex-col items-center justify-center gap-1 py-3 px-2 text-xs font-bold rounded-xl transition-all duration-300 ${
-                loginType === 'teacher' 
-                  ? 'bg-white text-emerald-600 shadow-md border border-slate-100 scale-100' 
-                  : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/30 scale-95'
-              }`}
+              onClick={() => navigate('/signup')}
+              className="flex-1 border-b-2 border-transparent px-3 py-4 text-xs font-medium text-slate-400 transition-colors hover:text-slate-600 sm:text-sm"
             >
-              <span className="text-xl">👨‍🏫</span>
-              <span>ครู</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => { setLoginType('student'); setError(''); }}
-              className={`flex flex-col items-center justify-center gap-1 py-3 px-2 text-xs font-bold rounded-xl transition-all duration-300 ${
-                loginType === 'student' 
-                  ? 'bg-white text-emerald-600 shadow-md border border-slate-100 scale-100' 
-                  : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/30 scale-95'
-              }`}
-            >
-              <span className="text-xl">👨‍🎓</span>
-              <span>นักเรียน</span>
+              ลงทะเบียนบุคลากร
             </button>
           </div>
 
-          <form className="space-y-6" onSubmit={handleSubmit}>
-            {loginType === 'admin' ? (
-              <>
-                {/* Admin/Owner Direct Login */}
-                <div className="space-y-5">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">
-                      ชื่อผู้ใช้
-                    </label>
-                    <div className="relative group">
-                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                        <span className="text-slate-400 group-focus-within:text-emerald-500 transition-colors">👤</span>
+          <div className="p-5 sm:p-8">
+            <div className="mb-5 grid grid-cols-3 gap-1.5 rounded-2xl bg-slate-100/80 p-1 sm:mb-6 sm:gap-2 sm:p-1.5">
+              {Object.entries(roleMeta).map(([key, meta]) => {
+                const Icon = meta.icon;
+                const isActive = loginType === key;
+
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => {
+                      setLoginType(key);
+                      setError('');
+                    }}
+                    className={`flex flex-col items-center gap-1 rounded-xl px-1.5 py-2.5 text-[11px] font-medium transition-all sm:px-2 sm:py-3 sm:text-xs ${
+                      isActive
+                        ? 'border border-blue-100 bg-white text-blue-600 shadow-sm'
+                        : 'text-slate-500 hover:bg-white/70 hover:text-slate-700'
+                    }`}
+                  >
+                    <Icon className="h-5 w-5" />
+                    <span>{key === 'admin' ? 'Admin' : key === 'teacher' ? 'ครู' : 'นักเรียน'}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="mb-5 rounded-2xl bg-blue-50/80 px-4 py-3 text-sm text-blue-700">
+              <div className="font-medium">{activeRoleMeta.label}</div>
+              <div className="mt-1 text-blue-600/80">{activeRoleMeta.description}</div>
+            </div>
+
+            <form className="space-y-5" onSubmit={handleSubmit}>
+              {loginType === 'admin' ? (
+                <>
+                  <div className="space-y-1.5">
+                    <label className="block text-sm font-medium text-slate-700">ชื่อผู้ใช้</label>
+                    <div className="relative">
+                      <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-slate-400">
+                        <User className="h-5 w-5" />
                       </div>
                       <input
                         type="text"
-                        className="block w-full pl-12 pr-4 py-3 border border-slate-200 rounded-xl bg-slate-50/50 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm shadow-sm"
+                        className={fieldClassWithIcon}
                         placeholder="Username ของคุณ"
                         value={username}
-                        onChange={e => setUsername(e.target.value)}
+                        onChange={(e) => setUsername(e.target.value)}
                         required
                       />
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">
-                      รหัสผ่าน
-                    </label>
-                    <div className="relative group">
-                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                        <span className="text-slate-400 group-focus-within:text-emerald-500 transition-colors">🔒</span>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-sm font-medium text-slate-700">รหัสผ่าน</label>
+                      <button
+                        type="button"
+                        onClick={() => navigate('/forgot')}
+                        className="text-xs font-medium text-blue-600 transition-colors hover:text-blue-700"
+                      >
+                        ลืมรหัสผ่าน?
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-slate-400">
+                        <Lock className="h-5 w-5" />
                       </div>
                       <input
                         type={showPassword ? 'text' : 'password'}
-                        className="block w-full pl-12 pr-12 py-3 border border-slate-200 rounded-xl bg-slate-50/50 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm shadow-sm"
-                        placeholder="Password"
+                        className="block w-full rounded-xl border border-slate-200 bg-white py-3 pl-11 pr-12 text-sm text-slate-700 outline-none transition-all placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
+                        placeholder="••••••••"
                         value={password}
-                        onChange={e => setPassword(e.target.value)}
+                        onChange={(e) => setPassword(e.target.value)}
                         required
                       />
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-emerald-500 transition-colors focus:outline-none"
+                        className="absolute inset-y-0 right-0 flex items-center pr-4 text-slate-400 transition-colors hover:text-blue-600"
+                        aria-label={showPassword ? 'ซ่อนรหัสผ่าน' : 'แสดงรหัสผ่าน'}
                       >
-                        {showPassword ? '🙈' : '👁️'}
+                        {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                       </button>
                     </div>
                   </div>
-                </div>
-              </>
-            ) : loginType === 'teacher' ? (
-              <>
-                {/* Teacher/Staff Directory Login */}
-                <div className="space-y-5">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">🏫 โรงเรียน</label>
-                    <div className="relative group">
+                </>
+              ) : loginType === 'teacher' ? (
+                <>
+                  <div className="space-y-1.5">
+                    <label className="block text-sm font-medium text-slate-700">โรงเรียน</label>
+                    <div className="relative">
                       <select
-                        className="block w-full pl-4 pr-10 py-3 border border-slate-200 rounded-xl bg-slate-50/50 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm appearance-none cursor-pointer shadow-sm"
+                        className={selectClass}
                         value={selectedTeacherSchoolId}
-                        onChange={e => setSelectedTeacherSchoolId(e.target.value)}
+                        onChange={(e) => setSelectedTeacherSchoolId(e.target.value)}
                         required
                       >
                         <option value="">-- เลือกโรงเรียน --</option>
-                        {schools.map(school => (
+                        {schools.map((school) => (
                           <option key={school.id} value={school.id}>{school.name}</option>
                         ))}
                       </select>
-                      <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-slate-400 group-focus-within:text-emerald-500 transition-colors">▼</div>
+                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-4 text-slate-400">
+                        <ChevronDown className="h-5 w-5" />
+                      </div>
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">👤 ชื่อครู/บุคลากร</label>
-                    <div className="relative group">
+                  <div className="space-y-1.5">
+                    <label className="block text-sm font-medium text-slate-700">ชื่อครูหรือบุคลากร</label>
+                    <div className="relative">
                       <select
-                        className="block w-full pl-4 pr-10 py-3 border border-slate-200 rounded-xl bg-slate-50/50 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm appearance-none disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                        className={selectClass}
                         value={selectedTeacherId}
-                        onChange={e => setSelectedTeacherId(e.target.value)}
+                        onChange={(e) => setSelectedTeacherId(e.target.value)}
                         required
                         disabled={!selectedTeacherSchoolId || teacherMembers.length === 0}
                       >
                         <option value="">-- เลือกชื่อ --</option>
-                        {teacherMembers.map(member => (
+                        {teacherMembers.map((member) => (
                           <option key={member.id} value={member.id}>{member.full_name || member.username}</option>
                         ))}
                       </select>
-                      <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-slate-400 group-focus-within:text-emerald-500 transition-colors">▼</div>
+                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-4 text-slate-400">
+                        <ChevronDown className="h-5 w-5" />
+                      </div>
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">🔒 รหัสผ่าน</label>
-                    <div className="relative group">
-                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                        <span className="text-slate-400 group-focus-within:text-emerald-500 transition-colors">🔒</span>
+                  <div className="space-y-1.5">
+                    <label className="block text-sm font-medium text-slate-700">รหัสผ่าน</label>
+                    <div className="relative">
+                      <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-slate-400">
+                        <Lock className="h-5 w-5" />
                       </div>
                       <input
                         type={showPassword ? 'text' : 'password'}
-                        className="block w-full pl-12 pr-12 py-3 border border-slate-200 rounded-xl bg-slate-50/50 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="block w-full rounded-xl border border-slate-200 bg-white py-3 pl-11 pr-12 text-sm text-slate-700 outline-none transition-all placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-50 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                         placeholder="รหัสผ่านของคุณ"
                         value={teacherPassword}
-                        onChange={e => setTeacherPassword(e.target.value)}
+                        onChange={(e) => setTeacherPassword(e.target.value)}
                         required
                         disabled={!selectedTeacherId}
                       />
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-emerald-500 transition-colors focus:outline-none"
+                        className="absolute inset-y-0 right-0 flex items-center pr-4 text-slate-400 transition-colors hover:text-blue-600"
+                        aria-label={showPassword ? 'ซ่อนรหัสผ่าน' : 'แสดงรหัสผ่าน'}
                       >
-                        {showPassword ? '🙈' : '👁️'}
+                        {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                       </button>
                     </div>
-                    <div className="mt-2.5 flex items-start gap-1.5">
-                      <span className="text-amber-500 text-xs mt-0.5">💡</span>
-                      <p className="text-[11px] text-slate-500 leading-tight">
-                        เลือกโรงเรียนและชื่อของคุณก่อนเข้าสู่ระบบ
-                      </p>
-                    </div>
                   </div>
-                </div>
-              </>
-            ) : (
-              <>
-                {/* Student Login */}
-                <div className="space-y-5">
-                  {/* School Selection */}
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">🏫 โรงเรียน</label>
-                    <div className="relative group">
+                </>
+              ) : (
+                <>
+                  <div className="space-y-1.5">
+                    <label className="block text-sm font-medium text-slate-700">โรงเรียน</label>
+                    <div className="relative">
                       <select
-                        className="block w-full pl-4 pr-10 py-3 border border-slate-200 rounded-xl bg-slate-50/50 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm appearance-none cursor-pointer shadow-sm"
+                        className={selectClass}
                         value={selectedSchoolId}
-                        onChange={e => setSelectedSchoolId(e.target.value)}
+                        onChange={(e) => setSelectedSchoolId(e.target.value)}
                         required
                       >
                         <option value="">-- เลือกโรงเรียน --</option>
-                        {schools.map(school => (
+                        {schools.map((school) => (
                           <option key={school.id} value={school.id}>{school.name}</option>
                         ))}
                       </select>
-                      <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-slate-400 group-focus-within:text-emerald-500 transition-colors">▼</div>
+                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-4 text-slate-400">
+                        <ChevronDown className="h-5 w-5" />
+                      </div>
                     </div>
                   </div>
 
-                  {/* Academic Year Selection */}
-                  {academicYears.length > 0 && (
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-2">📅 ปีการศึกษา</label>
-                      <div className="relative group">
+                  {academicYears.length > 0 ? (
+                    <div className="space-y-1.5">
+                      <label className="block text-sm font-medium text-slate-700">ปีการศึกษา</label>
+                      <div className="relative">
+                        <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-slate-400">
+                          <CalendarDays className="h-5 w-5" />
+                        </div>
                         <select
-                          className="block w-full pl-4 pr-10 py-3 border border-slate-200 rounded-xl bg-slate-50/50 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm appearance-none cursor-pointer shadow-sm"
+                          className="block w-full appearance-none rounded-xl border border-slate-200 bg-white py-3 pl-11 pr-10 text-sm text-slate-700 outline-none transition-all focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
                           value={selectedAcademicYear}
-                          onChange={e => setSelectedAcademicYear(e.target.value)}
+                          onChange={(e) => setSelectedAcademicYear(e.target.value)}
                           required
                         >
                           <option value="">-- เลือกปีการศึกษา --</option>
-                          {academicYears.map(y => (
-                            <option key={y} value={y}>{y}</option>
+                          {academicYears.map((year) => (
+                            <option key={year} value={year}>{year}</option>
                           ))}
                         </select>
-                        <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-slate-400 group-focus-within:text-emerald-500 transition-colors">▼</div>
+                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-4 text-slate-400">
+                          <ChevronDown className="h-5 w-5" />
+                        </div>
                       </div>
                     </div>
-                  )}
+                  ) : null}
 
-                  {/* Classroom Selection */}
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">📚 ชั้นเรียน</label>
-                    <div className="relative group">
+                  <div className="space-y-1.5">
+                    <label className="block text-sm font-medium text-slate-700">ชั้นเรียน</label>
+                    <div className="relative">
+                      <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-slate-400">
+                        <BookOpen className="h-5 w-5" />
+                      </div>
                       <select
-                        className="block w-full pl-4 pr-10 py-3 border border-slate-200 rounded-xl bg-slate-50/50 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm appearance-none disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                        className="block w-full appearance-none rounded-xl border border-slate-200 bg-white py-3 pl-11 pr-10 text-sm text-slate-700 outline-none transition-all focus:border-blue-500 focus:ring-4 focus:ring-blue-50 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                         value={selectedClassroomId}
-                        onChange={e => setSelectedClassroomId(e.target.value)}
+                        onChange={(e) => setSelectedClassroomId(e.target.value)}
                         required
                         disabled={!selectedSchoolId || !selectedAcademicYear || classrooms.length === 0}
                       >
                         <option value="">-- เลือกชั้นเรียน --</option>
-                        {classrooms.map(c => (
-                          <option key={c.id} value={c.id}>{c.name} ({c.grade_level || 'N/A'})</option>
+                        {classrooms.map((classroom) => (
+                          <option key={classroom.id} value={classroom.id}>{classroom.name} ({classroom.grade_level || 'N/A'})</option>
                         ))}
                       </select>
-                      <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-slate-400 group-focus-within:text-emerald-500 transition-colors">▼</div>
+                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-4 text-slate-400">
+                        <ChevronDown className="h-5 w-5" />
+                      </div>
                     </div>
                   </div>
 
-                  {/* Student Selection */}
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">👤 ชื่อนักเรียน</label>
-                    <div className="relative group">
+                  <div className="space-y-1.5">
+                    <label className="block text-sm font-medium text-slate-700">ชื่อนักเรียน</label>
+                    <div className="relative">
+                      <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-slate-400">
+                        <UserRound className="h-5 w-5" />
+                      </div>
                       <select
-                        className="block w-full pl-4 pr-10 py-3 border border-slate-200 rounded-xl bg-slate-50/50 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm appearance-none disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                        className="block w-full appearance-none rounded-xl border border-slate-200 bg-white py-3 pl-11 pr-10 text-sm text-slate-700 outline-none transition-all focus:border-blue-500 focus:ring-4 focus:ring-blue-50 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                         value={selectedStudentId}
-                        onChange={e => setSelectedStudentId(e.target.value)}
+                        onChange={(e) => setSelectedStudentId(e.target.value)}
                         required
                         disabled={!selectedClassroomId || students.length === 0}
                       >
                         <option value="">-- เลือกนักเรียน --</option>
-                        {students.map(s => (
-                          <option key={s.id} value={s.id}>{s.full_name || s.username}</option>
+                        {students.map((student) => (
+                          <option key={student.id} value={student.id}>{student.full_name || student.username}</option>
                         ))}
                       </select>
-                      <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-slate-400 group-focus-within:text-emerald-500 transition-colors">▼</div>
+                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-4 text-slate-400">
+                        <ChevronDown className="h-5 w-5" />
+                      </div>
                     </div>
                   </div>
 
-                  {/* Student Password */}
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">🔒 รหัสผ่าน</label>
-                    <input
-                      type="password"
-                      className="block w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50/50 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                      placeholder="รหัสผ่านของคุณ"
-                      value={studentPassword}
-                      onChange={e => setStudentPassword(e.target.value)}
-                      required
-                      disabled={!selectedStudentId}
-                    />
-                    <div className="mt-2.5 flex items-start gap-1.5">
-                      <span className="text-amber-500 text-xs mt-0.5">💡</span>
-                      <p className="text-[11px] text-slate-500 leading-tight">
-                        ครั้งแรกใช้รหัสผ่านที่ผู้ดูแลระบบให้ไว้
-                      </p>
+                  <div className="space-y-1.5">
+                    <label className="block text-sm font-medium text-slate-700">รหัสผ่าน</label>
+                    <div className="relative">
+                      <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-slate-400">
+                        <Lock className="h-5 w-5" />
+                      </div>
+                      <input
+                        type="password"
+                        className="block w-full rounded-xl border border-slate-200 bg-white py-3 pl-11 pr-4 text-sm text-slate-700 outline-none transition-all placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-50 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                        placeholder="รหัสผ่านของคุณ"
+                        value={studentPassword}
+                        onChange={(e) => setStudentPassword(e.target.value)}
+                        required
+                        disabled={!selectedStudentId}
+                      />
                     </div>
                   </div>
+                </>
+              )}
+
+              {error ? (
+                <div className="flex items-center justify-center gap-2 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-center text-xs font-medium text-red-600">
+                  <CircleHelp className="h-4 w-4" />
+                  {error}
                 </div>
-              </>
-            )}
+              ) : null}
 
-            {error && (
-              <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-xs font-medium animate-pulse text-center flex items-center justify-center gap-2">
-                <span>⚠️</span> {error}
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="mt-2 w-full rounded-xl bg-blue-600 py-3 text-sm font-medium text-white shadow-lg shadow-blue-500/30 transition-all duration-300 hover:-translate-y-0.5 hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {isLoading ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <svg className="h-5 w-5 animate-spin text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                    กำลังเข้าสู่ระบบ...
+                  </span>
+                ) : 'เข้าสู่ระบบ'}
+              </button>
+            </form>
+
+            <div className="mt-6 border-t border-slate-200/60 pt-6">
+              <div className="flex flex-wrap justify-center gap-x-4 gap-y-3 text-sm sm:gap-x-5">
+                <button
+                  type="button"
+                  onClick={() => navigate('/forgot')}
+                  className="font-medium text-slate-500 transition-colors hover:text-blue-600"
+                >
+                  ลืมรหัสผ่าน?
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate('/signup')}
+                  className="font-medium text-blue-600 transition-colors hover:text-blue-700"
+                >
+                  สร้างบัญชีใหม่
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate('/aboutme')}
+                  className="font-medium text-slate-500 transition-colors hover:text-slate-700"
+                >
+                  เกี่ยวกับผู้พัฒนา
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate('/')}
+                  className="font-medium text-slate-400 transition-colors hover:text-slate-600"
+                >
+                  กลับหน้าหลัก
+                </button>
               </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full flex justify-center py-3.5 px-4 border border-transparent rounded-xl shadow-lg text-sm font-bold text-white bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 transition-all transform active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed shadow-emerald-500/25"
-            >
-              {isLoading ? (
-                <span className="flex items-center gap-2">
-                  <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                  กำลังเข้าสู่ระบบ...
-                </span>
-              ) : 'เข้าสู่ระบบ'}
-            </button>
-          </form>
-
-          <div className="mt-8">
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-slate-200/60"></div>
-              </div>
-              <div className="relative flex justify-center text-xs">
-                <span className="px-3 bg-none text-slate-400 uppercase tracking-widest font-semibold backdrop-blur-xl">หรือ</span>
-              </div>
-            </div>
-
-            <div className="mt-6 flex flex-wrap justify-center gap-x-6 gap-y-3 text-sm">
-              <button type="button" onClick={() => navigate('/forgot')} className="text-slate-500 hover:text-emerald-600 font-medium transition-all hover:underline underline-offset-4 decoration-emerald-200">
-                ลืมรหัสผ่าน?
-              </button>
-              <button type="button" onClick={() => navigate('/signup')} className="text-emerald-600 hover:text-emerald-700 font-bold transition-colors">
-                สร้างบัญชีใหม่
-              </button>
-              <button type="button" onClick={() => navigate('/aboutme')} className="text-blue-500 hover:text-blue-600 font-bold transition-colors">
-                เกี่ยวกับผู้พัฒนา
-              </button>
-              <button type="button" onClick={() => navigate('/')} className="text-slate-400 hover:text-slate-600 font-medium transition-colors">
-                กลับหน้าหลัก
-              </button>
             </div>
           </div>
         </div>
-      </div>
 
-      <p className="mt-12 text-center text-xs text-slate-400 font-medium z-10">
-        © {new Date().getFullYear()} TDK Mosque Learning Center.
-      </p>
+        <p className="mt-6 text-center text-sm text-slate-400 sm:mt-8">© {new Date().getFullYear()} TDK Learning System</p>
+      </div>
     </div>
   );
 }

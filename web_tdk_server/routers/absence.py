@@ -453,7 +453,6 @@ def list_absences(
             if hr.classroom_id:
                 ids = db.query(ClassroomStudent.student_id).filter(
                     ClassroomStudent.classroom_id == hr.classroom_id,
-                    ClassroomStudent.is_active == True
                 ).all()
                 student_ids.update(student_id_value for student_id_value, in ids)
                 continue
@@ -473,7 +472,6 @@ def list_absences(
             if classroom_ids:
                 ids = db.query(ClassroomStudent.student_id).filter(
                     ClassroomStudent.classroom_id.in_(classroom_ids),
-                    ClassroomStudent.is_active == True
                 ).all()
                 student_ids.update(student_id_value for student_id_value, in ids)
 

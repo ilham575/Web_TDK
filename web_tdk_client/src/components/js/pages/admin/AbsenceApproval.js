@@ -225,7 +225,7 @@ export default function AbsenceApproval({ academicYear = '', semester = '' }) {
     const Icon = config.icon;
 
     return (
-      <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black border uppercase tracking-wider ${config.color}`}>
+      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${config.color}`}>
         <Icon className="w-3.5 h-3.5" />
         {config.label}
       </span>
@@ -242,79 +242,77 @@ export default function AbsenceApproval({ academicYear = '', semester = '' }) {
   };
 
   return (
-    <section className="bg-white/85 backdrop-blur-xl rounded-[2rem] border border-white/70 shadow-[0_24px_70px_-30px_rgba(15,23,42,0.32)] ring-1 ring-slate-200/40 overflow-hidden">
-      <div className="p-6 md:p-8 border-b border-slate-50 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-slate-50 to-white">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-emerald-500 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-emerald-200">
-            <FileText className="w-6 h-6" />
+    <section className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+      <div className="px-6 py-4 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-lg">
+            <FileText className="w-5 h-5" />
           </div>
           <div>
-            <h4 className="text-xl font-black text-slate-800 tracking-tight">อนุมัติการลาเรียน</h4>
-            <p className="text-sm font-medium text-slate-400">จัดการคำขอลางานจากนักเรียนในระบบ</p>
+            <h4 className="text-xl font-semibold text-slate-800">อนุมัติการลาเรียน</h4>
+            <p className="text-sm text-slate-500">จัดการคำขอลางานจากนักเรียนในระบบ</p>
           </div>
         </div>
         
         <button
           onClick={loadAbsences}
           disabled={loading}
-          className={`flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-100 text-slate-600 rounded-xl font-bold text-sm shadow-sm hover:bg-slate-50 hover:text-emerald-600 transition-all active:scale-95 disabled:opacity-50 group`}
+          className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-lg font-medium text-sm hover:bg-slate-50 hover:text-emerald-600 transition-colors disabled:opacity-50"
         >
-          <RefreshCw className={`w-4 h-4 transition-transform duration-700 ${loading ? 'animate-spin' : 'group-hover:rotate-180'}`} />
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           รีเฟรชข้อมูล
         </button>
       </div>
 
-      <div className="px-6 py-4 bg-slate-50/50 border-b border-slate-50 flex flex-wrap items-center gap-2">
+      <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/50 flex flex-wrap items-center gap-2">
         <div className="flex items-center gap-2 mr-2 text-slate-400">
           <Filter className="w-4 h-4" />
-          <span className="text-xs font-black uppercase tracking-widest">ตัวกรอง:</span>
+          <span className="text-xs font-medium uppercase tracking-wider">ตัวกรอง:</span>
         </div>
         {[
-          { id: 'pending', label: 'รอการอนุมัติ', icon: Clock, count: absences.filter(a => a.status === 'pending').length, activeColor: 'bg-blue-600 text-white shadow-blue-200' },
-          { id: 'approved', label: 'อนุมัติแล้ว', icon: CheckCircle, count: absences.filter(a => a.status === 'approved').length, activeColor: 'bg-emerald-600 text-white shadow-emerald-200' },
-          { id: 'rejected', label: 'ไม่อนุมัติ', icon: XCircle, count: absences.filter(a => a.status === 'rejected').length, activeColor: 'bg-rose-600 text-white shadow-rose-200' },
-          { id: 'all', label: 'ทั้งหมด', icon: Inbox, count: absences.length, activeColor: 'bg-slate-700 text-white shadow-slate-200' },
+          { id: 'pending', label: 'รอการอนุมัติ', icon: Clock, count: absences.filter(a => a.status === 'pending').length, activeStyle: 'bg-blue-600 text-white' },
+          { id: 'approved', label: 'อนุมัติแล้ว', icon: CheckCircle, count: absences.filter(a => a.status === 'approved').length, activeStyle: 'bg-emerald-600 text-white' },
+          { id: 'rejected', label: 'ไม่อนุมัติ', icon: XCircle, count: absences.filter(a => a.status === 'rejected').length, activeStyle: 'bg-red-600 text-white' },
+          { id: 'all', label: 'ทั้งหมด', icon: Inbox, count: absences.length, activeStyle: 'bg-slate-700 text-white' },
         ].map(btn => (
           <button 
             key={btn.id}
             onClick={() => setFilter(btn.id)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
               filter === btn.id 
-                ? `${btn.activeColor} shadow-lg scale-105` 
-                : 'bg-white text-slate-500 border border-slate-100 hover:border-slate-300'
+                ? `${btn.activeStyle} shadow-sm` 
+                : 'bg-white text-slate-500 border border-slate-200 hover:border-slate-300'
             }`}
           >
             <btn.icon className="w-3.5 h-3.5" />
             {btn.label}
-            <span className={`px-1.5 py-0.5 rounded-md text-[10px] ${filter === btn.id ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>
+            <span className={`px-1.5 py-0.5 rounded text-[10px] ${filter === btn.id ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>
               {btn.count}
             </span>
           </button>
         ))}
       </div>
 
-      <div className="p-6">
+      <div className="p-5">
         {loading ? (
-          <div className="py-20 flex flex-col items-center justify-center gap-4">
-            <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
-            <p className="text-slate-400 font-bold animate-pulse">กำลังโหลดข้อมูล...</p>
+          <div className="py-16 flex flex-col items-center justify-center gap-3">
+            <div className="w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+            <p className="text-slate-400 font-medium text-sm">กำลังโหลดข้อมูล...</p>
           </div>
         ) : filteredAbsences.length === 0 ? (
-          <div className="py-20 flex flex-col items-center justify-center gap-4 text-slate-300">
-            <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center">
-              <Inbox className="w-10 h-10" />
-            </div>
-            <p className="text-lg font-black tracking-tight text-slate-400">ไม่มีข้อมูลการลา</p>
-            <p className="text-sm">ลองเปลี่ยนตัวกรองหรือรีเฟรชหน้าสิ</p>
+          <div className="py-16 flex flex-col items-center justify-center gap-3 text-slate-400">
+            <Inbox className="w-12 h-12" />
+            <p className="text-base font-medium text-slate-500">ไม่มีข้อมูลการลา</p>
+            <p className="text-sm text-slate-400">ลองเปลี่ยนตัวกรองหรือรีเฟรชหน้าสิ</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             {filteredAbsences.map(absence => (
-              <div key={absence.id} className="group bg-white border border-slate-100 rounded-3xl p-5 hover:border-emerald-200 hover:shadow-xl hover:shadow-emerald-500/5 transition-all duration-300">
+              <div key={absence.id} className="bg-white border border-slate-100 rounded-xl p-5 hover:border-slate-200 hover:shadow-sm transition-all duration-200">
                 <div className="flex flex-col h-full">
                   <div className="flex justify-between items-start gap-3 mb-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-slate-600 group-hover:bg-emerald-50 group-hover:text-emerald-600 transition-colors">
+                      <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center text-slate-500">
                         <User className="w-5 h-5" />
                       </div>
                       <div>
@@ -351,7 +349,7 @@ export default function AbsenceApproval({ academicYear = '', semester = '' }) {
                     )}
 
                     {absence.reason && (
-                      <div className="bg-slate-50 rounded-2xl p-3 text-sm text-slate-600 border border-slate-100 group-hover:bg-white group-hover:border-emerald-100 transition-colors">
+                      <div className="bg-slate-50 rounded-lg p-3 text-sm text-slate-600 border border-slate-100 transition-colors">
                         <strong className="text-slate-400 block mb-1 uppercase text-[10px] tracking-widest font-black">เหตุผล</strong>
                         {absence.reason}
                       </div>
@@ -378,7 +376,7 @@ export default function AbsenceApproval({ academicYear = '', semester = '' }) {
                     )}
                     
                     {absence.status === 'rejected' && absence.reject_reason && (
-                      <div className="mt-2 bg-rose-50 rounded-xl p-3 text-[12px] text-rose-700 border border-rose-100">
+                      <div className="mt-2 bg-rose-50 rounded-lg p-3 text-[12px] text-rose-700 border border-rose-100">
                         <strong className="block text-[10px] font-black uppercase tracking-widest mb-1 opacity-70">เหตุผลที่ปฏิเสธ</strong>
                         {absence.reject_reason}
                       </div>
@@ -386,11 +384,11 @@ export default function AbsenceApproval({ academicYear = '', semester = '' }) {
                   </div>
 
                   {absence.status === 'pending' && (
-                    <div className="mt-5 pt-4 border-t border-slate-50 grid grid-cols-2 gap-3">
+                    <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-2 gap-3">
                       <button
                         onClick={() => handleApprove(absence.id, absence.version)}
                         disabled={processingIds.has(absence.id)}
-                        className="flex items-center justify-center gap-2 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-black shadow-lg shadow-emerald-200 transition-all active:scale-95 disabled:opacity-50"
+                        className="flex items-center justify-center gap-2 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
                       >
                         {processingIds.has(absence.id) ? (
                           <RefreshCw className="w-4 h-4 animate-spin" />
@@ -406,7 +404,7 @@ export default function AbsenceApproval({ academicYear = '', semester = '' }) {
                           setShowRejectModal(true);
                         }}
                         disabled={processingIds.has(absence.id)}
-                        className="flex items-center justify-center gap-2 py-2.5 bg-white border border-slate-200 text-slate-600 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-100 rounded-xl text-sm font-black transition-all active:scale-95 disabled:opacity-50"
+                        className="flex items-center justify-center gap-2 py-2 bg-white border border-slate-200 text-slate-600 hover:bg-red-50 hover:text-red-600 hover:border-red-100 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
                       >
                         <X className="w-4 h-4" />
                         ปฏิเสธ
@@ -422,14 +420,14 @@ export default function AbsenceApproval({ academicYear = '', semester = '' }) {
 
       {showRejectModal && ReactDOM.createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowRejectModal(false)} />
-          <div className="relative w-full max-w-md bg-white/95 border border-white/70 rounded-[2rem] shadow-[0_32px_90px_-28px_rgba(15,23,42,0.42)] ring-1 ring-slate-200/60 overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="p-6 border-b border-slate-50 flex items-center justify-between">
-              <div className="flex items-center gap-3 text-rose-600">
-                <div className="w-10 h-10 bg-rose-50 rounded-xl flex items-center justify-center">
-                  <XCircle className="w-6 h-6" />
+          <div className="absolute inset-0 bg-slate-900/50" onClick={() => setShowRejectModal(false)} />
+          <div className="relative w-full max-w-md bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 bg-red-50 text-red-600 rounded-lg flex items-center justify-center">
+                  <XCircle className="w-5 h-5" />
                 </div>
-                <h3 className="text-lg font-black tracking-tight text-slate-800">ปฏิเสธการลา</h3>
+                <h3 className="text-lg font-semibold text-slate-800">ปฏิเสธการลา</h3>
               </div>
               <button
                 className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-50 transition-colors"
@@ -440,11 +438,11 @@ export default function AbsenceApproval({ academicYear = '', semester = '' }) {
             </div>
 
             <div className="p-6">
-              <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2 px-1">
+              <label className="block text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">
                 ระบุเหตุผลการปฏิเสธ *
               </label>
               <textarea
-                className="w-full min-h-[120px] p-4 bg-slate-50 border border-slate-100 rounded-2xl text-slate-700 text-sm font-medium focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all resize-none"
+                className="w-full min-h-[120px] p-4 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 text-sm focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 outline-none transition-all resize-none"
                 placeholder="เช่น ข้อมูลไม่ครบถ้วน หรือไม่เป็นไปตามเกณฑ์..."
                 value={rejectReason}
                 onChange={(e) => setRejectReason(e.target.value)}
@@ -453,13 +451,13 @@ export default function AbsenceApproval({ academicYear = '', semester = '' }) {
 
             <div className="p-6 pt-0 flex gap-3">
               <button
-                className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl font-black text-sm transition-all"
+                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg font-medium text-sm transition-colors"
                 onClick={() => setShowRejectModal(false)}
               >
                 ยกเลิก
               </button>
               <button
-                className="flex-[2] py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-black text-sm shadow-lg shadow-rose-200 transition-all active:scale-95 disabled:opacity-50"
+                className="flex-[2] py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium text-sm transition-colors disabled:opacity-50"
                 onClick={handleReject}
                 disabled={processingIds.has(selectedAbsenceId)}
               >

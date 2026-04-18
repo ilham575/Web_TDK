@@ -113,38 +113,65 @@ export default function Footer() {
   if (!shouldRender || timeLeft === null) return null;
 
   const isLowTime = timeLeft < 300; // Less than 5 minutes
+  const footerTone = isLowTime
+    ? 'border-rose-200/70 bg-gradient-to-r from-rose-600/95 via-rose-500/95 to-orange-500/95 text-white shadow-[0_24px_60px_-22px_rgba(244,63,94,0.58)]'
+    : 'border-white/60 bg-white/88 text-slate-900 shadow-[0_24px_60px_-24px_rgba(15,23,42,0.28)]';
+  const accentTone = isLowTime
+    ? 'bg-white/18 text-white border border-white/15'
+    : 'bg-emerald-500/10 text-emerald-700 border border-emerald-100/80';
+  const timerTone = isLowTime
+    ? 'bg-white/16 text-white border border-white/15 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]'
+    : 'bg-slate-900 text-white border border-slate-800 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]';
 
   return (
-    <footer 
-      className={`fixed bottom-0 left-0 right-0 z-[100] transition-all duration-500 transform translate-y-0 ${
-        isLowTime ? 'bg-rose-600/90' : 'bg-slate-900/80'
-      } backdrop-blur-md border-t border-white/10`}
-      aria-live="polite"
-    >
-      <div className="max-w-7xl mx-auto px-4 py-2 sm:py-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className={`p-1.5 rounded-lg ${isLowTime ? 'bg-white/20' : 'bg-emerald-500/20'}`}>
-            <Shield className={`w-3.5 h-3.5 ${isLowTime ? 'text-white' : 'text-emerald-400'}`} />
+    <footer className="fixed bottom-3 left-0 right-0 z-[100] px-3 sm:px-4" aria-live="polite">
+      <div className="mx-auto max-w-6xl">
+        <div
+          className={`relative overflow-hidden rounded-[1.75rem] border backdrop-blur-2xl transition-all duration-500 ${footerTone}`}
+        >
+          <div className="absolute inset-0 pointer-events-none">
+            <div className={`absolute -top-10 right-12 h-24 w-24 rounded-full blur-3xl ${isLowTime ? 'bg-white/16' : 'bg-emerald-300/20'}`} />
+            <div className={`absolute -bottom-12 left-10 h-24 w-24 rounded-full blur-3xl ${isLowTime ? 'bg-orange-200/18' : 'bg-sky-300/16'}`} />
           </div>
-          <span className="text-[10px] sm:text-xs font-black tracking-widest text-white/70 uppercase">
-            Secure Session
-          </span>
-        </div>
 
-        <div className="flex items-center gap-4">
-          <div className={`flex items-center gap-2 px-3 py-1 rounded-full ${
-            isLowTime ? 'bg-white/20 animate-pulse' : 'bg-white/5 shadow-inner border border-white/5'
-          }`}>
-            <Clock className={`w-3.5 h-3.5 ${isLowTime ? 'text-white' : 'text-emerald-400'}`} />
-            {expired ? (
-              <span className="text-[10px] sm:text-xs font-bold text-white flex items-center gap-1">
-                <AlertTriangle className="w-3 h-3" /> หมดอายุแล้ว
-              </span>
-            ) : (
-              <span className="text-[10px] sm:text-xs font-black text-white font-mono tracking-tighter">
-                EXP: <span className={isLowTime ? 'text-white' : 'text-emerald-400'}>{formatDuration(timeLeft)}</span>
-              </span>
-            )}
+          <div className="relative flex items-center justify-between gap-3 px-4 py-2.5 sm:px-5 sm:py-3">
+            <div className="min-w-0 flex items-center gap-3">
+              <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] ${accentTone}`}>
+                <Shield className={`h-4 w-4 ${isLowTime ? 'text-white' : 'text-emerald-700'}`} />
+              </div>
+
+              <div className="min-w-0 leading-tight">
+                <div className={`text-[10px] font-black uppercase tracking-[0.28em] ${isLowTime ? 'text-white/75' : 'text-slate-400'}`}>
+                  Secure Session
+                </div>
+                <div className={`truncate text-xs sm:text-sm font-bold ${isLowTime ? 'text-white' : 'text-slate-700'}`}>
+                  {isLowTime ? 'เซสชันใกล้หมดอายุ กรุณาตรวจสอบก่อนออกจากหน้านี้' : 'ระบบยังคงยืนยันตัวตนและติดตามเวลาการใช้งานอยู่'}
+                </div>
+              </div>
+            </div>
+
+            <div className={`shrink-0 flex items-center gap-2 rounded-2xl px-3 py-2 sm:px-3.5 ${timerTone} ${isLowTime && !expired ? 'animate-pulse' : ''}`}>
+              {expired ? (
+                <>
+                  <AlertTriangle className="h-4 w-4" />
+                  <span className="text-[10px] sm:text-xs font-black tracking-wide">หมดอายุแล้ว</span>
+                </>
+              ) : (
+                <>
+                  <div className={`flex h-7 w-7 items-center justify-center rounded-xl ${isLowTime ? 'bg-white/18' : 'bg-white/8'}`}>
+                    <Clock className={`h-3.5 w-3.5 ${isLowTime ? 'text-white' : 'text-emerald-300'}`} />
+                  </div>
+                  <div className="leading-none text-right">
+                    <div className={`text-[9px] font-black uppercase tracking-[0.24em] ${isLowTime ? 'text-white/70' : 'text-white/55'}`}>
+                      Expires In
+                    </div>
+                    <div className="mt-1 font-mono text-xs sm:text-sm font-black tracking-[0.06em]">
+                      {formatDuration(timeLeft)}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </div>

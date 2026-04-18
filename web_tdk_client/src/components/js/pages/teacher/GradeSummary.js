@@ -418,22 +418,22 @@ function GradeSummary() {
     : (!hasRealCollectedAssignments || !hasRealExamAssignments);
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] pb-20 selection:bg-emerald-100 selection:text-emerald-900">
+    <div className="min-h-screen bg-slate-50 pb-20 selection:bg-blue-100 selection:text-blue-900">
       {/* Header */}
-      <div className="bg-white/80 backdrop-blur-md border-b border-slate-200/60 sticky top-0 z-30 transition-all duration-300">
+      <div className="bg-white border-b border-slate-200 sticky top-0 z-30 transition-colors duration-300">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-20">
             <div className="flex items-center gap-6">
               <button 
                 onClick={() => navigate(-1)}
-                className="group p-3 bg-white text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-2xl transition-all duration-300 active:scale-95 border border-slate-100 shadow-sm hover:shadow-md hover:border-emerald-100"
+                className="group p-3 bg-white text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all duration-300 active:scale-95 border border-slate-200 shadow-sm"
               >
                 <ArrowLeft className="w-5 h-5 group-hover:-translate-x-0.5 transition-transform" />
               </button>
               <div>
                 <h1 className="text-2xl font-black text-slate-800 tracking-tight leading-none">{t('teacherGradeSummary.title')}</h1>
                 <div className="flex items-center gap-2 mt-2">
-                  <span className="bg-emerald-100 text-emerald-700 text-[10px] font-black px-2 py-0.5 rounded-lg uppercase tracking-wider">
+                  <span className="bg-blue-100 text-blue-700 text-[10px] font-black px-2 py-0.5 rounded-lg uppercase tracking-wider">
                     {t('teacherGradeSummary.summaryBadge')}
                   </span>
                   <p className="text-xs font-bold text-slate-400 flex items-center gap-1.5 overflow-hidden text-ellipsis whitespace-nowrap max-w-[200px] sm:max-w-md">
@@ -448,7 +448,7 @@ function GradeSummary() {
               {shouldShowSaveButton && (
                 <button 
                   onClick={saveManualChanges}
-                  className="flex items-center gap-2 px-3 sm:px-5 py-2.5 sm:py-3 bg-emerald-600 text-white rounded-2xl font-black text-xs sm:text-sm shadow-lg shadow-emerald-200 hover:bg-emerald-700 hover:shadow-emerald-300 hover:-translate-y-0.5 transition-all duration-300 active:scale-95"
+                  className="flex items-center gap-2 px-3 sm:px-5 py-2.5 sm:py-3 bg-blue-600 text-white rounded-lg font-black text-xs sm:text-sm shadow-sm hover:bg-blue-700 transition-colors duration-300 active:scale-95"
                 >
                   <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5" />
                   <span>{t('teacherGradeSummary.saveScores')}</span>
@@ -456,7 +456,7 @@ function GradeSummary() {
               )}
               <button 
                 onClick={() => window.print()}
-                className="group p-3 bg-white text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-2xl transition-all duration-300 active:scale-95 border border-slate-100 shadow-sm hover:shadow-md hover:border-emerald-100"
+                className="group p-3 bg-white text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all duration-300 active:scale-95 border border-slate-200 shadow-sm"
               >
                 <Printer className="w-5 h-5 group-hover:scale-110 transition-transform" />
               </button>
@@ -476,8 +476,8 @@ function GradeSummary() {
                         onClick={() => setSelectedClass(c)}
                         className={`px-5 py-3 rounded-2xl font-black text-sm whitespace-nowrap transition-all duration-300 active:scale-95 ${
                             selectedClass?.key === c.key
-                            ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200'
-                            : 'bg-white text-slate-500 border border-slate-100 hover:bg-slate-50 hover:text-emerald-600'
+                            ? 'bg-blue-600 text-white shadow-sm'
+                            : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50 hover:text-blue-600'
                         }`}
                     >
                       {getDisplayClassLabel(c.label)}
@@ -488,7 +488,7 @@ function GradeSummary() {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <div className="bg-white rounded-[2rem] p-8 border border-slate-100/60 shadow-sm hover:shadow-md transition-all group">
+            <div className="bg-white rounded-xl p-8 border border-slate-100 shadow-sm hover:shadow-md transition-all group">
                 <div className="flex items-center justify-between mb-4">
                    <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400 group-hover:scale-110 transition-transform">
                       <BarChart3 className="w-6 h-6" />
@@ -501,9 +501,9 @@ function GradeSummary() {
                 </div>
             </div>
 
-            <div className="bg-white rounded-[2rem] p-8 border border-slate-100/60 shadow-sm hover:shadow-md transition-all group">
+            <div className="bg-white rounded-xl p-8 border border-slate-100 shadow-sm hover:shadow-md transition-all group">
                 <div className="flex items-center justify-between mb-4">
-                   <div className="w-12 h-12 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform">
+                   <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform">
                       <User className="w-6 h-6" />
                    </div>
                    <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest bg-slate-50 px-2 py-1 rounded-lg">{t('teacherGradeSummary.totalTag')}</span>
@@ -514,7 +514,7 @@ function GradeSummary() {
                 </div>
             </div>
 
-            <div className="bg-white rounded-[2rem] p-8 border border-slate-100/60 shadow-sm hover:shadow-md transition-all group">
+            <div className="bg-white rounded-xl p-8 border border-slate-100 shadow-sm hover:shadow-md transition-all group">
                 <div className="flex items-center justify-between mb-4">
                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform ${subjectType === 'activity' ? 'bg-amber-50 text-amber-600' : 'bg-blue-50 text-blue-600'}`}>
                       <BookOpen className="w-6 h-6" />
@@ -530,10 +530,10 @@ function GradeSummary() {
             {/* Additional info card could go here */}
         </div>
 
-        <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden">
+        <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
             <div className="p-8 border-b border-slate-50 bg-slate-50/30">
                 <h3 className="text-lg font-black text-slate-800 flex items-center gap-3">
-                    <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center shadow-lg shadow-emerald-200">
+                    <span className="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
                       <LayoutGrid className="w-5 h-5" />
                     </span>
                     {t('teacherGradeSummary.summaryTable')}
@@ -553,11 +553,11 @@ function GradeSummary() {
                             ).map(a => (
                                 <th key={a.id} className="px-6 py-5 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest min-w-[120px]">
                                     <span className="block truncate max-w-[100px] mx-auto" title={a.title}>{a.title}</span>
-                                    <span className="text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg ml-1">/{a.max_score}</span>
+                                    <span className="text-blue-600 bg-blue-50 px-2 py-0.5 rounded-lg ml-1">/{a.max_score}</span>
                                 </th>
                             ))}
                             {subjectType === 'activity' ? (
-                              <th className="px-8 py-5 text-center text-[10px] font-black text-emerald-800 uppercase tracking-widest bg-emerald-50 whitespace-nowrap">{t('teacherGradeSummary.tableTotalScore')}</th>
+                              <th className="px-8 py-5 text-center text-[10px] font-black text-blue-800 uppercase tracking-widest bg-blue-50 whitespace-nowrap">{t('teacherGradeSummary.tableTotalScore')}</th>
                             ) : (
                                 <>
                                     <th className="px-8 py-5 text-center text-[10px] font-black text-blue-700 uppercase tracking-widest bg-blue-50 whitespace-nowrap border-l border-white">
@@ -595,17 +595,17 @@ function GradeSummary() {
                                             <div className="flex flex-col items-center">
                                               <span className="text-sm font-black text-slate-600">{detail.score}</span>
                                               <div className="w-12 h-1 bg-slate-100 rounded-full mt-1 overflow-hidden">
-                                                <div className="h-full bg-emerald-400/50" style={{ width: `${detail.percentage}%` }}></div>
+                                                <div className="h-full bg-blue-400/60" style={{ width: `${detail.percentage}%` }}></div>
                                               </div>
                                             </div>
                                         </td>
                                     ))}
                                     {subjectType === 'activity' ? (
-                                        <td className="px-8 py-5 text-center bg-emerald-50/30 font-black text-emerald-700">
+                                            <td className="px-8 py-5 text-center bg-blue-50/30 font-black text-blue-700">
                                         {shouldShowActivityManualInput(student.id) ? (
                                                 <input 
                                                     type="number" 
-                                                    className="w-16 px-2 py-1 bg-white border border-emerald-100 rounded text-center text-sm font-black focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-300 outline-none transition-all"
+                                                  className="w-16 px-2 py-1 bg-white border border-blue-100 rounded text-center text-sm font-black focus:ring-4 focus:ring-blue-500/10 focus:border-blue-300 outline-none transition-all"
                                                     value={manualGrades[student.id]?.collected ?? ''}
                                                     onChange={(e) => handleManualGradeChange(student.id, 'collected', e.target.value)}
                                                     placeholder={maxCollectedScore}
@@ -654,7 +654,7 @@ function GradeSummary() {
                                               <div className="text-[10px] font-bold text-slate-400">/ {summary.totalMaxScore}</div>
                                             </div>
                                             <span className={`w-10 h-10 flex items-center justify-center rounded-xl text-xs font-black border-2 shadow-sm ${
-                                                summary.overallGrade === 'A' ? 'bg-emerald-100 text-emerald-600 border-emerald-200' :
+                                                summary.overallGrade === 'A' ? 'bg-blue-100 text-blue-600 border-blue-200' :
                                                 summary.overallGrade.includes('B') ? 'bg-blue-100 text-blue-600 border-blue-200' :
                                                 summary.overallGrade.includes('C') ? 'bg-amber-100 text-amber-600 border-amber-200' :
                                                 'bg-rose-100 text-rose-600 border-rose-200'
@@ -688,7 +688,7 @@ function GradeSummary() {
                                    </div>
                                 </div>
                                 <div className={`w-12 h-12 flex items-center justify-center rounded-2xl text-lg font-black border-2 uppercase shadow-sm ${
-                                    summary.overallGrade === 'A' ? 'bg-emerald-100 text-emerald-600 border-emerald-200 shadow-emerald-100' :
+                                    summary.overallGrade === 'A' ? 'bg-blue-100 text-blue-600 border-blue-200 shadow-blue-100' :
                                     summary.overallGrade.includes('B') ? 'bg-blue-100 text-blue-600 border-blue-200' :
                                     summary.overallGrade.includes('C') ? 'bg-amber-100 text-amber-600 border-amber-200' :
                                     'bg-rose-100 text-rose-600 border-rose-200'
@@ -699,19 +699,19 @@ function GradeSummary() {
 
                             <div className="grid grid-cols-2 gap-3 mb-4">
                                 {subjectType === 'activity' ? (
-                                    <div className="col-span-2 px-4 py-3 bg-emerald-50 rounded-2xl border border-emerald-100 flex justify-between items-center">
-                                    <span className="text-[10px] font-black text-emerald-600 uppercase">{t('teacherGradeSummary.tableTotalScore')} (/{maxCollectedScore})</span>
+                                    <div className="col-span-2 px-4 py-3 bg-blue-50 rounded-xl border border-blue-100 flex justify-between items-center">
+                                    <span className="text-[10px] font-black text-blue-600 uppercase">{t('teacherGradeSummary.tableTotalScore')} (/{maxCollectedScore})</span>
                                   {shouldShowActivityManualInput(student.id) ? (
                                             <input 
                                                 type="number" 
-                                                className="w-20 bg-transparent text-lg font-black text-emerald-700 outline-none placeholder:text-emerald-200 text-right"
+                                                className="w-20 bg-transparent text-lg font-black text-blue-700 outline-none placeholder:text-blue-200 text-right"
                                                 value={manualGrades[student.id]?.collected ?? ''}
                                                 onChange={(e) => handleManualGradeChange(student.id, 'collected', e.target.value)}
                                                 placeholder={maxCollectedScore}
                                                 max={maxCollectedScore}
                                             />
                                         ) : (
-                                            <span className="text-lg font-black text-emerald-700">{summary.totalScore}</span>
+                                            <span className="text-lg font-black text-blue-700">{summary.totalScore}</span>
                                         )}
                                     </div>
                                 ) : (

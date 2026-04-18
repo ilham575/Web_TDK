@@ -223,22 +223,22 @@ function SummaryCompletionTab({ semesterPeriods = [], selectedYear, selectedSeme
             </select>
           </div>
           <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">ภาคเรียน</label>
+            <label className="block text-xs font-medium text-slate-500 uppercase tracking-wider mb-1.5">ภาคเรียน</label>
             <select
               value={semester}
               onChange={(event) => setSemester(Number(event.target.value))}
-              className="min-w-[140px] px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-400 transition-all text-sm"
+              className="min-w-[140px] px-4 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all text-sm"
             >
               <option value={1}>ภาคเรียนที่ 1</option>
               <option value={2}>ภาคเรียนที่ 2</option>
             </select>
           </div>
           <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">รายวิชา</label>
+            <label className="block text-xs font-medium text-slate-500 uppercase tracking-wider mb-1.5">รายวิชา</label>
             <select
               value={selectedSubjectFilter}
               onChange={(event) => setSelectedSubjectFilter(event.target.value)}
-              className="min-w-[200px] px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-400 transition-all text-sm"
+              className="min-w-[200px] px-4 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all text-sm"
             >
               <option value="all">ทุกรายวิชา</option>
               {availableSubjects.map((subject) => (
@@ -247,11 +247,11 @@ function SummaryCompletionTab({ semesterPeriods = [], selectedYear, selectedSeme
             </select>
           </div>
           <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">ชั้นเรียน</label>
+            <label className="block text-xs font-medium text-slate-500 uppercase tracking-wider mb-1.5">ชั้นเรียน</label>
             <select
               value={selectedClassroomFilter}
               onChange={(event) => setSelectedClassroomFilter(event.target.value)}
-              className="min-w-[180px] px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-400 transition-all text-sm"
+              className="min-w-[180px] px-4 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all text-sm"
             >
               <option value="all">ทุกชั้นเรียน</option>
               {availableClassrooms.map((classroom) => (
@@ -262,24 +262,24 @@ function SummaryCompletionTab({ semesterPeriods = [], selectedYear, selectedSeme
           <button
             onClick={loadReport}
             disabled={loading}
-            className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold shadow-md shadow-emerald-200 hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 transition-all disabled:opacity-50 disabled:transform-none"
+            className="flex items-center gap-2 px-5 py-2 rounded-lg bg-blue-600 text-white font-medium text-sm hover:bg-blue-700 transition-colors disabled:opacity-50"
           >
             {loading ? <span className="animate-spin">⏳</span> : 'รีเฟรช'}
           </button>
         </div>
       </div>
 
-      <div className="p-8 space-y-8">
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="p-6 space-y-6">
+        <div className="grid grid-cols-2 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           {[
-            { label: 'รายการทั้งหมด', value: summaryStats.total, tone: 'slate' },
-            { label: 'ครบแล้ว', value: summaryStats.complete, tone: 'emerald' },
-            { label: 'ยังไม่ครบ', value: summaryStats.incomplete, tone: 'amber' },
-            { label: 'นักเรียนที่ยังขาด', value: summaryStats.affectedStudents, tone: 'rose' },
+            { label: 'รายการทั้งหมด', value: summaryStats.total, bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-700' },
+            { label: 'ครบแล้ว', value: summaryStats.complete, bg: 'bg-emerald-50', border: 'border-emerald-100', text: 'text-emerald-700' },
+            { label: 'ยังไม่ครบ', value: summaryStats.incomplete, bg: 'bg-amber-50', border: 'border-amber-100', text: 'text-amber-700' },
+            { label: 'นักเรียนที่ยังขาด', value: summaryStats.affectedStudents, bg: 'bg-rose-50', border: 'border-rose-100', text: 'text-rose-700' },
           ].map((stat) => (
-            <div key={stat.label} className={`rounded-2xl border px-5 py-4 bg-${stat.tone}-50 border-${stat.tone}-100`}>
-              <div className="text-xs font-black uppercase tracking-wider text-slate-500">{stat.label}</div>
-              <div className={`mt-2 text-3xl font-black text-${stat.tone}-700`}>{stat.value}</div>
+            <div key={stat.label} className={`rounded-xl border px-5 py-4 ${stat.bg} ${stat.border}`}>
+              <div className="text-xs font-medium uppercase tracking-wider text-slate-500">{stat.label}</div>
+              <div className={`mt-2 text-3xl font-bold ${stat.text}`}>{stat.value}</div>
             </div>
           ))}
         </div>
@@ -290,9 +290,9 @@ function SummaryCompletionTab({ semesterPeriods = [], selectedYear, selectedSeme
             <p className="text-slate-500 font-medium">กำลังโหลดรายงานสถานะสรุปคะแนน...</p>
           </div>
         ) : filteredReportItems.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-slate-400 gap-3 bg-slate-50 rounded-3xl border border-dashed border-slate-200">
-            <span className="text-6xl">📭</span>
-            <p className="text-lg font-semibold">
+          <div className="flex flex-col items-center justify-center py-16 gap-3 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+            <span className="text-5xl">📫</span>
+            <p className="text-base font-medium text-slate-500">
               {reportItems.length === 0
                 ? 'ไม่พบข้อมูลรายงานในช่วงที่เลือก'
                 : selectedSubjectFilter !== 'all' && selectedClassroomFilter !== 'all'
@@ -303,56 +303,60 @@ function SummaryCompletionTab({ semesterPeriods = [], selectedYear, selectedSeme
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto rounded-3xl border border-slate-200 shadow-sm">
+          <div className="overflow-x-auto rounded-xl border border-slate-200">
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-slate-900 text-white">
-                  <th className="px-5 py-4 text-left font-bold">วิชา</th>
-                  <th className="px-5 py-4 text-left font-bold">ห้อง</th>
-                  <th className="px-5 py-4 text-left font-bold">ครูผู้สอน</th>
-                  <th className="px-5 py-4 text-left font-bold">ต้องมี</th>
-                  <th className="px-5 py-4 text-center font-bold">ครบแล้ว</th>
-                  <th className="px-5 py-4 text-center font-bold">สถานะ</th>
-                  <th className="px-5 py-4 text-center font-bold">รายละเอียด</th>
+                <tr className="bg-slate-50 border-b border-slate-200">
+                  <th className="px-5 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">วิชา</th>
+                  <th className="px-5 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">ห้อง</th>
+                  <th className="px-5 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">ครูผู้สอน</th>
+                  <th className="px-5 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">ต้องมี</th>
+                  <th className="px-5 py-3 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">ครบแล้ว</th>
+                  <th className="px-5 py-3 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">สถานะ</th>
+                  <th className="px-5 py-3 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">รายละเอียด</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 bg-white">
                 {filteredReportItems.map((item) => (
                   <tr key={`${item.subject_id}-${item.classroom_id ?? 'general'}`} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-5 py-4 align-top">
-                      <div className="font-bold text-slate-800">{item.subject_name}</div>
+                    <td className="px-5 py-3.5 align-top">
+                      <div className="font-semibold text-slate-800">{item.subject_name}</div>
                       <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
-                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full font-bold ${item.subject_type === 'activity' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full font-medium ${item.subject_type === 'activity' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
                           {item.subject_type === 'activity' ? 'กิจกรรม' : 'วิชาปกติ'}
                         </span>
                         <span className="text-slate-400">ปี {item.academic_year || '-'} เทอม {item.semester || '-'}</span>
                       </div>
                     </td>
-                    <td className="px-5 py-4 align-top text-slate-600 font-semibold">{item.classroom_name || 'ทั่วไป'}</td>
-                    <td className="px-5 py-4 align-top text-slate-600">
+                    <td className="px-5 py-3.5 align-top text-slate-600 font-medium">{item.classroom_name || 'ทั่วไป'}</td>
+                    <td className="px-5 py-3.5 align-top text-slate-600">
                       {item.teacher_names && item.teacher_names.length > 0 ? item.teacher_names.join(', ') : 'ยังไม่ระบุ'}
                     </td>
-                    <td className="px-5 py-4 align-top text-slate-600">{(item.required_summary_titles || []).join(', ')}</td>
-                    <td className="px-5 py-4 align-top text-center">
-                      <div className="font-black text-slate-800">{item.completed_students_count}/{item.student_count}</div>
-                      <div className="text-xs text-slate-400 mt-1">{item.completion_percentage}%</div>
+                    <td className="px-5 py-3.5 align-top text-slate-600">{(item.required_summary_titles || []).join(', ')}</td>
+                    <td className="px-5 py-3.5 align-top text-center">
+                      <div className="font-semibold text-slate-800">{item.completed_students_count}/{item.student_count}</div>
+                      <div className="text-xs text-slate-400 mt-0.5">{item.completion_percentage}%</div>
                     </td>
-                    <td className="px-5 py-4 align-top text-center">
+                    <td className="px-5 py-3.5 align-top text-center">
                       {item.student_count === 0 ? (
-                        <span className="inline-flex items-center px-3 py-1 rounded-full bg-slate-100 text-slate-500 font-bold text-xs">ไม่มีนักเรียน</span>
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 font-medium text-xs">ไม่มีนักเรียน</span>
                       ) : item.is_complete ? (
-                        <span className="inline-flex items-center px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 font-bold text-xs">ครบแล้ว</span>
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 font-medium text-xs border border-emerald-200">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>ครบแล้ว
+                        </span>
                       ) : (
-                        <span className="inline-flex items-center px-3 py-1 rounded-full bg-amber-100 text-amber-700 font-bold text-xs">ยังไม่ครบ</span>
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 font-medium text-xs border border-amber-200">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>ยังไม่ครบ
+                        </span>
                       )}
                     </td>
-                    <td className="px-5 py-4 align-top text-center">
+                    <td className="px-5 py-3.5 align-top text-center">
                       {item.student_count === 0 || item.is_complete ? (
                         <span className="text-slate-300">-</span>
                       ) : (
                         <button
                           onClick={() => openMissingStudentsModal(item)}
-                          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-700 font-bold transition-colors"
+                          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 font-medium text-sm transition-colors"
                         >
                           ดูรายชื่อที่ขาด
                         </button>

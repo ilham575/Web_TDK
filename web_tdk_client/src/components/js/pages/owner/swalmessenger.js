@@ -8,8 +8,8 @@ const Toast = Swal.mixin({
   timer: 3000,
   timerProgressBar: true,
   customClass: {
-    popup: 'rounded-2xl border-none shadow-xl backdrop-blur-md bg-white/90 font-bold',
-    title: 'text-slate-800'
+    popup: 'rounded-3xl border border-slate-200 shadow-xl bg-white text-slate-800',
+    title: 'text-slate-800 font-semibold'
   }
 });
 
@@ -33,15 +33,15 @@ const swalMessenger = {
       showCancelButton: true,
       confirmButtonText,
       cancelButtonText,
-      confirmButtonColor: '#4f46e5',
-      cancelButtonColor: '#94a3b8',
+      confirmButtonColor: '#2563eb',
+      cancelButtonColor: '#cbd5e1',
       reverseButtons: true,
       customClass: {
-        popup: 'rounded-3xl border-none shadow-2xl p-8',
-        title: 'text-2xl font-black text-slate-800',
+        popup: 'rounded-[2rem] border border-slate-200 shadow-2xl p-8 bg-white',
+        title: 'text-2xl font-semibold text-slate-900',
         htmlContainer: 'text-slate-500 font-medium',
-        confirmButton: 'rounded-2xl px-6 py-3 font-bold transition-all shadow-lg shadow-indigo-500/30',
-        cancelButton: 'rounded-2xl px-6 py-3 font-bold transition-all'
+        confirmButton: 'rounded-2xl px-6 py-3 font-semibold transition-all shadow-sm',
+        cancelButton: 'rounded-2xl px-6 py-3 font-semibold transition-all text-slate-700'
       }
     });
     return !!res.isConfirmed;
@@ -55,14 +55,14 @@ const swalMessenger = {
       inputPlaceholder,
       inputValue,
       showCancelButton: true,
-      confirmButtonColor: '#4f46e5',
-      cancelButtonColor: '#94a3b8',
+      confirmButtonColor: '#2563eb',
+      cancelButtonColor: '#cbd5e1',
       customClass: {
-        popup: 'rounded-3xl border-none shadow-2xl p-8',
-        title: 'text-2xl font-black text-slate-800',
-        input: 'rounded-2xl border-slate-200 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium py-3 px-4',
-        confirmButton: 'rounded-2xl px-6 py-3 font-bold transition-all shadow-lg shadow-indigo-500/30',
-        cancelButton: 'rounded-2xl px-6 py-3 font-bold transition-all'
+        popup: 'rounded-[2rem] border border-slate-200 shadow-2xl p-8 bg-white',
+        title: 'text-2xl font-semibold text-slate-900',
+        input: 'rounded-2xl border-slate-200 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all font-medium py-3 px-4',
+        confirmButton: 'rounded-2xl px-6 py-3 font-semibold transition-all shadow-sm',
+        cancelButton: 'rounded-2xl px-6 py-3 font-semibold transition-all text-slate-700'
       }
     });
     if (res.isDismissed) return null;

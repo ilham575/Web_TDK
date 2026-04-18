@@ -186,15 +186,15 @@ function AttendancePage(){
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-teal-50/20 to-emerald-50/20 pb-20 font-sans selection:bg-emerald-100 selection:text-emerald-900">
+    <div className="min-h-screen bg-slate-50 pb-20 font-sans selection:bg-blue-100 selection:text-blue-900">
       {/* Top Navigation Bar */}
-      <div className="bg-white/80 backdrop-blur-md border-b border-slate-200/60 sticky top-0 z-30 transition-all duration-300">
+      <div className="bg-white border-b border-slate-200 sticky top-0 z-30 transition-colors duration-300">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-20">
             <div className="flex items-center gap-6">
               <button 
                 onClick={() => navigate(-1)}
-                className="group p-3 bg-white text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-2xl transition-all duration-300 active:scale-95 border border-slate-100 shadow-sm hover:shadow-md hover:border-emerald-100"
+                className="group p-3 bg-white text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all duration-300 active:scale-95 border border-slate-200 shadow-sm"
               >
                 <ArrowLeft className="w-5 h-5 group-hover:-translate-x-0.5 transition-transform" />
               </button>
@@ -203,7 +203,7 @@ function AttendancePage(){
                   เช็คชื่อเข้าเรียน
                 </h1>
                 <div className="flex items-center gap-2 mt-2">
-                  <span className="bg-emerald-100 text-emerald-700 text-[10px] font-black px-2 py-0.5 rounded-lg uppercase tracking-wider">
+                  <span className="bg-blue-100 text-blue-700 text-[10px] font-black px-2 py-0.5 rounded-lg uppercase tracking-wider">
                     ATTENDANCE
                   </span>
                   <p className="text-xs font-bold text-slate-400 flex items-center gap-1.5 truncat max-w-[200px] sm:max-w-md">
@@ -216,7 +216,7 @@ function AttendancePage(){
             
             <button 
               onClick={save}
-              className="group flex items-center gap-2.5 px-6 py-3.5 bg-emerald-600 text-white rounded-2xl font-black text-sm shadow-lg shadow-emerald-200 hover:bg-emerald-700 hover:shadow-emerald-300 hover:-translate-y-0.5 transition-all duration-300 active:scale-95"
+              className="group flex items-center gap-2.5 px-6 py-3.5 bg-blue-600 text-white rounded-lg font-black text-sm shadow-sm hover:bg-blue-700 transition-colors duration-300 active:scale-95"
             >
               <Save className="w-5 h-5 group-hover:scale-110 transition-transform" />
               <span className="hidden sm:inline">บันทึกข้อมูล</span>
@@ -231,9 +231,9 @@ function AttendancePage(){
           {/* Controls Sidebar */}
           <div className="lg:col-span-4 space-y-6">
             {/* Date Selection */}
-            <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100/60 p-6 md:p-8 hover:shadow-md transition-shadow duration-300">
+            <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-6 md:p-8 hover:shadow-md transition-shadow duration-300">
               <div className="flex items-center gap-4 mb-6">
-                <div className="w-12 h-12 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600 shadow-inner">
+                <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 shadow-inner">
                   <Calendar className="w-6 h-6" />
                 </div>
                 <div>
@@ -246,15 +246,15 @@ function AttendancePage(){
                   type="date"
                   value={selectedDate}
                   onChange={(e) => setSelectedDate(e.target.value)}
-                  className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-slate-700 font-bold text-sm focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all outline-none cursor-pointer"
+                  className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 font-bold text-sm focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all outline-none cursor-pointer"
                 />
-                <Calendar className="absolute right-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none group-hover:text-emerald-500 transition-colors" />
+                <Calendar className="absolute right-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none group-hover:text-blue-500 transition-colors" />
               </div>
             </div>
 
             {/* Class Filter */}
             {classes.length > 1 && (
-              <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100/60 p-6 md:p-8 hover:shadow-md transition-shadow duration-300">
+              <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-6 md:p-8 hover:shadow-md transition-shadow duration-300">
                 <div className="flex items-center gap-4 mb-6">
                   <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600 shadow-inner">
                     <Filter className="w-6 h-6" />
@@ -284,23 +284,20 @@ function AttendancePage(){
             )}
 
             {/* Summary Statistics */}
-            <div className="relative bg-slate-900 rounded-[2.5rem] shadow-xl shadow-slate-200 p-8 text-white overflow-hidden group">
-              <div className="absolute inset-0 bg-gradient-to-br from-slate-800 to-slate-950"></div>
-              <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 group-hover:bg-emerald-500/20 transition-colors duration-700"></div>
-              
+            <div className="relative bg-white rounded-xl shadow-sm border border-slate-100 p-8 text-slate-800 overflow-hidden">
               <div className="relative z-10">
                 <div className="flex items-center gap-3 mb-8">
-                  <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center backdrop-blur-sm">
-                    <Users className="w-5 h-5 text-emerald-400" />
+                  <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
+                    <Users className="w-5 h-5 text-blue-600" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-black uppercase tracking-widest text-emerald-400">ภาพรวมวันนี้</h3>
+                    <h3 className="text-sm font-black uppercase tracking-widest text-blue-600">ภาพรวมวันนี้</h3>
                     <p className="text-xs text-slate-400 font-medium">สถิติการเช็คชื่อปัจจุบัน</p>
                   </div>
                 </div>
 
                 <div className="space-y-4">
-                  <div className="bg-white/5 backdrop-blur-md rounded-2xl p-5 border border-white/5 hover:bg-white/10 transition-colors">
+                  <div className="bg-slate-50 rounded-xl p-5 border border-slate-100 transition-colors">
                     <div className="flex justify-between items-end">
                       <div>
                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">นักเรียนทั้งหมด</p>
@@ -312,20 +309,20 @@ function AttendancePage(){
                     </div>
                   </div>
                   
-                  <div className="bg-gradient-to-r from-emerald-500/20 to-teal-500/20 backdrop-blur-md rounded-2xl p-5 border border-emerald-500/20 hover:border-emerald-500/40 transition-colors">
+                  <div className="bg-blue-50 rounded-xl p-5 border border-blue-100 transition-colors">
                     <div className="flex justify-between items-end">
                       <div>
-                        <p className="text-[10px] font-black text-emerald-300 uppercase tracking-widest mb-1">มาเรียนวันนี้</p>
+                        <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-1">มาเรียนวันนี้</p>
                         <div className="flex items-baseline gap-2">
-                          <p className="text-3xl font-black text-emerald-400">
+                          <p className="text-3xl font-black text-blue-700">
                             {Object.values(attendance).filter(st => st === 'present').length}
                           </p>
-                          <span className="text-xs font-bold text-emerald-500/60">
+                          <span className="text-xs font-bold text-blue-500/70">
                             ({filteredStudents.length > 0 ? Math.round((Object.values(attendance).filter(st => st === 'present').length / filteredStudents.length) * 100) : 0}%)
                           </span>
                         </div>
                       </div>
-                      <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400">
+                      <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
                         <CheckCircle2 className="w-4 h-4" />
                       </div>
                     </div>
@@ -337,7 +334,7 @@ function AttendancePage(){
 
           {/* Student List */}
           <div className="lg:col-span-8">
-            <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100/60 overflow-hidden flex flex-col min-h-[600px]">
+            <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden flex flex-col min-h-[600px]">
               <div className="p-8 border-b border-slate-50 flex items-center justify-between bg-white sticky top-0 z-20">
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-500 shadow-inner">
@@ -349,7 +346,7 @@ function AttendancePage(){
                   </div>
                 </div>
                 <div className="hidden sm:flex items-center gap-2 px-4 py-2 bg-slate-50 rounded-xl border border-slate-100">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
                     <span className="text-xs font-bold text-slate-600">{filteredStudents.length} คนในรายการ</span>
                 </div>
               </div>
@@ -381,13 +378,13 @@ function AttendancePage(){
                       filteredStudents.map((s, idx) => (
                         <tr key={s.id} className="group hover:bg-slate-50/80 transition-all duration-200">
                           <td className="pl-8 py-4 align-middle">
-                            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-slate-400 font-black text-xs border border-slate-100 shadow-sm group-hover:border-emerald-200 group-hover:text-emerald-600 transition-colors">
+                            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-slate-400 font-black text-xs border border-slate-100 shadow-sm group-hover:border-blue-200 group-hover:text-blue-600 transition-colors">
                               {idx + 1}
                             </div>
                           </td>
                           <td className="px-6 py-4 align-middle">
                             <div className="flex flex-col">
-                              <h4 className="text-sm font-black text-slate-800 group-hover:text-emerald-700 transition-colors flex items-center gap-2">
+                              <h4 className="text-sm font-black text-slate-800 group-hover:text-blue-700 transition-colors flex items-center gap-2">
                                 {s.full_name || s.username}
                                 {attendance[s.id] === 'present' && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />}
                               </h4>
@@ -405,12 +402,12 @@ function AttendancePage(){
                                   onChange={(e) => setStatus(s.id, e.target.value)}
                                   className={`pl-11 pr-10 py-3 rounded-xl text-xs font-bold transition-all outline-none appearance-none border-2 cursor-pointer w-[180px] shadow-sm hover:shadow-md ${
                                     attendance[s.id] === 'present' 
-                                      ? 'bg-emerald-50 border-emerald-100 text-emerald-700 focus:border-emerald-500' 
+                                      ? 'bg-blue-50 border-blue-100 text-blue-700 focus:border-blue-500' 
                                       : attendance[s.id] === 'absent' 
                                       ? 'bg-rose-50 border-rose-100 text-rose-700 focus:border-rose-500' 
                                       : attendance[s.id] === 'sick_leave' 
                                       ? 'bg-amber-50 border-amber-100 text-amber-700 focus:border-amber-500' 
-                                      : 'bg-white border-slate-100 text-slate-500 focus:border-emerald-500'
+                                      : 'bg-white border-slate-100 text-slate-500 focus:border-blue-500'
                                   }`}
                                 >
                                   <option value="">เลือกสถานะ...</option>
@@ -464,7 +461,7 @@ function AttendancePage(){
                                   value={attendance[s.id] || ''}
                                   onChange={(e) => setStatus(s.id, e.target.value)}
                                   className={`pl-11 pr-10 py-4 w-full rounded-2xl text-sm font-bold transition-all outline-none appearance-none border-2 cursor-pointer shadow-sm ${
-                                    attendance[s.id] === 'present' ? 'bg-emerald-50 border-emerald-100 text-emerald-700' :
+                                    attendance[s.id] === 'present' ? 'bg-blue-50 border-blue-100 text-blue-700' :
                                     attendance[s.id] === 'absent' ? 'bg-rose-50 border-rose-100 text-rose-700' :
                                     attendance[s.id] === 'sick_leave' ? 'bg-amber-50 border-amber-100 text-amber-700' :
                                     'bg-white border-slate-100 text-slate-500'

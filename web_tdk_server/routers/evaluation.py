@@ -177,7 +177,6 @@ async def get_subject_evaluations(
         if eval.student:
             c_student = db.query(ClassroomStudentModel).filter(
                 ClassroomStudentModel.student_id == eval.student_id,
-                ClassroomStudentModel.is_active == True
             ).first()
             if c_student:
                 classroom = db.query(ClassroomModel).filter(ClassroomModel.id == c_student.classroom_id).first()
