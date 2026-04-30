@@ -51,6 +51,7 @@ function SigninPage() {
   // academic year options for student login
   const [academicYears, setAcademicYears] = useState([]);
   const [selectedAcademicYear, setSelectedAcademicYear] = useState('');
+  const [studentLoginPeriod, setStudentLoginPeriod] = useState(null);
   
   // Common state
   const [error, setError] = useState('');
@@ -109,6 +110,7 @@ function SigninPage() {
       setSelectedSchoolId('');
       setSelectedAcademicYear('');
       setAcademicYears([]);
+      setStudentLoginPeriod(null);
       setAllClassroomsByYear([]);
       setClassrooms([]);
       setSelectedClassroomId('');
@@ -140,6 +142,7 @@ function SigninPage() {
     }
   }, [loginType]);
 
+  
   // Load teachers/staff when school is selected (for teacher login)
   useEffect(() => {
     if (loginType !== 'teacher') {
@@ -169,38 +172,43 @@ function SigninPage() {
       });
   }, [loginType, selectedTeacherSchoolId]);
 
-  // Load school info when school is selected (to get current academic year)
+  // Load the public active academic period when school is selected.
+  // This mirrors the admin page's active semester-period logic instead of relying on stale school.current_academic_year.
   useEffect(() => {
     if (selectedSchoolId) {
       // reset dependent state
       setSelectedAcademicYear('');
       setAcademicYears([]);
+      setStudentLoginPeriod(null);
       setSelectedClassroomId('');
       setSelectedStudentId('');
       setAllClassroomsByYear([]);
       setClassrooms([]);
       setStudents([]);
 
-      // fetch school details for year info
-      fetch(`${API_BASE_URL}/schools/${selectedSchoolId}`)
+      fetch(`${API_BASE_URL}/schools/${selectedSchoolId}/active-period`)
         .then(res => res.json())
-        .then(school => {
-          if (school && school.current_academic_year) {
-            const cur = String(school.current_academic_year);
-            // include next year as option (assume numeric)
-            let next = '';
-            const num = parseInt(cur, 10);
-            if (!isNaN(num)) {
-              next = String(num + 1);
+        .then(period => {
+          if (period) {
+            const lockedAcademicYear = period.academic_year ? String(period.academic_year) : '';
+            const lockedSemester = period.semester ? Number(period.semester) : null;
+
+            setStudentLoginPeriod({
+              academicYear: lockedAcademicYear,
+              semester: Number.isFinite(lockedSemester) ? lockedSemester : null,
+              isAcademicYearSetup: Boolean(period.is_academic_year_setup),
+              source: period.source || null,
+            });
+
+            if (lockedAcademicYear) {
+              setAcademicYears([lockedAcademicYear]);
+              setSelectedAcademicYear(lockedAcademicYear);
             }
-            const years = [cur];
-            if (next) years.push(next);
-            setAcademicYears(years);
-            setSelectedAcademicYear(cur);
           }
         })
         .catch(err => {
-          console.error('Failed to load school info:', err);
+          console.error('Failed to load active academic period:', err);
+          setStudentLoginPeriod(null);
         });
     }
   }, [selectedSchoolId]);
@@ -442,6 +450,9 @@ function SigninPage() {
   };
 
   const activeRoleMeta = roleMeta[loginType];
+  const lockedStudentPeriodLabel = studentLoginPeriod?.academicYear
+    ? `ปี ${studentLoginPeriod.academicYear}${studentLoginPeriod?.semester ? ` ภาคเรียนที่ ${studentLoginPeriod.semester}` : ''}`
+    : '';
 
 
   return (
@@ -699,7 +710,7 @@ function SigninPage() {
                     </div>
                   </div>
 
-                  {academicYears.length > 0 ? (
+                  {selectedSchoolId ? (
                     <div className="space-y-1.5">
                       <label className="block text-sm font-medium text-slate-700">ปีการศึกษา</label>
                       <div className="relative">
@@ -711,8 +722,9 @@ function SigninPage() {
                           value={selectedAcademicYear}
                           onChange={(e) => setSelectedAcademicYear(e.target.value)}
                           required
+                          disabled
                         >
-                          <option value="">-- เลือกปีการศึกษา --</option>
+                          <option value="">-- รอแอดมินกำหนดช่วงเวลาเรียน --</option>
                           {academicYears.map((year) => (
                             <option key={year} value={year}>{year}</option>
                           ))}
@@ -721,6 +733,11 @@ function SigninPage() {
                           <ChevronDown className="h-5 w-5" />
                         </div>
                       </div>
+                      <p className={`text-xs ${lockedStudentPeriodLabel ? 'text-blue-600' : 'text-amber-600'}`}>
+                        {lockedStudentPeriodLabel
+                          ? `ปีการศึกษาถูกล็อกตามช่วงเวลาเรียนที่แอดมินกำหนดไว้: ${lockedStudentPeriodLabel}`
+                          : 'ยังไม่พบปีการศึกษาที่เปิดใช้งาน กรุณาให้แอดมินกำหนดช่วงเวลาเรียนก่อน'}
+                      </p>
                     </div>
                   ) : null}
 

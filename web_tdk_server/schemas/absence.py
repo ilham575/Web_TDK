@@ -17,7 +17,7 @@ class AbsenceStatusEnum(str, Enum):
 
 
 class AbsenceCreate(BaseModel):
-    subject_id: Optional[int] = None
+    subject_id: Optional[int] = None  # Legacy field; student absences are treated as full-day requests
     absence_date: date
     absence_date_end: Optional[date] = None  # End date for multi-day absence
     days_count: Optional[int] = 1  # Number of days
@@ -36,7 +36,7 @@ class AbsenceUpdate(BaseModel):
     absence_date: Optional[date] = None
     absence_date_end: Optional[date] = None
     days_count: Optional[int] = None
-    subject_id: Optional[int] = None
+    subject_id: Optional[int] = None  # Legacy field; ignored for student self-service edits
     # Status and rejection info are primarily for approvers, but kept optional
     status: Optional[AbsenceStatusEnum] = None
     reject_reason: Optional[str] = None

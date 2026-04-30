@@ -22,6 +22,43 @@ from routers.user import get_current_user
 router = APIRouter(prefix="/homeroom", tags=["homeroom"])
 
 
+def _get_visible_classroom_enrollments(db: Session, classroom_id: int):
+    base_query = db.query(ClassroomStudentModel, UserModel).join(
+        UserModel,
+        ClassroomStudentModel.student_id == UserModel.id
+    ).filter(
+        ClassroomStudentModel.classroom_id == classroom_id,
+        UserModel.role == 'student',
+        UserModel.is_active == True,
+        UserModel.user_status == 'active'
+    )
+
+    active_rows = base_query.filter(
+        ClassroomStudentModel.is_active == True
+    ).order_by(
+        ClassroomStudentModel.updated_at.desc()
+    ).all()
+
+    rows = active_rows if active_rows else base_query.order_by(
+        ClassroomStudentModel.is_active.desc(),
+        ClassroomStudentModel.updated_at.desc()
+    ).all()
+
+    seen_student_ids = set()
+    enrollments = []
+    for enrollment, student in rows:
+        if student.id in seen_student_ids:
+            continue
+        seen_student_ids.add(student.id)
+        enrollments.append((enrollment, student))
+
+    return enrollments
+
+
+def _count_visible_classroom_students(db: Session, classroom_id: int) -> int:
+    return len(_get_visible_classroom_enrollments(db, classroom_id))
+
+
 def _serialize_homeroom_conflict(db: Session, hr: HomeroomTeacherModel):
     teacher = db.query(UserModel).filter(UserModel.id == hr.teacher_id).first()
     classroom = None
@@ -99,9 +136,7 @@ def get_homeroom_teachers(
 
         # If homeroom is tied to a specific classroom, count students in that classroom
         if getattr(hr, 'classroom_id', None):
-            student_count = db.query(ClassroomStudentModel).filter(
-                ClassroomStudentModel.classroom_id == hr.classroom_id,
-            ).count()
+            student_count = _count_visible_classroom_students(db, hr.classroom_id)
             classroom = db.query(ClassroomModel).filter(ClassroomModel.id == hr.classroom_id).first()
             classroom_name = classroom.name if classroom else None
         else:
@@ -167,9 +202,7 @@ def get_homeroom_teacher(
     teacher = db.query(UserModel).filter(UserModel.id == hr.teacher_id).first()
 
     if getattr(hr, 'classroom_id', None):
-        student_count = db.query(ClassroomStudentModel).filter(
-            ClassroomStudentModel.classroom_id == hr.classroom_id,
-        ).count()
+        student_count = _count_visible_classroom_students(db, hr.classroom_id)
         classroom = db.query(ClassroomModel).filter(ClassroomModel.id == hr.classroom_id).first()
         classroom_name = classroom.name if classroom else None
     else:
@@ -631,18 +664,7 @@ def get_homeroom_summary(
             # (they were promoted to the next year's classroom) but are still valid members of
             # this historical classroom. The classroom itself is already scoped to a specific
             # academic_year / semester via classrooms_query above.
-            seen_student_ids: set = set()
-            _raw_enrollments = db.query(ClassroomStudentModel, UserModel).join(
-                UserModel, ClassroomStudentModel.student_id == UserModel.id
-            ).filter(
-                ClassroomStudentModel.classroom_id == classroom.id
-            ).order_by(ClassroomStudentModel.is_active.desc()).all()
-            # Deduplicate: keep the first (most-active) record per student
-            enrollments = []
-            for _enr, _stu in _raw_enrollments:
-                if _stu.id not in seen_student_ids:
-                    seen_student_ids.add(_stu.id)
-                    enrollments.append((_enr, _stu))
+            enrollments = _get_visible_classroom_enrollments(db, classroom.id)
             
             students_data = []
             for enrollment, student in enrollments:
@@ -816,11 +838,7 @@ def get_homeroom_classroom_students(
             raise HTTPException(status_code=403, detail="คุณไม่ใช่ครูประจำชั้นของห้องเรียนนี้")
     
     # Get students in this classroom
-    enrollments = db.query(ClassroomStudentModel, UserModel).join(
-        UserModel, ClassroomStudentModel.student_id == UserModel.id
-    ).filter(
-        ClassroomStudentModel.classroom_id == classroom_id,
-    ).all()
+    enrollments = _get_visible_classroom_enrollments(db, classroom_id)
     
     students_data = []
     for enrollment, student in enrollments:

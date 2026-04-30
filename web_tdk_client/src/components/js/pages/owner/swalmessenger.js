@@ -1,13 +1,18 @@
 import Swal from 'sweetalert2';
 
+const SWAL_CONTAINER_CLASS = 'swal2-top-layer';
+
 // Create a reusable Toast mixin for standard notifications
 const Toast = Swal.mixin({
   toast: true,
+  target: document.body,
+  heightAuto: false,
   position: 'top-end',
   showConfirmButton: false,
   timer: 3000,
   timerProgressBar: true,
   customClass: {
+    container: SWAL_CONTAINER_CLASS,
     popup: 'rounded-3xl border border-slate-200 shadow-xl bg-white text-slate-800',
     title: 'text-slate-800 font-semibold'
   }
@@ -22,7 +27,16 @@ const swalMessenger = {
 
   // Full dialog alerts
   alert: async ({ title = '', text = '', icon = undefined }) => {
-    await Swal.fire({ title, text, icon });
+    await Swal.fire({
+      title,
+      text,
+      icon,
+      target: document.body,
+      heightAuto: false,
+      customClass: {
+        container: SWAL_CONTAINER_CLASS,
+      },
+    });
   },
 
   confirm: async ({ title = '', text = '', confirmButtonText = 'OK', cancelButtonText = 'Cancel', icon = 'question' } = {}) => {
@@ -30,6 +44,8 @@ const swalMessenger = {
       title,
       text,
       icon,
+      target: document.body,
+      heightAuto: false,
       showCancelButton: true,
       confirmButtonText,
       cancelButtonText,
@@ -37,6 +53,7 @@ const swalMessenger = {
       cancelButtonColor: '#cbd5e1',
       reverseButtons: true,
       customClass: {
+        container: SWAL_CONTAINER_CLASS,
         popup: 'rounded-[2rem] border border-slate-200 shadow-2xl p-8 bg-white',
         title: 'text-2xl font-semibold text-slate-900',
         htmlContainer: 'text-slate-500 font-medium',
@@ -52,12 +69,15 @@ const swalMessenger = {
       title,
       text,
       input,
+      target: document.body,
+      heightAuto: false,
       inputPlaceholder,
       inputValue,
       showCancelButton: true,
       confirmButtonColor: '#2563eb',
       cancelButtonColor: '#cbd5e1',
       customClass: {
+        container: SWAL_CONTAINER_CLASS,
         popup: 'rounded-[2rem] border border-slate-200 shadow-2xl p-8 bg-white',
         title: 'text-2xl font-semibold text-slate-900',
         input: 'rounded-2xl border-slate-200 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all font-medium py-3 px-4',

@@ -1,8 +1,9 @@
+from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, HTTPException, Depends, Response, Request, status, UploadFile, File
 import secrets
-from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
+from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 from typing import List
@@ -15,7 +16,7 @@ from schemas.user import User, UserCreate, UserUpdate, Token, SessionInfo, Chang
 from models.user import User as UserModel
 from models.password_reset_request import PasswordResetRequest as PasswordResetRequestModel
 from database.connection import get_db
-from utils.security import clear_auth_cookie, get_request_token, hash_password, verify_password, create_access_token, decode_access_token, resolve_access_token_ttl, set_auth_cookie
+from utils.security import clear_auth_cookie, get_current_user, get_request_token, hash_password, verify_password, create_access_token, decode_access_token, resolve_access_token_ttl, set_auth_cookie
 from typing import List
 from sqlalchemy.orm import Session
 from io import BytesIO
@@ -73,28 +74,112 @@ def _grade_levels_match(left, right) -> bool:
         return False
     return _normalize_grade_level(left) == _normalize_grade_level(right)
 
-# กำหนด OAuth2 Security Scheme
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/users/login")
 
-def get_current_user(request: Request, db: Session = Depends(get_db)):
-    """Get current user from JWT token"""
-    token = get_request_token(request)
-    if not token:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-
+def _safe_int(value, default: int = -1) -> int:
     try:
-        payload = decode_access_token(token)
-        username = payload.get("sub")
-        if not username:
-            raise HTTPException(status_code=401, detail="Invalid token")
-        
-        user = db.query(UserModel).filter(UserModel.username == username).first()
-        if not user:
-            raise HTTPException(status_code=401, detail="User not found")
-        return user
-    except ValueError as e:
-        raise HTTPException(status_code=401, detail=str(e))
+        return int(str(value).strip())
+    except (TypeError, ValueError):
+        return default
 
+
+def _compose_classroom_display(grade_level, classroom_name):
+    grade_text = str(grade_level or '').strip()
+    classroom_text = str(classroom_name or '').strip()
+    if not classroom_text:
+        return grade_text or None
+    if grade_text and classroom_text.startswith(grade_text):
+        return classroom_text
+    if grade_text:
+        return f"{grade_text} {classroom_text}".strip()
+    return classroom_text
+
+
+def _pick_preferred_student_enrollment(enrollment_rows):
+    if not enrollment_rows:
+        return None
+
+    def sort_key(row):
+        return (
+            1 if getattr(row, 'enrollment_is_active', False) else 0,
+            1 if getattr(row, 'classroom_is_active', False) else 0,
+            _safe_int(getattr(row, 'classroom_academic_year', None)),
+            int(getattr(row, 'classroom_semester', 0) or 0),
+            int(getattr(row, 'classroom_id', 0) or 0),
+        )
+
+    return max(enrollment_rows, key=sort_key)
+
+
+def _build_student_enrollment_context_map(db: Session, student_ids: List[int]):
+    if not student_ids:
+        return {}
+
+    from models.classroom import Classroom, ClassroomStudent
+
+    enrollment_rows = db.query(
+        ClassroomStudent.student_id.label('student_id'),
+        ClassroomStudent.classroom_id.label('classroom_id'),
+        ClassroomStudent.student_number.label('student_number'),
+        ClassroomStudent.is_active.label('enrollment_is_active'),
+        Classroom.name.label('classroom_name'),
+        Classroom.grade_level.label('classroom_grade_level'),
+        Classroom.academic_year.label('classroom_academic_year'),
+        Classroom.semester.label('classroom_semester'),
+        Classroom.is_active.label('classroom_is_active'),
+    ).join(
+        Classroom,
+        Classroom.id == ClassroomStudent.classroom_id,
+    ).filter(
+        ClassroomStudent.student_id.in_(student_ids)
+    ).all()
+
+    rows_by_student_id = defaultdict(list)
+    for row in enrollment_rows:
+        rows_by_student_id[row.student_id].append(row)
+
+    context_map = {}
+    for student_id, rows in rows_by_student_id.items():
+        preferred = _pick_preferred_student_enrollment(rows)
+        if not preferred:
+            continue
+        context_map[student_id] = {
+            'classroom_id': preferred.classroom_id,
+            'classroom_name': preferred.classroom_name,
+            'classroom_display': _compose_classroom_display(preferred.classroom_grade_level, preferred.classroom_name),
+            'classroom_academic_year': preferred.classroom_academic_year,
+            'classroom_semester': preferred.classroom_semester,
+            'student_number': preferred.student_number,
+            'classroom_enrollment_active': bool(preferred.enrollment_is_active),
+        }
+
+    return context_map
+
+
+def _serialize_user_response(user: UserModel, classroom_context=None):
+    payload = {
+        'id': user.id,
+        'username': user.username,
+        'email': user.email,
+        'full_name': user.full_name,
+        'role': user.role,
+        'school_id': user.school_id,
+        'grade_level': user.grade_level,
+        'is_active': user.is_active,
+        'user_status': user.user_status,
+        'must_change_password': user.must_change_password,
+        'classroom_id': None,
+        'classroom_name': None,
+        'classroom_display': None,
+        'classroom_academic_year': None,
+        'classroom_semester': None,
+        'student_number': None,
+        'classroom_enrollment_active': None,
+        'created_at': user.created_at,
+        'updated_at': user.updated_at,
+    }
+    if classroom_context:
+        payload.update(classroom_context)
+    return payload
 
 @router.post("/{user_id}/admin_reset")
 def admin_reset_user_password(user_id: int, db: Session = Depends(get_db), current_user: UserModel = Depends(get_current_user)):
@@ -123,7 +208,11 @@ def admin_reset_user_password(user_id: int, db: Session = Depends(get_db), curre
 def get_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     """ดึงข้อมูลผู้ใช้งานทั้งหมด"""
     users = db.query(UserModel).offset(skip).limit(limit).all()
-    return users
+    student_context_map = _build_student_enrollment_context_map(
+        db,
+        [user.id for user in users if getattr(user, 'role', None) == 'student']
+    )
+    return [_serialize_user_response(user, student_context_map.get(user.id)) for user in users]
 
 
 @router.get("/public-teachers", response_model=List[PublicLoginUser])
@@ -232,7 +321,7 @@ def get_current_user_info(current_user: UserModel = Depends(get_current_user)):
 
 
 @router.get("/session", response_model=SessionInfo)
-def get_session_info(request: Request):
+def get_session_info(request: Request, current_user: UserModel = Depends(get_current_user)):
     """Return current authenticated session expiration for client-side countdown UI."""
     token = get_request_token(request)
     if not token:
@@ -1406,6 +1495,7 @@ def activate_user(
 @router.patch("/{user_id}/graduate")
 def graduate_user(
     user_id: int,
+    academic_year: str | None = None,
     db: Session = Depends(get_db),
     current_user: UserModel = Depends(get_current_user)
 ):
@@ -1419,11 +1509,24 @@ def graduate_user(
     if user.role != 'student':
         raise HTTPException(status_code=400, detail='Only students can be graduated')
 
+    if academic_year:
+        enrollment_context = _build_student_enrollment_context_map(db, [user.id]).get(user.id)
+        matched_year = str((enrollment_context or {}).get('classroom_academic_year') or '')
+        if matched_year != str(academic_year):
+            raise HTTPException(
+                status_code=400,
+                detail=f'นักเรียนคนนี้ไม่ได้อยู่ในปีการศึกษา {academic_year} ตามข้อมูลชั้นเรียนล่าสุด'
+            )
+
     user.is_active = False
     user.user_status = 'graduated'
     db.commit()
     db.refresh(user)
-    return {'message': f'นักเรียน {user.full_name} จบการศึกษาเรียบร้อยแล้ว', 'user': user}
+    return {
+        'message': f'นักเรียน {user.full_name} จบการศึกษาเรียบร้อยแล้ว',
+        'academic_year': academic_year,
+        'user': _serialize_user_response(user, _build_student_enrollment_context_map(db, [user.id]).get(user.id))
+    }
 
 
 @router.patch("/{user_id}/resign")
@@ -1475,6 +1578,7 @@ def reinstate_user(
 
 @router.post("/bulk/graduate")
 def bulk_graduate_students(
+    academic_year: str | None = None,
     db: Session = Depends(get_db),
     current_user: UserModel = Depends(get_current_user)
 ):
@@ -1494,8 +1598,22 @@ def bulk_graduate_students(
         UserModel.user_status == 'active'
     ).all()
 
+    if academic_year:
+        context_map = _build_student_enrollment_context_map(db, [student.id for student in students])
+        students = [
+            student for student in students
+            if str((context_map.get(student.id) or {}).get('classroom_academic_year') or '') == str(academic_year)
+        ]
+
     if not students:
-        return {'message': f'ไม่พบนักเรียนชั้น {school.graduation_grade_level} ที่สามารถจบการศึกษาได้', 'graduated_count': 0, 'graduated': []}
+        scope_text = f' ปีการศึกษา {academic_year}' if academic_year else ''
+        return {
+            'message': f'ไม่พบนักเรียนชั้น {school.graduation_grade_level}{scope_text} ที่สามารถจบการศึกษาได้',
+            'graduated_count': 0,
+            'graduation_grade_level': school.graduation_grade_level,
+            'academic_year': academic_year,
+            'graduated': []
+        }
 
     graduated = []
     for s in students:
@@ -1504,10 +1622,12 @@ def bulk_graduate_students(
         graduated.append({'id': s.id, 'username': s.username, 'full_name': s.full_name})
 
     db.commit()
+    scope_text = f' ปีการศึกษา {academic_year}' if academic_year else ''
     return {
-        'message': f'จบการศึกษานักเรียนชั้น {school.graduation_grade_level} จำนวน {len(graduated)} คน เรียบร้อยแล้ว',
+        'message': f'จบการศึกษานักเรียนชั้น {school.graduation_grade_level}{scope_text} จำนวน {len(graduated)} คน เรียบร้อยแล้ว',
         'graduated_count': len(graduated),
         'graduation_grade_level': school.graduation_grade_level,
+        'academic_year': academic_year,
         'graduated': graduated
     }
 
@@ -1720,6 +1840,14 @@ def promote_students(
                     continue
                 
                 # ดึงข้อมูลชั้นเรียนปัจจุบันของนักเรียน - ดึงแค่ ID และข้อมูลที่จำเป็น
+                # ถ้ามี source_classroom ให้กรองเฉพาะชั้นเรียนต้นทาง เพื่อป้องกันการ deactivate enrollment
+                # ของปีการศึกษาอื่นที่ยังคงเปิดใช้งานอยู่ (promote_classroom ไม่ได้ deactivate enrollment เก่า)
+                _enroll_filters = [
+                    ClassroomStudent.student_id == student_id,
+                    ClassroomStudent.is_active == True,
+                ]
+                if source_classroom:
+                    _enroll_filters.append(ClassroomStudent.classroom_id == source_classroom.id)
                 enrollment_data = db.query(
                     ClassroomStudent.id,
                     ClassroomStudent.classroom_id,
@@ -1727,10 +1855,7 @@ def promote_students(
                     ClassroomStudent.student_number
                 ).join(
                     Classroom, ClassroomStudent.classroom_id == Classroom.id
-                ).filter(
-                    ClassroomStudent.student_id == student_id,
-                    ClassroomStudent.is_active == True
-                ).first()
+                ).filter(*_enroll_filters).first()
                 
                 if promotion_type == 'mid_term':
                     # ต้องมีข้อมูลชั้นเรียนเพื่อเลื่อนเทอม

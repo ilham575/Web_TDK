@@ -40,6 +40,8 @@ class SubjectSchedule(SubjectScheduleBase):
     subject_code: Optional[str] = None
     teacher_name: Optional[str] = None
     classroom_name: Optional[str] = None  # Display classroom name if assigned
+    academic_year: Optional[str] = None
+    semester: Optional[int] = None
 
     # Make day/time optional in responses to support legacy rows without explicit times
     day_of_week: Optional[Union[int, str]] = None

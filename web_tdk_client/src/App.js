@@ -1,6 +1,6 @@
 import React from 'react';
 import './App.css';
-import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { I18nextProvider } from 'react-i18next';
 import i18n from './i18n';
 import InstallPrompt from './components/js/InstallPrompt';
@@ -21,7 +21,6 @@ import DefaultHome from './components/js/pages/default/home';
 import AttendancePage from './components/js/pages/teacher/attendance';
 import GradesPage from './components/js/pages/teacher/grades';
 import GradeSummary from './components/js/pages/teacher/GradeSummary';
-import EvaluationsPage from './components/js/pages/teacher/evaluations';
 import ProfilePage from './components/js/pages/profile';
 import OwnerPage from './components/js/pages/owner/home';
 import Footer from './components/js/Footer';
@@ -182,7 +181,7 @@ function App() {
           path="/teacher/evaluations/:subjectId?"
           element={
             <RequireAuth>
-              <EvaluationsPage />
+              <Navigate to="/teacher/home" replace />
             </RequireAuth>
           }
         />
@@ -237,7 +236,7 @@ function App() {
       </Routes>
       </div>
       {/* Global footer (shows remaining JWT expiry) */}
-      <ToastContainer position="top-right" autoClose={3000} />
+      <ToastContainer position="top-right" autoClose={3000} style={{ zIndex: 12000 }} />
       <Footer />
     </BrowserRouter>
     </I18nextProvider>

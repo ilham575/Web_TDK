@@ -6,12 +6,35 @@ from models.semester_period import SemesterPeriod as SemesterPeriodModel
 from database.connection import get_db
 from routers.user import get_current_user
 from models.user import User as UserModel
-from utils.gcs import upload_to_gcs, delete_from_gcs, generate_safe_filename
+from utils.gcs import delete_uploaded_file, upload_to_gcs, generate_safe_filename
 import os
 import shutil
-from datetime import datetime
+from datetime import datetime, timezone
 
 router = APIRouter(prefix="/schools", tags=["schools"])
+
+
+def _pick_active_semester_period(periods):
+    if not periods:
+        return None
+
+    now = datetime.now(timezone.utc)
+    for period in periods:
+        if not period.start_date:
+            continue
+
+        start = period.start_date
+        end = period.end_date or datetime.max.replace(tzinfo=timezone.utc)
+
+        if start.tzinfo is None:
+            start = start.replace(tzinfo=timezone.utc)
+        if end.tzinfo is None:
+            end = end.replace(tzinfo=timezone.utc)
+
+        if start <= now <= end:
+            return period
+
+    return periods[0]
 
 
 def require_academic_year_setup(school_id: int, db: Session):
@@ -43,24 +66,10 @@ def _safe_delete_logo_file(logo_url: str):
             print(f"Skipping delete: logo_url is empty or not a string")
             return
         print(f"Attempting to delete logo: {logo_url}")
-        # our stored logo_url is like "/uploads/logos/filename.ext"
-        if not logo_url.startswith('/uploads/logos/'):
-            print(f"Skipping delete: logo_url does not start with /uploads/logos/: {logo_url}")
-            return
-        filename = os.path.basename(logo_url)
-        print(f"Extracted filename: {filename}")
-        abs_upload_dir = os.path.abspath(UPLOAD_DIR)
-        candidate = os.path.abspath(os.path.join(UPLOAD_DIR, filename))
-        print(f"Candidate path: {candidate}, upload_dir: {abs_upload_dir}")
-        # ensure candidate is inside upload_dir
-        if not candidate.startswith(abs_upload_dir + os.path.sep) and candidate != abs_upload_dir:
-            print(f"Refusing to delete file outside upload dir: {candidate}")
-            return
-        if os.path.exists(candidate):
-            os.remove(candidate)
-            print(f"✓ Deleted old logo file: {candidate}")
+        if delete_uploaded_file(logo_url):
+            print(f"✓ Deleted old logo file: {logo_url}")
         else:
-            print(f"⚠ File does not exist: {candidate}")
+            print(f"⚠ No managed logo deleted for: {logo_url}")
     except Exception as e:
         # don't raise; log and continue
         print(f"✗ Failed to delete old logo file '{logo_url}': {e}")
@@ -88,6 +97,32 @@ def get_school(school_id: int, db: Session = Depends(get_db)):
     if not school:
         raise HTTPException(status_code=404, detail="School not found")
     return school
+
+
+@router.get("/{school_id}/active-period")
+def get_active_period(school_id: int, db: Session = Depends(get_db)):
+    school = db.query(SchoolModel).filter(SchoolModel.id == school_id).first()
+    if not school:
+        raise HTTPException(status_code=404, detail="School not found")
+
+    periods = db.query(SemesterPeriodModel).filter(
+        SemesterPeriodModel.school_id == school_id
+    ).order_by(
+        SemesterPeriodModel.academic_year.desc(),
+        SemesterPeriodModel.semester.desc(),
+    ).all()
+
+    active_period = _pick_active_semester_period(periods)
+
+    return {
+        "school_id": school.id,
+        "is_academic_year_setup": school.is_academic_year_setup,
+        "academic_year": active_period.academic_year if active_period else school.current_academic_year,
+        "semester": active_period.semester if active_period else school.current_semester,
+        "start_date": active_period.start_date if active_period else None,
+        "end_date": active_period.end_date if active_period else None,
+        "source": "semester_period" if active_period else "school",
+    }
 
 @router.patch("/{school_id}", response_model=School)
 def update_school(school_id: int, school_update: SchoolUpdate, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
@@ -174,7 +209,7 @@ def upload_logo(school_id: int, file: UploadFile = File(...), db: Session = Depe
         raise HTTPException(status_code=400, detail="File size must not exceed 5 MB")
     
     try:
-        # Create unique filename and upload to GCS
+        # Create unique filename and upload to configured storage
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         original_filename = file.filename
         safe_name = generate_safe_filename(original_filename)
@@ -183,36 +218,34 @@ def upload_logo(school_id: int, file: UploadFile = File(...), db: Session = Depe
         # Read file content safely
         file_content = file.file.read()
         
-        # Upload using the GCS utility
-        # We explicitly set public=True so the logo can be viewed by anyone with the link
+        # Upload using the storage utility.
+        # In local/docker dev this can fall back to /uploads/logos automatically.
         logo_url = upload_to_gcs(file_content, filename, content_type=file.content_type, public=True)
         
         if not logo_url:
-            raise Exception("GCS upload failed (returned empty URL)")
+            raise Exception("Upload failed (returned empty URL)")
 
         # Keep old logo path so we can delete it from GCS later
         old_logo_url = school.logo_url
         
-        # อัปเดต logo_url ในฐานข้อมูล (GCS URL จะเป็น https://storage.googleapis.com/...)
+        # Update logo_url in database. Value can be either a public GCS URL or /uploads/logos/... in local dev.
         school.logo_url = logo_url
         db.commit()
         db.refresh(school)
         
-        # delete old logo file from GCS if it was a GCS URL
-        if old_logo_url and "storage.googleapis.com" in old_logo_url:
-            # Extract filename from GCS URL
-            old_filename = old_logo_url.split("/")[-1]
-            delete_from_gcs(old_filename)
+        # Delete the previously managed logo regardless of whether it lived in GCS or local uploads.
+        if old_logo_url:
+            delete_uploaded_file(old_logo_url)
         
         return {
-            "detail": "Logo uploaded successfully to GCS",
+            "detail": "Logo uploaded successfully",
             "logo_url": logo_url,
             "school": school
         }
     
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Error uploading logo to GCS: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error uploading logo: {str(e)}")
 
 
 # ============================================================

@@ -306,7 +306,6 @@ async def list_classrooms(
     for c in classrooms:
         student_count = db.query(ClassroomStudent).filter(
             ClassroomStudent.classroom_id == c.id,
-            ClassroomStudent.is_active == True
         ).count()
 
         result.append(ClassroomListResponse(

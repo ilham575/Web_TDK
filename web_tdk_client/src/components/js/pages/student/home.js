@@ -19,7 +19,6 @@ import {
   Megaphone, 
   User, 
   CalendarDays, 
-  Clock, 
   MapPin, 
   ChevronRight, 
   AlertCircle,
@@ -257,41 +256,7 @@ function StudentPage() {
   };
 
   const renderScheduleTable = () => {
-    const dayNames = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
-    const days = operatingHours.map(slot => ({
-      key: parseInt(slot.day_of_week),
-      label: dayNames[parseInt(slot.day_of_week)] || 'ไม่ระบุ',
-      operatingStart: slot.start_time,
-      operatingEnd: slot.end_time
-    })).sort((a, b) => a.key - b.key);
-
-    if (days.length === 0) {
-      return (
-        <div className="text-center py-20 bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200">
-          <div className="w-20 h-20 bg-white rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-sm border border-slate-100">
-             <CalendarDays className="w-10 h-10 text-slate-300" />
-          </div>
-          <p className="text-slate-500 font-bold text-lg">ยังไม่ได้กำหนดเวลาเปิดเรียน</p>
-          <p className="text-sm text-slate-400 mt-2 font-medium">กรุณาติดต่อผู้ดูแลระบบ</p>
-        </div>
-      );
-    }
-
-    if (studentSchedule.length === 0) {
-      return (
-        <div className="text-center py-20 bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200">
-          <div className="w-20 h-20 bg-white rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-sm border border-slate-100">
-             <Clock className="w-10 h-10 text-slate-300" />
-          </div>
-          <p className="text-slate-500 font-bold text-lg">ยังไม่มีตารางเรียน</p>
-          <p className="text-sm text-slate-400 mt-2 font-medium">ติดต่อครูผู้สอนเพื่อดูตารางเรียน</p>
-        </div>
-      );
-    }
-
-    return (
-      <ScheduleGrid operatingHours={operatingHours} schedules={studentSchedule} role="student" />
-    );
+    return <ScheduleGrid operatingHours={operatingHours} schedules={studentSchedule} role="student" />;
   };
 
   const displaySchool = currentUser?.school_name || currentUser?.school?.name || localStorage.getItem('school_name') || '-';
@@ -748,7 +713,7 @@ function StudentPage() {
         )}
         
         {activeTab === 'absences' && (
-          <AbsenceManager studentId={currentUser?.id} operatingHours={operatingHours} studentSubjects={studentSubjects} />
+          <AbsenceManager studentId={currentUser?.id} />
         )}
         
         {activeTab === 'transcript' && (

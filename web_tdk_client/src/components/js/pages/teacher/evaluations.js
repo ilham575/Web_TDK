@@ -29,7 +29,7 @@ import {
 const ConfirmModal = ({ isOpen, title, message, onConfirm, onCancel, variant = 'danger' }) => {
   if (!isOpen) return null;
   return ReactDOM.createPortal(
-    <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[11000] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={onCancel} />
       <div className="relative w-full max-w-md bg-white rounded-[2rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 border border-white/20">
         <div className="p-8 text-center">

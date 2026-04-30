@@ -31,6 +31,7 @@ const AddStudentsModal = ({
   onClose,
   onRemoveStudent,
   onStudentCountUpdate,
+  isHistoricalClassroom = false,
   refreshKey,
 }) => {
   const { t } = useTranslation();
@@ -107,21 +108,22 @@ const AddStudentsModal = ({
 
   useEffect(() => {
     const sourceStudents = classroomStep === 'add_students' ? availableStudents : classroomStudents;
-    
-    // Filter out deleted students (is_active === false)
-    const activeStudents = sourceStudents.filter(s => s.is_active !== false);
+    const shouldShowAllStudents = classroomStep === 'view_students' && isHistoricalClassroom;
+    const visibleStudents = shouldShowAllStudents
+      ? sourceStudents
+      : sourceStudents.filter(s => s.is_active !== false);
     
     if (searchTerm.trim() === '') {
-      setFilteredStudents(activeStudents);
+      setFilteredStudents(visibleStudents);
     } else {
-      const filtered = activeStudents.filter(s =>
+      const filtered = visibleStudents.filter(s =>
         (s.full_name && s.full_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (s.username && s.username.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (s.email && s.email.toLowerCase().includes(searchTerm.toLowerCase()))
       );
       setFilteredStudents(filtered);
     }
-  }, [searchTerm, availableStudents, classroomStudents, classroomStep]);
+  }, [searchTerm, availableStudents, classroomStudents, classroomStep, isHistoricalClassroom]);
 
   // Reset form เมื่อ modal ปิด
   useEffect(() => {
@@ -285,6 +287,8 @@ const AddStudentsModal = ({
   if (!isOpen || (classroomStep !== 'add_students' && classroomStep !== 'view_students')) return null;
 
   const isViewMode = classroomStep === 'view_students';
+  const isHistoricalView = isViewMode && isHistoricalClassroom;
+  const canManageClassroomStudents = isViewMode && !isHistoricalClassroom;
   const isLoading = (classroomStep === 'add_students' && loadingAvailable) || (classroomStep === 'view_students' && loadingClassroomStudents);
 
   return (
@@ -492,6 +496,12 @@ const AddStudentsModal = ({
             </div>
           ) : (
             <>
+              {isHistoricalView && (
+                <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
+                  กำลังดูข้อมูลย้อนหลัง จะแสดงรายชื่อนักเรียนทั้งหมดของห้องนี้แบบอ่านอย่างเดียว
+                </div>
+              )}
+
               {/* Search box */}
               <div className="relative mb-6 group">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-emerald-500 transition-colors" />
@@ -534,7 +544,7 @@ const AddStudentsModal = ({
                           selectedStudentIds.has(student.id) 
                             ? 'bg-emerald-50 border-emerald-200 shadow-md shadow-emerald-500/5' 
                             : 'bg-white border-slate-50 hover:border-slate-200 hover:shadow-lg hover:shadow-slate-500/5'
-                        } ${student.is_active === false ? 'opacity-50 grayscale' : ''}`}
+                        } ${student.is_active === false && !isHistoricalView ? 'opacity-50 grayscale' : ''}`}
                       >
                         { !isViewMode && (
                           <div className={`w-6 h-6 rounded-lg flex items-center justify-center transition-all ${
@@ -546,7 +556,7 @@ const AddStudentsModal = ({
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
                             {isViewMode && (
-                              editingNumberId === (student.student_id || student.id) ? (
+                              canManageClassroomStudents && editingNumberId === (student.student_id || student.id) ? (
                                 <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
                                   <input
                                     type="number"
@@ -571,6 +581,16 @@ const AddStudentsModal = ({
                                     <X className="w-3 h-3" />
                                   </button>
                                 </div>
+                              ) : !canManageClassroomStudents ? (
+                                student.student_number != null ? (
+                                  <span className="inline-flex items-center justify-center min-w-7 h-7 px-2 bg-emerald-100 text-emerald-700 text-xs font-black rounded-lg flex-shrink-0">
+                                    {student.student_number}
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center justify-center min-w-7 h-7 px-2 bg-slate-100 text-slate-400 text-[10px] font-bold rounded-lg flex-shrink-0 border border-dashed border-slate-300">
+                                    ?
+                                  </span>
+                                )
                               ) : (
                                 <div
                                   className="flex items-center gap-1 cursor-pointer group/num"
@@ -601,7 +621,7 @@ const AddStudentsModal = ({
                             <span className="truncate">{student.email}</span>
                           </div>
                         </div>
-                        {isViewMode && (
+                        {canManageClassroomStudents && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -642,7 +662,7 @@ const AddStudentsModal = ({
           
           {isViewMode && (
             <div className="flex items-center gap-2 flex-wrap">
-              {classroomStudents.length > 0 && (
+              {canManageClassroomStudents && classroomStudents.length > 0 && (
                 <button
                   type="button"
                   className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl font-black text-sm shadow-lg shadow-blue-200 transition-all hover:bg-blue-700 active:scale-95 disabled:opacity-50"
@@ -653,14 +673,16 @@ const AddStudentsModal = ({
                   กำหนดเลขที่อัตโนมัติ
                 </button>
               )}
-              <button
-                type="button"
-                className="flex items-center gap-2 px-6 py-3 bg-amber-500 text-white rounded-xl font-black text-sm shadow-lg shadow-amber-200 transition-all hover:bg-amber-600 active:scale-95"
-                onClick={handleOpenRestorePanel}
-              >
-                <RotateCcw className="w-4 h-4" />
-                กู้คืนจากเทอมอื่น
-              </button>
+              {canManageClassroomStudents && (
+                <button
+                  type="button"
+                  className="flex items-center gap-2 px-6 py-3 bg-amber-500 text-white rounded-xl font-black text-sm shadow-lg shadow-amber-200 transition-all hover:bg-amber-600 active:scale-95"
+                  onClick={handleOpenRestorePanel}
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  กู้คืนจากเทอมอื่น
+                </button>
+              )}
             </div>
           )}
           

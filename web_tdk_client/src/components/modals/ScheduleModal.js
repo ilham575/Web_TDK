@@ -5,6 +5,11 @@ import { X, Calendar, Book, Clock, MapPin, ChevronRight } from 'lucide-react';
 function ScheduleModal({
   isOpen,
   editingAssignment,
+  semesterPeriods = [],
+  selectedAcademicYear,
+  setSelectedAcademicYear,
+  selectedSemester,
+  setSelectedSemester,
   selectedSubjectId,
   setSelectedSubjectId,
   scheduleDay,
@@ -27,6 +32,83 @@ function ScheduleModal({
     else document.body.style.overflow = 'unset';
     return () => { document.body.style.overflow = 'unset'; };
   }, [isOpen]);
+
+  const periodSources = Array.isArray(semesterPeriods) && semesterPeriods.length > 0
+    ? semesterPeriods
+    : [...(Array.isArray(teacherSubjects) ? teacherSubjects : []), ...(Array.isArray(classrooms) ? classrooms : [])];
+
+  const availableAcademicYears = [...new Set(
+    periodSources
+      .map((item) => item?.academic_year)
+      .filter(Boolean)
+      .map((year) => String(year))
+  )].sort((a, b) => Number(b) - Number(a));
+
+  const getSemestersForYear = (year) => [...new Set(
+    periodSources
+      .filter((item) => String(item?.academic_year || '') === String(year || ''))
+      .map((item) => item?.semester)
+      .filter((value) => value !== null && value !== undefined && value !== '')
+      .map((value) => String(value))
+  )].sort((a, b) => Number(a) - Number(b));
+
+  const availableSemesters = selectedAcademicYear ? getSemestersForYear(selectedAcademicYear) : [];
+  const hasSelectedPeriod = Boolean(selectedAcademicYear) && Boolean(selectedSemester);
+
+  const filteredTeacherSubjects = hasSelectedPeriod
+    ? teacherSubjects.filter(
+        (subject) => String(subject?.academic_year || '') === String(selectedAcademicYear)
+          && String(subject?.semester || '') === String(selectedSemester)
+      )
+    : [];
+
+  const filteredClassrooms = hasSelectedPeriod
+    ? classrooms.filter(
+        (classroom) => String(classroom?.academic_year || '') === String(selectedAcademicYear)
+          && String(classroom?.semester || '') === String(selectedSemester)
+      )
+    : [];
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    if (selectedAcademicYear && !availableAcademicYears.includes(String(selectedAcademicYear))) {
+      setSelectedAcademicYear(availableAcademicYears[0] || '');
+      return;
+    }
+
+    if (selectedAcademicYear && selectedSemester && !availableSemesters.includes(String(selectedSemester))) {
+      setSelectedSemester(availableSemesters[0] || '');
+    }
+  }, [
+    isOpen,
+    selectedAcademicYear,
+    selectedSemester,
+    availableAcademicYears,
+    availableSemesters,
+    setSelectedAcademicYear,
+    setSelectedSemester,
+  ]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    if (selectedSubjectId && !filteredTeacherSubjects.some((subject) => String(subject.id) === String(selectedSubjectId))) {
+      setSelectedSubjectId('');
+    }
+
+    if (selectedClassroomId && !filteredClassrooms.some((classroom) => String(classroom.id) === String(selectedClassroomId))) {
+      setSelectedClassroomId('');
+    }
+  }, [
+    isOpen,
+    selectedSubjectId,
+    selectedClassroomId,
+    filteredTeacherSubjects,
+    filteredClassrooms,
+    setSelectedSubjectId,
+    setSelectedClassroomId,
+  ]);
 
   if (!isOpen) return null;
 
@@ -89,6 +171,52 @@ function ScheduleModal({
 
         {/* Content */}
         <div className="p-8 space-y-6">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">
+                <Calendar className="w-3 h-3" /> ปีการศึกษา
+              </label>
+              <select
+                value={selectedAcademicYear}
+                onChange={e => {
+                  const year = e.target.value;
+                  setSelectedAcademicYear(year);
+                  const semesters = getSemestersForYear(year);
+                  setSelectedSemester(semesters[0] || '');
+                }}
+                className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 text-sm font-bold transition-all outline-none appearance-none cursor-pointer"
+              >
+                <option value="">-- เลือกปีการศึกษา --</option>
+                {availableAcademicYears.map((year) => (
+                  <option key={year} value={year}>ปี {year}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">
+                <Calendar className="w-3 h-3" /> ภาคเรียน
+              </label>
+              <select
+                value={selectedSemester}
+                onChange={e => setSelectedSemester(e.target.value)}
+                disabled={!selectedAcademicYear}
+                className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 text-sm font-bold transition-all outline-none appearance-none cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                <option value="">-- เลือกภาคเรียน --</option>
+                {availableSemesters.map((semester) => (
+                  <option key={semester} value={semester}>ภาคเรียนที่ {semester}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {!hasSelectedPeriod && (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800">
+              กรุณาเลือกปีการศึกษาและภาคเรียนก่อน แล้วระบบจะแสดงเฉพาะวิชาและห้องเรียนของช่วงเวลานั้น
+            </div>
+          )}
+
           {/* Subject Field */}
           <div className="space-y-2">
             <label className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">
@@ -97,11 +225,12 @@ function ScheduleModal({
             <select
               value={selectedSubjectId}
               onChange={e => setSelectedSubjectId(e.target.value)}
-              className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 text-sm font-bold transition-all outline-none appearance-none cursor-pointer"
+              disabled={!hasSelectedPeriod}
+              className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 text-sm font-bold transition-all outline-none appearance-none cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <option value="">-- เลือกรายวิชา --</option>
-              {teacherSubjects.map(subject => (
-                <option key={subject.id} value={subject.id}>{subject.name}</option>
+              {filteredTeacherSubjects.map(subject => (
+                <option key={subject.id} value={subject.id}>{subject.name} • ปี {subject.academic_year} เทอม {subject.semester}</option>
               ))}
             </select>
           </div>
@@ -140,12 +269,13 @@ function ScheduleModal({
               <select
                 value={selectedClassroomId}
                 onChange={e => setSelectedClassroomId(e.target.value)}
-                className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 text-sm font-bold transition-all outline-none appearance-none cursor-pointer"
+                disabled={!hasSelectedPeriod}
+                className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 text-sm font-bold transition-all outline-none appearance-none cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <option value="">-- ทุกชั้น/ไม่ระบุ --</option>
-                {classrooms.map(classroom => (
+                {filteredClassrooms.map(classroom => (
                   <option key={classroom.id} value={classroom.id}>
-                    {classroom.name} {classroom.grade_level ? `(${classroom.grade_level})` : ''}
+                    {classroom.name} {classroom.grade_level ? `(${classroom.grade_level})` : ''} • ปี {classroom.academic_year} เทอม {classroom.semester}
                   </option>
                 ))}
               </select>

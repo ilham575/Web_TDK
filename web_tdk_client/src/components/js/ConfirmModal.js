@@ -32,7 +32,7 @@ function ConfirmModal({ isOpen, title, message, onConfirm, onCancel, confirmButt
 
   return ReactDOM.createPortal(
     <div 
-      className="fixed inset-0 bg-slate-900/40 backdrop-blur-[2px] z-[10000] flex items-center justify-center p-4 animate-in fade-in duration-200"
+      className="fixed inset-0 bg-slate-900/40 backdrop-blur-[2px] z-[11000] flex items-center justify-center p-4 animate-in fade-in duration-200"
       onClick={onCancel}
     >
       <div 

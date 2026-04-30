@@ -303,6 +303,23 @@ function AdminPage() {
   const systemYear = activePeriod ? activePeriod.academic_year : currentBEYear;
   const systemSemester = activePeriod ? activePeriod.semester : 1;
 
+  const isHistoricalClassroomPeriod = (classroom) => {
+    if (!classroom) return false;
+
+    return (
+      String(classroom.academic_year ?? '') !== String(systemYear ?? '') ||
+      Number(classroom.semester ?? 0) !== Number(systemSemester ?? 0)
+    );
+  };
+
+  const getVisibleStudentCount = (classroom, students) => {
+    const studentList = Array.isArray(students) ? students : [];
+    if (isHistoricalClassroomPeriod(classroom)) {
+      return studentList.length;
+    }
+    return studentList.filter(student => student.is_active !== false).length;
+  };
+
   // Sync the unified filter to match the active semester period whenever it changes
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -992,6 +1009,7 @@ function AdminPage() {
   const [teacherStatusFilter, setTeacherStatusFilter] = useState('all'); // 'all', 'active', 'inactive'
   const [teacherBulkMode, setTeacherBulkMode] = useState('reset'); // 'reset', 'disable', 'delete'
   const [studentStatusFilter, setStudentStatusFilter] = useState('all');
+  const [studentGraduationAcademicYear, setStudentGraduationAcademicYear] = useState('');
   const [studentBulkMode, setStudentBulkMode] = useState('reset'); // 'reset', 'disable', 'delete'
   const [teacherCurrentPage, setTeacherCurrentPage] = useState(1);
   const [studentCurrentPage, setStudentCurrentPage] = useState(1);
@@ -1025,6 +1043,68 @@ function AdminPage() {
 
   // Sub-tabs for Users section
   const [userSubTab, setUserSubTab] = useState('teachers'); // 'teachers', 'students', 'password_reset'
+
+  const graduationAcademicYears = React.useMemo(() => {
+    const years = new Set();
+    if (graduationGradeLevelDraft && systemYear) {
+      years.add(String(systemYear));
+    }
+    students.forEach((student) => {
+      if (
+        graduationGradeLevelDraft &&
+        student.grade_level === graduationGradeLevelDraft &&
+        student.classroom_academic_year
+      ) {
+        years.add(String(student.classroom_academic_year));
+      }
+    });
+    return [...years].sort((left, right) => Number(right) - Number(left));
+  }, [students, graduationGradeLevelDraft, systemYear]);
+
+  const graduationScopeYear = studentGraduationAcademicYear || graduationAcademicYears[0] || String(systemYear || '');
+
+  const getStudentAcademicScopeLabel = (student) => {
+    const parts = [];
+    const classroomLabel = student.classroom_display || student.classroom_name || student.grade_level;
+    if (classroomLabel) parts.push(classroomLabel);
+    if (student.classroom_academic_year) parts.push(`ปี ${student.classroom_academic_year}`);
+    if (student.classroom_semester) parts.push(`เทอม ${student.classroom_semester}`);
+    return parts.join(' • ');
+  };
+
+  const isStudentInSelectedGraduationScope = (student) => {
+    if (!graduationGradeLevelDraft) return false;
+    if (student.user_status === 'graduated') return false;
+    if (student.grade_level !== graduationGradeLevelDraft) return false;
+    if (!graduationScopeYear) return false;
+    return String(student.classroom_academic_year || '') === String(graduationScopeYear);
+  };
+
+  const eligibleGraduationStudentsCount = React.useMemo(() => (
+    students.filter((student) => isStudentInSelectedGraduationScope(student)).length
+  ), [students, graduationGradeLevelDraft, graduationScopeYear]);
+
+  useEffect(() => {
+    if (!graduationGradeLevelDraft) {
+      setStudentGraduationAcademicYear('');
+      return;
+    }
+
+    if (graduationAcademicYears.length === 0) {
+      setStudentGraduationAcademicYear(String(systemYear || ''));
+      return;
+    }
+
+    setStudentGraduationAcademicYear((previousYear) => {
+      if (previousYear && graduationAcademicYears.includes(String(previousYear))) {
+        return String(previousYear);
+      }
+      const preferredYear = [selectedYear, systemYear].find(
+        (year) => year && graduationAcademicYears.includes(String(year))
+      );
+      return String(preferredYear || graduationAcademicYears[0] || '');
+    });
+  }, [graduationGradeLevelDraft, graduationAcademicYears, selectedYear, systemYear]);
 
   useEffect(() => {
     const onDocClick = (e) => {
@@ -1110,11 +1190,11 @@ function AdminPage() {
   }, [currentUser]);
 
   // Fetch actual student counts for each classroom
-  // Re-fetch when classrooms change OR when switching to classrooms/promotions tabs (to ensure fresh data)
+  // Re-fetch when classrooms change OR when switching to tabs that display student totals by classroom
   useEffect(() => {
     if (!Array.isArray(classrooms) || classrooms.length === 0) return;
-    // Only run when on tabs that need student counts (include homeroom list)
-    if (activeTab !== 'classrooms' && activeTab !== 'promotions' && activeTab !== 'homeroom') return;
+    // Only run when on tabs that need student counts (include homeroom list and overview)
+    if (activeTab !== 'home' && activeTab !== 'classrooms' && activeTab !== 'promotions' && activeTab !== 'homeroom') return;
     
     const token = getStoredAccessToken();
     classrooms.forEach(classroom => {
@@ -1124,15 +1204,14 @@ function AdminPage() {
       })
         .then(res => res.json())
         .then(students => {
-          // Filter out deleted students (is_active === false)
-          const activeStudents = Array.isArray(students) ? students.filter(s => s.is_active !== false) : [];
-          setClassroomStudentCounts(prev => ({ ...prev, [classroom.id]: activeStudents.length }));
+          const studentCount = getVisibleStudentCount(classroom, students);
+          setClassroomStudentCounts(prev => ({ ...prev, [classroom.id]: studentCount }));
         })
         .catch(() => {
           setClassroomStudentCounts(prev => ({ ...prev, [classroom.id]: 0 }));
         });
     });
-  }, [classrooms, activeTab]);
+  }, [classrooms, activeTab, systemYear, systemSemester]);
 
   // Determine school name from multiple possible sources (API shape may vary)
   const displaySchool = currentUser?.school_name || currentUser?.school?.name || localStorage.getItem('school_name') || '-';
@@ -1479,14 +1558,17 @@ function AdminPage() {
     } catch (err) { console.error(err); toast.error(t('admin.activateUserError')); }
   };
 
-  const graduateUser = async (userId, userName) => {
+  const graduateUser = async (userId, userName, academicYear = '') => {
     const token = getStoredAccessToken();
     if (!token) { toast.error(t('admin.loginRequired')); return; }
     try {
-      const res = await fetch(`${API_BASE_URL}/users/${userId}/graduate`, { method: 'PATCH', headers: { 'Authorization': `Bearer ${token}` } });
+      const params = new URLSearchParams();
+      if (academicYear) params.set('academic_year', String(academicYear));
+      const query = params.toString();
+      const res = await fetch(`${API_BASE_URL}/users/${userId}/graduate${query ? `?${query}` : ''}`, { method: 'PATCH', headers: { 'Authorization': `Bearer ${token}` } });
       const data = await res.json();
       if (!res.ok) { toast.error(data.detail || 'ไม่สามารถจบการศึกษาได้'); }
-      else { toast.success(`🎓 ${userName} จบการศึกษาแล้ว`); window.location.reload(); }
+      else { toast.success(`🎓 ${userName} จบการศึกษาแล้ว${academicYear ? ` (ปี ${academicYear})` : ''}`); window.location.reload(); }
     } catch (err) { console.error(err); toast.error('เกิดข้อผิดพลาด'); }
   };
 
@@ -1512,14 +1594,21 @@ function AdminPage() {
     } catch (err) { console.error(err); toast.error('เกิดข้อผิดพลาด'); }
   };
 
-  const bulkGraduateStudents = async () => {
+  const bulkGraduateStudents = async (academicYear = '') => {
     const token = getStoredAccessToken();
     if (!token) { toast.error(t('admin.loginRequired')); return; }
     try {
-      const res = await fetch(`${API_BASE_URL}/users/bulk/graduate`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } });
+      const params = new URLSearchParams();
+      if (academicYear) params.set('academic_year', String(academicYear));
+      const query = params.toString();
+      const res = await fetch(`${API_BASE_URL}/users/bulk/graduate${query ? `?${query}` : ''}`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } });
       const data = await res.json();
       if (!res.ok) { toast.error(data.detail || 'ไม่สามารถจบการศึกษาหมู่ได้'); }
-      else { toast.success(`🎓 จบการศึกษา ${data.graduated_count} คน (ชั้น ${data.graduation_grade_level})`); window.location.reload(); }
+      else {
+        const scopeText = data.academic_year ? ` ปี ${data.academic_year}` : '';
+        toast.success(`🎓 จบการศึกษา ${data.graduated_count} คน (ชั้น ${data.graduation_grade_level}${scopeText})`);
+        window.location.reload();
+      }
     } catch (err) { console.error(err); toast.error('เกิดข้อผิดพลาด'); }
   };
 
@@ -3430,11 +3519,11 @@ function AdminPage() {
             });
             if (studentRes.ok) {
               const students = await studentRes.json();
-              // Filter out deleted students (is_active === false)
-              const activeStudents = Array.isArray(students) ? students.filter(s => s.is_active !== false) : [];
+              const classroom = classrooms.find(item => item.id === classroomId) || selectedClassroom;
+              const studentCount = getVisibleStudentCount(classroom, students);
               setClassroomStudentCounts(prev => ({ 
                 ...prev, 
-                [classroomId]: activeStudents.length 
+                [classroomId]: studentCount 
               }));
             }
             
@@ -3828,13 +3917,17 @@ function AdminPage() {
           {activeTab === 'home' && (
             <AdminTabIntro
               teachers={teachers}
-              students={students}
-              classrooms={classrooms}
+              classrooms={filteredClassrooms}
+              classroomStudentCounts={classroomStudentCounts}
               announcements={announcements}
               setActiveTab={setActiveTab}
               schoolData={schoolData}
               selectedYear={selectedYear}
               selectedSemester={selectedSemester}
+              yearOptions={yearOptions}
+              onSelectedYearChange={setSelectedYear}
+              onSelectedSemesterChange={setSelectedSemester}
+              activePeriod={activePeriod}
             />
           )}
           {activeTab === 'users' && (
@@ -4486,6 +4579,47 @@ function AdminPage() {
                     {t('admin.students')} ({students.length} {t('admin.people')})
                   </h3>
 
+                  <div className={`rounded-2xl border px-4 py-3 text-sm ${graduationGradeLevelDraft ? 'border-blue-200 bg-blue-50 text-blue-800' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>
+                    <div className="font-bold mb-1">
+                      {graduationGradeLevelDraft
+                        ? `🎓 ชั้นจบที่ตั้งไว้: ${graduationGradeLevelDraft}`
+                        : '⚠️ ยังไม่ได้กำหนดชั้นจบของโรงเรียน'}
+                    </div>
+                    {graduationGradeLevelDraft && (
+                      <div className="mt-3 flex flex-wrap items-center gap-3">
+                        <span className="font-semibold">แยกชั้นจบตามปีการศึกษา:</span>
+                        <select
+                          value={studentGraduationAcademicYear}
+                          onChange={(e) => {
+                            setStudentGraduationAcademicYear(e.target.value);
+                            setStudentCurrentPage(1);
+                          }}
+                          className="px-3 py-2 rounded-xl border border-blue-200 bg-white text-slate-700 font-semibold cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-400/60"
+                        >
+                          {graduationAcademicYears.map((year) => (
+                            <option key={year} value={year}>ปีการศึกษา {year}</option>
+                          ))}
+                        </select>
+                        <span className="inline-flex items-center gap-2 px-3 py-2 rounded-full bg-white/80 border border-blue-100 font-semibold text-blue-700">
+                          ใช้กับชั้น {graduationGradeLevelDraft} ปี {graduationScopeYear || '-'}
+                        </span>
+                        <span className="text-xs font-bold text-blue-700 bg-white/80 border border-blue-100 px-3 py-2 rounded-full">
+                          พบที่เข้าเงื่อนไข {eligibleGraduationStudentsCount} คน
+                        </span>
+                      </div>
+                    )}
+                    <div>
+                      ปุ่ม 🎓 ในหน้านี้ใช้สำหรับเปลี่ยนสถานะผู้ใช้เป็น "จบการศึกษา" เท่านั้น
+                      {graduationGradeLevelDraft ? ` และจะแสดงปุ่มเฉพาะนักเรียนที่อยู่ชั้น ${graduationGradeLevelDraft} ปีการศึกษา ${graduationScopeYear || '-'}` : ''}
+                      {' '}ไม่ได้เปลี่ยนปีการศึกษา หรือภาคเรียนของข้อมูลเดิม
+                    </div>
+                    {graduationGradeLevelDraft && graduationAcademicYears.length === 0 && (
+                      <div className="mt-2 text-xs font-semibold text-amber-700">
+                        ยังไม่พบข้อมูลปีการศึกษาจากชั้นเรียนของนักเรียนชั้นจบ ระบบจึงยังแยกตามปีไม่ได้
+                      </div>
+                    )}
+                  </div>
+
                   {/* Search, Filter */}
                   <div className="flex flex-wrap gap-4 items-center mb-6">
                     <input
@@ -4574,14 +4708,15 @@ function AdminPage() {
                         <button
                           type="button"
                           onClick={() => openConfirmModal(
-                            '🎓 จบการศึกษาหมู่',
-                            `จบการศึกษาสำหรับนักเรียนชั้น ${graduationGradeLevelDraft} ทั้งหมด? นักเรียนจะถูกปิดใช้งาน แต่ข้อมูลยังคงอยู่ในระบบ`,
-                            async () => { await bulkGraduateStudents(); }
+                            '🎓 เปลี่ยนสถานะจบการศึกษาหมู่',
+                            `เปลี่ยนสถานะนักเรียนชั้น ${graduationGradeLevelDraft} ปีการศึกษา ${graduationScopeYear || '-'} ทั้งหมดเป็น "จบการศึกษา"? การทำงานนี้เป็นการเปลี่ยนสถานะผู้ใช้ และจะไม่แก้ปีการศึกษา/ภาคเรียนของข้อมูลเดิม`,
+                            async () => { await bulkGraduateStudents(graduationScopeYear); }
                           )}
-                          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg font-semibold bg-blue-100 text-blue-700 hover:bg-blue-200 border border-blue-200 transition-all duration-300"
-                          title={`จบการศึกษาสำหรับนักเรียนชั้น ${graduationGradeLevelDraft} ทั้งหมด`}
+                          className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg font-semibold border transition-all duration-300 ${eligibleGraduationStudentsCount > 0 ? 'bg-blue-100 text-blue-700 hover:bg-blue-200 border-blue-200' : 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'}`}
+                          title={`เปลี่ยนสถานะนักเรียนชั้น ${graduationGradeLevelDraft} ปี ${graduationScopeYear || '-'} เป็นจบการศึกษา`}
+                          disabled={!graduationScopeYear || eligibleGraduationStudentsCount === 0}
                         >
-                          🎓 จบการศึกษาชั้น {graduationGradeLevelDraft}
+                          🎓 เปลี่ยนสถานะชั้น {graduationGradeLevelDraft} ปี {graduationScopeYear || '-'} เป็นจบการศึกษา {eligibleGraduationStudentsCount > 0 ? `(${eligibleGraduationStudentsCount})` : ''}
                         </button>
                       )}
                     </div>
@@ -4709,6 +4844,9 @@ function AdminPage() {
                             </thead>
                             <tbody className="divide-y divide-slate-100">
                             {paginatedStudents.map(student => {
+                              const isGraduationScopeMatch = isStudentInSelectedGraduationScope(student);
+                              const studentAcademicScopeLabel = getStudentAcademicScopeLabel(student);
+                              const graduationYearLabel = student.classroom_academic_year ? `ปี ${student.classroom_academic_year}` : 'ยังไม่ทราบปี';
                                 const isSelectedForReset = selectedStudentsForReset.has(student.id);
                                 const isSelectedForDisable = selectedStudentsForDisable.has(student.id);
                                 const isSelectedForDelete = selectedStudentsForDelete.has(student.id);
@@ -4753,6 +4891,14 @@ function AdminPage() {
                                     >
                                       {student.full_name || student.username}
                                     </button>
+                                    {studentAcademicScopeLabel && (
+                                      <div className="mt-1 text-xs font-medium text-slate-500">{studentAcademicScopeLabel}</div>
+                                    )}
+                                    {graduationGradeLevelDraft && student.grade_level === graduationGradeLevelDraft && student.user_status !== 'graduated' && (
+                                      <div className={`mt-1 inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${isGraduationScopeMatch ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>
+                                        🎓 ชั้นจบ {graduationYearLabel}
+                                      </div>
+                                    )}
                                   </td>
                                   <td className="px-4 py-4 text-slate-600">{student.email}</td>
                                   <td className="px-4 py-4 text-slate-500">{student.username}</td>
@@ -4808,11 +4954,11 @@ function AdminPage() {
                                           >
                                             🚫
                                           </button>
-                                          {graduationGradeLevelDraft && student.grade_level === graduationGradeLevelDraft && (
+                                          {isGraduationScopeMatch && (
                                             <button
                                               className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-blue-100 text-blue-600 hover:bg-blue-200 hover:text-blue-800 transition-all duration-200"
-                                              onClick={() => openConfirmModal('🎓 จบการศึกษา', `บันทึกการจบการศึกษาของ "${student.full_name || student.username}" (ชั้น ${student.grade_level})?`, async () => { await graduateUser(student.id, student.full_name || student.username); })}
-                                              title="จบการศึกษา"
+                                              onClick={() => openConfirmModal('🎓 เปลี่ยนสถานะเป็นจบการศึกษา', `เปลี่ยนสถานะของ "${student.full_name || student.username}" (ชั้น ${student.grade_level} ปีการศึกษา ${student.classroom_academic_year || graduationScopeYear || '-'}) เป็น "จบการศึกษา"? การทำงานนี้ไม่เปลี่ยนปีการศึกษา/ภาคเรียนของข้อมูลเดิม`, async () => { await graduateUser(student.id, student.full_name || student.username, student.classroom_academic_year || graduationScopeYear); })}
+                                              title={`เปลี่ยนสถานะเป็นจบการศึกษา (ปี ${student.classroom_academic_year || graduationScopeYear || '-'})`}
                                             >
                                               🎓
                                             </button>
@@ -4897,6 +5043,9 @@ function AdminPage() {
                                 </label>
                             </div>
                             {paginatedStudents.map(student => {
+                              const isGraduationScopeMatch = isStudentInSelectedGraduationScope(student);
+                              const studentAcademicScopeLabel = getStudentAcademicScopeLabel(student);
+                              const graduationYearLabel = student.classroom_academic_year ? `ปี ${student.classroom_academic_year}` : 'ยังไม่ทราบปี';
                                 const isSelectedForReset = selectedStudentsForReset.has(student.id);
                                 const isSelectedForDisable = selectedStudentsForDisable.has(student.id);
                                 const isSelectedForDelete = selectedStudentsForDelete.has(student.id);
@@ -4942,6 +5091,14 @@ function AdminPage() {
                                               {student.full_name || student.username}
                                             </button>
                                             <div className="text-sm text-slate-500 font-medium">@{student.username}</div>
+                                            {studentAcademicScopeLabel && (
+                                              <div className="mt-1 text-xs font-medium text-slate-500">{studentAcademicScopeLabel}</div>
+                                            )}
+                                            {graduationGradeLevelDraft && student.grade_level === graduationGradeLevelDraft && student.user_status !== 'graduated' && (
+                                              <div className={`mt-2 inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${isGraduationScopeMatch ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>
+                                                🎓 ชั้นจบ {graduationYearLabel}
+                                              </div>
+                                            )}
                                         </div>
                                     </div>
                                     {student.user_status === 'graduated' ? (
@@ -5000,11 +5157,11 @@ function AdminPage() {
                                           >
                                             🚫
                                           </button>
-                                          {graduationGradeLevelDraft && student.grade_level === graduationGradeLevelDraft && (
+                                          {isGraduationScopeMatch && (
                                             <button
                                               className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-blue-100 text-blue-600 hover:bg-blue-200 hover:text-blue-800 transition-all"
-                                              onClick={() => openConfirmModal('🎓 จบการศึกษา', `บันทึกการจบการศึกษาของ "${student.full_name || student.username}" (ชั้น ${student.grade_level})?`, async () => { await graduateUser(student.id, student.full_name || student.username); })}
-                                              title="จบการศึกษา"
+                                              onClick={() => openConfirmModal('🎓 เปลี่ยนสถานะเป็นจบการศึกษา', `เปลี่ยนสถานะของ "${student.full_name || student.username}" (ชั้น ${student.grade_level} ปีการศึกษา ${student.classroom_academic_year || graduationScopeYear || '-'}) เป็น "จบการศึกษา"? การทำงานนี้ไม่เปลี่ยนปีการศึกษา/ภาคเรียนของข้อมูลเดิม`, async () => { await graduateUser(student.id, student.full_name || student.username, student.classroom_academic_year || graduationScopeYear); })}
+                                              title={`เปลี่ยนสถานะเป็นจบการศึกษา (ปี ${student.classroom_academic_year || graduationScopeYear || '-'})`}
                                             >
                                               🎓
                                             </button>
@@ -6650,18 +6807,16 @@ function AdminPage() {
               </div>
               
               {/* Schedule Preview */}
-              {Array.isArray(scheduleSlots) && scheduleSlots.length > 0 && Array.isArray(adminSchedules) && adminSchedules.length > 0 && (
-                <div className="mt-6">
-                  <h4 className="flex items-center gap-2 text-lg font-bold text-slate-700 mb-4">{t('admin.schedulePreview')}</h4>
-                  <ScheduleGrid
-                    operatingHours={scheduleSlots}
-                    schedules={adminSchedules}
-                    role="admin"
-                    onActionDelete={(id)=>{ openConfirmModal(t('admin.cancelScheduleTitle'), t('admin.confirmCancelSchedule'), async ()=>{ await deleteAssignment(id); }); }}
-                    onActionEdit={(item)=>{ setEditingAssignment(item); setShowScheduleManagementModal(true); }}
-                  />
-                </div>
-              )}
+              <div className="mt-6">
+                <h4 className="flex items-center gap-2 text-lg font-bold text-slate-700 mb-4">{t('admin.schedulePreview')}</h4>
+                <ScheduleGrid
+                  operatingHours={scheduleSlots}
+                  schedules={adminSchedules}
+                  role="admin"
+                  onActionDelete={(id)=>{ openConfirmModal(t('admin.cancelScheduleTitle'), t('admin.confirmCancelSchedule'), async ()=>{ await deleteAssignment(id); }); }}
+                  onActionEdit={(item)=>{ setEditingAssignment(item); setShowScheduleManagementModal(true); }}
+                />
+              </div>
             </div>
           </div>
         )}
@@ -7713,6 +7868,7 @@ function AdminPage() {
         onBack={() => setClassroomStep('select')}
         onClose={closeClassroomModal}
         onRemoveStudent={removeStudentFromClassroom}
+        isHistoricalClassroom={isHistoricalClassroomPeriod(selectedClassroom)}
         refreshKey={classroomRefreshKey}
       />
 

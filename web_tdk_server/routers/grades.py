@@ -1413,33 +1413,75 @@ def get_classroom_ranking(classroom_id: int, academic_year: str = None, semester
 
     _enforce_student_ranking_access(current_user, db, academic_year=academic_year, semester=semester)
 
-    # Get students in classroom or grade level
-    query = db.query(UserModel).join(
-        ClassroomStudentModel, UserModel.id == ClassroomStudentModel.student_id
-    )
     is_combined_classroom_mode = (not grade_level and semester is None)
     target_classroom = None
     q_year = str(academic_year).strip() if academic_year is not None else None
+
+    def _apply_student_scope_filters(query):
+        if grade_level:
+            query = query.join(ClassroomModel, ClassroomStudentModel.classroom_id == ClassroomModel.id)
+            query = query.filter(ClassroomModel.grade_level == grade_level)
+            school_id_scope = getattr(current_user, 'school_id', None)
+            if school_id_scope:
+                query = query.filter(ClassroomModel.school_id == school_id_scope)
+            if q_year is not None:
+                if len(q_year) <= 2:
+                    query = query.filter(or_(
+                        ClassroomModel.academic_year == academic_year,
+                        func.right(ClassroomModel.academic_year, len(q_year)) == q_year
+                    ))
+                else:
+                    query = query.filter(ClassroomModel.academic_year == academic_year)
+            if semester is not None:
+                query = query.filter(ClassroomModel.semester == semester)
+            return query
+
+        if is_combined_classroom_mode:
+            combined_target_classroom = db.query(ClassroomModel).filter(ClassroomModel.id == classroom_id).first()
+            if not combined_target_classroom:
+                return None
+
+            query = query.join(ClassroomModel, ClassroomStudentModel.classroom_id == ClassroomModel.id)
+            query = query.filter(
+                ClassroomModel.school_id == combined_target_classroom.school_id,
+                ClassroomModel.name == combined_target_classroom.name,
+                ClassroomModel.grade_level == combined_target_classroom.grade_level
+            )
+
+            if q_year is not None:
+                if len(q_year) <= 2:
+                    query = query.filter(or_(
+                        ClassroomModel.academic_year == academic_year,
+                        func.right(ClassroomModel.academic_year, len(q_year)) == q_year
+                    ))
+                else:
+                    query = query.filter(ClassroomModel.academic_year == academic_year)
+            elif combined_target_classroom.academic_year:
+                query = query.filter(ClassroomModel.academic_year == combined_target_classroom.academic_year)
+            return query
+
+        return query.filter(ClassroomStudentModel.classroom_id == classroom_id)
+
+    def _load_rank_students(active_enrollment_only: bool):
+        query = db.query(UserModel).join(
+            ClassroomStudentModel, UserModel.id == ClassroomStudentModel.student_id
+        ).filter(
+            UserModel.role == 'student',
+            UserModel.is_active == True,
+            UserModel.user_status == 'active'
+        )
+        if active_enrollment_only:
+            query = query.filter(ClassroomStudentModel.is_active == True)
+        query = _apply_student_scope_filters(query)
+        if query is None:
+            return []
+        return query.all()
     
     if grade_level:
         # If grade_level is provided, find all students in any classroom of that grade level
         # scoped to the correct school + year + semester so that students from other years
         # (e.g. newly enrolled year-69 students) are not mixed into the year-68 ranking.
-        query = query.join(ClassroomModel, ClassroomStudentModel.classroom_id == ClassroomModel.id)
-        query = query.filter(ClassroomModel.grade_level == grade_level)
-        school_id_scope = getattr(current_user, 'school_id', None)
-        if school_id_scope:
-            query = query.filter(ClassroomModel.school_id == school_id_scope)
-        if q_year is not None:
-            if len(q_year) <= 2:
-                query = query.filter(or_(
-                    ClassroomModel.academic_year == academic_year,
-                    func.right(ClassroomModel.academic_year, len(q_year)) == q_year
-                ))
-            else:
-                query = query.filter(ClassroomModel.academic_year == academic_year)
-        if semester is not None:
-            query = query.filter(ClassroomModel.semester == semester)
+        pass
     elif is_combined_classroom_mode:
         # Combined mode: merge same classroom across semesters in the selected academic year
         # (same school + same classroom name + same grade level)
@@ -1447,27 +1489,10 @@ def get_classroom_ranking(classroom_id: int, academic_year: str = None, semester
         if not target_classroom:
             return []
 
-        query = query.join(ClassroomModel, ClassroomStudentModel.classroom_id == ClassroomModel.id)
-        query = query.filter(
-            ClassroomModel.school_id == target_classroom.school_id,
-            ClassroomModel.name == target_classroom.name,
-            ClassroomModel.grade_level == target_classroom.grade_level
-        )
+    students = _load_rank_students(active_enrollment_only=True)
+    if not students:
+        students = _load_rank_students(active_enrollment_only=False)
 
-        if q_year is not None:
-            if len(q_year) <= 2:
-                query = query.filter(or_(
-                    ClassroomModel.academic_year == academic_year,
-                    func.right(ClassroomModel.academic_year, len(q_year)) == q_year
-                ))
-            else:
-                query = query.filter(ClassroomModel.academic_year == academic_year)
-        elif target_classroom.academic_year:
-            query = query.filter(ClassroomModel.academic_year == target_classroom.academic_year)
-    else:
-        query = query.filter(ClassroomStudentModel.classroom_id == classroom_id)
-        
-    students = query.all()
     # Deduplicate students that appear in both semesters of the same classroom
     students = list({s.id: s for s in students}.values())
 
@@ -1476,50 +1501,65 @@ def get_classroom_ranking(classroom_id: int, academic_year: str = None, semester
 
     # Build student_number lookup map
     student_ids = [s.id for s in students]
-    enrollments_query = db.query(ClassroomStudentModel).filter(
-        ClassroomStudentModel.student_id.in_(student_ids)
-    )
-
-    if grade_level:
-        enrollments_query = enrollments_query.join(
-            ClassroomModel, ClassroomStudentModel.classroom_id == ClassroomModel.id
-        ).filter(ClassroomModel.grade_level == grade_level)
-        school_id_scope = getattr(current_user, 'school_id', None)
-        if school_id_scope:
-            enrollments_query = enrollments_query.filter(ClassroomModel.school_id == school_id_scope)
-        if q_year is not None:
-            if len(q_year) <= 2:
-                enrollments_query = enrollments_query.filter(or_(
-                    ClassroomModel.academic_year == academic_year,
-                    func.right(ClassroomModel.academic_year, len(q_year)) == q_year
-                ))
-            else:
-                enrollments_query = enrollments_query.filter(ClassroomModel.academic_year == academic_year)
-        if semester is not None:
-            enrollments_query = enrollments_query.filter(ClassroomModel.semester == semester)
-    elif is_combined_classroom_mode and target_classroom is not None:
-        enrollments_query = enrollments_query.join(
-            ClassroomModel, ClassroomStudentModel.classroom_id == ClassroomModel.id
+    def _load_rank_enrollments(active_enrollment_only: bool):
+        query = db.query(ClassroomStudentModel).join(
+            UserModel,
+            UserModel.id == ClassroomStudentModel.student_id
         ).filter(
-            ClassroomModel.school_id == target_classroom.school_id,
-            ClassroomModel.name == target_classroom.name,
-            ClassroomModel.grade_level == target_classroom.grade_level
+            ClassroomStudentModel.student_id.in_(student_ids),
+            UserModel.role == 'student',
+            UserModel.is_active == True,
+            UserModel.user_status == 'active'
         )
+        if active_enrollment_only:
+            query = query.filter(ClassroomStudentModel.is_active == True)
 
-        if q_year is not None:
-            if len(q_year) <= 2:
-                enrollments_query = enrollments_query.filter(or_(
-                    ClassroomModel.academic_year == academic_year,
-                    func.right(ClassroomModel.academic_year, len(q_year)) == q_year
-                ))
-            else:
-                enrollments_query = enrollments_query.filter(ClassroomModel.academic_year == academic_year)
-        elif target_classroom.academic_year:
-            enrollments_query = enrollments_query.filter(ClassroomModel.academic_year == target_classroom.academic_year)
-    else:
-        enrollments_query = enrollments_query.filter(ClassroomStudentModel.classroom_id == classroom_id)
+        if grade_level:
+            query = query.join(
+                ClassroomModel, ClassroomStudentModel.classroom_id == ClassroomModel.id
+            ).filter(ClassroomModel.grade_level == grade_level)
+            school_id_scope = getattr(current_user, 'school_id', None)
+            if school_id_scope:
+                query = query.filter(ClassroomModel.school_id == school_id_scope)
+            if q_year is not None:
+                if len(q_year) <= 2:
+                    query = query.filter(or_(
+                        ClassroomModel.academic_year == academic_year,
+                        func.right(ClassroomModel.academic_year, len(q_year)) == q_year
+                    ))
+                else:
+                    query = query.filter(ClassroomModel.academic_year == academic_year)
+            if semester is not None:
+                query = query.filter(ClassroomModel.semester == semester)
+            return query.all()
 
-    enrollments = enrollments_query.all()
+        if is_combined_classroom_mode and target_classroom is not None:
+            query = query.join(
+                ClassroomModel, ClassroomStudentModel.classroom_id == ClassroomModel.id
+            ).filter(
+                ClassroomModel.school_id == target_classroom.school_id,
+                ClassroomModel.name == target_classroom.name,
+                ClassroomModel.grade_level == target_classroom.grade_level
+            )
+
+            if q_year is not None:
+                if len(q_year) <= 2:
+                    query = query.filter(or_(
+                        ClassroomModel.academic_year == academic_year,
+                        func.right(ClassroomModel.academic_year, len(q_year)) == q_year
+                    ))
+                else:
+                    query = query.filter(ClassroomModel.academic_year == academic_year)
+            elif target_classroom.academic_year:
+                query = query.filter(ClassroomModel.academic_year == target_classroom.academic_year)
+            return query.all()
+
+        return query.filter(ClassroomStudentModel.classroom_id == classroom_id).all()
+
+    enrollments = _load_rank_enrollments(active_enrollment_only=True)
+    if not enrollments:
+        enrollments = _load_rank_enrollments(active_enrollment_only=False)
+
     student_number_map = {}
     for e in enrollments:
         if e.student_id not in student_number_map or (student_number_map[e.student_id] is None and e.student_number is not None):

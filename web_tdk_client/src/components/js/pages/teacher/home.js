@@ -17,6 +17,7 @@ import FirstVisitOnboarding, {
   markOnboardingSeen,
   shouldShowOnboarding
 } from '../../FirstVisitOnboarding';
+import swalMessenger from '../owner/swalmessenger';
 import { setSchoolFavicon } from '../../../../utils/faviconUtils';
 import { fetchCurrentUser, getStoredAccessToken, hasSessionMarker, logout } from '../../../../utils/authUtils';
 import { 
@@ -473,8 +474,8 @@ function TeacherPage() {
     }
   };
 
-  const handleOpenEvaluationModal = async (subject) => {
-    navigate(`/teacher/evaluations/${subject.id}`);
+  const handleOpenEvaluationModal = async () => {
+    await handleUnavailableEvaluations();
   };
 
   const displaySchool = currentUser?.school_name || currentUser?.school?.name || localStorage.getItem('school_name') || '-';
@@ -558,6 +559,14 @@ function TeacherPage() {
     logout();
     toast.success('Signed out successfully!');
     setTimeout(() => navigate('/signin'), 1000);
+  };
+
+  const handleUnavailableEvaluations = async () => {
+    await swalMessenger.alert({
+      title: 'กำลังพัฒนา',
+      text: 'ในส่วนนี้กำลังพัฒนาและแก้ไข โปรดลองอีกครั้งในภายหลัง',
+      icon: 'info'
+    });
   };
 
   const uploadAnnouncementPdf = async (announcementId, pdfFile) => {
@@ -1287,30 +1296,58 @@ function TeacherPage() {
                     </div>
                   </div>
                   
-                  <div className="flex gap-3 md:gap-4">
+                  <div className="flex w-full md:w-auto mt-4 md:mt-0">
                      {remainingTime && remainingTime.status === 'active' ? (
-                        <>
-                           <div className="bg-slate-50 rounded-xl p-3 md:p-5 text-center min-w-[90px] md:min-w-[110px] border border-slate-200 flex flex-col justify-center items-center">
-                              <div className="text-3xl md:text-4xl font-black text-blue-600 leading-none mb-1 tabular-nums">{remainingTime.days}</div>
-                              <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">วัน</div>
+                        <div className="relative group w-full md:w-auto">
+                           <div className="absolute inset-0 bg-blue-500/5 blur-xl group-hover:bg-blue-500/10 transition-colors rounded-3xl z-0" />
+                           <div className="relative z-10 flex flex-col md:flex-row items-center bg-white border border-blue-100 rounded-3xl p-3 md:p-2 md:pr-6 shadow-[0_4px_20px_-4px_rgba(59,130,246,0.1)] hover:shadow-[0_8px_30px_-4px_rgba(59,130,246,0.15)] transition-all duration-300 gap-4 md:gap-5 w-full md:w-auto">
+                              <div className="flex gap-2">
+                                 {/* Days */}
+                                 <div className="flex flex-col items-center justify-center w-20 h-20 bg-gradient-to-b from-blue-50/50 to-white border border-blue-100/80 rounded-2xl shadow-sm relative overflow-hidden">
+                                     <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-blue-400 to-indigo-500 opacity-80" />
+                                     <span className="text-3xl lg:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-br from-blue-600 to-indigo-600 tabular-nums leading-none tracking-tight">
+                                        {remainingTime.days}
+                                     </span>
+                                     <span className="text-[10px] font-black text-blue-400 mt-1 uppercase tracking-widest">วัน</span>
+                                 </div>
+                                 {/* Separator */}
+                                 <div className="flex flex-col justify-center px-1 text-2xl font-black text-blue-200 animate-[pulse_2s_ease-in-out_infinite] mb-4">:</div>
+                                 {/* Hours */}
+                                 <div className="flex flex-col items-center justify-center w-20 h-20 bg-gradient-to-b from-indigo-50/50 to-white border border-indigo-100/80 rounded-2xl shadow-sm relative overflow-hidden">
+                                     <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-indigo-400 to-purple-500 opacity-80" />
+                                     <span className="text-3xl lg:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-br from-indigo-600 to-purple-600 tabular-nums leading-none tracking-tight">
+                                        {remainingTime.hours}
+                                     </span>
+                                     <span className="text-[10px] font-black text-indigo-400 mt-1 uppercase tracking-widest">ชั่วโมง</span>
+                                 </div>
+                              </div>
+                              
+                              <div className="flex flex-col items-center md:items-start justify-center border-t md:border-t-0 md:border-l border-slate-100 pt-3 md:pt-0 md:pl-5 w-full md:w-auto">
+                                 <div className="flex items-center gap-1.5 text-[10px] font-black text-blue-600 uppercase tracking-widest mb-1.5 px-2.5 py-1 rounded-md bg-blue-50 border border-blue-100/50">
+                                    <Clock className="w-3.5 h-3.5" /> เหลือเวลาอีก
+                                 </div>
+                                 <div className="text-sm font-bold text-slate-500">
+                                    ก่อนปิดภาคเรียน
+                                 </div>
+                              </div>
                            </div>
-                           <div className="bg-slate-50 rounded-xl p-3 md:p-5 text-center min-w-[90px] md:min-w-[110px] border border-slate-200 flex flex-col justify-center items-center">
-                              <div className="text-3xl md:text-4xl font-black text-blue-600 leading-none mb-1 tabular-nums">{remainingTime.hours}</div>
-                              <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">ชั่วโมง</div>
-                           </div>
-                           <div className="flex flex-col justify-center pl-2">
-                              <div className="text-sm font-black text-slate-700 mb-0.5">เหลือเวลาอีก</div>
-                              <div className="text-xs text-slate-400 font-medium">ก่อนปิดภาคเรียน</div>
-                           </div>
-                        </>
+                        </div>
                      ) : (
-                        <div className="flex items-center gap-5 bg-red-50 px-8 py-6 rounded-xl border border-red-100 w-full md:w-auto">
-                           <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-inner">
-                              <Clock className="w-6 h-6 text-red-500" />
-                           </div>
-                           <div>
-                              <div className="font-black text-red-700 text-xl">สิ้นสุดภาคเรียนแล้ว</div>
-                              <div className="text-xs text-red-500 font-bold mt-1 opacity-80">กรุณาตรวจสอบกำหนดการใหม่</div>
+                        <div className="relative group w-full md:w-auto">
+                           <div className="absolute inset-0 bg-red-500/5 blur-xl group-hover:bg-red-500/10 transition-colors rounded-3xl z-0" />
+                           <div className="relative z-10 flex flex-col md:flex-row items-center gap-4 md:gap-5 bg-white border border-red-100/50 rounded-3xl p-4 md:p-3 md:pr-8 shadow-[0_4px_20px_-4px_rgba(239,68,68,0.1)] hover:shadow-[0_8px_30px_-4px_rgba(239,68,68,0.15)] transition-all duration-300 w-full md:w-auto">
+                              <div className="flex items-center justify-center w-16 h-16 md:w-20 md:h-20 bg-gradient-to-b from-red-50/50 to-white border border-red-100/80 rounded-2xl shadow-sm relative overflow-hidden shrink-0">
+                                 <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-red-400 to-rose-500 opacity-80" />
+                                 <Clock className="w-8 h-8 md:w-10 md:h-10 text-red-500" />
+                              </div>
+                              <div className="flex flex-col items-center md:items-start justify-center border-t md:border-t-0 md:border-l border-slate-100 pt-3 md:pt-0 md:pl-5 w-full md:w-auto">
+                                 <div className="flex items-center gap-1.5 text-[10px] font-black text-red-600 uppercase tracking-widest mb-1.5 px-2.5 py-1 rounded-md bg-red-50 border border-red-100/50">
+                                    <AlertCircle className="w-3.5 h-3.5" /> หมดเวลาแล้ว
+                                 </div>
+                                 <div className="text-sm font-bold text-slate-500">
+                                    สิ้นสุดภาคเรียนนี้แล้ว
+                                 </div>
+                              </div>
                            </div>
                         </div>
                      )}
@@ -1325,12 +1362,15 @@ function TeacherPage() {
           {tabs.map(tab => (
             <button
               key={tab.id}
-              onClick={() => tab.id === 'evaluations' ? navigate('/teacher/evaluations') : setActiveTab(tab.id)}
+              onClick={() => tab.id === 'evaluations' ? handleUnavailableEvaluations() : setActiveTab(tab.id)}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
-                (activeTab === tab.id && tab.id !== 'evaluations')
+                tab.id === 'evaluations'
+                  ? 'bg-slate-50 text-slate-400 border border-dashed border-slate-200 hover:bg-slate-100 hover:text-slate-500 cursor-not-allowed'
+                  : (activeTab === tab.id && tab.id !== 'evaluations')
                   ? 'bg-blue-50 text-blue-600 border border-blue-100' 
                   : 'text-slate-600 hover:bg-slate-50 hover:text-blue-600 border border-transparent'
               }`}
+              aria-disabled={tab.id === 'evaluations'}
             >
               <tab.icon className="w-4 h-4" />
               {tab.label}
@@ -1522,7 +1562,8 @@ function TeacherPage() {
                                                 {sub.subject_type === 'main' && (
                                                     <button 
                                                         onClick={() => handleOpenEvaluationModal(sub)}
-                                                        className="col-span-3 py-3 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-xl text-xs font-black hover:bg-indigo-100 transition-all active:scale-95 flex items-center justify-center gap-2 hover:-translate-y-0.5"
+                                                    className="col-span-3 py-3 bg-slate-50 text-slate-400 border border-dashed border-slate-200 rounded-xl text-xs font-black hover:bg-slate-100 hover:text-slate-500 transition-all active:scale-95 flex items-center justify-center gap-2"
+                                                    aria-disabled="true"
                                                     >
                                                         <Brain className="w-4 h-4" /> แบบประเมินคุณลักษณะ
                                                     </button>
@@ -2126,33 +2167,29 @@ function TeacherPage() {
                 </div>
               </div>
 
-              {subjectSchedules.length === 0 ? (
-                <div className="bg-white rounded-xl p-20 text-center shadow-lg border-2 border-dashed border-slate-100">
-                  <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6 grayscale opacity-30">
-                    <Calendar className="w-12 h-12 text-slate-400" />
-                  </div>
-                  <h4 className="text-2xl font-black text-slate-300 uppercase tracking-widest">No Subject Schedule</h4>
-                  <p className="text-slate-400 mt-2 font-medium">คลิกปุ่ม 'กำหนดเวลาสอน' เพื่อเริ่มสร้างตารางเรียน</p>
-                </div>
-              ) : (
-                <div className="bg-white rounded-xl p-4 sm:p-8 shadow-sm border border-slate-100 overflow-x-auto min-w-full">
-                  <ScheduleGrid
-                    operatingHours={scheduleSlots}
-                    schedules={subjectSchedules}
-                    role="teacher"
-                    onActionDelete={(id) => openConfirm('ยกเลิกเวลาเรียน', 'ข้อมูลตารางเรียนจะถูกลบถาวร ต้องการดำเนินการหรือไม่?', () => deleteSubjectSchedule(id))}
-                    onActionEdit={(item) => {
-                      setEditingAssignment(item);
-                      setSelectedSubjectId(item.subject_id || item.subjectId || item.subject?.id || '');
-                      setSelectedClassroomId(item.classroom_id ? String(item.classroom_id) : '');
-                      setScheduleDay(String(item.day_of_week));
-                      setScheduleStartTime(item.start_time);
-                      setScheduleEndTime(item.end_time);
-                      setShowScheduleModal(true);
-                    }}
-                  />
-                </div>
-              )}
+              <div className="bg-white rounded-xl p-4 sm:p-8 shadow-sm border border-slate-100 overflow-x-auto min-w-full">
+                <ScheduleGrid
+                  operatingHours={scheduleSlots}
+                  schedules={subjectSchedules}
+                  role="teacher"
+                  onActionDelete={(id) => openConfirm('ยกเลิกเวลาเรียน', 'ข้อมูลตารางเรียนจะถูกลบถาวร ต้องการดำเนินการหรือไม่?', () => deleteSubjectSchedule(id))}
+                  onActionEdit={(item) => {
+                    setEditingAssignment(item);
+                    if (item.academic_year) {
+                      setScheduleYear(String(item.academic_year));
+                    }
+                    if (item.semester) {
+                      setScheduleSemester(String(item.semester));
+                    }
+                    setSelectedSubjectId(item.subject_id || item.subjectId || item.subject?.id || '');
+                    setSelectedClassroomId(item.classroom_id ? String(item.classroom_id) : '');
+                    setScheduleDay(String(item.day_of_week));
+                    setScheduleStartTime(item.start_time);
+                    setScheduleEndTime(item.end_time);
+                    setShowScheduleModal(true);
+                  }}
+                />
+              </div>
             </div>
           )}
         </div>
@@ -2178,6 +2215,11 @@ function TeacherPage() {
       <ScheduleModal
         isOpen={showScheduleModal}
         editingAssignment={editingAssignment}
+        semesterPeriods={semesterPeriods}
+        selectedAcademicYear={scheduleYear}
+        setSelectedAcademicYear={setScheduleYear}
+        selectedSemester={scheduleSemester}
+        setSelectedSemester={setScheduleSemester}
         selectedSubjectId={selectedSubjectId}
         setSelectedSubjectId={setSelectedSubjectId}
         scheduleDay={scheduleDay}

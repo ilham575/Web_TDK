@@ -11,6 +11,7 @@ from models.user import User
 from models.classroom import Classroom, ClassroomStudent
 from models.homeroom import HomeroomTeacher
 from models.semester_period import SemesterPeriod
+from models.subject import Subject
 from utils.security import hash_password
 from datetime import datetime
 
@@ -228,6 +229,31 @@ def create_semester_period(school_id, admin_headers, academic_year, semester, st
         db.close()
 
 
+def create_subject(school_id, academic_year='2025', semester=1, name='Test Subject'):
+    db = SessionLocal()
+    try:
+        subject = Subject(
+            name=name,
+            code=f'SUB-{random.randint(1000, 9999)}',
+            subject_type='main',
+            school_id=school_id,
+            academic_year=academic_year,
+            semester=semester,
+            is_ended=False,
+        )
+        db.add(subject)
+        db.commit()
+        db.refresh(subject)
+        return {
+            'id': subject.id,
+            'name': subject.name,
+            'academic_year': subject.academic_year,
+            'semester': subject.semester,
+        }
+    finally:
+        db.close()
+
+
 def test_student_absence_creates_announcement_and_notifies_homeroom():
     school, admin_headers = create_school_and_admin()
     classroom = create_classroom(school['id'], admin_headers)
@@ -343,6 +369,40 @@ def test_absence_approval_respects_homeroom_semester_assignment():
         json={'status': 'approved', 'version': absence['version']},
     )
     assert r.status_code == 200
+
+
+def test_student_absence_is_full_day_and_ignores_subject_selection():
+    school, admin_headers = create_school_and_admin()
+    classroom = create_classroom(school['id'], admin_headers, semester=1, academic_year='2025')
+    create_semester_period(school['id'], admin_headers, '2025', 1, '2020-01-01T00:00:00', '2030-12-31T23:59:59')
+    student = create_student_and_enroll(school['id'], admin_headers, classroom['id'])
+    subject = create_subject(school['id'], academic_year='2025', semester=1)
+
+    r = client.post('/users/login', data={'username': student['username'], 'password': 'studentpass'})
+    assert r.status_code == 200
+
+    r = client.post('/absences/', json={
+        'subject_id': subject['id'],
+        'absence_date': '2025-07-15',
+        'absence_date_end': None,
+        'days_count': 1,
+        'absence_type': 'personal',
+        'reason': 'ธุระส่วนตัว'
+    })
+    assert r.status_code == 201
+    absence = r.json()
+    assert absence['subject_id'] is None
+    assert absence['subject_name'] is None
+
+    r = client.put(
+        f"/absences/{absence['id']}",
+        json={'subject_id': subject['id'], 'reason': 'อัปเดตเหตุผล'},
+    )
+    assert r.status_code == 200
+    updated = r.json()
+    assert updated['subject_id'] is None
+    assert updated['subject_name'] is None
+    assert updated['reason'] == 'อัปเดตเหตุผล'
 
 
 def test_teacher_only_announcement_visible_with_cookie_auth():

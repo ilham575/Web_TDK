@@ -8,7 +8,7 @@ const getBaseURL = () => {
   }
   
   if (isDev) {
-    const raw = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8080';
+    const raw = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8081';
     if (process.env.NODE_ENV === 'development') {
       console.log('DEV API_BASE_URL:', raw);
     }
@@ -24,7 +24,7 @@ const getBaseURL = () => {
     }
 
     if (process.env.NODE_ENV === 'production') {
-      console.log('API_BASE_URL:', raw);
+      // console.log('API_BASE_URL:', raw);
     }
 
     return raw;

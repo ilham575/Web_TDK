@@ -271,11 +271,14 @@ def create_absence(
     if getattr(current_user, 'role', None) != 'student':
         raise HTTPException(status_code=403, detail='Only students can request absences')
 
+    # Student absence requests are always whole-day and must not be tied to a subject.
+    normalized_subject_id = None
+
     context = get_student_absence_context(
         db,
         current_user.id,
         absence_date=payload.absence_date,
-        subject_id=payload.subject_id,
+        subject_id=normalized_subject_id,
     )
     enforce_admin_time_window(
         db,
@@ -296,7 +299,7 @@ def create_absence(
     
     new_absence = AbsenceModel(
         student_id=current_user.id,
-        subject_id=payload.subject_id,
+        subject_id=normalized_subject_id,
         absence_date=payload.absence_date,
         absence_date_end=payload.absence_date_end,
         days_count=payload.days_count or 1,
@@ -573,7 +576,7 @@ def update_absence(
             db,
             absence.student_id,
             absence_date=payload.absence_date or absence.absence_date,
-            subject_id=payload.subject_id if payload.subject_id is not None else absence.subject_id,
+            subject_id=None,
         )
         enforce_admin_time_window(
             db,
@@ -608,8 +611,9 @@ def update_absence(
             absence.absence_date_end = payload.absence_date_end
         if payload.days_count is not None:
             absence.days_count = payload.days_count
-        if payload.subject_id is not None or (hasattr(payload, 'subject_id') and payload.subject_id == ''):
-            absence.subject_id = payload.subject_id
+
+        # Student absences are always whole-day requests.
+        absence.subject_id = None
     
     # Handle status change (approval/rejection) - only for teachers/admins
     elif payload.status is not None:

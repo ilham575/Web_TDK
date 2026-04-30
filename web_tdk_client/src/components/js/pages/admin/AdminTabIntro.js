@@ -2,23 +2,32 @@ import React, { useMemo } from 'react';
 import {
   Users, GraduationCap, School, Megaphone,
   ArrowRight, BookOpen, UserX, TrendingUp,
-  FileBarChart2, FileCheck2, ClipboardList, CalendarDays
+  FileBarChart2, FileCheck2, ClipboardList
 } from 'lucide-react';
 
 export default function AdminTabIntro({
   teachers = [],
-  students = [],
   classrooms = [],
+  classroomStudentCounts = {},
   announcements = [],
   setActiveTab,
   schoolData,
   selectedYear,
   selectedSemester,
+  yearOptions = [],
+  onSelectedYearChange,
+  onSelectedSemesterChange,
+  activePeriod,
 }) {
   const isExpired = (a) => a.expiry && new Date(a.expiry) < new Date();
   const activeAnnouncements = Array.isArray(announcements)
     ? announcements.filter((a) => !isExpired(a)).length
     : 0;
+  const getStudentCount = (classroom) => Number(classroomStudentCounts[classroom.id] ?? classroom.student_count) || 0;
+  const filteredStudentCount = useMemo(
+    () => classrooms.reduce((total, classroom) => total + getStudentCount(classroom), 0),
+    [classrooms, classroomStudentCounts]
+  );
 
   // Aggregate students by grade_level from classrooms
   const studentsByGrade = useMemo(() => {
@@ -27,7 +36,7 @@ export default function AdminTabIntro({
     classrooms.forEach((c) => {
       const grade = c.grade_level || 'อื่นๆ';
       if (!gradeGroups[grade]) gradeGroups[grade] = 0;
-      gradeGroups[grade] += Number(c.student_count) || 0;
+      gradeGroups[grade] += getStudentCount(c);
     });
     return Object.entries(gradeGroups)
       .sort(([a], [b]) => {
@@ -36,7 +45,7 @@ export default function AdminTabIntro({
         return na - nb;
       })
       .map(([grade, count]) => ({ grade, count }));
-  }, [classrooms]);
+  }, [classrooms, classroomStudentCounts]);
 
   const maxCount = Math.max(...studentsByGrade.map((g) => g.count), 1);
 
@@ -54,14 +63,57 @@ export default function AdminTabIntro({
   return (
     <div className="space-y-6">
       {/* Page title */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-800">ภาพรวมสถานศึกษา</h1>
-          <p className="text-sm text-slate-500 mt-0.5">
-            {schoolData?.name || 'โรงเรียน'}
-            {selectedYear ? ` · ปีการศึกษา ${selectedYear}` : ''}
-            {selectedSemester ? ` ภาคเรียนที่ ${selectedSemester}` : ''}
-          </p>
+      <div className="space-y-3">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-start gap-3">
+          <div>
+            <h1 className="text-2xl font-semibold text-slate-800">ภาพรวมสถานศึกษา</h1>
+            <p className="text-sm text-slate-500 mt-0.5">{schoolData?.name || 'โรงเรียน'}</p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full sm:w-auto sm:min-w-[320px]">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">ปีการศึกษา</p>
+              <p className="mt-1 text-sm font-semibold text-slate-800">{selectedYear || 'ทุกปีการศึกษา'}</p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">ภาคเรียน</p>
+              <p className="mt-1 text-sm font-semibold text-slate-800">
+                {selectedSemester ? `ภาคเรียนที่ ${selectedSemester}` : 'ทุกภาคเรียน'}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-col lg:flex-row lg:items-center gap-3 rounded-2xl border border-indigo-100 bg-indigo-50/70 p-4">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-wide text-indigo-500">ตัวกรองข้อมูลนักเรียน</p>
+            <p className="text-sm font-medium text-indigo-800">แสดงข้อมูลตามปีการศึกษาและภาคเรียนที่เลือก</p>
+          </div>
+          <div className="flex flex-1 flex-col sm:flex-row gap-2">
+            <select
+              value={selectedYear || ''}
+              onChange={(e) => onSelectedYearChange?.(e.target.value)}
+              className="px-4 py-2.5 rounded-xl border border-indigo-200 bg-white text-slate-700 font-semibold text-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-all"
+            >
+              <option value="">ทุกปีการศึกษา</option>
+              {yearOptions.map((year) => (
+                <option key={year} value={year}>ปี {year}</option>
+              ))}
+            </select>
+            <select
+              value={selectedSemester || ''}
+              onChange={(e) => onSelectedSemesterChange?.(Number(e.target.value))}
+              className="px-4 py-2.5 rounded-xl border border-indigo-200 bg-white text-slate-700 font-semibold text-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-all"
+            >
+              <option value={1}>ภาคเรียนที่ 1</option>
+              <option value={2}>ภาคเรียนที่ 2</option>
+            </select>
+          </div>
+          {activePeriod && (
+            <div className="inline-flex items-center rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-indigo-600 border border-indigo-100">
+              ภาคเรียนปัจจุบัน: ปี {activePeriod.academic_year} / ภาคเรียนที่ {activePeriod.semester}
+            </div>
+          )}
         </div>
       </div>
 
@@ -69,8 +121,8 @@ export default function AdminTabIntro({
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { label: 'ครู/บุคลากร', value: teachers.length, Icon: Users, bg: 'bg-blue-50', fg: 'text-blue-600' },
-          { label: 'นักเรียนทั้งหมด', value: students.length, Icon: GraduationCap, bg: 'bg-emerald-50', fg: 'text-emerald-600' },
-          { label: 'ห้องเรียน', value: classrooms.length, Icon: School, bg: 'bg-violet-50', fg: 'text-violet-600' },
+          { label: 'นักเรียนตามตัวกรอง', value: filteredStudentCount, Icon: GraduationCap, bg: 'bg-emerald-50', fg: 'text-emerald-600' },
+          { label: 'ห้องเรียนตามตัวกรอง', value: classrooms.length, Icon: School, bg: 'bg-violet-50', fg: 'text-violet-600' },
           { label: 'ประกาศ (ใช้งาน)', value: activeAnnouncements, Icon: Megaphone, bg: 'bg-amber-50', fg: 'text-amber-600' },
         ].map((kpi, i) => (
           <div

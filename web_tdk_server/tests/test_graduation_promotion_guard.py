@@ -276,3 +276,86 @@ def test_end_of_year_student_promotion_allows_repeating_same_graduation_grade():
         assert repeated_enrollment is not None
     finally:
         db.close()
+
+
+def test_get_users_includes_student_classroom_academic_year_context():
+    school, _headers = create_school_admin_and_headers(graduation_grade_level='Grade 6')
+    classroom_id, student_id = create_classroom_with_student(
+        school['id'],
+        grade_level='Grade 6',
+        academic_year='2569',
+        semester=1,
+    )
+
+    response = client.get('/users?limit=500')
+
+    assert response.status_code == 200
+    payload = response.json()
+    student_payload = next(item for item in payload if item['id'] == student_id)
+    assert student_payload['classroom_id'] == classroom_id
+    assert student_payload['classroom_name'] == 'Grade 6/1'
+    assert student_payload['classroom_academic_year'] == '2569'
+    assert student_payload['classroom_semester'] == 1
+    assert student_payload['classroom_enrollment_active'] is True
+
+
+def test_graduate_user_rejects_mismatched_academic_year_scope():
+    school, headers = create_school_admin_and_headers(graduation_grade_level='Grade 6')
+    _classroom_id, student_id = create_classroom_with_student(
+        school['id'],
+        grade_level='Grade 6',
+        academic_year='2568',
+        semester=1,
+    )
+
+    response = client.patch(f'/users/{student_id}/graduate?academic_year=2569', headers=headers)
+
+    assert response.status_code == 400
+    assert 'ปีการศึกษา 2569' in response.json()['detail']
+
+    db = SessionLocal()
+    try:
+        student = db.query(User).filter(User.id == student_id).first()
+        assert student is not None
+        assert student.user_status == 'active'
+        assert student.is_active is True
+    finally:
+        db.close()
+
+
+def test_bulk_graduate_students_filters_by_academic_year():
+    school, headers = create_school_admin_and_headers(graduation_grade_level='Grade 6')
+    _old_classroom_id, old_student_id = create_classroom_with_student(
+        school['id'],
+        grade_level='Grade 6',
+        academic_year='2568',
+        semester=1,
+    )
+    _current_classroom_id, current_student_id = create_classroom_with_student(
+        school['id'],
+        grade_level='Grade 6',
+        academic_year='2569',
+        semester=1,
+    )
+
+    response = client.post('/users/bulk/graduate?academic_year=2569', headers=headers)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload['graduated_count'] == 1
+    assert payload['graduation_grade_level'] == 'Grade 6'
+    assert payload['academic_year'] == '2569'
+    assert {item['id'] for item in payload['graduated']} == {current_student_id}
+
+    db = SessionLocal()
+    try:
+        old_student = db.query(User).filter(User.id == old_student_id).first()
+        current_student = db.query(User).filter(User.id == current_student_id).first()
+        assert old_student is not None
+        assert current_student is not None
+        assert old_student.user_status == 'active'
+        assert old_student.is_active is True
+        assert current_student.user_status == 'graduated'
+        assert current_student.is_active is False
+    finally:
+        db.close()

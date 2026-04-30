@@ -17,6 +17,84 @@ from schemas.user import User as UserSchema
 router = APIRouter(prefix="/subjects", tags=["subjects"])
 
 
+def _get_visible_classroom_student_ids(db: Session, classroom_ids: List[int]):
+    if not classroom_ids:
+        return set(), False
+
+    base_query = db.query(ClassroomStudentModel.student_id).join(
+        UserModel,
+        UserModel.id == ClassroomStudentModel.student_id
+    ).filter(
+        ClassroomStudentModel.classroom_id.in_(classroom_ids),
+        UserModel.role == 'student',
+        UserModel.is_active == True,
+        UserModel.user_status == 'active'
+    )
+
+    active_ids = {
+        row[0] for row in base_query.filter(ClassroomStudentModel.is_active == True).all()
+        if row and row[0] is not None
+    }
+    if active_ids:
+        return active_ids, True
+
+    fallback_ids = {
+        row[0] for row in base_query.all()
+        if row and row[0] is not None
+    }
+    return fallback_ids, False
+
+
+def _resolve_student_classroom(
+    db: Session,
+    subject: SubjectModel,
+    student_id: int,
+    restrict_classroom_ids=None,
+    allow_inactive_fallback: bool = True,
+):
+    """Pick the student's classroom in the same school and subject term when possible."""
+
+    def _query(base_restrict_ids=None, enforce_term=True, active_only=False):
+        query = db.query(ClassroomStudentModel, ClassroomModel).join(
+            ClassroomModel,
+            ClassroomModel.id == ClassroomStudentModel.classroom_id
+        ).filter(
+            ClassroomStudentModel.student_id == student_id,
+            ClassroomModel.school_id == subject.school_id
+        )
+        if active_only:
+            query = query.filter(ClassroomStudentModel.is_active == True)
+        if base_restrict_ids:
+            query = query.filter(ClassroomStudentModel.classroom_id.in_(base_restrict_ids))
+        if enforce_term:
+            if subject.academic_year is not None:
+                query = query.filter(ClassroomModel.academic_year == subject.academic_year)
+            if subject.semester is not None:
+                query = query.filter(ClassroomModel.semester == subject.semester)
+        return query.order_by(
+            ClassroomStudentModel.is_active.desc(),
+            ClassroomStudentModel.updated_at.desc()
+        ).first()
+
+    preferred = _query(base_restrict_ids=restrict_classroom_ids, enforce_term=True, active_only=True)
+    if preferred:
+        return preferred
+
+    if allow_inactive_fallback:
+        preferred_inactive = _query(base_restrict_ids=restrict_classroom_ids, enforce_term=True, active_only=False)
+        if preferred_inactive:
+            return preferred_inactive
+
+    fallback_active = _query(base_restrict_ids=restrict_classroom_ids, enforce_term=False, active_only=True)
+    if fallback_active:
+        return fallback_active
+
+    if allow_inactive_fallback:
+        return _query(base_restrict_ids=restrict_classroom_ids, enforce_term=False, active_only=False)
+
+    return None
+
+
 def _with_teacher(subject_obj: SubjectModel, db: Session):
     """Return dict representing subject, including optional teacher info."""
     if not subject_obj:
@@ -436,78 +514,55 @@ def get_subject_students(subject_id: int, db: Session = Depends(get_db), current
     # Build student ID set based on scope
     student_id_set = set()
 
-    def resolve_student_classroom(student_id: int, restrict_classroom_ids=None):
-        """Pick the student's classroom in the same school and subject term when possible."""
-        def _query(base_restrict_ids=None, enforce_term=True, active_only=False):
-            q = db.query(ClassroomStudentModel, ClassroomModel).join(
-                ClassroomModel,
-                ClassroomModel.id == ClassroomStudentModel.classroom_id
-            ).filter(
-                ClassroomStudentModel.student_id == student_id,
-                ClassroomModel.school_id == subj.school_id
-            )
-            if active_only:
-                q = q.filter(ClassroomStudentModel.is_active == True)
-            if base_restrict_ids:
-                q = q.filter(ClassroomStudentModel.classroom_id.in_(base_restrict_ids))
-            if enforce_term:
-                if subj.academic_year is not None:
-                    q = q.filter(ClassroomModel.academic_year == subj.academic_year)
-                if subj.semester is not None:
-                    q = q.filter(ClassroomModel.semester == subj.semester)
-            return q.order_by(ClassroomStudentModel.is_active.desc(), ClassroomStudentModel.updated_at.desc()).first()
+    scoped_classroom_student_ids, scoped_uses_active_memberships = _get_visible_classroom_student_ids(
+        db,
+        scoped_subj_classroom_ids,
+    )
 
-        preferred = _query(base_restrict_ids=restrict_classroom_ids, enforce_term=True, active_only=False)
-        if preferred:
-            return preferred
-
-        fallback_active = _query(base_restrict_ids=restrict_classroom_ids, enforce_term=False, active_only=True)
-        if fallback_active:
-            return fallback_active
-
-        return _query(base_restrict_ids=restrict_classroom_ids, enforce_term=False, active_only=False)
+    response_scope_classroom_ids = scoped_subj_classroom_ids if scoped_subj_classroom_ids else None
+    response_scope_uses_active_memberships = scoped_uses_active_memberships
 
     if is_admin or teacher_is_global:
-        # Admin or global teacher: include all enrolled students + students in subject classrooms
-        student_id_set.update(enrolled_ids)
-
         if scoped_subj_classroom_ids:
-            classroom_student_ids = [r[0] for r in db.query(ClassroomStudentModel.student_id).filter(
-                ClassroomStudentModel.classroom_id.in_(scoped_subj_classroom_ids),
-            ).all()]
-            student_id_set.update(classroom_student_ids)
+            # For classroom-scoped subjects, the assigned classrooms are the source of truth.
+            # This avoids stale SubjectStudent rows from leaking students that no longer belong there.
+            student_id_set.update(scoped_classroom_student_ids)
+        else:
+            student_id_set.update(enrolled_ids)
     else:
         # Teacher assigned to specific classrooms only: compute allowed classroom ids
         allowed_classroom_ids = [s.classroom_id for s in teacher_schedules if s.classroom_id is not None]
         effective_allowed_classroom_ids = list(set(allowed_classroom_ids).intersection(set(scoped_subj_classroom_ids))) if scoped_subj_classroom_ids else allowed_classroom_ids
-
-        # Include direct enrollments only if the student's active classroom is in allowed_classroom_ids
-        for sid in enrolled_ids:
-            resolved = resolve_student_classroom(sid, effective_allowed_classroom_ids)
-            cs = resolved[0] if resolved else None
-            if cs and cs.classroom_id in allowed_classroom_ids:
-                student_id_set.add(sid)
-
-        # Include students who are in classrooms assigned to the subject AND that the teacher is responsible for
-        # i.e., intersection of subj_classroom_ids and allowed_classroom_ids
-        classroom_ids = list(set(scoped_subj_classroom_ids).intersection(set(allowed_classroom_ids)))
-        if classroom_ids:
-            classroom_student_ids = [r[0] for r in db.query(ClassroomStudentModel.student_id).filter(
-                ClassroomStudentModel.classroom_id.in_(classroom_ids),
-            ).all()]
-            student_id_set.update(classroom_student_ids)
+        allowed_classroom_student_ids, allowed_uses_active_memberships = _get_visible_classroom_student_ids(
+            db,
+            effective_allowed_classroom_ids,
+        )
+        student_id_set.update(allowed_classroom_student_ids)
+        response_scope_classroom_ids = effective_allowed_classroom_ids or None
+        response_scope_uses_active_memberships = allowed_uses_active_memberships
 
     if not student_id_set:
         return []
 
     # Fetch student user rows
-    student_rows = db.query(UserModel).filter(UserModel.id.in_(list(student_id_set))).all()
+    student_rows = db.query(UserModel).filter(
+        UserModel.id.in_(list(student_id_set)),
+        UserModel.role == 'student',
+        UserModel.is_active == True,
+        UserModel.user_status == 'active'
+    ).all()
 
     # Build response including active classroom info if available
     result = []
     for student in student_rows:
         classroom_info = None
-        resolved = resolve_student_classroom(student.id, scoped_subj_classroom_ids if scoped_subj_classroom_ids else None)
+        resolved = _resolve_student_classroom(
+            db,
+            subj,
+            student.id,
+            response_scope_classroom_ids,
+            allow_inactive_fallback=(response_scope_classroom_ids is None or not response_scope_uses_active_memberships),
+        )
         classroom_student = resolved[0] if resolved else None
         classroom = resolved[1] if resolved else None
         if classroom_student and classroom:

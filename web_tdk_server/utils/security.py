@@ -6,7 +6,7 @@ from passlib.context import CryptContext
 import jwt
 
 # FastAPI imports for dependency
-from fastapi import Depends, HTTPException, Request, Response, status
+from fastapi import Depends, HTTPException, Request, Response, Security, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
@@ -33,6 +33,7 @@ if not SECRET_KEY or SECRET_KEY.strip() in INVALID_SECRET_VALUES:
 
 ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 ACCESS_TOKEN_COOKIE_NAME = os.getenv("JWT_COOKIE_NAME", "access_token")
+COOKIE_AUTH_MARKER = "cookie-authenticated"
 COOKIE_SECURE = os.getenv("JWT_COOKIE_SECURE", "auto").lower()
 COOKIE_SAMESITE = os.getenv(
     "JWT_COOKIE_SAMESITE",
@@ -133,27 +134,40 @@ def get_request_token(request: Request) -> str | None:
 
     authorization = request.headers.get("Authorization", "")
     scheme, _, credentials = authorization.partition(" ")
-    if scheme.lower() == "bearer" and credentials and credentials != "cookie-authenticated":
+    if scheme.lower() == "bearer" and credentials and credentials != COOKIE_AUTH_MARKER:
         return credentials
     return None
 
 
-# OAuth2 scheme used by FastAPI endpoints
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/users/login")
+oauth2_scheme_optional = OAuth2PasswordBearer(
+    tokenUrl="/users/login",
+    auto_error=False,
+    scheme_name="BearerAuth",
+)
 
 
-def get_current_user(request: Request, db: Session = Depends(get_db)):
+def _resolve_security_token(request: Request, token: str | None) -> str | None:
+    if token and token != COOKIE_AUTH_MARKER:
+        return token
+    return get_request_token(request)
+
+
+def get_current_user(
+    request: Request,
+    db: Session = Depends(get_db),
+    token: str | None = Security(oauth2_scheme_optional),
+):
     """FastAPI dependency to retrieve current user from JWT token.
 
     This function imports the User model inside the function body to avoid circular imports
     when routers import this utility.
     """
-    token = get_request_token(request)
-    if not token:
+    resolved_token = _resolve_security_token(request, token)
+    if not resolved_token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
 
     try:
-        payload = decode_access_token(token)
+        payload = decode_access_token(resolved_token)
         username = payload.get("sub")
         if not username:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
@@ -169,16 +183,17 @@ def get_current_user(request: Request, db: Session = Depends(get_db)):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
 
 
-# Optional OAuth2 scheme for endpoints that allow anonymous access
-oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="/users/login", auto_error=False)
-
-def get_optional_current_user(request: Request, db: Session = Depends(get_db)):
+def get_optional_current_user(
+    request: Request,
+    db: Session = Depends(get_db),
+    token: str | None = Security(oauth2_scheme_optional),
+):
     """Return current user if token present and valid, otherwise None."""
-    token = get_request_token(request)
-    if not token:
+    resolved_token = _resolve_security_token(request, token)
+    if not resolved_token:
         return None
     try:
-        payload = decode_access_token(token)
+        payload = decode_access_token(resolved_token)
         username = payload.get("sub")
         if not username:
             return None

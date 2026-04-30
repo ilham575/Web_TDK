@@ -35,6 +35,13 @@ class User(UserBase):
     is_active: bool
     user_status: str = 'active'  # active, inactive, graduated, resigned
     must_change_password: bool
+    classroom_id: Optional[int] = None
+    classroom_name: Optional[str] = None
+    classroom_display: Optional[str] = None
+    classroom_academic_year: Optional[str] = None
+    classroom_semester: Optional[int] = None
+    student_number: Optional[int] = None
+    classroom_enrollment_active: Optional[bool] = None
     created_at: datetime
     updated_at: datetime
     

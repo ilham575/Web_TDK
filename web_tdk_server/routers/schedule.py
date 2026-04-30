@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 from database.connection import get_db
@@ -17,6 +18,236 @@ from schemas.schedule import (
 from utils.security import get_current_user
 
 router = APIRouter(prefix="/schedule", tags=["schedule"])
+
+
+def _build_subject_schedule_response(
+    schedule: SubjectSchedule,
+    teacher_name_override: Optional[str] = None,
+) -> SubjectScheduleSchema:
+    subject = schedule.subject
+    teacher = schedule.teacher
+    classroom = schedule.classroom
+    schedule_slot = schedule.schedule_slot
+
+    teacher_name = teacher_name_override
+    if not teacher_name and teacher is not None:
+        teacher_name = getattr(teacher, 'full_name', None) or getattr(teacher, 'username', None)
+
+    day_of_week = schedule.day_of_week or (schedule_slot.day_of_week if schedule_slot else None)
+    start_time = schedule.start_time or (schedule_slot.start_time if schedule_slot else None)
+    end_time = schedule.end_time or (schedule_slot.end_time if schedule_slot else None)
+
+    return SubjectScheduleSchema(
+        id=schedule.id,
+        subject_id=schedule.subject_id,
+        schedule_slot_id=schedule.schedule_slot_id,
+        teacher_id=schedule.teacher_id,
+        classroom_id=schedule.classroom_id,
+        day_of_week=day_of_week,
+        start_time=start_time,
+        end_time=end_time,
+        subject_name=subject.name if subject else None,
+        subject_code=subject.code if subject else None,
+        teacher_name=teacher_name,
+        classroom_name=classroom.name if classroom else None,
+        academic_year=subject.academic_year if subject else None,
+        semester=subject.semester if subject else None,
+    )
+
+
+def _build_period_overlap_query(
+    db: Session,
+    school_id: int,
+    day_of_week,
+    start_time,
+    end_time,
+    academic_year: Optional[str] = None,
+    semester: Optional[int] = None,
+):
+    query = db.query(SubjectSchedule).join(
+        Subject, SubjectSchedule.subject_id == Subject.id
+    ).filter(
+        Subject.school_id == school_id,
+        SubjectSchedule.day_of_week == str(day_of_week),
+        SubjectSchedule.start_time < end_time,
+        SubjectSchedule.end_time > start_time,
+    )
+
+    if academic_year is not None:
+        query = query.filter(Subject.academic_year == academic_year)
+    if semester is not None:
+        query = query.filter(Subject.semester == semester)
+
+    return query
+
+
+def _resolve_student_classroom_ids(
+    db: Session,
+    student_id: int,
+    school_id: int,
+    academic_year: Optional[str] = None,
+    semester: Optional[int] = None,
+) -> List[int]:
+    from models.classroom import Classroom as ClassroomModel, ClassroomStudent as ClassroomStudentModel
+
+    query = db.query(
+        ClassroomStudentModel.classroom_id,
+        ClassroomStudentModel.is_active,
+        ClassroomStudentModel.updated_at,
+    ).join(
+        ClassroomModel,
+        ClassroomStudentModel.classroom_id == ClassroomModel.id,
+    ).filter(
+        ClassroomStudentModel.student_id == student_id,
+        ClassroomModel.school_id == school_id,
+    )
+
+    if academic_year is not None:
+        query = query.filter(ClassroomModel.academic_year == academic_year)
+    if semester is not None:
+        query = query.filter(ClassroomModel.semester == semester)
+
+    rows = query.order_by(
+        ClassroomStudentModel.is_active.desc(),
+        ClassroomStudentModel.updated_at.desc(),
+        ClassroomStudentModel.id.desc(),
+    ).all()
+
+    classroom_ids = []
+    seen_ids = set()
+    for classroom_id, _is_active, _updated_at in rows:
+        if classroom_id in seen_ids:
+            continue
+        seen_ids.add(classroom_id)
+        classroom_ids.append(classroom_id)
+
+    return classroom_ids
+
+
+def _build_student_schedule_responses(
+    db: Session,
+    student_id: int,
+    school_id: int,
+    academic_year: Optional[str] = None,
+    semester: Optional[int] = None,
+) -> List[StudentScheduleResponse]:
+    from models.classroom_subject import ClassroomSubject as ClassroomSubjectModel
+
+    classroom_ids = _resolve_student_classroom_ids(
+        db,
+        student_id=student_id,
+        school_id=school_id,
+        academic_year=academic_year,
+        semester=semester,
+    )
+
+    direct_subject_query = db.query(SubjectStudent.subject_id).join(
+        Subject,
+        SubjectStudent.subject_id == Subject.id,
+    ).filter(
+        SubjectStudent.student_id == student_id,
+        Subject.school_id == school_id,
+    )
+    if academic_year is not None:
+        direct_subject_query = direct_subject_query.filter(Subject.academic_year == academic_year)
+    if semester is not None:
+        direct_subject_query = direct_subject_query.filter(Subject.semester == semester)
+    direct_subject_ids = {row[0] for row in direct_subject_query.all()}
+
+    classroom_subject_ids = set()
+    if classroom_ids:
+        classroom_subject_query = db.query(ClassroomSubjectModel.subject_id).join(
+            Subject,
+            ClassroomSubjectModel.subject_id == Subject.id,
+        ).filter(
+            ClassroomSubjectModel.classroom_id.in_(classroom_ids),
+            Subject.school_id == school_id,
+        )
+        if academic_year is not None:
+            classroom_subject_query = classroom_subject_query.filter(Subject.academic_year == academic_year)
+        if semester is not None:
+            classroom_subject_query = classroom_subject_query.filter(Subject.semester == semester)
+        classroom_subject_ids = {row[0] for row in classroom_subject_query.all()}
+
+    scheduled_classroom_subject_ids = set()
+    if classroom_ids:
+        scheduled_subject_query = db.query(SubjectSchedule.subject_id).join(
+            Subject,
+            SubjectSchedule.subject_id == Subject.id,
+        ).filter(
+            SubjectSchedule.classroom_id.in_(classroom_ids),
+            Subject.school_id == school_id,
+        )
+        if academic_year is not None:
+            scheduled_subject_query = scheduled_subject_query.filter(Subject.academic_year == academic_year)
+        if semester is not None:
+            scheduled_subject_query = scheduled_subject_query.filter(Subject.semester == semester)
+        scheduled_classroom_subject_ids = {row[0] for row in scheduled_subject_query.distinct().all()}
+
+    subject_ids = list(direct_subject_ids | classroom_subject_ids | scheduled_classroom_subject_ids)
+    if not subject_ids:
+        return []
+
+    schedule_query = db.query(SubjectSchedule).options(
+        joinedload(SubjectSchedule.subject),
+        joinedload(SubjectSchedule.schedule_slot),
+        joinedload(SubjectSchedule.teacher),
+        joinedload(SubjectSchedule.classroom),
+    ).join(
+        Subject,
+        SubjectSchedule.subject_id == Subject.id,
+    ).filter(
+        SubjectSchedule.subject_id.in_(subject_ids),
+        Subject.school_id == school_id,
+    )
+
+    if academic_year is not None:
+        schedule_query = schedule_query.filter(Subject.academic_year == academic_year)
+    if semester is not None:
+        schedule_query = schedule_query.filter(Subject.semester == semester)
+
+    if classroom_ids:
+        schedule_query = schedule_query.filter(
+            or_(
+                SubjectSchedule.classroom_id.is_(None),
+                SubjectSchedule.classroom_id.in_(classroom_ids),
+            )
+        )
+    else:
+        schedule_query = schedule_query.filter(SubjectSchedule.classroom_id.is_(None))
+
+    schedules = schedule_query.all()
+
+    result = []
+    for schedule in schedules:
+        teacher_name = None
+        if schedule.teacher is not None:
+            teacher_name = getattr(schedule.teacher, 'full_name', None) or getattr(schedule.teacher, 'username', None)
+
+        day_of_week = schedule.day_of_week or (schedule.schedule_slot.day_of_week if schedule.schedule_slot else None)
+        start_time = schedule.start_time or (schedule.schedule_slot.start_time if schedule.schedule_slot else None)
+        end_time = schedule.end_time or (schedule.schedule_slot.end_time if schedule.schedule_slot else None)
+
+        result.append(StudentScheduleResponse(
+            id=schedule.id,
+            subject_id=schedule.subject_id,
+            subject_name=schedule.subject.name if schedule.subject else None,
+            subject_code=schedule.subject.code if schedule.subject else None,
+            teacher_name=teacher_name,
+            day_of_week=str(day_of_week) if day_of_week is not None else None,
+            start_time=start_time,
+            end_time=end_time,
+        ))
+
+    def sort_key(item: StudentScheduleResponse):
+        try:
+            day_value = int(item.day_of_week) if item.day_of_week is not None else 99
+        except (TypeError, ValueError):
+            day_value = 99
+        return (day_value, str(item.start_time or ''))
+
+    result.sort(key=sort_key)
+    return result
 
 # Admin endpoints - Create, Read, Update, Delete schedule slots
 @router.post("/slots", response_model=ScheduleSlotSchema)
@@ -231,10 +462,15 @@ def assign_subject_to_schedule(
     
     # Check for time conflicts with other subjects on the same day
     # Same teacher cannot have overlapping schedules at the same time (even across different classrooms)
-    existing_schedule = db.query(SubjectSchedule).filter(
-        SubjectSchedule.day_of_week == str(assignment.day_of_week),
-        SubjectSchedule.start_time < assignment.end_time,
-        SubjectSchedule.end_time > assignment.start_time,
+    existing_schedule = _build_period_overlap_query(
+        db,
+        school_id=current_user.school_id,
+        day_of_week=assignment.day_of_week,
+        start_time=assignment.start_time,
+        end_time=assignment.end_time,
+        academic_year=subject.academic_year,
+        semester=subject.semester,
+    ).filter(
         SubjectSchedule.teacher_id == current_user.id
     ).first()
     
@@ -246,11 +482,16 @@ def assign_subject_to_schedule(
     
     # Check if same time slot has a subject in the same classroom already (only one subject per timeslot per classroom)
     if assignment.classroom_id:
-        existing_subject_in_classroom = db.query(SubjectSchedule).filter(
-            SubjectSchedule.classroom_id == assignment.classroom_id,
-            SubjectSchedule.day_of_week == str(assignment.day_of_week),
-            SubjectSchedule.start_time < assignment.end_time,
-            SubjectSchedule.end_time > assignment.start_time
+        existing_subject_in_classroom = _build_period_overlap_query(
+            db,
+            school_id=current_user.school_id,
+            day_of_week=assignment.day_of_week,
+            start_time=assignment.start_time,
+            end_time=assignment.end_time,
+            academic_year=subject.academic_year,
+            semester=subject.semester,
+        ).filter(
+            SubjectSchedule.classroom_id == assignment.classroom_id
         ).first()
         
         if existing_subject_in_classroom:
@@ -292,20 +533,7 @@ def assign_subject_to_schedule(
         db.commit()
         db.refresh(db_assignment)
         
-        # Return the created assignment with proper schema
-        return SubjectScheduleSchema(
-            id=db_assignment.id,
-            subject_id=db_assignment.subject_id,
-            schedule_slot_id=db_assignment.schedule_slot_id,
-            teacher_id=db_assignment.teacher_id,
-            classroom_id=db_assignment.classroom_id,
-            day_of_week=db_assignment.day_of_week,
-            start_time=db_assignment.start_time,
-            end_time=db_assignment.end_time,
-            subject_name=subject.name if subject else None,
-            teacher_name=current_user.full_name,
-            classroom_name=db_assignment.classroom.name if db_assignment.classroom else None
-        )
+        return _build_subject_schedule_response(db_assignment, teacher_name_override=current_user.full_name)
     except HTTPException:
         raise
     except Exception as e:
@@ -342,24 +570,11 @@ def get_teacher_schedules(
         query = query.filter(Subject.semester == semester)
 
     schedules = query.all()
-    
-    result = []
-    for schedule in schedules:
-        result.append(SubjectScheduleSchema(
-            id=schedule.id,
-            subject_id=schedule.subject_id,
-            schedule_slot_id=schedule.schedule_slot_id,
-            teacher_id=schedule.teacher_id,
-            classroom_id=schedule.classroom_id,
-            day_of_week=schedule.day_of_week,
-            start_time=schedule.start_time,
-            end_time=schedule.end_time,
-            subject_name=schedule.subject.name if schedule.subject else None,
-            teacher_name=current_user.full_name,
-            classroom_name=schedule.classroom.name if schedule.classroom else None
-        ))
-    
-    return result
+
+    return [
+        _build_subject_schedule_response(schedule, teacher_name_override=current_user.full_name)
+        for schedule in schedules
+    ]
 
 
 @router.get('/student', response_model=List[StudentScheduleResponse])
@@ -373,85 +588,13 @@ def get_student_schedule_current(
     if current_user.role != 'student':
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Only students can access this endpoint')
 
-    student_id = current_user.id
-
-    # Student's active classroom
-    cs = db.query(SubjectStudent).filter(SubjectStudent.student_id == student_id).all()
-
-    from models.classroom import ClassroomStudent as ClassroomStudentModel
-    from models.classroom_subject import ClassroomSubject as ClassroomSubjectModel
-
-    classroom_student = db.query(ClassroomStudentModel).filter(
-        ClassroomStudentModel.student_id == student_id,
-        ClassroomStudentModel.is_active == True
-    ).first()
-    classroom_id = classroom_student.classroom_id if classroom_student else None
-
-    # Direct enrollments
-    enrolled_subject_ids = [r.subject_id for r in db.query(SubjectStudent).filter(SubjectStudent.student_id == student_id).all()]
-
-    # Subjects assigned to classroom
-    classroom_subject_ids = []
-    if classroom_id:
-        classroom_subject_ids = [r.subject_id for r in db.query(ClassroomSubjectModel).filter(ClassroomSubjectModel.classroom_id == classroom_id).all()]
-
-    all_subject_ids = set(enrolled_subject_ids) | set(classroom_subject_ids)
-
-    if not all_subject_ids:
-        return []
-
-    # Filter subject_ids by academic_year / semester if provided
-    if academic_year or semester is not None:
-        subject_filter = db.query(Subject.id).filter(Subject.id.in_(list(all_subject_ids)))
-        if academic_year:
-            subject_filter = subject_filter.filter(Subject.academic_year == academic_year)
-        if semester is not None:
-            subject_filter = subject_filter.filter(Subject.semester == semester)
-        subject_ids = set(row[0] for row in subject_filter.all())
-    else:
-        subject_ids = all_subject_ids
-
-    if not subject_ids:
-        return []
-
-    # Find schedules for these subjects that are global or target the student's classroom
-    schedules = db.query(SubjectSchedule).options(joinedload(SubjectSchedule.subject), joinedload(SubjectSchedule.teacher)).filter(
-        SubjectSchedule.subject_id.in_(list(subject_ids)),
-        ((SubjectSchedule.classroom_id == None) | (SubjectSchedule.classroom_id == classroom_id))
-    ).all()
-
-    result = []
-    for s in schedules:
-        teacher_name = s.teacher.full_name if s.teacher and getattr(s.teacher, 'full_name', None) else (s.teacher.username if s.teacher else 'Unknown')
-        # Prefer schedule_slot if present
-        if s.schedule_slot:
-            day_of_week = s.schedule_slot.day_of_week
-            start_time = s.schedule_slot.start_time
-            end_time = s.schedule_slot.end_time
-        else:
-            day_of_week = s.day_of_week
-            start_time = s.start_time
-            end_time = s.end_time
-
-        result.append(StudentScheduleResponse(
-            id=s.id,
-            subject_id=s.subject_id,
-            subject_name=s.subject.name if s.subject else None,
-            subject_code=s.subject.code if s.subject else None,
-            teacher_name=teacher_name,
-            day_of_week=day_of_week,
-            start_time=start_time,
-            end_time=end_time
-        ))
-
-    # Sort by day then starts
-    def sort_key(item):
-        dow = item.day_of_week if item.day_of_week is not None else ''
-        st = item.start_time if item.start_time is not None else ''
-        return (str(dow), str(st))
-
-    result.sort(key=sort_key)
-    return result
+    return _build_student_schedule_responses(
+        db,
+        student_id=current_user.id,
+        school_id=current_user.school_id,
+        academic_year=academic_year,
+        semester=semester,
+    )
 
 @router.put("/assign/{assignment_id}", response_model=SubjectScheduleSchema)
 def update_subject_schedule(
@@ -556,12 +699,17 @@ def update_subject_schedule(
     
     # Check for time conflicts with other subjects on the same day (excluding current assignment)
     # Same teacher cannot have overlapping schedules at the same time (even across different classrooms)
-    existing_schedule = db.query(SubjectSchedule).filter(
+    existing_schedule = _build_period_overlap_query(
+        db,
+        school_id=current_user.school_id,
+        day_of_week=assignment.day_of_week,
+        start_time=assignment.start_time,
+        end_time=assignment.end_time,
+        academic_year=subject.academic_year,
+        semester=subject.semester,
+    ).filter(
         SubjectSchedule.id != assignment_id,
-        SubjectSchedule.day_of_week == str(assignment.day_of_week),
-        SubjectSchedule.start_time < assignment.end_time,
-        SubjectSchedule.end_time > assignment.start_time,
-        SubjectSchedule.teacher_id == current_user.id
+        SubjectSchedule.teacher_id == db_assignment.teacher_id,
     ).first()
     
     if existing_schedule:
@@ -572,12 +720,17 @@ def update_subject_schedule(
     
     # Check if same time slot has a subject in the same classroom already (only one subject per timeslot per classroom)
     if assignment.classroom_id:
-        existing_subject_in_classroom = db.query(SubjectSchedule).filter(
+        existing_subject_in_classroom = _build_period_overlap_query(
+            db,
+            school_id=current_user.school_id,
+            day_of_week=assignment.day_of_week,
+            start_time=assignment.start_time,
+            end_time=assignment.end_time,
+            academic_year=subject.academic_year,
+            semester=subject.semester,
+        ).filter(
             SubjectSchedule.id != assignment_id,
             SubjectSchedule.classroom_id == assignment.classroom_id,
-            SubjectSchedule.day_of_week == str(assignment.day_of_week),
-            SubjectSchedule.start_time < assignment.end_time,
-            SubjectSchedule.end_time > assignment.start_time
         ).first()
         
         if existing_subject_in_classroom:
@@ -612,20 +765,7 @@ def update_subject_schedule(
         db.commit()
         db.refresh(db_assignment)
         
-        # Return the updated assignment with proper schema
-        return SubjectScheduleSchema(
-            id=db_assignment.id,
-            subject_id=db_assignment.subject_id,
-            schedule_slot_id=db_assignment.schedule_slot_id,
-            teacher_id=db_assignment.teacher_id,
-            classroom_id=db_assignment.classroom_id,
-            day_of_week=db_assignment.day_of_week,
-            start_time=db_assignment.start_time,
-            end_time=db_assignment.end_time,
-            subject_name=subject.name if subject else None,
-            teacher_name=current_user.full_name,
-            classroom_name=db_assignment.classroom.name if db_assignment.classroom else None
-        )
+        return _build_subject_schedule_response(db_assignment)
     except HTTPException:
         raise
     except Exception as e:
@@ -696,81 +836,8 @@ def get_school_assignments(
         query = query.filter(Subject.semester == semester)
 
     schedules = query.all()
-    
-    result = []
-    for schedule in schedules:
-        result.append(SubjectScheduleSchema(
-            id=schedule.id,
-            subject_id=schedule.subject_id,
-            schedule_slot_id=schedule.schedule_slot_id,
-            teacher_id=schedule.teacher_id,
-            classroom_id=schedule.classroom_id,
-            day_of_week=schedule.day_of_week,
-            start_time=schedule.start_time,
-            end_time=schedule.end_time,
-            subject_name=schedule.subject.name if schedule.subject else None,
-            teacher_name=schedule.teacher.full_name if schedule.teacher else None,
-            classroom_name=schedule.classroom.name if schedule.classroom else None
-        ))
-    
-    return result
 
-# Student endpoint - Get student's schedule
-@router.get("/student", response_model=List[StudentScheduleResponse])
-def get_student_schedule(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    if current_user.role != "student":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only students can access this endpoint"
-        )
-    
-    # Import needed models
-    from models.classroom import ClassroomStudent, Classroom
-    
-    # Get student's current classroom
-    student_classroom = db.query(ClassroomStudent).join(
-        Classroom, ClassroomStudent.classroom_id == Classroom.id
-    ).filter(
-        ClassroomStudent.student_id == current_user.id,
-        ClassroomStudent.is_active == True
-    ).first()
-    
-    classroom_id = student_classroom.classroom_id if student_classroom else None
-    
-    # Get all subjects the student is enrolled in
-    student_subjects = db.query(SubjectStudent.subject_id).filter(
-        SubjectStudent.student_id == current_user.id
-    ).subquery()
-    
-    # Get schedules for those subjects
-    # Filter by: (classroom_id matches student's classroom) OR (classroom_id is NULL = applies to all)
-    schedules = db.query(SubjectSchedule).options(
-        joinedload(SubjectSchedule.subject),
-        joinedload(SubjectSchedule.schedule_slot),
-        joinedload(SubjectSchedule.teacher)
-    ).filter(
-        SubjectSchedule.subject_id.in_(student_subjects),
-        # Show schedules that either match student's classroom or apply to all classrooms
-        (SubjectSchedule.classroom_id == classroom_id) | (SubjectSchedule.classroom_id == None)
-    ).all()
-    
-    result = []
-    for schedule in schedules:
-        result.append(StudentScheduleResponse(
-            id=schedule.id,
-            subject_id=schedule.subject_id,
-            subject_name=schedule.subject.name if schedule.subject else "",
-            subject_code=schedule.subject.code if schedule.subject else "",
-            teacher_name=schedule.teacher.full_name if schedule.teacher else "",
-            day_of_week=schedule.day_of_week,
-            start_time=schedule.start_time,
-            end_time=schedule.end_time
-        ))
-    
-    return result
+    return [_build_subject_schedule_response(schedule) for schedule in schedules]
 
 # Admin endpoints - Assign schedules to teachers and students
 @router.post("/assign_admin", response_model=SubjectScheduleSchema)
@@ -821,10 +888,15 @@ def admin_assign_schedule_to_teacher(
     
     # Check for time conflicts with other subjects on the same day
     # Same teacher cannot have overlapping schedules at the same time (even across different classrooms)
-    existing_schedule = db.query(SubjectSchedule).filter(
-        SubjectSchedule.day_of_week == str(assignment.day_of_week),
-        SubjectSchedule.start_time < assignment.end_time,
-        SubjectSchedule.end_time > assignment.start_time,
+    existing_schedule = _build_period_overlap_query(
+        db,
+        school_id=current_user.school_id,
+        day_of_week=assignment.day_of_week,
+        start_time=assignment.start_time,
+        end_time=assignment.end_time,
+        academic_year=subject.academic_year,
+        semester=subject.semester,
+    ).filter(
         SubjectSchedule.teacher_id == teacher_id
     ).first()
     
@@ -836,11 +908,16 @@ def admin_assign_schedule_to_teacher(
     
     # Check if same time slot has a subject in the same classroom already (only one subject per timeslot per classroom)
     if assignment.classroom_id:
-        existing_subject_in_classroom = db.query(SubjectSchedule).filter(
-            SubjectSchedule.classroom_id == assignment.classroom_id,
-            SubjectSchedule.day_of_week == str(assignment.day_of_week),
-            SubjectSchedule.start_time < assignment.end_time,
-            SubjectSchedule.end_time > assignment.start_time
+        existing_subject_in_classroom = _build_period_overlap_query(
+            db,
+            school_id=current_user.school_id,
+            day_of_week=assignment.day_of_week,
+            start_time=assignment.start_time,
+            end_time=assignment.end_time,
+            academic_year=subject.academic_year,
+            semester=subject.semester,
+        ).filter(
+            SubjectSchedule.classroom_id == assignment.classroom_id
         ).first()
         
         if existing_subject_in_classroom:
@@ -880,19 +957,7 @@ def admin_assign_schedule_to_teacher(
         db.commit()
         db.refresh(db_assignment)
         
-        return SubjectScheduleSchema(
-            id=db_assignment.id,
-            subject_id=db_assignment.subject_id,
-            schedule_slot_id=db_assignment.schedule_slot_id,
-            teacher_id=db_assignment.teacher_id,
-            classroom_id=db_assignment.classroom_id,
-            day_of_week=db_assignment.day_of_week,
-            start_time=db_assignment.start_time,
-            end_time=db_assignment.end_time,
-            subject_name=subject.name,
-            teacher_name=teacher.full_name,
-            classroom_name=db_assignment.classroom.name if db_assignment.classroom else None
-        )
+        return _build_subject_schedule_response(db_assignment)
     except HTTPException:
         raise
     except Exception as e:

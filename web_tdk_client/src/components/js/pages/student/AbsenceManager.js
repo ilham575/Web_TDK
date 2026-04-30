@@ -8,8 +8,6 @@ import {
   Clock, 
   CheckCircle2, 
   XCircle, 
-  AlertCircle, 
-  MoreVertical, 
   Trash2, 
   Edit2,
   X,
@@ -17,7 +15,7 @@ import {
   ClipboardList
 } from 'lucide-react';
 
-export default function AbsenceManager({ studentId, operatingHours = [], studentSubjects = [] }) {
+export default function AbsenceManager({ studentId }) {
   const [absences, setAbsences] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -26,8 +24,7 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
     absence_type: 'personal',
     start_date: '',
     end_date: '',
-    reason: '',
-    subject_id: ''
+    reason: ''
   });
 
   const loadAbsences = async () => {
@@ -65,8 +62,7 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
         absence_date: formData.start_date,
         absence_date_end: formData.end_date || formData.start_date,
         absence_type: formData.absence_type,
-        reason: formData.reason,
-        subject_id: formData.subject_id || null
+        reason: formData.reason
       };
       
       const url = editingId 
@@ -91,8 +87,7 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
           absence_type: 'personal',
           start_date: '',
           end_date: '',
-          reason: '',
-          subject_id: ''
+          reason: ''
         });
         loadAbsences();
       } else {
@@ -172,8 +167,7 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
                 absence_type: 'personal',
                 start_date: new Date().toISOString().split('T')[0],
                 end_date: '',
-                reason: '',
-                subject_id: ''
+               reason: ''
              });
              setShowForm(true);
            }}
@@ -236,12 +230,10 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
                                 </>
                             )}
                         </div>
-                        {absence.subject_id && (
-                            <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-lg">
-                                <FileText className="w-4 h-4" />
-                                วิชา: {studentSubjects.find(s => s.id === absence.subject_id)?.name || 'Unknown'}
-                            </div>
-                        )}
+                        <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-lg">
+                          <Clock className="w-4 h-4" />
+                          ลาทั้งวัน
+                        </div>
                     </div>
                  </div>
 
@@ -255,8 +247,7 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
                                     absence_type: absence.absence_type,
                                     start_date: absence.absence_date,
                                     end_date: absence.absence_date_end || '',
-                                    reason: absence.reason,
-                                    subject_id: absence.subject_id || ''
+                                    reason: absence.reason || ''
                                 });
                                 setShowForm(true);
                             }}
@@ -295,32 +286,26 @@ export default function AbsenceManager({ studentId, operatingHours = [], student
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-5">
-                  <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                          <label className="text-xs font-black text-slate-400 uppercase tracking-wider ml-1">ประเภทการลา</label>
-                          <select 
-                             value={formData.absence_type}
-                             onChange={e => setFormData({...formData, absence_type: e.target.value})}
-                              className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none font-bold text-slate-700 appearance-none pointer-events-auto"
-                          >
-                              <option value="personal">ลากิจ</option>
-                              <option value="sick">ลาป่วย</option>
-                              <option value="other">อื่นๆ</option>
-                          </select>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-xs font-black text-slate-400 uppercase tracking-wider ml-1">ประเภทการลา</label>
+                      <select 
+                       value={formData.absence_type}
+                       onChange={e => setFormData({...formData, absence_type: e.target.value})}
+                        className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none font-bold text-slate-700 appearance-none pointer-events-auto"
+                      >
+                        <option value="personal">ลากิจ</option>
+                        <option value="sick">ลาป่วย</option>
+                        <option value="other">อื่นๆ</option>
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-black text-slate-400 uppercase tracking-wider ml-1">รูปแบบการลา</label>
+                      <div className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl font-bold text-slate-700 flex items-center gap-2">
+                        <Clock className="w-4 h-4 text-blue-500" />
+                        ลาทั้งวัน ไม่แยกรายวิชา
                       </div>
-                      <div className="space-y-2">
-                          <label className="text-xs font-black text-slate-400 uppercase tracking-wider ml-1">วิชา (ถ้ามี)</label>
-                          <select 
-                             value={formData.subject_id}
-                             onChange={e => setFormData({...formData, subject_id: e.target.value})}
-                              className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none font-bold text-slate-700 appearance-none"
-                          >
-                              <option value="">ทั้งวัน / ทุกวิชา</option>
-                              {studentSubjects.map(s => (
-                                  <option key={s.id} value={s.id}>{s.name} ({s.code})</option>
-                              ))}
-                          </select>
-                      </div>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
