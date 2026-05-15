@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { BookOpen, CalendarDays, Clock3, School, UserRound } from "lucide-react";
+import { BookOpen, CalendarDays, Clock3, Coffee, School, UserRound } from "lucide-react";
 import ScheduleDetailModal from "./ScheduleDetailModal";
 
 const DAY_NAMES = ["อาทิตย์", "จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์", "เสาร์"];
@@ -98,6 +98,15 @@ const CARD_PALETTES = [
     ribbon: "#06b6d4",
   },
 ];
+
+const BREAK_CARD_PALETTE = {
+  background: "linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%)",
+  border: "#f59e0b",
+  text: "#92400e",
+  shadow: "rgba(217, 119, 6, 0.24)",
+  chip: "rgba(255, 255, 255, 0.88)",
+  ribbon: "#f59e0b",
+};
 
 const normalizeSortDay = (day) => (day === 0 ? 7 : day);
 
@@ -220,11 +229,12 @@ export default function ScheduleGrid({ operatingHours = [], schedules = [], role
         day_of_week: normalizeDay(slot.day_of_week),
         start_time: normalizeTime(slot.start_time),
         end_time: normalizeTime(slot.end_time),
+        is_break: Boolean(slot.is_break),
       }))
       .filter((slot) => slot.day_of_week !== null && slot.start_time && slot.end_time)
   ), [operatingHours]);
 
-  const normalizedSchedules = useMemo(() => (
+  const normalizedSubjectSchedules = useMemo(() => (
     schedules
       .map((item, index) => {
         const dayOfWeek = normalizeDay(item.day_of_week ?? item.day ?? item.schedule_day);
@@ -272,6 +282,8 @@ export default function ScheduleGrid({ operatingHours = [], schedules = [], role
           room: roomName,
           subject_code: subjectCode,
           note,
+          is_break: Boolean(item.is_break),
+          scope_label: firstText(item.scope_label, item.scope, item.scope_name),
           _start: startValue,
           _end: endValue,
           _duration: startValue !== null && endValue !== null ? Math.max(endValue - startValue, 0) : 0,
@@ -285,6 +297,41 @@ export default function ScheduleGrid({ operatingHours = [], schedules = [], role
         return left._end - right._end;
       })
   ), [schedules]);
+
+  const normalizedBreakSchedules = useMemo(() => (
+    normalizedOperatingHours
+      .filter((slot) => slot.is_break)
+      .map((slot, index) => {
+        const startValue = timeToFloat(slot.start_time);
+        const endValue = timeToFloat(slot.end_time);
+
+        return {
+          ...slot,
+          id: slot.id != null ? `break-slot-${slot.id}` : `break-slot-${slot.day_of_week}-${slot.start_time}-${slot.end_time}-${index}`,
+          subject_name: "เวลาพัก",
+          teacher_name: "",
+          classroom_name: "",
+          room: "",
+          subject_code: "",
+          note: "ช่วงเวลาพักของทั้งโรงเรียน ระบบจะไม่อนุญาตให้ลงวิชาทับช่วงเวลานี้",
+          is_break: true,
+          scope_label: "ทุกชั้นเรียน",
+          _start: startValue,
+          _end: endValue,
+          _duration: startValue !== null && endValue !== null ? Math.max(endValue - startValue, 0) : 0,
+        };
+      })
+      .filter((item) => item.day_of_week !== null && item._start !== null && item._end !== null && item._end > item._start)
+  ), [normalizedOperatingHours]);
+
+  const normalizedSchedules = useMemo(() => (
+    [...normalizedSubjectSchedules, ...normalizedBreakSchedules].sort((left, right) => {
+      const dayCompare = normalizeSortDay(left.day_of_week) - normalizeSortDay(right.day_of_week);
+      if (dayCompare !== 0) return dayCompare;
+      if (left._start !== right._start) return left._start - right._start;
+      return left._end - right._end;
+    })
+  ), [normalizedSubjectSchedules, normalizedBreakSchedules]);
 
   const days = useMemo(() => {
     const source = normalizedOperatingHours.length > 0 ? normalizedOperatingHours : normalizedSchedules;
@@ -306,7 +353,7 @@ export default function ScheduleGrid({ operatingHours = [], schedules = [], role
 
   const dayCounts = useMemo(() => {
     const counts = {};
-    normalizedSchedules.forEach((item) => {
+    normalizedSchedules.filter((item) => !item.is_break).forEach((item) => {
       counts[item.day_of_week] = (counts[item.day_of_week] || 0) + 1;
     });
     return counts;
@@ -340,7 +387,7 @@ export default function ScheduleGrid({ operatingHours = [], schedules = [], role
 
   const operatingWindowByDay = useMemo(() => {
     const grouped = {};
-    normalizedOperatingHours.forEach((slot) => {
+    normalizedOperatingHours.filter((slot) => !slot.is_break).forEach((slot) => {
       const key = slot.day_of_week;
       if (key === null) return;
 
@@ -391,6 +438,10 @@ export default function ScheduleGrid({ operatingHours = [], schedules = [], role
     normalizedSchedules.filter((item) => visibleDayKeys.has(item.day_of_week))
   ), [normalizedSchedules, visibleDayKeys]);
 
+  const visibleTeachingSchedules = useMemo(() => (
+    visibleSchedules.filter((item) => !item.is_break)
+  ), [visibleSchedules]);
+
   const visibleSchedulesByDay = useMemo(() => {
     const grouped = {};
     visibleSchedules.forEach((item) => {
@@ -418,14 +469,14 @@ export default function ScheduleGrid({ operatingHours = [], schedules = [], role
 
   const scheduleCount = useMemo(() => {
     if (role === "student") {
-      return new Set(visibleSchedules.map((item) => item.subject_id ?? item.subject_code ?? item.subject_name)).size;
+      return new Set(visibleTeachingSchedules.map((item) => item.subject_id ?? item.subject_code ?? item.subject_name)).size;
     }
-    return visibleSchedules.length;
-  }, [role, visibleSchedules]);
+    return visibleTeachingSchedules.length;
+  }, [role, visibleTeachingSchedules]);
 
   const totalHours = useMemo(() => (
-    visibleSchedules.reduce((sum, item) => sum + item._duration, 0)
-  ), [visibleSchedules]);
+    visibleTeachingSchedules.reduce((sum, item) => sum + item._duration, 0)
+  ), [visibleTeachingSchedules]);
 
   const openDetail = (item) => {
     setSelectedItem(item);
@@ -438,11 +489,13 @@ export default function ScheduleGrid({ operatingHours = [], schedules = [], role
   };
 
   const handleEdit = (item) => {
+    if (!item) return;
+    if (item.is_break && role !== "admin") return;
     if (onActionEdit) onActionEdit(item);
   };
 
-  const handleDelete = (itemId) => {
-    if (onActionDelete) onActionDelete(itemId);
+  const handleDelete = (item) => {
+    if (onActionDelete) onActionDelete(item);
   };
 
   if (!days.length) {
@@ -594,9 +647,11 @@ export default function ScheduleGrid({ operatingHours = [], schedules = [], role
                     {items.length > 0 ? (
                       <div className="space-y-3">
                         {items.map((item) => {
-                          const palette = getCardPalette(`${item.subject_name}-${item.classroom_name}-${item.teacher_name}`);
+                          const palette = item.is_break ? BREAK_CARD_PALETTE : getCardPalette(`${item.subject_name}-${item.classroom_name}-${item.teacher_name}`);
                           const durationLabel = formatDurationLabel(item._duration);
-                          const locationText = [item.classroom_name, item.room].filter(Boolean).join(" · ");
+                          const locationText = item.is_break
+                            ? (item.scope_label || "ทุกชั้นเรียน")
+                            : [item.classroom_name, item.room].filter(Boolean).join(" · ");
 
                           return (
                             <button
@@ -618,6 +673,12 @@ export default function ScheduleGrid({ operatingHours = [], schedules = [], role
                                     {item.start_time} - {item.end_time}
                                   </div>
                                   <h5 className="mt-3 text-base font-black leading-tight text-slate-800">{item.subject_name}</h5>
+                                  {item.is_break && (
+                                    <div className="mt-2 inline-flex max-w-full items-center gap-1 rounded-full bg-white/80 px-2.5 py-1 text-[11px] font-black text-amber-700">
+                                      <Coffee className="h-3.5 w-3.5" />
+                                      <span className="truncate">{item.scope_label || "ทุกชั้นเรียน"}</span>
+                                    </div>
+                                  )}
                                   {item.subject_code && (
                                     <div className="mt-2 text-xs font-bold uppercase tracking-[0.16em] text-slate-500">{item.subject_code}</div>
                                   )}
@@ -632,7 +693,7 @@ export default function ScheduleGrid({ operatingHours = [], schedules = [], role
                               <div className="mt-4 space-y-2 text-sm font-semibold text-slate-600">
                                 {locationText && (
                                   <div className="flex items-center gap-2">
-                                    <School className="h-4 w-4 shrink-0" />
+                                    {item.is_break ? <Coffee className="h-4 w-4 shrink-0" /> : <School className="h-4 w-4 shrink-0" />}
                                     <span className="truncate">{locationText}</span>
                                   </div>
                                 )}
@@ -755,7 +816,7 @@ export default function ScheduleGrid({ operatingHours = [], schedules = [], role
                       const dayWidthPercent = 100 / visibleDays.length;
 
                       return daySchedules.map((item) => {
-                        const palette = getCardPalette(`${item.subject_name}-${item.classroom_name}-${item.teacher_name}`);
+                        const palette = item.is_break ? BREAK_CARD_PALETTE : getCardPalette(`${item.subject_name}-${item.classroom_name}-${item.teacher_name}`);
                         const columnWidthPercent = dayWidthPercent / item._columnCount;
                         const leftPercent = (dayIndex * dayWidthPercent) + (item._column * columnWidthPercent);
                         const top = ((item._start - timeBounds.minHour) * PIXELS_PER_HOUR) + 6;
@@ -810,14 +871,28 @@ export default function ScheduleGrid({ operatingHours = [], schedules = [], role
                                 )}
                               </div>
 
-                              {showMeta && item.classroom_name && (
+                              {item.is_break && !isDense && (
+                                <div className="inline-flex max-w-full items-center gap-1 rounded-full bg-white/80 px-2 py-1 text-[9px] font-black text-amber-700 sm:text-[10px]">
+                                  <Coffee className="h-3 w-3 shrink-0" />
+                                  <span className="truncate">{item.scope_label || "ทุกชั้นเรียน"}</span>
+                                </div>
+                              )}
+
+                              {showMeta && item.is_break && (
+                                <div className="flex items-center gap-1.5 text-[10px] font-semibold opacity-80 sm:text-[11px]">
+                                  <Coffee className="h-3.5 w-3.5 shrink-0" />
+                                  <span className="truncate">{item.scope_label || "ทุกชั้นเรียน"}</span>
+                                </div>
+                              )}
+
+                              {showMeta && !item.is_break && item.classroom_name && (
                                 <div className="flex items-center gap-1.5 text-[10px] font-semibold opacity-80 sm:text-[11px]">
                                   <School className="h-3.5 w-3.5 shrink-0" />
                                   <span className="truncate">{item.classroom_name}</span>
                                 </div>
                               )}
 
-                              {showMeta && item.teacher_name && role !== "teacher" && (
+                              {showMeta && !item.is_break && item.teacher_name && role !== "teacher" && (
                                 <div className="flex items-center gap-1.5 text-[10px] font-semibold opacity-75 sm:text-[11px]">
                                   <UserRound className="h-3.5 w-3.5 shrink-0" />
                                   <span className="truncate">{item.teacher_name}</span>

@@ -4,8 +4,9 @@ import { toast } from 'react-toastify';
 import Loading from '../Loading';
 import ChangePasswordModal from '../ChangePasswordModal';
 import ClassroomDetailModal from '../ClassroomDetailModal';
+import GoogleIdentityButton, { hasGoogleIdentityConfig } from '../GoogleIdentityButton';
 import { API_BASE_URL } from '../../endpoints';
-import { fetchCurrentUser, hasSessionMarker } from '../../../utils/authUtils';
+import { fetchCurrentUser, getStoredAccessToken, hasSessionMarker } from '../../../utils/authUtils';
 import {
   ArrowLeft,
   BadgeCheck,
@@ -40,6 +41,25 @@ function ProfilePage() {
   const [gradeLevels, setGradeLevels] = useState([]);
   const [loadingGradeLevels, setLoadingGradeLevels] = useState(false);
   const [classroomStudentCounts, setClassroomStudentCounts] = useState({});
+  const [googleLinkStatus, setGoogleLinkStatus] = useState(null);
+  const [loadingGoogleLinkStatus, setLoadingGoogleLinkStatus] = useState(false);
+  const [googleStatusError, setGoogleStatusError] = useState('');
+  const [isLinkingGoogle, setIsLinkingGoogle] = useState(false);
+  const [isUnlinkingGoogle, setIsUnlinkingGoogle] = useState(false);
+
+  const getAuthHeaders = (includeContentType = false) => {
+    const headers = {};
+    if (includeContentType) {
+      headers['Content-Type'] = 'application/json';
+    }
+
+    const token = getStoredAccessToken();
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    return headers;
+  };
 
   // Refresh student count when modal opens
   useEffect(() => {
@@ -127,8 +147,106 @@ function ProfilePage() {
       .finally(() => setLoading(false));
   }, [navigate]);
 
+  useEffect(() => {
+    if (!user || !hasGoogleIdentityConfig()) {
+      setGoogleLinkStatus(null);
+      setGoogleStatusError('');
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadStatus = async () => {
+      setLoadingGoogleLinkStatus(true);
+      setGoogleStatusError('');
+
+      try {
+        const res = await fetch(`${API_BASE_URL}/users/me/google/status`, {
+          headers: getAuthHeaders()
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.detail || 'ไม่สามารถโหลดสถานะการเชื่อม Google ได้');
+        }
+
+        if (!cancelled) {
+          setGoogleLinkStatus(data);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setGoogleLinkStatus(null);
+          setGoogleStatusError(err.message || 'ไม่สามารถโหลดสถานะการเชื่อม Google ได้');
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingGoogleLinkStatus(false);
+        }
+      }
+    };
+
+    loadStatus();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
   const handleEditChange = (field, value) => {
     setEditData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleGoogleLink = async (credential) => {
+    try {
+      setIsLinkingGoogle(true);
+      setGoogleStatusError('');
+
+      const res = await fetch(`${API_BASE_URL}/users/me/google/link`, {
+        method: 'POST',
+        headers: getAuthHeaders(true),
+        body: JSON.stringify({ credential })
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.detail || 'ไม่สามารถเชื่อมบัญชี Google ได้');
+      }
+
+      setGoogleLinkStatus(data);
+      toast.success('เชื่อมบัญชี Google เรียบร้อยแล้ว');
+    } catch (err) {
+      const message = err.message || 'ไม่สามารถเชื่อมบัญชี Google ได้';
+      setGoogleStatusError(message);
+      toast.error(message);
+    } finally {
+      setIsLinkingGoogle(false);
+    }
+  };
+
+  const handleGoogleUnlink = async () => {
+    try {
+      setIsUnlinkingGoogle(true);
+      setGoogleStatusError('');
+
+      const res = await fetch(`${API_BASE_URL}/users/me/google/link`, {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.detail || 'ไม่สามารถยกเลิกการเชื่อม Google ได้');
+      }
+
+      setGoogleLinkStatus(data);
+      toast.success('ยกเลิกการเชื่อมบัญชี Google แล้ว');
+    } catch (err) {
+      const message = err.message || 'ไม่สามารถยกเลิกการเชื่อม Google ได้';
+      setGoogleStatusError(message);
+      toast.error(message);
+    } finally {
+      setIsUnlinkingGoogle(false);
+    }
   };
 
   const handleSave = async () => {
@@ -355,6 +473,78 @@ function ProfilePage() {
                   <p className="text-sm text-slate-700 font-medium">{user.role === 'student' ? (user.grade_level || 'ไม่ระบุ') : getRoleText(user.role)}</p>
                 </div>
               </div>
+            </div>
+
+            <div className="bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 p-6 sm:p-8">
+              <h3 className="text-lg font-semibold text-slate-800 mb-5 flex items-center gap-2">
+                <BadgeCheck className="w-5 h-5 text-blue-500" /> Google Sign-In
+              </h3>
+
+              {!hasGoogleIdentityConfig() ? (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm leading-6 text-amber-700">
+                  ระบบฝั่ง client ยังไม่ได้ตั้งค่า Google Client ID จึงยังไม่สามารถเชื่อมหรือเข้าสู่ระบบด้วย Google ได้
+                </div>
+              ) : loadingGoogleLinkStatus ? (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">
+                  กำลังโหลดสถานะการเชื่อมบัญชี Google...
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-lg font-black text-blue-600 shadow-sm ring-1 ring-slate-200">
+                        G
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-slate-800">
+                          {googleLinkStatus?.linked ? 'เชื่อมบัญชี Google แล้ว' : 'ยังไม่ได้เชื่อมบัญชี Google'}
+                        </p>
+                        <p className="mt-1 text-sm leading-6 text-slate-500 break-all">
+                          {googleLinkStatus?.linked
+                            ? (googleLinkStatus.provider_email || 'เชื่อมแล้ว แต่ยังไม่มีอีเมลจากผู้ให้บริการ')
+                            : 'เชื่อม Google เพื่อใช้ปุ่ม Google Sign-In ในการเข้าสู่ระบบครั้งถัดไป โดยยังคงใช้บัญชีเดิมของระบบนี้'}
+                        </p>
+                        {googleLinkStatus?.linked_at ? (
+                          <p className="mt-2 text-xs font-medium text-slate-400">
+                            เชื่อมเมื่อ {new Date(googleLinkStatus.linked_at).toLocaleString('th-TH')}
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+
+                  {googleStatusError ? (
+                    <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600">
+                      {googleStatusError}
+                    </div>
+                  ) : null}
+
+                  {googleLinkStatus?.linked ? (
+                    <button
+                      type="button"
+                      onClick={handleGoogleUnlink}
+                      disabled={isUnlinkingGoogle || isLinkingGoogle}
+                      className="w-full rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm font-semibold text-rose-600 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isUnlinkingGoogle ? 'กำลังยกเลิกการเชื่อม...' : 'ยกเลิกการเชื่อม Google'}
+                    </button>
+                  ) : (
+                    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-5">
+                      <div className="flex justify-center">
+                        <GoogleIdentityButton
+                          onCredential={handleGoogleLink}
+                          text="continue_with"
+                          width={300}
+                          disabled={isLinkingGoogle || isUnlinkingGoogle}
+                        />
+                      </div>
+                      <p className="mt-3 text-center text-xs font-medium leading-5 text-slate-400">
+                        ระบบจะเชื่อม Google เข้ากับบัญชีปัจจุบันเท่านั้น และจะไม่สร้างผู้ใช้ใหม่อัตโนมัติ
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {user.role === 'teacher' && (

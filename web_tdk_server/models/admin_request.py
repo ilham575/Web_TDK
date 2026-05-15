@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text
+from sqlalchemy import Boolean, Column, Integer, String, DateTime, Text
 from sqlalchemy.sql import func
 from database.connection import Base
 
@@ -11,6 +11,10 @@ class AdminRequest(Base):
     full_name = Column(String(100), nullable=False)
     password_hash = Column(String(255), nullable=False)
     school_name = Column(String(255), nullable=False)
+    social_provider = Column(String(32), nullable=True, index=True)
+    social_provider_user_id = Column(String(255), nullable=True, index=True)
+    social_provider_email = Column(String(255), nullable=True)
+    social_email_verified = Column(Boolean, default=False, nullable=False)
     status = Column(String(20), default="pending", nullable=False)  # pending, approved, rejected
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

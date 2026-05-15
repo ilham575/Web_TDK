@@ -17,7 +17,12 @@ from schemas.user import User as UserSchema
 router = APIRouter(prefix="/subjects", tags=["subjects"])
 
 
-def _get_visible_classroom_student_ids(db: Session, classroom_ids: List[int]):
+def _get_visible_classroom_student_ids(
+    db: Session,
+    classroom_ids: List[int],
+    *,
+    include_inactive_users: bool = False,
+):
     if not classroom_ids:
         return set(), False
 
@@ -27,9 +32,20 @@ def _get_visible_classroom_student_ids(db: Session, classroom_ids: List[int]):
     ).filter(
         ClassroomStudentModel.classroom_id.in_(classroom_ids),
         UserModel.role == 'student',
-        UserModel.is_active == True,
-        UserModel.user_status == 'active'
     )
+
+    if not include_inactive_users:
+        base_query = base_query.filter(
+            UserModel.is_active == True,
+            UserModel.user_status == 'active'
+        )
+
+    if include_inactive_users:
+        all_ids = {
+            row[0] for row in base_query.all()
+            if row and row[0] is not None
+        }
+        return all_ids, False
 
     active_ids = {
         row[0] for row in base_query.filter(ClassroomStudentModel.is_active == True).all()
@@ -93,6 +109,57 @@ def _resolve_student_classroom(
         return _query(base_restrict_ids=restrict_classroom_ids, enforce_term=False, active_only=False)
 
     return None
+
+
+def _get_scoped_subject_classroom_ids(db: Session, subject: SubjectModel) -> List[int]:
+    classroom_ids = [
+        row[0]
+        for row in db.query(ClassroomSubjectModel.classroom_id).filter(
+            ClassroomSubjectModel.subject_id == subject.id
+        ).all()
+    ]
+
+    if classroom_ids and (subject.academic_year is not None or subject.semester is not None):
+        classroom_query = db.query(ClassroomModel.id).filter(ClassroomModel.id.in_(classroom_ids))
+        if subject.academic_year is not None:
+            classroom_query = classroom_query.filter(ClassroomModel.academic_year == subject.academic_year)
+        if subject.semester is not None:
+            classroom_query = classroom_query.filter(ClassroomModel.semester == subject.semester)
+        classroom_ids = [row[0] for row in classroom_query.all()]
+
+    return classroom_ids
+
+
+def _count_visible_subject_students(
+    db: Session,
+    subject: SubjectModel,
+    *,
+    include_inactive_users: bool = False,
+) -> int:
+    scoped_classroom_ids = _get_scoped_subject_classroom_ids(db, subject)
+    if scoped_classroom_ids:
+        visible_ids, _ = _get_visible_classroom_student_ids(
+            db,
+            scoped_classroom_ids,
+            include_inactive_users=include_inactive_users,
+        )
+        return len(visible_ids)
+
+    query = db.query(SubjectStudentModel.student_id).join(
+        UserModel,
+        UserModel.id == SubjectStudentModel.student_id,
+    ).filter(
+        SubjectStudentModel.subject_id == subject.id,
+        UserModel.role == 'student',
+    )
+
+    if not include_inactive_users:
+        query = query.filter(
+            UserModel.is_active == True,
+            UserModel.user_status == 'active',
+        )
+
+    return query.distinct().count()
 
 
 def _with_teacher(subject_obj: SubjectModel, db: Session):
@@ -352,14 +419,9 @@ def subjects_by_teacher(teacher_id: int, academic_year: str = None, semester: in
             })
         
         # Count classrooms
-        classroom_count = db.query(ClassroomSubjectModel).filter(
-            ClassroomSubjectModel.subject_id == subject.id
-        ).count()
-        
-        # Count enrolled students
-        student_count = db.query(SubjectStudentModel).filter(
-            SubjectStudentModel.subject_id == subject.id
-        ).count()
+        scoped_classroom_ids = _get_scoped_subject_classroom_ids(db, subject)
+        classroom_count = len(scoped_classroom_ids)
+        student_count = _count_visible_subject_students(db, subject)
         
         # For backward compatibility, teacher_name is the first teacher
         teacher_name = teachers_list[0]['name'] if teachers_list else None
@@ -463,7 +525,12 @@ def subjects_by_student(student_id: int, db: Session = Depends(get_db), current_
 
 
 @router.get("/{subject_id}/students")
-def get_subject_students(subject_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+def get_subject_students(
+    subject_id: int,
+    include_inactive: bool = False,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
     """List students for a subject.
 
     Behavior:
@@ -487,6 +554,7 @@ def get_subject_students(subject_id: int, db: Session = Depends(get_db), current
 
     is_admin = user_role == 'admin'
     is_assigned_teacher = len(teacher_schedules) > 0
+    include_inactive = bool(include_inactive and is_admin)
 
     if not (is_admin or is_assigned_teacher):
         raise HTTPException(status_code=403, detail='Not authorized to view students for this subject')
@@ -517,6 +585,7 @@ def get_subject_students(subject_id: int, db: Session = Depends(get_db), current
     scoped_classroom_student_ids, scoped_uses_active_memberships = _get_visible_classroom_student_ids(
         db,
         scoped_subj_classroom_ids,
+        include_inactive_users=include_inactive,
     )
 
     response_scope_classroom_ids = scoped_subj_classroom_ids if scoped_subj_classroom_ids else None
@@ -536,6 +605,7 @@ def get_subject_students(subject_id: int, db: Session = Depends(get_db), current
         allowed_classroom_student_ids, allowed_uses_active_memberships = _get_visible_classroom_student_ids(
             db,
             effective_allowed_classroom_ids,
+            include_inactive_users=include_inactive,
         )
         student_id_set.update(allowed_classroom_student_ids)
         response_scope_classroom_ids = effective_allowed_classroom_ids or None
@@ -548,9 +618,13 @@ def get_subject_students(subject_id: int, db: Session = Depends(get_db), current
     student_rows = db.query(UserModel).filter(
         UserModel.id.in_(list(student_id_set)),
         UserModel.role == 'student',
-        UserModel.is_active == True,
-        UserModel.user_status == 'active'
-    ).all()
+    )
+    if not include_inactive:
+        student_rows = student_rows.filter(
+            UserModel.is_active == True,
+            UserModel.user_status == 'active'
+        )
+    student_rows = student_rows.all()
 
     # Build response including active classroom info if available
     result = []
@@ -584,6 +658,7 @@ def get_subject_students(subject_id: int, db: Session = Depends(get_db), current
             'school_id': student.school_id,
             'grade_level': student.grade_level,
             'is_active': student.is_active,
+            'user_status': student.user_status,
             'classroom': classroom_info,
             'student_number': classroom_student.student_number if classroom_student else None
         })
@@ -1001,14 +1076,11 @@ def get_all_subjects_by_school(school_id: int, db: Session = Depends(get_db), cu
     result = []
     for subj in subjects:
         # Count classrooms
-        classroom_count = db.query(ClassroomSubjectModel).filter(
-            ClassroomSubjectModel.subject_id == subj.id
-        ).count()
-        
-        # Count enrolled students
-        student_count = db.query(SubjectStudentModel).filter(
-            SubjectStudentModel.subject_id == subj.id
-        ).count()
+        scoped_classroom_ids = _get_scoped_subject_classroom_ids(db, subj)
+        classroom_count = len(scoped_classroom_ids)
+        # Admin subject management must reflect the subject's historical roster,
+        # even when students later graduate or leave the school.
+        student_count = _count_visible_subject_students(db, subj, include_inactive_users=True)
         
         # Get teacher info - now multiple teachers possible
         teachers_info = []
@@ -1140,6 +1212,19 @@ def add_subject_teacher(subject_id: int, teacher_data: SubjectTeacherCreate, db:
         ).first()
         if not classroom:
             raise HTTPException(status_code=404, detail="Classroom not found")
+
+        subject_academic_year = str(getattr(subject, 'academic_year', '') or '')
+        classroom_academic_year = str(getattr(classroom, 'academic_year', '') or '')
+        subject_semester = '' if getattr(subject, 'semester', None) is None else str(subject.semester)
+        classroom_semester = '' if getattr(classroom, 'semester', None) is None else str(classroom.semester)
+        if (
+            (subject_academic_year and classroom_academic_year and subject_academic_year != classroom_academic_year)
+            or (subject_semester and classroom_semester and subject_semester != classroom_semester)
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail="ชั้นเรียนต้องอยู่ในปีการศึกษาและภาคเรียนเดียวกับรายวิชา"
+            )
 
     # Prevent mixing assignment types: cannot add global teacher if specific-classroom teachers exist
     if teacher_data.classroom_id is None:

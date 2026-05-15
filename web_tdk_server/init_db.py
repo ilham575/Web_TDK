@@ -4,7 +4,7 @@ This will be run once to initialize the database schema
 """
 import os
 from database.connection import engine, Base
-from models import user, school, announcement, document, subject, subject_student, attendance, grade, schedule, admin_request, evaluation, absence, homeroom, classroom, classroom_subject, password_reset_request, school_deletion_request, token_setting
+from models import user, school, announcement, document, subject, subject_student, attendance, grade, schedule, admin_request, evaluation, absence, homeroom, classroom, classroom_subject, password_reset_request, school_deletion_request, token_setting, social_account
 
 def create_tables():
     """Create all tables in the database"""

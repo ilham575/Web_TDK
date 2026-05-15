@@ -6,7 +6,8 @@ param(
     [string]$Region = "asia-southeast1",
     [string]$ProjectId = "tdk-proj-489111",
     [string]$DbPasswordSecretName = "web-tdk-db-password",
-    [string]$DbUser = "web_tdk_user"
+    [string]$DbUser = "web_tdk_user",
+    [string]$GoogleClientId = "449550769588-fjguj4vau51u20or4b0plap0872qe49l.apps.googleusercontent.com"
 )
 
 $ServiceName = "web-tdk-server"
@@ -70,6 +71,7 @@ ENV: "production"
 DEBUG: "False"
 JWT_COOKIE_SECURE: "true"
 JWT_COOKIE_SAMESITE: "lax"
+GOOGLE_CLIENT_ID: "${GoogleClientId}"
 FRONTEND_URL: "https://tdk-proj-489111.web.app"
 CORS_ORIGINS: "https://tdk-proj-489111.web.app,https://tdk-proj-489111.firebaseapp.com"
 "@ | Set-Content "env-prod.yaml"

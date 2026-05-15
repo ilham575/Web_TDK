@@ -175,6 +175,11 @@ function AttendancePage(){
     ? students.filter(s => getClassIdentifier(s) === selectedClass)
     : students;
 
+  const presentCount = filteredStudents.filter(s => attendance[s.id] === 'present').length;
+  const attendanceRate = filteredStudents.length > 0
+    ? Math.round((presentCount / filteredStudents.length) * 100)
+    : 0;
+
   const getStatusIcon = (status) => {
     switch(status) {
       case 'present': return <CheckCircle2 className="w-4 h-4 text-emerald-500" />;
@@ -315,10 +320,10 @@ function AttendancePage(){
                         <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-1">มาเรียนวันนี้</p>
                         <div className="flex items-baseline gap-2">
                           <p className="text-3xl font-black text-blue-700">
-                            {Object.values(attendance).filter(st => st === 'present').length}
+                            {presentCount}
                           </p>
                           <span className="text-xs font-bold text-blue-500/70">
-                            ({filteredStudents.length > 0 ? Math.round((Object.values(attendance).filter(st => st === 'present').length / filteredStudents.length) * 100) : 0}%)
+                            ({attendanceRate}%)
                           </span>
                         </div>
                       </div>

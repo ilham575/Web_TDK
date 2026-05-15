@@ -42,10 +42,13 @@ def table_exists(table_name):
 
 def create_all_tables():
     # Import models to register them with Base
-    from models import user, school, announcement, document, subject, subject_student, attendance, grade, schedule, admin_request, evaluation, semester_period, homeroom, absence
+    from models import user, school, announcement, document, subject, subject_student, attendance, grade, schedule, admin_request, evaluation, semester_period, homeroom, absence, social_account
     Base.metadata.create_all(bind=engine)
     migrate_homeroom_schema()
     migrate_user_status_schema()
+    migrate_schedule_slot_break_schema()
+    migrate_break_schedule_classroom_schema()
+    migrate_admin_request_google_schema()
 
 def migrate_user_status_schema():
     """Add user_status column to users table if it doesn't exist."""
@@ -64,6 +67,74 @@ def migrate_user_status_schema():
                 print("✓ Added column user_status to users")
             except Exception as e:
                 print(f"migrate_user_status_schema: {e}")
+
+
+def migrate_schedule_slot_break_schema():
+    """Add the is_break column to schedule slots if it doesn't exist."""
+    inspector = inspect(engine)
+    if "schedule_slots" not in inspector.get_table_names():
+        return
+
+    column_names = {col["name"] for col in inspector.get_columns("schedule_slots")}
+    if "is_break" in column_names:
+        return
+
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("ALTER TABLE schedule_slots ADD COLUMN is_break BOOLEAN NOT NULL DEFAULT 0"))
+            conn.commit()
+            print("✓ Added column is_break to schedule_slots")
+        except Exception as e:
+            print(f"migrate_schedule_slot_break_schema: {e}")
+
+
+def migrate_break_schedule_classroom_schema():
+    """Add the classroom_id column to break_schedules if it doesn't exist."""
+    inspector = inspect(engine)
+    if "break_schedules" not in inspector.get_table_names():
+        return
+
+    column_names = {col["name"] for col in inspector.get_columns("break_schedules")}
+    if "classroom_id" in column_names:
+        return
+
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("ALTER TABLE break_schedules ADD COLUMN classroom_id INTEGER NULL"))
+            conn.commit()
+            print("✓ Added column classroom_id to break_schedules")
+        except Exception as e:
+            print(f"migrate_break_schedule_classroom_schema: {e}")
+
+
+def migrate_admin_request_google_schema():
+    """Add Google link fields to admin_requests if they don't exist."""
+    inspector = inspect(engine)
+    if "admin_requests" not in inspector.get_table_names():
+        return
+
+    column_names = {col["name"] for col in inspector.get_columns("admin_requests")}
+    statements = []
+
+    if "social_provider" not in column_names:
+        statements.append("ALTER TABLE admin_requests ADD COLUMN social_provider VARCHAR(32) NULL")
+    if "social_provider_user_id" not in column_names:
+        statements.append("ALTER TABLE admin_requests ADD COLUMN social_provider_user_id VARCHAR(255) NULL")
+    if "social_provider_email" not in column_names:
+        statements.append("ALTER TABLE admin_requests ADD COLUMN social_provider_email VARCHAR(255) NULL")
+    if "social_email_verified" not in column_names:
+        statements.append("ALTER TABLE admin_requests ADD COLUMN social_email_verified BOOLEAN NOT NULL DEFAULT 0")
+
+    if not statements:
+        return
+
+    with engine.connect() as conn:
+        for statement in statements:
+            try:
+                conn.execute(text(statement))
+                conn.commit()
+            except Exception as e:
+                print(f"migrate_admin_request_google_schema: {e}")
 
 def migrate_evaluation_schema():
     """Update evaluations table schema"""

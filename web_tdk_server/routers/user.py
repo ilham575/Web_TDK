@@ -1,5 +1,6 @@
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
+import json
 
 from fastapi import APIRouter, HTTPException, Depends, Response, Request, status, UploadFile, File
 import secrets
@@ -12,7 +13,13 @@ from sqlalchemy.exc import IntegrityError
 import os
 import smtplib
 from email.message import EmailMessage
-from schemas.user import User, UserCreate, UserUpdate, Token, SessionInfo, ChangePasswordRequest, PasswordResetRequestCreate, PasswordResetRequestResponse, PasswordResetByAdminRequest, PublicLoginUser
+from urllib import error as urllib_error
+from urllib import parse as urllib_parse
+from urllib import request as urllib_request
+
+from models.admin_request import AdminRequest as AdminRequestModel
+from models.social_account import SocialAccount as SocialAccountModel
+from schemas.user import User, UserCreate, UserUpdate, AdminUserProfileUpdate, GoogleCredentialRequest, GoogleLinkStatus, Token, SessionInfo, ChangePasswordRequest, PasswordResetRequestCreate, PasswordResetRequestResponse, PasswordResetByAdminRequest, PublicLoginUser
 from models.user import User as UserModel
 from models.password_reset_request import PasswordResetRequest as PasswordResetRequestModel
 from database.connection import get_db
@@ -181,6 +188,85 @@ def _serialize_user_response(user: UserModel, classroom_context=None):
         payload.update(classroom_context)
     return payload
 
+
+def _serialize_google_link_status(account: SocialAccountModel | None):
+    return {
+        'provider': 'google',
+        'linked': bool(account),
+        'provider_email': getattr(account, 'provider_email', None),
+        'email_verified': bool(getattr(account, 'email_verified', False)),
+        'linked_at': getattr(account, 'created_at', None),
+    }
+
+
+def _get_google_client_id() -> str:
+    client_id = os.getenv('GOOGLE_CLIENT_ID') or os.getenv('REACT_APP_GOOGLE_CLIENT_ID')
+    if not client_id:
+        raise HTTPException(status_code=503, detail='Google Sign-In is not configured on the server')
+    return client_id
+
+
+def _verify_google_credential(credential: str):
+    credential_value = str(credential or '').strip()
+    if not credential_value:
+        raise HTTPException(status_code=400, detail='Missing Google credential')
+
+    client_id = _get_google_client_id()
+    token_info_url = 'https://oauth2.googleapis.com/tokeninfo?' + urllib_parse.urlencode({'id_token': credential_value})
+
+    try:
+        with urllib_request.urlopen(token_info_url, timeout=5) as response:
+            payload = json.loads(response.read().decode('utf-8'))
+    except urllib_error.HTTPError:
+        raise HTTPException(status_code=401, detail='Google credential is invalid or expired')
+    except urllib_error.URLError:
+        raise HTTPException(status_code=502, detail='Unable to verify Google credential right now')
+    except Exception:
+        raise HTTPException(status_code=500, detail='Google verification failed unexpectedly')
+
+    if payload.get('aud') != client_id:
+        raise HTTPException(status_code=401, detail='Google credential audience mismatch')
+
+    issuer = payload.get('iss')
+    if issuer not in ('accounts.google.com', 'https://accounts.google.com'):
+        raise HTTPException(status_code=401, detail='Google credential issuer is invalid')
+
+    subject = payload.get('sub')
+    email = payload.get('email')
+    email_verified = str(payload.get('email_verified', 'false')).lower() == 'true'
+
+    if not subject or not email:
+        raise HTTPException(status_code=400, detail='Google account is missing required identity fields')
+
+    if not email_verified:
+        raise HTTPException(status_code=400, detail='Google account email must be verified before linking or signing in')
+
+    return {
+        'provider_user_id': subject,
+        'provider_email': email,
+        'email_verified': email_verified,
+        'full_name': payload.get('name') or '',
+    }
+
+
+def _build_token_response(user: UserModel, response: Response, db: Session, expires_delta=None):
+    access_token = create_access_token(data={"sub": user.username}, role=user.role, expires_delta=expires_delta)
+    effective_expires_delta = resolve_access_token_ttl(expires_delta=expires_delta, role=user.role)
+    expires_at = datetime.now(timezone.utc) + effective_expires_delta
+
+    set_auth_cookie(response, access_token, expires_delta=effective_expires_delta, role=user.role)
+
+    classroom_context = None
+    if getattr(user, 'role', None) == 'student':
+        classroom_context = _build_student_enrollment_context_map(db, [user.id]).get(user.id)
+
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user_info": _serialize_user_response(user, classroom_context),
+        "expires_at": expires_at,
+    }
+
 @router.post("/{user_id}/admin_reset")
 def admin_reset_user_password(user_id: int, db: Session = Depends(get_db), current_user: UserModel = Depends(get_current_user)):
     """Admin-only: reset a user's password and return a temporary password to the caller.
@@ -295,18 +381,92 @@ def login(response: Response, form_data: OAuth2PasswordRequestForm = Depends(), 
         except Exception:
             pass
     
-    # Create token with custom expiration if available, otherwise use role-based default
-    access_token = create_access_token(data={"sub": user.username}, role=user.role, expires_delta=expires_delta)
-    effective_expires_delta = resolve_access_token_ttl(expires_delta=expires_delta, role=user.role)
+    return _build_token_response(user, response, db, expires_delta=expires_delta)
 
-    expires_at = datetime.now(timezone.utc) + effective_expires_delta
-    set_auth_cookie(response, access_token, expires_delta=effective_expires_delta, role=user.role)
-    return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "user_info": user,
-        "expires_at": expires_at,
-    }
+
+@router.post("/auth/google", response_model=Token)
+def login_with_google(
+    payload: GoogleCredentialRequest,
+    response: Response,
+    db: Session = Depends(get_db)
+):
+    """Sign in with Google for accounts that have been linked previously."""
+    google_account_data = _verify_google_credential(payload.credential)
+
+    social_account = db.query(SocialAccountModel).filter(
+        SocialAccountModel.provider == 'google',
+        SocialAccountModel.provider_user_id == google_account_data['provider_user_id']
+    ).first()
+
+    if not social_account:
+        pending_request = db.query(AdminRequestModel).filter(
+            AdminRequestModel.status == 'pending',
+            AdminRequestModel.social_provider == 'google',
+            AdminRequestModel.social_provider_user_id == google_account_data['provider_user_id']
+        ).first()
+        if pending_request:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    'code': 'google_account_pending_approval',
+                    'message': 'บัญชี Google นี้ได้ส่งคำขอสมัครไว้แล้ว กรุณารอ owner อนุมัติก่อนเข้าใช้งาน',
+                    'google_profile': {
+                        'email': google_account_data['provider_email'],
+                        'full_name': google_account_data['full_name'],
+                    },
+                }
+            )
+
+        existing_user = db.query(UserModel).filter(
+            UserModel.email == google_account_data['provider_email']
+        ).first()
+        if existing_user:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    'code': 'google_account_not_linked',
+                    'message': 'พบบัญชีผู้ใช้ในระบบที่ใช้อีเมลนี้แล้ว กรุณาเข้าสู่ระบบด้วยรหัสผ่านก่อน แล้วเชื่อม Google จากหน้าโปรไฟล์',
+                    'google_profile': {
+                        'email': google_account_data['provider_email'],
+                        'full_name': google_account_data['full_name'],
+                    },
+                }
+            )
+
+        raise HTTPException(
+            status_code=409,
+            detail={
+                'code': 'google_account_signup_required',
+                'message': 'บัญชี Google นี้ยังไม่มีบัญชีในระบบ คุณสามารถส่งคำขอสมัครด้วย Google ได้ทันที',
+                'google_profile': {
+                    'email': google_account_data['provider_email'],
+                    'full_name': google_account_data['full_name'],
+                },
+            }
+        )
+
+    user = db.query(UserModel).filter(UserModel.id == social_account.user_id).first()
+    if not user or not user.is_active:
+        raise HTTPException(status_code=401, detail='บัญชีผู้ใช้ที่เชื่อมกับ Google นี้ไม่พร้อมใช้งาน')
+
+    social_account.provider_email = google_account_data['provider_email']
+    social_account.email_verified = google_account_data['email_verified']
+    db.commit()
+
+    expires_delta = None
+    if user.school_id:
+        try:
+            from models.token_setting import TokenExpireSetting as TokenExpireSettingModel
+            setting = db.query(TokenExpireSettingModel).filter(
+                TokenExpireSettingModel.school_id == user.school_id,
+                TokenExpireSettingModel.role == user.role
+            ).first()
+            if setting:
+                expires_delta = timedelta(minutes=setting.expire_minutes)
+        except Exception:
+            pass
+
+    return _build_token_response(user, response, db, expires_delta=expires_delta)
 
 
 @router.post("/logout")
@@ -318,6 +478,78 @@ def logout(response: Response):
 def get_current_user_info(current_user: UserModel = Depends(get_current_user)):
     """ดึงข้อมูลผู้ใช้งานปัจจุบันจาก JWT"""
     return current_user
+
+
+@router.get("/me/google/status", response_model=GoogleLinkStatus)
+def get_google_link_status(
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    social_account = db.query(SocialAccountModel).filter(
+        SocialAccountModel.user_id == current_user.id,
+        SocialAccountModel.provider == 'google'
+    ).first()
+    return _serialize_google_link_status(social_account)
+
+
+@router.post("/me/google/link", response_model=GoogleLinkStatus)
+def link_google_account(
+    payload: GoogleCredentialRequest,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    google_account_data = _verify_google_credential(payload.credential)
+
+    linked_elsewhere = db.query(SocialAccountModel).filter(
+        SocialAccountModel.provider == 'google',
+        SocialAccountModel.provider_user_id == google_account_data['provider_user_id'],
+        SocialAccountModel.user_id != current_user.id
+    ).first()
+    if linked_elsewhere:
+        raise HTTPException(status_code=409, detail='บัญชี Google นี้ถูกเชื่อมกับผู้ใช้อื่นแล้ว')
+
+    social_account = db.query(SocialAccountModel).filter(
+        SocialAccountModel.user_id == current_user.id,
+        SocialAccountModel.provider == 'google'
+    ).first()
+
+    if social_account and social_account.provider_user_id != google_account_data['provider_user_id']:
+        raise HTTPException(status_code=409, detail='บัญชีนี้เชื่อม Google ไว้อยู่แล้ว กรุณายกเลิกการเชื่อมก่อนเปลี่ยนบัญชี')
+
+    if not social_account:
+        social_account = SocialAccountModel(
+            user_id=current_user.id,
+            provider='google',
+            provider_user_id=google_account_data['provider_user_id'],
+            provider_email=google_account_data['provider_email'],
+            email_verified=google_account_data['email_verified'],
+        )
+        db.add(social_account)
+    else:
+        social_account.provider_email = google_account_data['provider_email']
+        social_account.email_verified = google_account_data['email_verified']
+
+    db.commit()
+    db.refresh(social_account)
+    return _serialize_google_link_status(social_account)
+
+
+@router.delete("/me/google/link", response_model=GoogleLinkStatus)
+def unlink_google_account(
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    social_account = db.query(SocialAccountModel).filter(
+        SocialAccountModel.user_id == current_user.id,
+        SocialAccountModel.provider == 'google'
+    ).first()
+
+    if not social_account:
+        return _serialize_google_link_status(None)
+
+    db.delete(social_account)
+    db.commit()
+    return _serialize_google_link_status(None)
 
 
 @router.get("/session", response_model=SessionInfo)
@@ -877,6 +1109,75 @@ def update_current_user(
     db.commit()
     db.refresh(current_user)
     return current_user
+
+
+@router.put("/{user_id}", response_model=User)
+def admin_update_user_profile(
+    user_id: int,
+    user_update: AdminUserProfileUpdate,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Admin/Owner: update teacher or student profile fields."""
+    role = getattr(current_user, 'role', None)
+    if role not in ('admin', 'owner'):
+        raise HTTPException(status_code=403, detail='เฉพาะแอดมินหรือเจ้าของระบบเท่านั้นที่แก้ไขข้อมูลผู้ใช้ได้')
+
+    target_user = db.query(UserModel).filter(UserModel.id == user_id).first()
+    if not target_user:
+        raise HTTPException(status_code=404, detail='ไม่พบผู้ใช้ที่ระบุ')
+
+    if target_user.role not in ('teacher', 'student'):
+        raise HTTPException(status_code=400, detail='สามารถแก้ไขได้เฉพาะข้อมูลครูและนักเรียน')
+
+    if role == 'admin' and target_user.school_id != current_user.school_id:
+        raise HTTPException(status_code=403, detail='ไม่สามารถแก้ไขผู้ใช้จากโรงเรียนอื่นได้')
+
+    incoming = user_update.dict(exclude_unset=True)
+
+    if 'username' in incoming:
+        username = str(incoming['username'] or '').strip()
+        if not username:
+            raise HTTPException(status_code=400, detail='กรุณาระบุชื่อผู้ใช้')
+        existing_username = db.query(UserModel).filter(
+            UserModel.username == username,
+            UserModel.id != target_user.id
+        ).first()
+        if existing_username:
+            raise HTTPException(status_code=400, detail='ชื่อผู้ใช้นี้มีการใช้งานแล้ว')
+        target_user.username = username
+
+    if 'full_name' in incoming:
+        full_name = str(incoming['full_name'] or '').strip()
+        if not full_name:
+            raise HTTPException(status_code=400, detail='กรุณาระบุชื่อ-สกุล')
+        target_user.full_name = full_name
+
+    if 'email' in incoming:
+        email = str(incoming['email']).strip() if incoming['email'] else None
+        if email:
+            existing_email = db.query(UserModel).filter(
+                UserModel.email == email,
+                UserModel.id != target_user.id
+            ).first()
+            if existing_email:
+                raise HTTPException(status_code=400, detail='อีเมลนี้มีการใช้งานแล้ว')
+        target_user.email = email
+
+    if 'grade_level' in incoming:
+        if target_user.role != 'student':
+            raise HTTPException(status_code=400, detail='เฉพาะนักเรียนเท่านั้นที่สามารถแก้ไขชั้นปีได้')
+        target_user.grade_level = str(incoming['grade_level'] or '').strip() or None
+
+    db.commit()
+    db.refresh(target_user)
+
+    classroom_context = None
+    if target_user.role == 'student':
+        classroom_context_map = _build_student_enrollment_context_map(db, [target_user.id])
+        classroom_context = classroom_context_map.get(target_user.id)
+
+    return _serialize_user_response(target_user, classroom_context)
 
 @router.post("/change_password")
 def change_password(

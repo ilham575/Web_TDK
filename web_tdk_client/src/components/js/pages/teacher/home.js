@@ -12,6 +12,7 @@ import StudentAttendanceModal from '../../../modals/StudentAttendanceModal';
 import ScheduleModal from '../../../modals/ScheduleModal';
 import StudentEvaluationModal from '../../../modals/StudentEvaluationModal';
 import { API_BASE_URL } from '../../../endpoints';
+import DailySubjectTrackingBoard from '../../DailySubjectTrackingBoard';
 import FirstVisitOnboarding, {
   ONBOARDING_KEYS,
   markOnboardingSeen,
@@ -20,6 +21,7 @@ import FirstVisitOnboarding, {
 import swalMessenger from '../owner/swalmessenger';
 import { setSchoolFavicon } from '../../../../utils/faviconUtils';
 import { fetchCurrentUser, getStoredAccessToken, hasSessionMarker, logout } from '../../../../utils/authUtils';
+import { exportTeacherScheduleExcel, exportTeacherSchedulePdf } from '../../../../utils/scheduleExportUtils';
 import { 
   BookOpen, 
   Home, 
@@ -40,7 +42,10 @@ import {
   Settings,
   Trash2,
   Brain,
-  BarChart3
+  BarChart3,
+  FileDown,
+  FileSpreadsheet,
+  Loader2
 } from 'lucide-react';
 
 function TeacherPage() {
@@ -68,7 +73,7 @@ function TeacherPage() {
   const [showExpiryModal, setShowExpiryModal] = useState(false);
   const [expiryModalValue, setExpiryModalValue] = useState('');
   const [expiryModalId, setExpiryModalId] = useState(null);
-  const [activeTab, setActiveTab] = useState('subjects');
+  const [activeTab, setActiveTab] = useState('tracking');
 
   // Subject semester/year filter removed — admin sets these per subject
 
@@ -90,6 +95,7 @@ function TeacherPage() {
   const [scheduleEndTime, setScheduleEndTime] = useState('');
   const [editingAssignment, setEditingAssignment] = useState(null);
   const [classrooms, setClassrooms] = useState([]);
+  const [scheduleExportingKey, setScheduleExportingKey] = useState('');
 
   // Homeroom state
   const [homeroomSummary, setHomeroomSummary] = useState(null);
@@ -285,7 +291,12 @@ function TeacherPage() {
             if (teachersRes.ok) {
               const teachersData = await teachersRes.json();
               if (Array.isArray(teachersData)) {
-                teachersMap[subject.id] = teachersData;
+                teachersMap[subject.id] = [...new Map(
+                  teachersData.map(teacher => [
+                    String(teacher.teacher_id ?? teacher.id ?? teacher.teacher_name ?? ''),
+                    teacher
+                  ])
+                ).values()];
               }
             }
           } catch (err) {}
@@ -1199,6 +1210,64 @@ function TeacherPage() {
     } catch { toast.error('เกิดข้อผิดพลาด'); }
   }, [loadSubjectSchedules]);
 
+  const handleTeacherScheduleExport = useCallback(async (format) => {
+    let schedulesToExport = Array.isArray(subjectSchedules) ? subjectSchedules : [];
+
+    if ((!schedulesToExport || schedulesToExport.length === 0) && currentUser) {
+      try {
+        const token = getStoredAccessToken();
+        const params = new URLSearchParams();
+        if (scheduleYear) params.set('academic_year', scheduleYear);
+        if (scheduleSemester) params.set('semester', scheduleSemester);
+        const queryStr = params.toString() ? `?${params.toString()}` : '';
+        const res = await fetch(`${API_BASE_URL}/schedule/teacher${queryStr}`, { headers: { Authorization: `Bearer ${token}` } });
+        if (res.ok) {
+          const data = await res.json();
+          schedulesToExport = Array.isArray(data) ? data : [];
+          setSubjectSchedules(schedulesToExport);
+        }
+      } catch (loadError) {
+        console.error('Teacher schedule export preload error:', loadError);
+      }
+    }
+
+    if (!Array.isArray(schedulesToExport) || schedulesToExport.length === 0) {
+      toast.error('ไม่มีข้อมูลตารางสำหรับส่งออก');
+      return;
+    }
+
+    const exportKey = `teacher-${format}`;
+    const schoolName = currentUser?.school_name || currentUser?.school?.name || localStorage.getItem('school_name') || 'โรงเรียน';
+    const teacherName = currentUser?.full_name || currentUser?.username || 'ครู';
+
+    setScheduleExportingKey(exportKey);
+    try {
+      if (format === 'pdf') {
+        await exportTeacherSchedulePdf({
+          schoolName,
+          academicYear: scheduleYear,
+          semester: scheduleSemester,
+          schedules: schedulesToExport,
+          teacherName,
+        });
+      } else {
+        await exportTeacherScheduleExcel({
+          schoolName,
+          academicYear: scheduleYear,
+          semester: scheduleSemester,
+          schedules: schedulesToExport,
+          teacherName,
+        });
+      }
+      toast.success(format === 'pdf' ? 'ส่งออกตารางสอน PDF สำเร็จ' : 'ส่งออกตารางสอน Excel สำเร็จ');
+    } catch (error) {
+      console.error('Teacher schedule export error:', error);
+      toast.error('เกิดข้อผิดพลาดในการส่งออกตารางสอน');
+    } finally {
+      setScheduleExportingKey('');
+    }
+  }, [subjectSchedules, currentUser, scheduleYear, scheduleSemester]);
+
   const getDayName = (dayNumber) => {
     const days = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
     return days[parseInt(dayNumber, 10)] || 'ไม่ระบุ';
@@ -1213,6 +1282,7 @@ function TeacherPage() {
   }, [activeTab, currentUser, loadSubjectSchedules, loadScheduleSlots, loadClassrooms]);
 
   const tabs = [
+    { id: 'tracking', label: 'ติดตามเวลา', icon: Clock },
     { id: 'subjects', label: 'รายวิชา', icon: BookOpen },
     { id: 'evaluations', label: 'การประเมิน', icon: Brain },
     { id: 'homeroom', label: 'ประจำชั้น', icon: Home },
@@ -1378,8 +1448,78 @@ function TeacherPage() {
           ))}
         </div>
 
+        {activeTab !== 'schedule' && (
+          <div className="mb-6 flex flex-col gap-4 rounded-2xl border border-blue-100 bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between">
+            <div>
+              <h3 className="text-base font-black text-slate-800">ส่งออกตารางสอน</h3>
+              <p className="mt-1 text-sm font-medium text-slate-500">ปุ่ม export ตารางสอนอยู่ที่นี่ด้วย และยังเข้าแท็บตารางเรียนเพื่อดูรายละเอียดต่อได้ทันที</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setActiveTab('schedule')}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-black text-slate-700 transition-colors hover:bg-slate-100"
+              >
+                เปิดแท็บตารางเรียน
+              </button>
+              <button
+                onClick={() => handleTeacherScheduleExport('pdf')}
+                disabled={Boolean(scheduleExportingKey)}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {scheduleExportingKey === 'teacher-pdf' ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
+                Export PDF
+              </button>
+              <button
+                onClick={() => handleTeacherScheduleExport('excel')}
+                disabled={Boolean(scheduleExportingKey)}
+                className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-black text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {scheduleExportingKey === 'teacher-excel' ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
+                Export Excel
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Tab Content */}
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+          {activeTab === 'tracking' && (
+            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-700">
+              <DailySubjectTrackingBoard
+                endpointPath="/schedule/tracking/teacher"
+                viewerScheduleEndpointPath="/schedule/teacher"
+                combineViewerGroups={true}
+                academicYear={scheduleYear}
+                semester={scheduleSemester}
+                title="ติดตามเวลาเรียนของวิชาที่สอน"
+                description="ดูคาบเรียนประจำวันของคุณพร้อมเวลาเริ่ม/เลิกจริงที่แอดมินบันทึก เพื่อสื่อสารกับนักเรียนและตรวจสอบความคลาดเคลื่อนรายวัน"
+                emptyMessage="ยังไม่มีคาบสอนที่ต้องติดตามในวันที่เลือก"
+                toolbar={(
+                  <>
+                    <select
+                      value={scheduleYear}
+                      onChange={(event) => setScheduleYear(event.target.value)}
+                      className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 outline-none transition-colors focus:border-blue-300 focus:ring-2 focus:ring-blue-500/20"
+                    >
+                      {BE_YEAR_OPTIONS.map((year) => (
+                        <option key={year} value={year}>ปี {year}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={scheduleSemester}
+                      onChange={(event) => setScheduleSemester(event.target.value)}
+                      className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 outline-none transition-colors focus:border-blue-300 focus:ring-2 focus:ring-blue-500/20"
+                    >
+                      <option value="">ทุกภาคเรียน</option>
+                      <option value="1">ภาคเรียนที่ 1</option>
+                      <option value="2">ภาคเรียนที่ 2</option>
+                    </select>
+                  </>
+                )}
+              />
+            </div>
+          )}
+
           {activeTab === 'subjects' && (
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-700">
               <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
@@ -2093,15 +2233,17 @@ function TeacherPage() {
                               )}
                             </div>
 
-                            {ownedBy(item) && (
+                            {(ownedBy(item) || currentUser?.role === 'teacher') && (
                               <div className="flex flex-col gap-2 shrink-0">
-                                <button
-                                  onClick={() => openAnnouncementModal(item)}
-                                  className="p-2 border border-slate-100 rounded-xl text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-all"
-                                  title="แก้ไข"
-                                >
-                                  <Settings className="w-4 h-4" />
-                                </button>
+                                {ownedBy(item) && (
+                                  <button
+                                    onClick={() => openAnnouncementModal(item)}
+                                    className="p-2 border border-slate-100 rounded-xl text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-all"
+                                    title="แก้ไข"
+                                  >
+                                    <Settings className="w-4 h-4" />
+                                  </button>
+                                )}
                                 <button
                                   onClick={() => openConfirm('ลบข่าว', 'ข้อมูลข่าวจะถูกลบถาวร ต้องการดำเนินการต่อหรือไม่?', () => deleteAnnouncement(item.id))}
                                   className="p-2 border border-slate-100 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all"
@@ -2164,6 +2306,22 @@ function TeacherPage() {
                   >
                     <Plus className="w-4 h-4" /> กำหนดเวลาสอน
                   </button>
+                  <button
+                    onClick={() => handleTeacherScheduleExport('pdf')}
+                    disabled={Boolean(scheduleExportingKey)}
+                    className="px-6 py-3 bg-white text-slate-700 rounded-lg font-black text-sm shadow-sm border border-slate-200 hover:bg-slate-50 active:scale-95 transition-colors flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {scheduleExportingKey === 'teacher-pdf' ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
+                    Export PDF
+                  </button>
+                  <button
+                    onClick={() => handleTeacherScheduleExport('excel')}
+                    disabled={Boolean(scheduleExportingKey)}
+                    className="px-6 py-3 bg-emerald-600 text-white rounded-lg font-black text-sm shadow-sm hover:bg-emerald-700 active:scale-95 transition-colors flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {scheduleExportingKey === 'teacher-excel' ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
+                    Export Excel
+                  </button>
                 </div>
               </div>
 
@@ -2172,7 +2330,7 @@ function TeacherPage() {
                   operatingHours={scheduleSlots}
                   schedules={subjectSchedules}
                   role="teacher"
-                  onActionDelete={(id) => openConfirm('ยกเลิกเวลาเรียน', 'ข้อมูลตารางเรียนจะถูกลบถาวร ต้องการดำเนินการหรือไม่?', () => deleteSubjectSchedule(id))}
+                  onActionDelete={(item) => openConfirm('ยกเลิกเวลาเรียน', 'ข้อมูลตารางเรียนจะถูกลบถาวร ต้องการดำเนินการหรือไม่?', () => deleteSubjectSchedule(item.id))}
                   onActionEdit={(item) => {
                     setEditingAssignment(item);
                     if (item.academic_year) {
@@ -2232,6 +2390,7 @@ function TeacherPage() {
         setScheduleEndTime={setScheduleEndTime}
         teacherSubjects={teacherSubjects}
         scheduleSlots={scheduleSlots}
+        breakSchedules={subjectSchedules.filter((item) => item?.is_break)}
         classrooms={classrooms}
         getDayName={getDayName}
         onSubmit={editingAssignment ? updateSubjectSchedule : assignSubjectToSchedule}

@@ -94,8 +94,45 @@ function GradeExportTab({
   const [homeroomTeacher, setHomeroomTeacher] = useState(null);
   const [schoolInfo, setSchoolInfo] = useState(schoolData);
   const [pdfBaseFontSize, setPdfBaseFontSize] = useState(18);
+  const [includeActivity, setIncludeActivity] = useState(true);
+  const [subjectTypeMap, setSubjectTypeMap] = useState({});
 
   const t = (key) => translations[language]?.[key] || key;
+
+  useEffect(() => {
+    setAcademicYear(String(selectedYear || (semesterPeriods.length > 0 ? semesterPeriods[0].academic_year : new Date().getFullYear() + 543)));
+  }, [selectedYear, semesterPeriods]);
+
+  useEffect(() => {
+    setSemester(selectedSemester || 1);
+  }, [selectedSemester]);
+
+  const activePeriod = React.useMemo(() => {
+    if (!Array.isArray(semesterPeriods) || semesterPeriods.length === 0) {
+      return null;
+    }
+
+    const now = new Date();
+    const active = semesterPeriods.find((period) => {
+      if (!period?.start_date) return false;
+      const start = new Date(period.start_date);
+      const end = period.end_date ? new Date(period.end_date) : new Date(8640000000000000);
+      return now >= start && now <= end;
+    });
+
+    return active || semesterPeriods[0] || null;
+  }, [semesterPeriods]);
+
+  const includeHistoricalRanking = React.useMemo(() => {
+    if (!activePeriod) {
+      return false;
+    }
+
+    return (
+      String(academicYear || '') !== String(activePeriod.academic_year || '') ||
+      Number(semester || 0) !== Number(activePeriod.semester || 0)
+    );
+  }, [academicYear, semester, activePeriod]);
 
   useEffect(() => {
     if (selectedClassroom) {
@@ -145,7 +182,7 @@ function GradeExportTab({
       const token = getStoredAccessToken();
       const yearStr = String(classroom?.academic_year || academicYear);
       const res = await fetch(
-        `${API_BASE_URL}/homeroom?classroom_id=${classroom.id}&academic_year=${yearStr}`,
+        `${API_BASE_URL}/homeroom?classroom_id=${classroom.id}&academic_year=${yearStr}&semester=${semester}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       if (res.ok) {
@@ -161,7 +198,7 @@ function GradeExportTab({
 
       if (classroom?.grade_level && currentUser?.school_id) {
         const fallbackRes = await fetch(
-          `${API_BASE_URL}/homeroom/by-grade/${encodeURIComponent(classroom.grade_level)}?school_id=${currentUser.school_id}&academic_year=${yearStr}`,
+          `${API_BASE_URL}/homeroom/by-grade/${encodeURIComponent(classroom.grade_level)}?school_id=${currentUser.school_id}&academic_year=${yearStr}&semester=${semester}`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
         if (fallbackRes.ok) {
@@ -203,8 +240,16 @@ function GradeExportTab({
       
       await loadHomeroomTeacher(entry);
       
+      const rankingParams = new URLSearchParams({
+        academic_year: String(academicYear),
+        semester: String(semester),
+      });
+      if (includeHistoricalRanking) {
+        rankingParams.set('include_inactive', 'true');
+      }
+
       const rankRes = await fetch(
-        `${API_BASE_URL}/grades/classroom/${classroomId}/ranking?academic_year=${academicYear}&semester=${semester}`,
+        `${API_BASE_URL}/grades/classroom/${classroomId}/ranking?${rankingParams.toString()}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       if (!rankRes.ok) {
@@ -226,6 +271,7 @@ function GradeExportTab({
       }
 
       const allSubjectsSet = new Set();
+      const newSubjectTypeMap = {};
       
       // Load ALL transcripts in parallel
       const transcriptResults = await Promise.all(
@@ -246,14 +292,21 @@ function GradeExportTab({
         transData.forEach(item => {
           if (item.subject_name) {
             allSubjectsSet.add(item.subject_name);
+            if (!newSubjectTypeMap[item.subject_name]) {
+              newSubjectTypeMap[item.subject_name] = item.subject_type || 'regular';
+            }
           }
         });
       });
       
+      setSubjectTypeMap(newSubjectTypeMap);
+
       // Sort subjects: regular subjects first, then activity
       const subjectList = Array.from(allSubjectsSet).sort((a, b) => {
-        if (a === 'กิจกรรม (Activity)') return 1;
-        if (b === 'กิจกรรม (Activity)') return -1;
+        const aIsActivity = newSubjectTypeMap[a] === 'activity';
+        const bIsActivity = newSubjectTypeMap[b] === 'activity';
+        if (aIsActivity && !bIsActivity) return 1;
+        if (!aIsActivity && bIsActivity) return -1;
         return a.localeCompare(b, 'th');
       });
       console.log('Subjects found:', subjectList);
@@ -300,6 +353,31 @@ function GradeExportTab({
     [availableClassrooms, selectedClassroom]
   );
 
+  const displayedSubjectsData = React.useMemo(() => {
+    if (includeActivity) return subjectsData;
+    return subjectsData.filter(name => subjectTypeMap[name] !== 'activity');
+  }, [subjectsData, includeActivity, subjectTypeMap]);
+
+  const subjectColumnSummary = React.useMemo(() => {
+    const result = {};
+    displayedSubjectsData.forEach(subj => {
+      let sumScores = 0;
+      let sumMax = 0;
+      let count = 0;
+      gradeData.forEach(student => {
+        const item = (student.transcript || []).find(s => s.subject_name === subj);
+        if (!item) return;
+        const raw = item.normalized_score !== undefined ? item.normalized_score : item.score;
+        const num = Number(raw);
+        const max = Number(item.max_score);
+        if (Number.isFinite(num)) { sumScores += num; count++; }
+        if (Number.isFinite(max)) sumMax += max;
+      });
+      result[subj] = { sumScores, sumMax, count, percent: sumMax > 0 ? (sumScores / sumMax) * 100 : null };
+    });
+    return result;
+  }, [displayedSubjectsData, gradeData]);
+
   const getClassroomDisplayName = (classroom) => {
     if (!classroom) return '-';
     const gradeLevel = String(classroom.grade_level || '').trim();
@@ -328,8 +406,13 @@ function GradeExportTab({
 
   const getStudentOverallPercent = (student) => {
     const transcript = Array.isArray(student?.transcript) ? student.transcript : [];
-    const transcriptTotal = transcript.reduce((acc, item) => acc + (toSafeNumber(item?.score) || 0), 0);
-    const transcriptMax = transcript.reduce((acc, item) => acc + (toSafeNumber(item?.max_score) || 0), 0);
+    const filteredTranscript = includeActivity ? transcript : transcript.filter(item => item?.subject_type !== 'activity');
+    const transcriptTotal = filteredTranscript.reduce((acc, item) => acc + (toSafeNumber(item?.score) || 0), 0);
+    const transcriptMax = filteredTranscript.reduce((acc, item) => acc + (toSafeNumber(item?.max_score) || 0), 0);
+
+    if (!includeActivity) {
+      return transcriptMax > 0 ? (transcriptTotal / transcriptMax) * 100 : null;
+    }
 
     const apiPercent = toSafeNumber(student?.average_score);
     if (apiPercent !== null && (apiPercent > 0 || transcriptTotal <= 0 || transcriptMax <= 0)) return apiPercent;
@@ -348,7 +431,10 @@ function GradeExportTab({
 
   const getStudentAllSubjectsTotal = (student) => {
     const transcript = Array.isArray(student?.transcript) ? student.transcript : [];
-    const transcriptTotal = transcript.reduce((acc, item) => acc + (toSafeNumber(item?.score) || 0), 0);
+    const filteredTranscript = includeActivity ? transcript : transcript.filter(item => item?.subject_type !== 'activity');
+    const transcriptTotal = filteredTranscript.reduce((acc, item) => acc + (toSafeNumber(item?.score) || 0), 0);
+
+    if (!includeActivity) return transcriptTotal;
 
     const apiTotal = toSafeNumber(student?.total_score);
     if (apiTotal !== null && (apiTotal > 0 || transcriptTotal <= 0)) return apiTotal;
@@ -396,6 +482,7 @@ function GradeExportTab({
             .meta .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 10px; font-size: ${metaFontSize}px; }
             table.report-table { width: 100%; border-collapse: collapse; font-size: ${tableFontSize}px; }
             table.report-table th, table.report-table td { border: 1px solid #ddd; padding: 8px; vertical-align: middle; }
+            table.report-table tr { page-break-inside: avoid; }
             table.report-table thead th { background-color: #2980b9; color: white; font-weight: 600; }
             table.report-table thead th.subject { font-size: ${subjectHeaderSize}px; }
             table.report-table tbody tr:nth-child(even) { background-color: #fafafa; }
@@ -423,7 +510,7 @@ function GradeExportTab({
                 <tr>
                   <th style="text-align:center; width:5%"><strong>${language === 'th' ? 'เลขที่' : 'No.'}</strong></th>
                   <th style="text-align:left; width:30%"><strong>${t('name')}</strong></th>
-                  ${subjectsData.map(subj => `<th class="subject" style="text-align:center; font-size:${subjectHeaderSize}px;"><strong>${escapeHtml(subj)}</strong></th>`).join('')}
+                  ${displayedSubjectsData.map(subj => `<th class="subject" style="text-align:center; font-size:${subjectHeaderSize}px;"><strong>${escapeHtml(subj)}</strong></th>`).join('')}
                   <th style="text-align:right; width:10%"><strong>${t('allSubjectsTotal')}</strong></th>
                   <th style="text-align:right; width:10%"><strong>${t('overallPercent')} (%)</strong></th>
                   <th style="text-align:center; width:8%"><strong>${t('rank')}</strong></th>
@@ -434,13 +521,25 @@ function GradeExportTab({
                   <tr>
                     <td style="text-align:center;">${escapeHtml(student.student_number ?? (idx + 1))}</td>
                     <td>${escapeHtml(student.full_name || '-')}</td>
-                    ${subjectsData.map(subj => `<td style="text-align:center;">${escapeHtml(getStudentSubjectScore(student, subj))}</td>`).join('')}
+                    ${displayedSubjectsData.map(subj => `<td style="text-align:center;">${escapeHtml(getStudentSubjectScore(student, subj))}</td>`).join('')}
                     <td style="text-align:right; font-weight:bold; color:#1f4b99;">${formatNumberOrDash(getStudentAllSubjectsTotal(student), 2)}</td>
                     <td style="text-align:right; font-weight:bold; color:#27ae60;">${formatNumberOrDash(getStudentOverallPercent(student), 2)}</td>
                     <td style="text-align:center;"><strong>${escapeHtml(student.rank || '-')}</strong></td>
                   </tr>
                 `).join('')}
               </tbody>
+              <tfoot>
+                <tr style="background-color:#e8f4e8; font-weight:bold;">
+                  <td colspan="2" style="text-align:center; font-size:${tableFontSize}px;">${language === 'th' ? 'รวมทั้งห้อง' : 'Jumlah Kelas'}</td>
+                  ${displayedSubjectsData.map(subj => {
+                    const s = subjectColumnSummary[subj] || {};
+                    const sum = Number.isFinite(s.sumScores) ? s.sumScores.toFixed(2) : '-';
+                    const pct = s.percent !== null && s.percent !== undefined ? s.percent.toFixed(1) + '%' : '-';
+                    return `<td style="text-align:center; font-size:${tableFontSize}px;">${sum}<br><span style="font-size:${subjectHeaderSize}px; color:#27ae60;">${pct}</span></td>`;
+                  }).join('')}
+                  <td colspan="3" style="text-align:center;"></td>
+                </tr>
+              </tfoot>
             </table>
 
             <div class="summary">
@@ -454,11 +553,12 @@ function GradeExportTab({
       element.innerHTML = htmlContent;
       
       const options = {
-        margin: 8,
+        margin: [10, 8, 10, 8],
         filename: `${t('gradeReport').replace(/\s+/g, '_')}_${classroomName}_${academicYear}_${semester}.pdf`,
         image: { type: 'jpeg', quality: 0.98 },
         html2canvas: { scale: 2, useCORS: true },
-        jsPDF: { orientation: 'landscape', unit: 'mm', format: 'a4' }
+        jsPDF: { orientation: 'landscape', unit: 'mm', format: 'a4' },
+        pagebreak: { mode: 'css', avoid: 'tr' }
       };
 
       if (document.fonts?.load) {
@@ -503,14 +603,14 @@ function GradeExportTab({
         [`${t('homeroomTeacher')}: ${homeroomName}`],
         [`${t('printDate')}: ${timestamp}`],
         [],
-        [language === 'th' ? 'เลขที่' : 'No.', t('name'), ...subjectsData, t('allSubjectsTotal'), `${t('overallPercent')} (%)`, t('rank')]
+        [language === 'th' ? 'เลขที่' : 'No.', t('name'), ...displayedSubjectsData, t('allSubjectsTotal'), `${t('overallPercent')} (%)`, t('rank')]
       ];
 
       gradeData.forEach((student, idx) => {
         const row = [
           student.student_number ?? (idx + 1),
           student.full_name || '-',
-          ...subjectsData.map(subj => getStudentSubjectScore(student, subj)),
+          ...displayedSubjectsData.map(subj => getStudentSubjectScore(student, subj)),
           formatNumberOrDash(getStudentAllSubjectsTotal(student), 2),
           formatNumberOrDash(getStudentOverallPercent(student), 2),
           student.rank || '-'
@@ -518,8 +618,28 @@ function GradeExportTab({
         worksheetData.push(row);
       });
 
+      worksheetData.push([]);
+      worksheetData.push([
+        '',
+        language === 'th' ? 'รวมทั้งห้อง' : 'Jumlah Kelas',
+        ...displayedSubjectsData.map(subj => {
+          const s = subjectColumnSummary[subj] || {};
+          return Number.isFinite(s.sumScores) ? parseFloat(s.sumScores.toFixed(2)) : '-';
+        }),
+        '', '', ''
+      ]);
+      worksheetData.push([
+        '',
+        language === 'th' ? 'เปอร์เซ็น (%)' : 'Peratus (%)',
+        ...displayedSubjectsData.map(subj => {
+          const s = subjectColumnSummary[subj] || {};
+          return s.percent !== null && s.percent !== undefined ? parseFloat(s.percent.toFixed(2)) : '-';
+        }),
+        '', '', ''
+      ]);
+
       const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
-      const colWidths = [6, 20, ...subjectsData.map(() => 12), 14, 14, 8];
+      const colWidths = [6, 20, ...displayedSubjectsData.map(() => 12), 14, 14, 8];
       worksheet['!cols'] = colWidths.map(w => ({ wch: w }));
 
       const workbook = XLSX.utils.book_new();
@@ -572,6 +692,19 @@ function GradeExportTab({
               🇲🇾 {t('malay')}
             </button>
           </div>
+        </div>
+
+        <div className="bg-slate-50 rounded-lg border border-slate-200 p-4">
+          <label className="block text-sm font-medium text-slate-700 mb-2">{language === 'th' ? 'ตัวเลือกเนื้อหา' : 'Pilihan Kandungan'}</label>
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={includeActivity}
+              onChange={e => setIncludeActivity(e.target.checked)}
+              className="w-4 h-4 accent-emerald-600"
+            />
+            <span className="text-sm text-slate-700">{language === 'th' ? 'รวมรายวิชากิจกรรม' : 'Termasuk Mata Pelajaran Aktiviti'}</span>
+          </label>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-5 bg-slate-50 rounded-xl border border-slate-200">
@@ -635,7 +768,7 @@ function GradeExportTab({
 
         {previewLoaded && gradeData.length > 0 && (
           <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
-            <h3 className="font-bold text-slate-800 mb-3">{t('previewData')} ({gradeData.length} {t('students')}) - {subjectsData.length} {language === 'th' ? 'วิชา' : 'Mata Pelajaran'}</h3>
+            <h3 className="font-bold text-slate-800 mb-3">{t('previewData')} ({gradeData.length} {t('students')}) - {displayedSubjectsData.length} {language === 'th' ? 'วิชา' : 'Mata Pelajaran'}</h3>
             {subjectsData.length === 0 && (
               <div className="bg-blue-50 border border-blue-200 rounded p-3 mb-4">
                 <p className="text-sm text-blue-700">⚠️ {language === 'th' ? 'กำลังโหลดข้อมูลวิชา...' : 'Sedang memuat data mata pelajaran...'}</p>
@@ -647,7 +780,7 @@ function GradeExportTab({
                   <tr className="bg-slate-50 text-slate-500 text-xs uppercase font-medium border-b border-slate-200">
                     <th className="px-3 py-2 text-left">#</th>
                     <th className="px-3 py-2 text-left">{t('name')}</th>
-                    {subjectsData.slice(0, 8).map(subj => (
+                    {displayedSubjectsData.slice(0, 8).map(subj => (
                       <th key={subj} className="px-3 py-2 text-center text-xs bg-blue-50">{subj}</th>
                     ))}
                     <th className="px-3 py-2 text-right">{t('allSubjectsTotal')}</th>
@@ -660,7 +793,7 @@ function GradeExportTab({
                     <tr key={idx} className="hover:bg-slate-50 transition-colors">
                       <td className="px-3 py-2">{item.student_number ?? (idx + 1)}</td>
                       <td className="px-3 py-2">{item.full_name || '-'}</td>
-                      {subjectsData.slice(0, 8).map(subj => (
+                      {displayedSubjectsData.slice(0, 8).map(subj => (
                         <td key={subj} className="px-3 py-2 text-center text-xs bg-blue-50">{getStudentSubjectScore(item, subj)}</td>
                       ))}
                       <td className="px-3 py-2 text-right font-semibold text-blue-700">{formatNumberOrDash(getStudentAllSubjectsTotal(item), 2)}</td>
@@ -669,12 +802,29 @@ function GradeExportTab({
                     </tr>
                   ))}
                 </tbody>
+                <tfoot>
+                  <tr className="bg-emerald-50 font-bold text-xs border-t-2 border-emerald-200">
+                    <td colSpan={2} className="px-3 py-2 text-center text-slate-700 font-semibold">{language === 'th' ? 'รวมทั้งห้อง' : 'Jumlah Kelas'}</td>
+                    {displayedSubjectsData.slice(0, 8).map(subj => {
+                      const s = subjectColumnSummary[subj] || {};
+                      return (
+                        <td key={subj} className="px-3 py-2 text-center bg-emerald-50">
+                          <div className="font-bold text-slate-800">{Number.isFinite(s.sumScores) ? s.sumScores.toFixed(2) : '-'}</div>
+                          <div className="text-emerald-600">{s.percent !== null && s.percent !== undefined ? s.percent.toFixed(1) + '%' : '-'}</div>
+                        </td>
+                      );
+                    })}
+                    <td className="px-3 py-2"></td>
+                    <td className="px-3 py-2"></td>
+                    <td className="px-3 py-2"></td>
+                  </tr>
+                </tfoot>
               </table>
             </div>
-            {subjectsData.length > 8 && (
-              <p className="text-xs text-slate-500 mt-2">+{subjectsData.length - 8} {language === 'th' ? 'วิชาเพิ่มเติม' : 'mata pelajaran lainnya'}</p>
+            {displayedSubjectsData.length > 8 && (
+              <p className="text-xs text-slate-500 mt-2">+{displayedSubjectsData.length - 8} {language === 'th' ? 'วิชาเพิ่มเติม' : 'mata pelajaran lainnya'}</p>
             )}
-            {subjectsData.length === 0 && gradeData.length > 0 && (
+            {displayedSubjectsData.length === 0 && gradeData.length > 0 && (
               <p className="text-xs text-amber-600 mt-2">💡 {language === 'th' ? 'หากไม่เห็นวิชาใน 10 วินาที ให้รีเฟรชหรือลองเลื่อนไปแรกเรียนอื่น' : 'Jika tidak melihat mata pelajaran dalam 10 detik, coba segarkan atau pilih kelas lain'}</p>
             )}
           </div>

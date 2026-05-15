@@ -9,6 +9,56 @@ function TeacherAssignmentModal({ isOpen, onClose, onSave, subject, teachers, cl
   const [loading, setLoading] = useState(false);
   const [selectedTeacherForClassroom, setSelectedTeacherForClassroom] = useState('');
   const [selectedClassroomForTeacher, setSelectedClassroomForTeacher] = useState('');
+  const subjectAcademicYear = String(subject?.academic_year ?? '');
+  const subjectSemester = subject?.semester != null ? String(subject.semester) : '';
+
+  const formatClassroomLabel = (classroom) => {
+    if (!classroom) return '';
+
+    const heading = classroom.grade_level
+      ? `${classroom.name} (${classroom.grade_level})`
+      : classroom.name;
+    const periodBits = [];
+
+    if (classroom.academic_year) {
+      periodBits.push(`ปี ${classroom.academic_year}`);
+    }
+    if (classroom.semester != null && classroom.semester !== '') {
+      periodBits.push(`เทอม ${classroom.semester}`);
+    }
+
+    return periodBits.length > 0 ? `${heading} • ${periodBits.join(' ')}` : heading;
+  };
+
+  const getSubjectPeriodClassrooms = () => {
+    const list = Array.isArray(classrooms) ? classrooms : [];
+    if (!subjectAcademicYear && !subjectSemester) {
+      return list;
+    }
+
+    return list.filter((classroom) => {
+      const academicYearMatches = !subjectAcademicYear
+        || String(classroom?.academic_year ?? '') === subjectAcademicYear;
+      const semesterMatches = !subjectSemester
+        || String(classroom?.semester ?? '') === subjectSemester;
+      return academicYearMatches && semesterMatches;
+    });
+  };
+
+  const findClassroomById = (classroomId) => {
+    if (classroomId == null || classroomId === '') return null;
+    return (Array.isArray(classrooms) ? classrooms : []).find(
+      (classroom) => String(classroom.id) === String(classroomId)
+    ) || null;
+  };
+
+  const getAssignmentClassroomLabel = (assignment) => {
+    const classroom = findClassroomById(assignment?.classroom_id);
+    if (classroom) {
+      return formatClassroomLabel(classroom);
+    }
+    return assignment?.classroom_name || `ชั้นเรียน #${assignment?.classroom_id}`;
+  };
 
   // Load teachers when modal opens or subject changes
   useEffect(() => {
@@ -42,6 +92,16 @@ function TeacherAssignmentModal({ isOpen, onClose, onSave, subject, teachers, cl
     if (!subject?.id) {
       toast.error('กรุณาบันทึกรายวิชาก่อนเพิ่มครู');
       return;
+    }
+
+    if (classroomId != null) {
+      const classroomAllowed = getSubjectPeriodClassrooms().some(
+        (classroom) => String(classroom.id) === String(classroomId)
+      );
+      if (!classroomAllowed) {
+        toast.error('กรุณาเลือกชั้นเรียนที่อยู่ในปีการศึกษาและภาคเรียนเดียวกับรายวิชา');
+        return;
+      }
     }
 
     // Prevent mixing global and specific-classroom teachers
@@ -136,12 +196,23 @@ function TeacherAssignmentModal({ isOpen, onClose, onSave, subject, teachers, cl
   };
 
   const getAvailableClassrooms = () => {
-    return classrooms || [];
+    return getSubjectPeriodClassrooms();
   };
 
   // Helpers to determine if mixing is present
   const hasGlobalTeacher = subjectTeachers.some(st => st.classroom_id == null);
   const hasSpecificTeachers = subjectTeachers.some(st => st.classroom_id != null);
+  const crossPeriodAssignments = subjectTeachers.filter((assignment) => {
+    if (assignment?.classroom_id == null) return false;
+    const classroom = findClassroomById(assignment.classroom_id);
+    if (!classroom) return true;
+
+    const academicYearMatches = !subjectAcademicYear
+      || String(classroom?.academic_year ?? '') === subjectAcademicYear;
+    const semesterMatches = !subjectSemester
+      || String(classroom?.semester ?? '') === subjectSemester;
+    return !academicYearMatches || !semesterMatches;
+  });
 
   if (!isOpen || !subject) return null; 
 
@@ -162,6 +233,11 @@ function TeacherAssignmentModal({ isOpen, onClose, onSave, subject, teachers, cl
                 <School className="w-3.5 h-3.5" />
                 {subject.name}
               </p>
+              {(subjectAcademicYear || subjectSemester) && (
+                <p className="mt-2 w-fit rounded-lg border border-blue-100 bg-blue-50 px-2.5 py-1 text-[10px] font-black text-blue-600">
+                  ปีการศึกษา {subjectAcademicYear || '-'} • ภาคเรียนที่ {subjectSemester || '-'}
+                </p>
+              )}
             </div>
           </div>
           <button 
@@ -174,6 +250,12 @@ function TeacherAssignmentModal({ isOpen, onClose, onSave, subject, teachers, cl
 
         {/* Body */}
         <div className="p-8 space-y-8 overflow-y-auto flex-1 bg-gradient-to-b from-white via-slate-50/35 to-indigo-50/20">
+          {crossPeriodAssignments.length > 0 && (
+            <div className="rounded-[1.5rem] border border-amber-200 bg-amber-50 px-5 py-4 text-sm font-bold text-amber-800">
+              พบการมอบหมายครูให้ชั้นเรียนคนละปีหรือเทอมกับรายวิชานี้ รายชื่อครูอาจไม่ขึ้นในหน้าจัดตารางเรียน กรุณาลบรายการที่ไม่ตรงเทอมแล้วเพิ่มใหม่
+            </div>
+          )}
+
           {/* Current Teachers Section */}
           <div className="space-y-4">
             <div className="flex items-center justify-between px-1">
@@ -194,12 +276,12 @@ function TeacherAssignmentModal({ isOpen, onClose, onSave, subject, teachers, cl
             ) : (
               <div className="flex flex-wrap gap-3">
                 {subjectTeachers.map(st => (
-                  <div key={st.id} className="group pl-4 pr-2 py-2 bg-blue-50 text-blue-700 rounded-2xl border border-blue-100 flex items-center gap-3 animate-in zoom-in-95 duration-200">
+                  <div key={st.id} className={`group flex items-center gap-3 rounded-2xl border pl-4 pr-2 py-2 animate-in zoom-in-95 duration-200 ${crossPeriodAssignments.some((item) => item.id === st.id) ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-blue-100 bg-blue-50 text-blue-700'}`}>
                     <div className="flex flex-col">
                       <span className="text-xs font-black leading-none">{st.teacher_name}</span>
                       {st.classroom_name && (
-                        <span className="text-[9px] font-bold text-blue-400 mt-1 uppercase tracking-tighter">
-                          📍 {st.classroom_name}
+                        <span className={`mt-1 text-[9px] font-bold uppercase tracking-tighter ${crossPeriodAssignments.some((item) => item.id === st.id) ? 'text-amber-600' : 'text-blue-400'}`}>
+                          📍 {getAssignmentClassroomLabel(st)}
                         </span>
                       )}
                     </div>
@@ -307,11 +389,17 @@ function TeacherAssignmentModal({ isOpen, onClose, onSave, subject, teachers, cl
                       <option value="">เลือกชั้นเรียน</option>
                       {getAvailableClassrooms().map(classroom => (
                         <option key={classroom.id} value={classroom.id}>
-                          {classroom.name}
+                          {formatClassroomLabel(classroom)}
                         </option>
                       ))}
                     </select>
                   </div>
+
+                  <p className="px-1 text-[10px] font-bold text-slate-400">
+                    {getAvailableClassrooms().length > 0
+                      ? `แสดงเฉพาะชั้นเรียนของปี ${subjectAcademicYear || '-'} เทอม ${subjectSemester || '-'}`
+                      : 'ยังไม่มีชั้นเรียนในปีและเทอมเดียวกับรายวิชานี้'}
+                  </p>
 
                   <button
                     type="button"

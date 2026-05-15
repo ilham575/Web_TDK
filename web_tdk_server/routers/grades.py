@@ -231,7 +231,6 @@ def _build_summary_completion_report(db: Session, school_id: int, academic_year:
     if directly_enrolled_student_ids:
         student_rows = db.query(UserModel).filter(
             UserModel.id.in_(list(directly_enrolled_student_ids)),
-            UserModel.is_active == True,
         ).all()
         student_map = {row.id: row for row in student_rows}
 
@@ -1404,7 +1403,7 @@ def get_student_semester_list(student_id: int, db: Session = Depends(get_db), cu
 
 
 @router.get('/classroom/{classroom_id}/ranking')
-def get_classroom_ranking(classroom_id: int, academic_year: str = None, semester: int = None, grade_level: str = None, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+def get_classroom_ranking(classroom_id: int, academic_year: str = None, semester: int = None, grade_level: str = None, include_inactive: bool = False, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     """Calculate ranking for all students in a classroom or grade level based on weighted average of scores."""
     # Check authorization (Admin or Teacher or Student)
     user_role = getattr(current_user, 'role', None)
@@ -1414,6 +1413,7 @@ def get_classroom_ranking(classroom_id: int, academic_year: str = None, semester
     _enforce_student_ranking_access(current_user, db, academic_year=academic_year, semester=semester)
 
     is_combined_classroom_mode = (not grade_level and semester is None)
+    allow_inactive_students = bool(include_inactive and user_role == 'admin')
     target_classroom = None
     q_year = str(academic_year).strip() if academic_year is not None else None
 
@@ -1467,9 +1467,12 @@ def get_classroom_ranking(classroom_id: int, academic_year: str = None, semester
             ClassroomStudentModel, UserModel.id == ClassroomStudentModel.student_id
         ).filter(
             UserModel.role == 'student',
-            UserModel.is_active == True,
-            UserModel.user_status == 'active'
         )
+        if not allow_inactive_students:
+            query = query.filter(
+                UserModel.is_active == True,
+                UserModel.user_status == 'active'
+            )
         if active_enrollment_only:
             query = query.filter(ClassroomStudentModel.is_active == True)
         query = _apply_student_scope_filters(query)
@@ -1489,9 +1492,12 @@ def get_classroom_ranking(classroom_id: int, academic_year: str = None, semester
         if not target_classroom:
             return []
 
-    students = _load_rank_students(active_enrollment_only=True)
-    if not students:
+    if allow_inactive_students:
         students = _load_rank_students(active_enrollment_only=False)
+    else:
+        students = _load_rank_students(active_enrollment_only=True)
+        if not students:
+            students = _load_rank_students(active_enrollment_only=False)
 
     # Deduplicate students that appear in both semesters of the same classroom
     students = list({s.id: s for s in students}.values())
@@ -1508,9 +1514,12 @@ def get_classroom_ranking(classroom_id: int, academic_year: str = None, semester
         ).filter(
             ClassroomStudentModel.student_id.in_(student_ids),
             UserModel.role == 'student',
-            UserModel.is_active == True,
-            UserModel.user_status == 'active'
         )
+        if not allow_inactive_students:
+            query = query.filter(
+                UserModel.is_active == True,
+                UserModel.user_status == 'active'
+            )
         if active_enrollment_only:
             query = query.filter(ClassroomStudentModel.is_active == True)
 
@@ -1556,9 +1565,12 @@ def get_classroom_ranking(classroom_id: int, academic_year: str = None, semester
 
         return query.filter(ClassroomStudentModel.classroom_id == classroom_id).all()
 
-    enrollments = _load_rank_enrollments(active_enrollment_only=True)
-    if not enrollments:
+    if allow_inactive_students:
         enrollments = _load_rank_enrollments(active_enrollment_only=False)
+    else:
+        enrollments = _load_rank_enrollments(active_enrollment_only=True)
+        if not enrollments:
+            enrollments = _load_rank_enrollments(active_enrollment_only=False)
 
     student_number_map = {}
     for e in enrollments:

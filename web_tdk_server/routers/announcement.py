@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from schemas.announcement import Announcement, AnnouncementCreate, AnnouncementUpdate
 from models.announcement import Announcement as AnnouncementModel
+from models.absence import Absence as AbsenceModel
 from database.connection import get_db
 from routers.user import get_current_user  # keep existing
 from models.user import User as UserModel
@@ -194,8 +195,19 @@ def delete_announcement(
     announcement = db.query(AnnouncementModel).filter(AnnouncementModel.id == announcement_id).first()
     if not announcement:
         raise HTTPException(status_code=404, detail="Announcement not found")
-    # เฉพาะเจ้าของหรือ admin เท่านั้นที่ลบได้
-    if (announcement.author_id != current_user.id) and (getattr(current_user, "role", None) != "admin"):
+    role = getattr(current_user, "role", None)
+    # เจ้าของหรือ admin ลบได้เสมอ
+    is_authorized = (announcement.author_id == current_user.id) or (role == "admin")
+    # ครูสามารถลบข่าวที่สร้างจากการลาเรียน (linked absence) ในโรงเรียนเดียวกันได้
+    if not is_authorized and role == "teacher":
+        teacher_school_id = getattr(current_user, "school_id", None)
+        if teacher_school_id and announcement.school_id == teacher_school_id:
+            linked_absence = db.query(AbsenceModel).filter(
+                AbsenceModel.announcement_id == announcement_id
+            ).first()
+            if linked_absence:
+                is_authorized = True
+    if not is_authorized:
         raise HTTPException(status_code=403, detail="Not authorized to delete this announcement")
     db.delete(announcement)
     db.commit()

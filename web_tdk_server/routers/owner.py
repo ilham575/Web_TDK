@@ -12,6 +12,7 @@ from models.attendance import Attendance as AttendanceModel
 from models.grade import Grade as GradeModel
 from models.admin_request import AdminRequest as AdminRequestModel
 from models.document import Document as DocumentModel
+from models.social_account import SocialAccount as SocialAccountModel
 from models.subject_student import SubjectStudent as SubjectStudentModel
 from models.classroom import Classroom as ClassroomModel, ClassroomStudent as ClassroomStudentModel
 from models.classroom_subject import ClassroomSubject as ClassroomSubjectModel
@@ -196,6 +197,30 @@ def get_recent_activities(limit: int = 50, db: Session = Depends(get_db), curren
 
 @router.post("/request_admin")
 def request_admin(request: AdminRequestCreate, db: Session = Depends(get_db)):
+    google_account_data = None
+    effective_email = request.email
+
+    if request.google_credential:
+        from routers.user import _verify_google_credential
+
+        google_account_data = _verify_google_credential(request.google_credential)
+        effective_email = google_account_data['provider_email']
+
+        existing_social_account = db.query(SocialAccountModel).filter(
+            SocialAccountModel.provider == 'google',
+            SocialAccountModel.provider_user_id == google_account_data['provider_user_id']
+        ).first()
+        if existing_social_account:
+            raise HTTPException(status_code=400, detail='บัญชี Google นี้ถูกใช้งานในระบบแล้ว')
+
+        existing_google_request = db.query(AdminRequestModel).filter(
+            AdminRequestModel.social_provider == 'google',
+            AdminRequestModel.social_provider_user_id == google_account_data['provider_user_id'],
+            AdminRequestModel.status == 'pending'
+        ).first()
+        if existing_google_request:
+            raise HTTPException(status_code=400, detail='มีคำขอสมัครที่ใช้บัญชี Google นี้อยู่แล้ว')
+
     # Check if username already exists in users or requests
     existing_user = db.query(UserModel).filter(UserModel.username == request.username).first()
     if existing_user:
@@ -206,19 +231,27 @@ def request_admin(request: AdminRequestCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Request already exists for this username")
     
     # Check email
-    if request.email:
-        existing_email = db.query(UserModel).filter(UserModel.email == request.email).first()
+    if effective_email:
+        existing_email = db.query(UserModel).filter(UserModel.email == effective_email).first()
         if existing_email:
+            if google_account_data:
+                raise HTTPException(status_code=400, detail="อีเมล Google นี้มีบัญชีในระบบอยู่แล้ว กรุณาเข้าสู่ระบบด้วยรหัสผ่านแล้วเชื่อม Google จากหน้าโปรไฟล์")
             raise HTTPException(status_code=400, detail="Email already exists")
         
-        existing_email_request = db.query(AdminRequestModel).filter(AdminRequestModel.email == request.email, AdminRequestModel.status == "pending").first()
+        existing_email_request = db.query(AdminRequestModel).filter(AdminRequestModel.email == effective_email, AdminRequestModel.status == "pending").first()
         if existing_email_request:
             raise HTTPException(status_code=400, detail="Request already exists for this email")
     
     # Delete any non-pending requests for this username and email to allow re-requesting
     db.query(AdminRequestModel).filter(AdminRequestModel.username == request.username, AdminRequestModel.status != "pending").delete()
-    if request.email:
-        db.query(AdminRequestModel).filter(AdminRequestModel.email == request.email, AdminRequestModel.status != "pending").delete()
+    if effective_email:
+        db.query(AdminRequestModel).filter(AdminRequestModel.email == effective_email, AdminRequestModel.status != "pending").delete()
+    if google_account_data:
+        db.query(AdminRequestModel).filter(
+            AdminRequestModel.social_provider == 'google',
+            AdminRequestModel.social_provider_user_id == google_account_data['provider_user_id'],
+            AdminRequestModel.status != 'pending'
+        ).delete()
     
     # Hash password
     hashed = hash_password(request.password)
@@ -226,10 +259,14 @@ def request_admin(request: AdminRequestCreate, db: Session = Depends(get_db)):
     # Create request
     request_obj = AdminRequestModel(
         username=request.username,
-        email=request.email if request.email else None,
+        email=effective_email if effective_email else None,
         full_name=request.full_name,
         password_hash=hashed,
         school_name=request.school_name,
+        social_provider='google' if google_account_data else None,
+        social_provider_user_id=google_account_data['provider_user_id'] if google_account_data else None,
+        social_provider_email=google_account_data['provider_email'] if google_account_data else None,
+        social_email_verified=google_account_data['email_verified'] if google_account_data else False,
         status="pending"
     )
     db.add(request_obj)
@@ -412,6 +449,22 @@ def approve_admin_request(request_id: int, db: Session = Depends(get_db), curren
     db.add(user)
     db.commit()
     db.refresh(user)
+
+    if request.social_provider and request.social_provider_user_id:
+        existing_social_account = db.query(SocialAccountModel).filter(
+            SocialAccountModel.provider == request.social_provider,
+            SocialAccountModel.provider_user_id == request.social_provider_user_id
+        ).first()
+        if existing_social_account:
+            raise HTTPException(status_code=400, detail="Social account is already linked to another user")
+
+        db.add(SocialAccountModel(
+            user_id=user.id,
+            provider=request.social_provider,
+            provider_user_id=request.social_provider_user_id,
+            provider_email=request.social_provider_email or request.email,
+            email_verified=bool(request.social_email_verified),
+        ))
     
     # Update request status
     request.status = "approved"

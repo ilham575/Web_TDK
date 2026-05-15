@@ -1,6 +1,11 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import ReactDOM from 'react-dom';
 import { X, Calendar, Book, Clock, MapPin, ChevronRight } from 'lucide-react';
+
+const formatTimeToHHMM = (timeStr) => {
+  if (!timeStr) return '';
+  return String(timeStr).split(':').slice(0, 2).join(':');
+};
 
 function ScheduleModal({
   isOpen,
@@ -22,6 +27,7 @@ function ScheduleModal({
   setScheduleEndTime,
   teacherSubjects,
   scheduleSlots,
+  breakSchedules = [],
   classrooms,
   getDayName,
   onSubmit,
@@ -52,22 +58,52 @@ function ScheduleModal({
       .map((value) => String(value))
   )].sort((a, b) => Number(a) - Number(b));
 
-  const availableSemesters = selectedAcademicYear ? getSemestersForYear(selectedAcademicYear) : [];
+  const availableSemesters = useMemo(
+    () => (selectedAcademicYear ? getSemestersForYear(selectedAcademicYear) : []),
+    [selectedAcademicYear, periodSources]
+  );
   const hasSelectedPeriod = Boolean(selectedAcademicYear) && Boolean(selectedSemester);
 
-  const filteredTeacherSubjects = hasSelectedPeriod
-    ? teacherSubjects.filter(
-        (subject) => String(subject?.academic_year || '') === String(selectedAcademicYear)
-          && String(subject?.semester || '') === String(selectedSemester)
-      )
+  const filteredTeacherSubjects = useMemo(() => (
+    hasSelectedPeriod
+      ? teacherSubjects.filter(
+          (subject) => String(subject?.academic_year || '') === String(selectedAcademicYear)
+            && String(subject?.semester || '') === String(selectedSemester)
+        )
+      : []
+  ), [hasSelectedPeriod, teacherSubjects, selectedAcademicYear, selectedSemester]);
+
+  const filteredClassrooms = useMemo(() => (
+    hasSelectedPeriod
+      ? classrooms.filter(
+          (classroom) => String(classroom?.academic_year || '') === String(selectedAcademicYear)
+            && String(classroom?.semester || '') === String(selectedSemester)
+        )
+      : []
+  ), [hasSelectedPeriod, classrooms, selectedAcademicYear, selectedSemester]);
+  const teachingScheduleSlots = Array.isArray(scheduleSlots)
+    ? scheduleSlots.filter((slot) => !slot?.is_break)
     : [];
 
-  const filteredClassrooms = hasSelectedPeriod
-    ? classrooms.filter(
-        (classroom) => String(classroom?.academic_year || '') === String(selectedAcademicYear)
-          && String(classroom?.semester || '') === String(selectedSemester)
-      )
-    : [];
+  const getDayTeachingWindow = (dayValue) => {
+    if (!dayValue) return null;
+    const daySlots = teachingScheduleSlots.filter((slot) => String(slot.day_of_week) === String(dayValue));
+    if (!daySlots.length) return null;
+
+    const startTimes = daySlots.map((slot) => String(slot.start_time || '')).sort();
+    const endTimes = daySlots.map((slot) => String(slot.end_time || '')).sort();
+    return {
+      start_time: startTimes[0],
+      end_time: endTimes[endTimes.length - 1],
+    };
+  };
+
+  const getBreakSlotsForDay = (dayValue) => {
+    if (!dayValue) return [];
+    return (Array.isArray(breakSchedules) ? breakSchedules : [])
+      .filter((slot) => String(slot.day_of_week) === String(dayValue) && Boolean(slot.is_break))
+      .sort((left, right) => String(left.start_time || '').localeCompare(String(right.start_time || '')));
+  };
 
   useEffect(() => {
     if (!isOpen) return;
@@ -133,7 +169,8 @@ function ScheduleModal({
     }
   };
 
-  const currentOperatingHours = scheduleDay && scheduleSlots.find(slot => slot.day_of_week.toString() === scheduleDay);
+  const currentOperatingHours = getDayTeachingWindow(scheduleDay);
+  const currentBreakSlots = getBreakSlotsForDay(scheduleDay);
 
   return ReactDOM.createPortal(
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
@@ -247,8 +284,8 @@ function ScheduleModal({
                 className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 text-sm font-bold transition-all outline-none appearance-none cursor-pointer"
               >
                 <option value="">-- เลือกวัน --</option>
-                {Array.isArray(scheduleSlots) && scheduleSlots.length > 0 ? (
-                  scheduleSlots
+                {teachingScheduleSlots.length > 0 ? (
+                  teachingScheduleSlots
                     .filter((s, idx, arr) => arr.findIndex(x => String(x.day_of_week) === String(s.day_of_week)) === idx)
                     .map(slot => (
                       <option key={slot.id || slot.day_of_week} value={String(slot.day_of_week)}>
@@ -294,6 +331,12 @@ function ScheduleModal({
                 </span>
               )}
             </div>
+
+            {currentBreakSlots.length > 0 && (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800">
+                เวลาพักทั้งโรงเรียน: {currentBreakSlots.map((slot) => `${formatTimeToHHMM(slot.start_time)} - ${formatTimeToHHMM(slot.end_time)}`).join(', ')}
+              </div>
+            )}
 
             <div className="flex items-center gap-3">
               <div className="flex-1 space-y-1.5">

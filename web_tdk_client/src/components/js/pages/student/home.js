@@ -5,6 +5,7 @@ import AbsenceManager from './AbsenceManager';
 import AcademicTranscript from './AcademicTranscript';
 import StudentTabs from './StudentTabs';
 import PageHeader from '../../PageHeader';
+import DailySubjectTrackingBoard from '../../DailySubjectTrackingBoard';
 import { toast } from 'react-toastify';
 import { API_BASE_URL } from '../../../endpoints';
 import FirstVisitOnboarding, {
@@ -13,20 +14,19 @@ import FirstVisitOnboarding, {
   shouldShowOnboarding
 } from '../../FirstVisitOnboarding';
 import { setSchoolFavicon } from '../../../../utils/faviconUtils';
+import { exportStudentScheduleExcel, exportStudentSchedulePdf } from '../../../../utils/scheduleExportUtils';
 import { fetchCurrentUser, hasSessionMarker, logout } from '../../../../utils/authUtils';
 import { 
   BookOpen, 
   Megaphone, 
   User, 
   CalendarDays, 
-  MapPin, 
   ChevronRight, 
   AlertCircle,
-  FileText,
-  CheckCircle2,
-  XCircle,
   X,
-  School
+  FileDown,
+  FileSpreadsheet,
+  Loader2
 } from 'lucide-react';
 
 function StudentPage() {
@@ -57,6 +57,7 @@ function StudentPage() {
   // Schedule state
   const [studentSchedule, setStudentSchedule] = useState([]);
   const [operatingHours, setOperatingHours] = useState([]);
+  const [scheduleExportingKey, setScheduleExportingKey] = useState('');
 
   useEffect(() => {
     if (!hasSessionMarker()) {
@@ -259,6 +260,61 @@ function StudentPage() {
     return <ScheduleGrid operatingHours={operatingHours} schedules={studentSchedule} role="student" />;
   };
 
+  const handleStudentScheduleExport = async (format) => {
+    let schedulesToExport = Array.isArray(studentSchedule) ? studentSchedule : [];
+
+    if ((!schedulesToExport || schedulesToExport.length === 0) && currentUser) {
+      try {
+        const params = new URLSearchParams();
+        if (selectedAcademicYear) params.set('academic_year', selectedAcademicYear);
+        if (selectedSemester) params.set('semester', selectedSemester);
+        const queryStr = params.toString() ? `?${params.toString()}` : '';
+        const res = await fetch(`${API_BASE_URL}/schedule/student${queryStr}`);
+        const data = await res.json();
+        schedulesToExport = res.ok && Array.isArray(data) ? data : [];
+        setStudentSchedule(schedulesToExport);
+      } catch (loadError) {
+        console.error('Student schedule export preload error:', loadError);
+      }
+    }
+
+    if (!Array.isArray(schedulesToExport) || schedulesToExport.length === 0) {
+      toast.error('ไม่มีข้อมูลตารางเรียนสำหรับส่งออก');
+      return;
+    }
+
+    const exportKey = `student-${format}`;
+    const schoolName = currentUser?.school_name || currentUser?.school?.name || localStorage.getItem('school_name') || '-';
+    const studentName = currentUser?.full_name || currentUser?.username || 'นักเรียน';
+
+    setScheduleExportingKey(exportKey);
+    try {
+      if (format === 'pdf') {
+        await exportStudentSchedulePdf({
+          schoolName,
+          academicYear: selectedAcademicYear,
+          semester: selectedSemester,
+          schedules: schedulesToExport,
+          studentName,
+        });
+      } else {
+        await exportStudentScheduleExcel({
+          schoolName,
+          academicYear: selectedAcademicYear,
+          semester: selectedSemester,
+          schedules: schedulesToExport,
+          studentName,
+        });
+      }
+      toast.success(format === 'pdf' ? 'ส่งออกตารางเรียน PDF สำเร็จ' : 'ส่งออกตารางเรียน Excel สำเร็จ');
+    } catch (error) {
+      console.error('Student schedule export error:', error);
+      toast.error('เกิดข้อผิดพลาดในการส่งออกตารางเรียน');
+    } finally {
+      setScheduleExportingKey('');
+    }
+  };
+
   const displaySchool = currentUser?.school_name || currentUser?.school?.name || localStorage.getItem('school_name') || '-';
 
   useEffect(() => {
@@ -373,212 +429,92 @@ function StudentPage() {
 
         <StudentTabs activeTab={activeTab} setActiveTab={setActiveTab} />
 
+        {activeTab !== 'schedule' && (
+          <div className="mb-6 flex flex-col gap-4 rounded-2xl border border-pink-100 bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between">
+            <div>
+              <h3 className="text-base font-black text-slate-800">ส่งออกตารางเรียนของฉัน</h3>
+              <p className="mt-1 text-sm font-medium text-slate-500">ไม่ต้องหาในแท็บตารางแล้ว สามารถดาวน์โหลด PDF หรือ Excel ได้จากตรงนี้ทันที</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setActiveTab('schedule')}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-black text-slate-700 transition-colors hover:bg-slate-100"
+              >
+                เปิดแท็บตารางเรียน
+              </button>
+              <button
+                onClick={() => handleStudentScheduleExport('pdf')}
+                disabled={Boolean(scheduleExportingKey)}
+                className="inline-flex items-center gap-2 rounded-xl border border-pink-200 bg-pink-50 px-4 py-2.5 text-sm font-black text-pink-700 transition-colors hover:bg-pink-100 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {scheduleExportingKey === 'student-pdf' ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
+                ดาวน์โหลด PDF
+              </button>
+              <button
+                onClick={() => handleStudentScheduleExport('excel')}
+                disabled={Boolean(scheduleExportingKey)}
+                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-sky-500 to-cyan-500 px-4 py-2.5 text-sm font-black text-white transition-all hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {scheduleExportingKey === 'student-excel' ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
+                ดาวน์โหลด Excel
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Tab Content */}
         <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
         
         {activeTab === 'subjects' && (
           <section className="space-y-6">
-            <div className="flex flex-col md:flex-row md:items-center gap-4 mb-6">
-               <div className="flex items-center gap-3">
-                 <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
-                   <BookOpen className="w-6 h-6" />
-                 </div>
-                 <h3 className="text-xl font-black text-slate-800 tracking-tight">รายวิชาของฉัน</h3>
-               </div>
-               
-               {/* Semester Filter */}
-               {availableSemesters.length > 0 && (
-                  <div className="flex items-center gap-2 bg-white p-1.5 rounded-2xl shadow-sm border border-slate-100/60 ml-auto">
-                      <div className="relative">
-                          <select
-                              className="py-2 pl-4 pr-10 bg-slate-50 hover:bg-slate-100 border border-transparent rounded-xl text-slate-700 font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500/20 appearance-none cursor-pointer transition-all"
-                              value={selectedAcademicYear}
-                              onChange={e => { setSelectedAcademicYear(e.target.value); setSelectedSemester(''); }}
-                          >
-                              {[...new Set(availableSemesters.map(s => s.academic_year))].sort((a, b) => b - a).map(y => (
-                              <option key={y} value={y}>ปี {y}</option>
-                              ))}
-                          </select>
-                      </div>
-                      
-                      {selectedAcademicYear && (
-                          <div className="relative">
-                              <select
-                                  className="py-2 pl-4 pr-10 bg-slate-50 hover:bg-slate-100 border border-transparent rounded-xl text-slate-700 font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500/20 appearance-none cursor-pointer transition-all"
-                                  value={selectedSemester}
-                                  onChange={e => setSelectedSemester(e.target.value)}
-                              >
-                              {getSemestersForYear(selectedAcademicYear).map(sem => (
-                                <option key={sem} value={sem}>ภาค {sem} เท่านั้น</option>
-                              ))}
-                              </select>
-                          </div>
-                      )}
+            <DailySubjectTrackingBoard
+              endpointPath="/schedule/tracking/student"
+              viewerScheduleEndpointPath="/schedule/student"
+              academicYear={selectedAcademicYear}
+              semester={selectedSemester}
+              title="ติดตามรายวิชาประจำวัน"
+              description="แท็บรายวิชาถูกปรับให้แสดงคาบเรียนประจำวันจากตารางในฐานข้อมูล พร้อมเวลาเรียนจริงที่แอดมินบันทึกไว้"
+              emptyMessage="ยังไม่มีคาบเรียนที่ต้องติดตามในวันที่เลือก"
+              toolbar={availableSemesters.length > 0 ? (
+                <>
+                  <select
+                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 outline-none transition-colors focus:border-blue-300 focus:ring-2 focus:ring-blue-500/20"
+                    value={selectedAcademicYear}
+                    onChange={(event) => {
+                      setSelectedAcademicYear(event.target.value);
+                      setSelectedSemester('');
+                    }}
+                  >
+                    {[...new Set(availableSemesters.map((entry) => entry.academic_year))].sort((a, b) => b - a).map((year) => (
+                      <option key={year} value={year}>ปี {year}</option>
+                    ))}
+                  </select>
 
-                      {selectedSemester && (
-                          <button
-                              onClick={() => setSelectedSemester('')}
-                              className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-all"
-                              title="ล้างตัวกรอง"
-                          >
-                              <X className="w-5 h-5" />
-                          </button>
-                      )}
-                  </div>
-               )}
-            </div>
-            
-            {studentSubjects.length === 0 ? (
-                <div className="p-12 text-center bg-white rounded-2xl border border-slate-100 shadow-sm">
-                <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6">
-                   <AlertCircle className="w-10 h-10 text-slate-300" />
-                </div>
-                <p className="text-slate-400 font-bold text-lg">ยังไม่มีรายวิชาที่ลงทะเบียน</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 gap-4">
-                {(() => {
-                  // Student subject tab always shows a specific semester (no merged two-semester view)
-                  const shouldGroup = false;
-                  
-                  if (shouldGroup) {
-                    // Group subjects by code - show only one subject per code
-                    const groupedByCode = {};
-                    studentSubjects.forEach(sub => {
-                      const code = sub.code || `unknown-${sub.id}`;
-                      if (!groupedByCode[code]) {
-                        groupedByCode[code] = [];
-                      }
-                      groupedByCode[code].push(sub);
-                    });
+                  {selectedAcademicYear ? (
+                    <select
+                      className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 outline-none transition-colors focus:border-blue-300 focus:ring-2 focus:ring-blue-500/20"
+                      value={selectedSemester}
+                      onChange={(event) => setSelectedSemester(event.target.value)}
+                    >
+                      {getSemestersForYear(selectedAcademicYear).map((sem) => (
+                        <option key={sem} value={sem}>ภาคเรียนที่ {sem}</option>
+                      ))}
+                    </select>
+                  ) : null}
 
-                    return Object.values(groupedByCode).map(subjectGroup => {
-                      // Take first subject from group as representative
-                      const displaySubject = subjectGroup[0];
-                      const isMerged = subjectGroup.length > 1;
-                      const isAllEnded = displaySubject.teachers?.length > 0 && displaySubject.teachers.every(t => t.is_ended);
-                      
-                      return (
-                        <div 
-                          key={displaySubject.code || displaySubject.id} 
-                          className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100/60 hover:shadow-lg hover:border-blue-100 transition-all duration-300 group cursor-pointer relative overflow-hidden"
-                        >
-                          <div className="absolute top-0 right-0 w-32 h-32 bg-slate-50 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 group-hover:bg-blue-50 transition-colors duration-500"></div>
-                          
-                          <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-                            <div className="flex items-start gap-5">
-                              <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400 font-black text-xl shadow-inner group-hover:text-blue-500 group-hover:bg-white group-hover:shadow-lg transition-all">
-                                 {displaySubject.code ? displaySubject.code.charAt(0) : 'S'}
-                              </div>
-                              <div>
-                                <div className="flex items-center gap-2 mb-1">
-                                   <h4 className="text-xl font-black text-slate-800 group-hover:text-blue-700 transition-colors">{displaySubject.name}</h4>
-                                   {isMerged && (
-                                     <span className="text-[10px] font-black bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full uppercase tracking-wider">(รวม 2 ภาค)</span>
-                                   )}
-                                   {isAllEnded && (
-                                     <span className="text-[10px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full uppercase tracking-wider">Ended</span>
-                                   )}
-                                </div>
-                                  <p className="text-xs font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded-lg inline-block group-hover:bg-blue-50 group-hover:text-blue-600/70 transition-colors">
-                                   CODE: {displaySubject.code || 'N/A'}
-                                </p>
-                                
-                                <div className="flex items-center gap-4 mt-4 text-xs font-medium text-slate-400">
-                                    {displaySubject.teachers?.length > 0 && (
-                                       <div className="flex items-center gap-1.5">
-                                          <User className="w-3.5 h-3.5" />
-                                          {displaySubject.teachers.map(t => t.username).join(', ')}
-                                       </div>
-                                    )}
-                                    {displaySubject.classroom && (
-                                       <div className="flex items-center gap-1.5">
-                                          <School className="w-3.5 h-3.5" />
-                                          {displaySubject.classroom.name}
-                                       </div>
-                                    )}
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="flex flex-col items-end gap-3">
-                               <span className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider shadow-sm border
-                                  ${isAllEnded 
-                                    ? 'bg-slate-100 text-slate-500 border-slate-200'
-                                    : 'bg-blue-50 text-blue-600 border-blue-100'
-                                  }
-                                `}>
-                                  {isAllEnded ? <XCircle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
-                                  {isAllEnded ? 'จบการเรียนแล้ว' : 'กำลังทำการเรียนการสอน'}
-                                </span>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    });
-                  } else {
-                    // Show individual subjects when semester is selected
-                    return studentSubjects.map(sub => {
-                      const isAllEnded = sub.teachers?.length > 0 && sub.teachers.every(t => t.is_ended);
-                      return (
-                        <div 
-                          key={sub.id} 
-                          className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100/60 hover:shadow-lg hover:border-blue-100 transition-all duration-300 group cursor-pointer relative overflow-hidden"
-                        >
-                          <div className="absolute top-0 right-0 w-32 h-32 bg-slate-50 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 group-hover:bg-blue-50 transition-colors duration-500"></div>
-                          
-                          <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-                            <div className="flex items-start gap-5">
-                              <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400 font-black text-xl shadow-inner group-hover:text-blue-500 group-hover:bg-white group-hover:shadow-lg transition-all">
-                                 {sub.code ? sub.code.charAt(0) : 'S'}
-                              </div>
-                              <div>
-                                <div className="flex items-center gap-2 mb-1">
-                                  <h4 className="text-xl font-black text-slate-800 group-hover:text-blue-700 transition-colors">{sub.name}</h4>
-                                   {isAllEnded && (
-                                     <span className="text-[10px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full uppercase tracking-wider">Ended</span>
-                                   )}
-                                </div>
-                                <p className="text-xs font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded-lg inline-block group-hover:bg-blue-50 group-hover:text-blue-600/70 transition-colors">
-                                   CODE: {sub.code || 'N/A'}
-                                </p>
-                                
-                                <div className="flex items-center gap-4 mt-4 text-xs font-medium text-slate-400">
-                                    {sub.teachers?.length > 0 && (
-                                       <div className="flex items-center gap-1.5">
-                                          <User className="w-3.5 h-3.5" />
-                                          {sub.teachers.map(t => t.username).join(', ')}
-                                       </div>
-                                    )}
-                                    {sub.classroom && (
-                                       <div className="flex items-center gap-1.5">
-                                          <School className="w-3.5 h-3.5" />
-                                          {sub.classroom.name}
-                                       </div>
-                                    )}
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="flex flex-col items-end gap-3">
-                               <span className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider shadow-sm border
-                                  ${isAllEnded 
-                                    ? 'bg-slate-100 text-slate-500 border-slate-200'
-                                    : 'bg-blue-50 text-blue-600 border-blue-100'
-                                  }
-                                `}>
-                                  {isAllEnded ? <XCircle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
-                                  {isAllEnded ? 'จบการเรียนแล้ว' : 'กำลังทำการเรียนการสอน'}
-                                </span>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    });
-                  }
-                })()}
-              </div>
-            )}
+                  {selectedSemester ? (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedSemester('')}
+                      className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-black text-rose-600 transition-colors hover:bg-rose-100"
+                      title="ล้างตัวกรองภาคเรียน"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  ) : null}
+                </>
+              ) : null}
+            />
           </section>
         )}
         
@@ -705,6 +641,24 @@ function StudentPage() {
                       )}
                   </div>
                )}
+            </div>
+            <div className="mb-4 flex flex-wrap justify-end gap-2">
+              <button
+                onClick={() => handleStudentScheduleExport('pdf')}
+                disabled={Boolean(scheduleExportingKey)}
+                className="inline-flex items-center gap-2 rounded-xl border border-pink-200 bg-pink-50 px-5 py-3 text-sm font-black text-pink-700 shadow-sm transition-all hover:bg-pink-100 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {scheduleExportingKey === 'student-pdf' ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
+                ดาวน์โหลด PDF
+              </button>
+              <button
+                onClick={() => handleStudentScheduleExport('excel')}
+                disabled={Boolean(scheduleExportingKey)}
+                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-sky-500 to-cyan-500 px-5 py-3 text-sm font-black text-white shadow-sm transition-all hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {scheduleExportingKey === 'student-excel' ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
+                ดาวน์โหลด Excel
+              </button>
             </div>
             <div className="bg-white rounded-2xl shadow-sm border border-slate-100/60 p-1 md:p-6 overflow-hidden">
               {renderScheduleTable()}

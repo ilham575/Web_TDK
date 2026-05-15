@@ -21,8 +21,11 @@ import FirstVisitOnboarding, {
   markOnboardingSeen,
   shouldShowOnboarding
 } from '../../FirstVisitOnboarding';
+import GoogleIdentityButton, { hasGoogleIdentityConfig } from '../../GoogleIdentityButton';
 import { setSchoolFavicon } from '../../../../utils/faviconUtils';
 import { clearClientSession, storeAccessToken } from '../../../../utils/authUtils';
+
+const GOOGLE_SIGNUP_DRAFT_KEY = 'tdk_google_signup_draft';
 
 function SigninPage() {
   // Login type selection ('admin', 'teacher', or 'student')
@@ -85,6 +88,105 @@ function SigninPage() {
       });
     }
   }, [location.state]);
+
+  const finishLogin = (data) => {
+    try {
+      storeAccessToken(data.access_token);
+    } catch (tokenError) {
+      clearClientSession();
+      setError('เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่อีกครั้ง');
+      toast.error('ระบบไม่สามารถบันทึก token สำหรับการเข้าสู่ระบบได้ กรุณาลองใหม่อีกครั้ง', {
+        position: "top-center",
+        theme: "colored"
+      });
+      return false;
+    }
+
+    const detectedSchoolId = data.user_info?.school_id || data.user_info?.school?.id || data.school_id || data.school?.id || null;
+    if (detectedSchoolId) localStorage.setItem('school_id', String(detectedSchoolId));
+    const detectedSchoolName = data.user_info?.school_name || data.user_info?.school?.name || data.school_name || data.school?.name || '';
+    if (detectedSchoolName) localStorage.setItem('school_name', detectedSchoolName);
+
+    if (detectedSchoolId) {
+      try {
+        setSchoolFavicon(detectedSchoolId);
+      } catch (err) {
+        console.error('setSchoolFavicon failed after login', err);
+      }
+    }
+
+    if (data.user_info?.must_change_password) {
+      toast.info('กรุณาเปลี่ยนรหัสผ่านเพื่อความปลอดภัย', {
+        position: "top-center",
+        theme: "colored"
+      });
+      navigate('/change-password');
+      return true;
+    }
+
+    if (data.user_info?.role === 'student') navigate('/student/home');
+    else if (data.user_info?.role === 'teacher') navigate('/teacher/home');
+    else if (data.user_info?.role === 'admin') navigate('/admin/home');
+    else if (data.user_info?.role === 'owner') navigate('/owner/home');
+
+    toast.success('เข้าสู่ระบบเรียบร้อยแล้ว', {
+      position: "top-center",
+      theme: "colored"
+    });
+    return true;
+  };
+
+  const handleGoogleCredential = async (credential) => {
+    setError('');
+    setIsLoading(true);
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/users/auth/google`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credential })
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        const detail = data?.detail;
+
+        if (res.status === 409 && detail?.code === 'google_account_signup_required') {
+          const googleSignupDraft = {
+            credential,
+            profile: detail.google_profile || null,
+          };
+          sessionStorage.setItem(GOOGLE_SIGNUP_DRAFT_KEY, JSON.stringify(googleSignupDraft));
+          toast.info(detail.message || 'ยังไม่มีบัญชีในระบบ กำลังพาไปหน้าสมัครด้วย Google', {
+            position: "top-center",
+            theme: "colored"
+          });
+          navigate('/signup', { state: { googleSignupDraft } });
+          return;
+        }
+
+        const message = typeof detail === 'string'
+          ? detail
+          : detail?.message || 'การเข้าสู่ระบบด้วย Google ล้มเหลว';
+        setError(message);
+        toast[detail?.code === 'google_account_pending_approval' ? 'info' : 'error'](message, {
+          position: "top-center",
+          theme: "colored"
+        });
+        return;
+      }
+
+      finishLogin(data);
+    } catch (err) {
+      setError('การเข้าสู่ระบบด้วย Google ล้มเหลว กรุณาลองใหม่อีกครั้ง');
+      toast.error('การเข้าสู่ระบบด้วย Google ล้มเหลว กรุณาลองใหม่อีกครั้ง', {
+        position: "top-center",
+        theme: "colored"
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
     setShowLoginOnboarding(shouldShowOnboarding(ONBOARDING_KEYS.login));
@@ -378,44 +480,7 @@ function SigninPage() {
           theme: "colored"
         });
       } else {
-        try {
-          storeAccessToken(data.access_token);
-        } catch (tokenError) {
-          clearClientSession();
-          setError('เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่อีกครั้ง');
-          toast.error('ระบบไม่สามารถบันทึก token สำหรับการเข้าสู่ระบบได้ กรุณาลองใหม่อีกครั้ง', {
-            position: "top-center",
-            theme: "colored"
-          });
-          return;
-        }
-        const detectedSchoolId = data.user_info?.school_id || data.user_info?.school?.id || data.school_id || data.school?.id || null;
-        if (detectedSchoolId) localStorage.setItem('school_id', String(detectedSchoolId));
-        const detectedSchoolName = data.user_info?.school_name || data.user_info?.school?.name || data.school_name || data.school?.name || '';
-        if (detectedSchoolName) localStorage.setItem('school_name', detectedSchoolName);
-        
-        if (detectedSchoolId) {
-          try { setSchoolFavicon(detectedSchoolId); } catch (err) { console.error('setSchoolFavicon failed after login', err); }
-        }
-        
-        if (data.user_info?.must_change_password) {
-          toast.info('กรุณาเปลี่ยนรหัสผ่านเพื่อความปลอดภัย', {
-            position: "top-center",
-            theme: "colored"
-          });
-          navigate('/change-password');
-          return;
-        }
-        
-        if (data.user_info?.role === 'student') navigate('/student/home');
-        else if (data.user_info?.role === 'teacher') navigate('/teacher/home');
-        else if (data.user_info?.role === 'admin') navigate('/admin/home');
-        else if (data.user_info?.role === 'owner') navigate('/owner/home');
-        
-        toast.success('เข้าสู่ระบบเรียบร้อยแล้ว', {
-          position: "top-center",
-          theme: "colored"
-        });
+        finishLogin(data);
       }
     } catch (err) {
       setError('การเข้าสู่ระบบล้มเหลว กรุณาลองอีกครั้ง');
@@ -504,7 +569,6 @@ function SigninPage() {
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div className="absolute -left-20 -top-16 h-96 w-96 rounded-full bg-blue-200/60 blur-3xl opacity-70 [animation:auth-blob_16s_infinite]" />
         <div className="absolute right-[-6rem] top-[18%] h-72 w-72 rounded-full bg-indigo-200/60 blur-3xl opacity-70 [animation:auth-blob_18s_infinite]" style={{ animationDelay: '2s' }} />
-        <div className="absolute bottom-[-7rem] left-[18%] h-80 w-80 rounded-full bg-cyan-200/60 blur-3xl opacity-70 [animation:auth-blob_20s_infinite]" style={{ animationDelay: '4s' }} />
       </div>
 
       <div className="relative z-10 w-full max-w-md">
@@ -829,6 +893,42 @@ function SigninPage() {
                 ) : 'เข้าสู่ระบบ'}
               </button>
             </form>
+
+            <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-5">
+              <div className="text-center">
+                <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">Google Sign-In</p>
+                <p className="mt-2 text-sm font-medium text-slate-600">
+                  {hasGoogleIdentityConfig()
+                    ? 'ใช้ได้เฉพาะบัญชีที่เชื่อม Google ไว้แล้ว'
+                    : 'Google Sign-In ยังไม่ถูกเปิดใช้งานในระบบนี้'}
+                </p>
+              </div>
+
+              {hasGoogleIdentityConfig() ? (
+                <>
+                  <div className="mt-4 flex justify-center">
+                    <GoogleIdentityButton
+                      onCredential={handleGoogleCredential}
+                      text="signin_with"
+                      width={300}
+                      disabled={isLoading}
+                    />
+                  </div>
+                  <p className="mt-3 text-center text-xs font-medium leading-5 text-slate-400">
+                    ถ้ายังไม่เคยเชื่อมบัญชี ให้เข้าสู่ระบบด้วยรหัสผ่านก่อนแล้วเชื่อมจากหน้าโปรไฟล์ หรือถ้ายังไม่มีบัญชี ระบบจะพาไปหน้าสมัครด้วย Google
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-white/80 px-4 py-3 text-center text-sm font-medium text-slate-400">
+                    ต้องตั้งค่า REACT_APP_GOOGLE_CLIENT_ID ก่อน ปุ่ม Google จึงจะแสดงและใช้งานได้
+                  </div>
+                  <p className="mt-3 text-center text-xs font-medium leading-5 text-slate-400">
+                    ฝั่งโปรเจกต์ตอนนี้ยังไม่มีค่า Google Client ID ใน client env จึงซ่อนปุ่มจริงไว้เพื่อไม่ให้กดแล้วล้มเหลว
+                  </p>
+                </>
+              )}
+            </div>
 
             <div className="mt-6 border-t border-slate-200/60 pt-6">
               <div className="flex flex-wrap justify-center gap-x-4 gap-y-3 text-sm sm:gap-x-5">

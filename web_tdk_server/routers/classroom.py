@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+﻿from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
 from sqlalchemy.exc import IntegrityError
@@ -78,6 +78,37 @@ def _grade_levels_match(left: Optional[str], right: Optional[str]) -> bool:
     if not left or not right:
         return False
     return _normalize_grade_level(left) == _normalize_grade_level(right)
+
+
+def _visible_classroom_students_query(
+    db: Session,
+    classroom_id: int,
+    include_inactive: bool = False,
+):
+    query = db.query(ClassroomStudent, User).join(
+        User,
+        ClassroomStudent.student_id == User.id,
+    ).filter(
+        ClassroomStudent.classroom_id == classroom_id,
+        User.role == 'student',
+    )
+
+    if not include_inactive:
+        query = query.filter(
+            ClassroomStudent.is_active == True,
+            User.is_active == True,
+            User.user_status == 'active',
+        )
+
+    return query
+
+
+def _count_visible_students(db: Session, classroom_id: int, include_inactive: bool = False) -> int:
+    return _visible_classroom_students_query(
+        db,
+        classroom_id,
+        include_inactive=include_inactive,
+    ).count()
 
 
 # ===== Classroom CRUD =====
@@ -260,9 +291,7 @@ async def get_classrooms(
 
     result = []
     for c in classrooms:
-        student_count = db.query(ClassroomStudent).filter(
-            ClassroomStudent.classroom_id == c.id,
-        ).count()
+        student_count = _count_visible_students(db, c.id)
 
         result.append(ClassroomListResponse(
             id=c.id,
@@ -304,9 +333,7 @@ async def list_classrooms(
 
     result = []
     for c in classrooms:
-        student_count = db.query(ClassroomStudent).filter(
-            ClassroomStudent.classroom_id == c.id,
-        ).count()
+        student_count = _count_visible_students(db, c.id)
 
         result.append(ClassroomListResponse(
             id=c.id,
@@ -332,7 +359,7 @@ async def get_available_students(
 ):
     """
     ดึงรายชื่อนักเรียนที่สามารถเพิ่มเข้าชั้นเรียนได้
-    (นักเรียนที่ยังไม่ลงทะเบียนในชั้นเรียนใดเลยในปีการศึกษาเดียวกันและโรงเรียนเดียวกัน)
+    (นักเรียนที่ยังใช้งานอยู่ และยังไม่ลงทะเบียนในชั้นเรียนใดเลยในปีการศึกษาเดียวกันและโรงเรียนเดียวกัน)
     """
     verify_admin_or_owner(current_user)
     classroom = get_classroom_or_404(classroom_id, db)
@@ -340,7 +367,9 @@ async def get_available_students(
     # ดึงรายชื่อนักเรียนทั้งหมดในโรงเรียน
     all_students = db.query(User).filter(
         User.role == "student",
-        User.school_id == classroom.school_id
+        User.school_id == classroom.school_id,
+        User.is_active == True,
+        User.user_status == 'active'
     ).all()
 
     # ดึงรายชื่อนักเรียนที่ลงทะเบียนอยู่แล้ว (active) ใน academic_year+semester เดียวกัน
@@ -471,17 +500,29 @@ async def add_students_to_classroom(
 @router.get("/{classroom_id}/students", response_model=List[StudentInClassroom])
 async def get_students_in_classroom(
     classroom_id: int,
+    include_inactive: bool = False,
     db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_optional_current_user)
 ):
-    """ดึงรายชื่อนักเรียนในชั้นเรียน (รวม active และ inactive)"""
+    """ดึงรายชื่อนักเรียนในชั้นเรียน โดย default จะแสดงเฉพาะนักเรียนที่ยังมองเห็นได้จริง"""
     classroom = get_classroom_or_404(classroom_id, db)
 
-    enrollments = db.query(ClassroomStudent, User).join(
-        User, ClassroomStudent.student_id == User.id
-    ).filter(
-        ClassroomStudent.classroom_id == classroom_id
+    enrollments = _visible_classroom_students_query(
+        db,
+        classroom_id,
+        include_inactive=include_inactive,
     ).all()
+
+    enrollments = sorted(
+        enrollments,
+        key=lambda row: (
+            row[0].is_active is False,
+            row[0].student_number is None,
+            row[0].student_number if row[0].student_number is not None else 10**9,
+            str(row[1].full_name or '').lower(),
+            row[1].id,
+        )
+    )
 
     result = []
     for enrollment, student in enrollments:
@@ -491,6 +532,7 @@ async def get_students_in_classroom(
             full_name=student.full_name,
             username=student.username,
             email=student.email,
+            user_status=student.user_status,
             student_number=enrollment.student_number,
             is_active=enrollment.is_active  # ใช้ enrollment.is_active ไม่ใช่ student.is_active
         ))

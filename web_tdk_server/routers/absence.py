@@ -44,15 +44,20 @@ def get_student_absence_context(
     *,
     absence_date: Optional[date] = None,
     subject_id: Optional[int] = None,
+    include_inactive_enrollments: bool = False,
 ):
     """Resolve the student's classroom/year/semester context for a specific absence."""
-    enrollments = db.query(ClassroomStudent, Classroom).join(
+    enrollments_query = db.query(ClassroomStudent, Classroom).join(
         Classroom, ClassroomStudent.classroom_id == Classroom.id
     ).filter(
         ClassroomStudent.student_id == student_id,
-        ClassroomStudent.is_active == True,
         Classroom.is_active == True
-    ).all()
+    )
+
+    if not include_inactive_enrollments:
+        enrollments_query = enrollments_query.filter(ClassroomStudent.is_active == True)
+
+    enrollments = enrollments_query.all()
 
     subject = None
     if subject_id:
@@ -115,12 +120,20 @@ def get_student_absence_context(
     return to_context(None)
 
 
-def get_student_grade_level(db: Session, student_id: int) -> Optional[str]:
-    return get_student_absence_context(db, student_id).get('grade_level')
+def get_student_grade_level(db: Session, student_id: int, include_inactive_enrollments: bool = False) -> Optional[str]:
+    return get_student_absence_context(
+        db,
+        student_id,
+        include_inactive_enrollments=include_inactive_enrollments,
+    ).get('grade_level')
 
 
-def get_student_school_id(db: Session, student_id: int) -> Optional[int]:
-    return get_student_absence_context(db, student_id).get('school_id')
+def get_student_school_id(db: Session, student_id: int, include_inactive_enrollments: bool = False) -> Optional[int]:
+    return get_student_absence_context(
+        db,
+        student_id,
+        include_inactive_enrollments=include_inactive_enrollments,
+    ).get('school_id')
 
 
 def find_matching_homeroom_assignments(
@@ -167,6 +180,7 @@ def is_homeroom_teacher_of_student(db: Session, teacher_id: int, student_id: int
         student_id,
         absence_date=getattr(absence, 'absence_date', None),
         subject_id=getattr(absence, 'subject_id', None),
+        include_inactive_enrollments=absence is not None,
     )
 
     homerooms = find_matching_homeroom_assignments(
@@ -190,7 +204,14 @@ def can_approve_absence(db: Session, current_user, student_id: int, absence: Opt
     
     # Owner และ Admin สามารถอนุมัติได้เสมอ (ถ้าอยู่โรงเรียนเดียวกัน)
     if role in ['owner', 'admin']:
-        student_school_id = get_student_school_id(db, student_id)
+        student_context = get_student_absence_context(
+            db,
+            student_id,
+            absence_date=getattr(absence, 'absence_date', None),
+            subject_id=getattr(absence, 'subject_id', None),
+            include_inactive_enrollments=absence is not None,
+        )
+        student_school_id = student_context.get('school_id')
         user_school_id = getattr(current_user, 'school_id', None)
         
         if student_school_id and user_school_id and student_school_id == user_school_id:
@@ -229,6 +250,7 @@ def absence_to_response(db: Session, absence: AbsenceModel) -> dict:
         absence.student_id,
         absence_date=absence.absence_date,
         subject_id=absence.subject_id,
+        include_inactive_enrollments=True,
     )
     
     return {
@@ -622,6 +644,7 @@ def update_absence(
             absence.student_id,
             absence_date=absence.absence_date,
             subject_id=absence.subject_id,
+            include_inactive_enrollments=True,
         )
         enforce_admin_time_window(
             db,
@@ -714,6 +737,7 @@ def delete_absence(
         absence.student_id,
         absence_date=absence.absence_date,
         subject_id=absence.subject_id,
+        include_inactive_enrollments=True,
     )
     enforce_admin_time_window(
         db,
@@ -734,6 +758,66 @@ def delete_absence(
     if role == 'teacher':
         if not is_homeroom_teacher_of_student(db, current_user.id, absence.student_id, absence):
             raise HTTPException(status_code=403, detail='Not authorized to delete this absence')
-    
+
+    # Delete associated announcement if it exists
+    ann_id = getattr(absence, 'announcement_id', None)
+    if ann_id:
+        try:
+            ann = db.query(AnnouncementModel).filter(AnnouncementModel.id == ann_id).first()
+            if ann:
+                absence.announcement_id = None
+                db.flush()
+                db.delete(ann)
+        except Exception as e:
+            print('Failed to delete associated announcement on absence deletion', e)
+
     db.delete(absence)
     db.commit()
+
+
+@router.delete('/{absence_id}/announcement', status_code=status.HTTP_204_NO_CONTENT)
+def delete_absence_announcement(
+    absence_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Allow admins and homeroom teachers to dismiss (delete) the announcement linked to an absence."""
+    absence = db.query(AbsenceModel).filter(AbsenceModel.id == absence_id).first()
+    if not absence:
+        raise HTTPException(status_code=404, detail='Absence not found')
+
+    role = getattr(current_user, 'role', None)
+
+    if role == 'student':
+        raise HTTPException(status_code=403, detail='Not authorized')
+
+    if role == 'teacher':
+        if not is_homeroom_teacher_of_student(db, current_user.id, absence.student_id, absence):
+            raise HTTPException(status_code=403, detail='Not authorized to manage this absence announcement')
+
+    if role == 'admin':
+        user_school_id = getattr(current_user, 'school_id', None)
+        context = get_student_absence_context(
+            db,
+            absence.student_id,
+            absence_date=absence.absence_date,
+            subject_id=absence.subject_id,
+            include_inactive_enrollments=True,
+        )
+        if context.get('school_id') != user_school_id:
+            raise HTTPException(status_code=403, detail='Not authorized to manage this absence announcement')
+
+    ann_id = getattr(absence, 'announcement_id', None)
+    if not ann_id:
+        raise HTTPException(status_code=404, detail='No announcement linked to this absence')
+
+    try:
+        ann = db.query(AnnouncementModel).filter(AnnouncementModel.id == ann_id).first()
+        absence.announcement_id = None
+        db.flush()
+        if ann:
+            db.delete(ann)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f'Failed to delete announcement: {str(e)}')

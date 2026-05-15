@@ -38,6 +38,7 @@ function AdminTabs({ isMobile: propIsMobile, activeTab, setActiveTab, loadSubjec
     { id: 'promotions', Icon: TrendingUp, label: t('admin.tabPromotions'), longLabel: t('admin.tabPromotionsLong'), section: 'mgmt' },
     { id: 'schedule', Icon: Clock, label: t('admin.tabSchedule'), longLabel: t('admin.tabScheduleLong'), section: 'mgmt' },
     { id: 'schedules', Icon: CalendarDays, label: t('admin.tabSchedules'), longLabel: t('admin.tabSchedulesLong'), section: 'mgmt', onClick: loadSubjects },
+    { id: 'dailyTracking', Icon: Clock, label: 'บันทึกเวลา', longLabel: 'บันทึกเวลาเรียนจริงรายวัน', section: 'mgmt' },
     { id: 'settings', Icon: Settings2, label: t('admin.tabSettings'), longLabel: t('admin.tabSettingsLong'), section: 'other' },
     { id: 'school_deletion', Icon: Trash2, label: t('admin.tabSchoolDeletion'), longLabel: t('admin.tabSchoolDeletion'), section: 'other' },
   ];

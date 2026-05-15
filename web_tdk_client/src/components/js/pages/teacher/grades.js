@@ -127,6 +127,7 @@ function GradesPage(){
           setStudents(data);
 
           const makeClassObj = (s) => {
+            const classroomId = s.classroom?.id || null;
             let label = 'Default';
             if (s.classroom && (s.classroom.name || s.classroom.id)) {
               label = s.classroom.name || String(s.classroom.id);
@@ -143,9 +144,14 @@ function GradesPage(){
             } else if (s.section) {
               label = s.section;
             }
-            // Always key by name so classrooms with the same name across different semesters merge.
-            const key = `label:${label}`;
-            return { key, label };
+            const key = classroomId ? `id:${classroomId}` : `label:${label}`;
+            return {
+              key,
+              id: classroomId,
+              label,
+              academic_year: s.classroom?.academic_year || null,
+              semester: s.classroom?.semester || null,
+            };
           };
 
           const classMap = {};
@@ -414,7 +420,10 @@ function GradesPage(){
       }
     }
 
-    const existingAssignment = assignments.find(a => a.title.toLowerCase() === newAssignmentTitle.trim().toLowerCase());
+    const existingAssignment = assignments.find(a =>
+      a.title.toLowerCase() === newAssignmentTitle.trim().toLowerCase()
+      && (a.classroom_id || null) === ((selectedClassId || resolvedClassroomId) || null)
+    );
     if (existingAssignment) {
       toast.error('หัวข้องานนี้มีอยู่แล้ว');
       return;
@@ -654,6 +663,7 @@ function GradesPage(){
     const sId = s.classroom ? s.classroom.id : null;
     if (selectedClass.id && sId) return sId === selectedClass.id;
     return selectedClass.label === (
+            (s.classroom && s.classroom.name) ||
             (s.classroom_name) || 
             (s.class_name) || 
             (s.grade_level && s.section ? `${s.grade_level} ${s.section}` : '') ||

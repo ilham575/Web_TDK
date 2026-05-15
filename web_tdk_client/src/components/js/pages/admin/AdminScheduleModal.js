@@ -28,6 +28,7 @@ function AdminScheduleModal({ isOpen, editingSchedule, onClose, onSubmit }) {
       setNewScheduleEndTime(editingSchedule.end_time || '');
     } else {
       setNewScheduleDay('');
+      setNewScheduleDays([]);
       setUseMultipleDays(false);
       setNewScheduleStartTime('');
       setNewScheduleEndTime('');
@@ -36,6 +37,8 @@ function AdminScheduleModal({ isOpen, editingSchedule, onClose, onSubmit }) {
 
   const handleClose = () => {
     setNewScheduleDay('');
+    setNewScheduleDays([]);
+    setUseMultipleDays(false);
     setNewScheduleStartTime('');
     setNewScheduleEndTime('');
     onClose();
@@ -99,6 +102,10 @@ function AdminScheduleModal({ isOpen, editingSchedule, onClose, onSubmit }) {
     { v: '0', l: 'อา.', full: t('admin.sunday'), color: 'bg-rose-400' }
   ];
 
+  const modalTitle = editingSchedule ? t('admin.editSchedulePeriodTitle') : t('admin.addSchedulePeriodTitle');
+  const modalSubtitle = 'กำหนดช่วงเวลาในตารางเรียน';
+  const primaryIcon = editingSchedule ? <Edit3 className="w-6 h-6" /> : <Plus className="w-6 h-6" />;
+
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6">
       <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={handleClose} />
@@ -108,13 +115,13 @@ function AdminScheduleModal({ isOpen, editingSchedule, onClose, onSubmit }) {
         <div className="px-8 py-6 border-b border-slate-100/80 flex items-center justify-between bg-gradient-to-r from-slate-50 via-white to-indigo-50/50">
           <div className="flex items-center gap-4">
             <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-lg ${editingSchedule ? 'bg-amber-500 shadow-amber-200' : 'bg-emerald-500 shadow-emerald-200'}`}>
-              {editingSchedule ? <Edit3 className="w-6 h-6" /> : <Plus className="w-6 h-6" />}
+              {primaryIcon}
             </div>
             <div>
               <h3 className="text-xl font-black text-slate-800 tracking-tight leading-tight">
-                {editingSchedule ? t('admin.editSchedulePeriodTitle') : t('admin.addSchedulePeriodTitle')}
+                {modalTitle}
               </h3>
-              <p className="text-sm font-bold text-slate-400 mt-0.5">กำหนดช่วงเวลาในตารางเรียน</p>
+              <p className="text-sm font-bold text-slate-400 mt-0.5">{modalSubtitle}</p>
             </div>
           </div>
           <button 

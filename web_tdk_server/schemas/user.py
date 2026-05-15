@@ -25,6 +25,25 @@ class UserUpdate(BaseModel):
     school_id: Optional[int] = None
     grade_level: Optional[str] = None
 
+
+class AdminUserProfileUpdate(BaseModel):
+    username: Optional[str] = None
+    email: Optional[EmailStr] = None
+    full_name: Optional[str] = None
+    grade_level: Optional[str] = None
+
+
+class GoogleCredentialRequest(BaseModel):
+    credential: str
+
+
+class GoogleLinkStatus(BaseModel):
+    provider: str = 'google'
+    linked: bool
+    provider_email: Optional[str] = None
+    email_verified: bool = False
+    linked_at: Optional[datetime] = None
+
 class ChangePasswordRequest(BaseModel):
     current_password: Optional[str] = None
     new_password: str
@@ -78,6 +97,7 @@ class AdminRequestCreate(BaseModel):
     full_name: str
     password: str
     school_name: str
+    google_credential: Optional[str] = None
 
 # Password reset request schemas
 class PasswordResetRequestCreate(BaseModel):

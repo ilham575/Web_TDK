@@ -359,3 +359,89 @@ def test_bulk_graduate_students_filters_by_academic_year():
         assert current_student.is_active is False
     finally:
         db.close()
+
+
+def test_available_students_excludes_non_active_student_statuses():
+    school, headers = create_school_admin_and_headers(graduation_grade_level='Grade 6')
+
+    db = SessionLocal()
+    try:
+        classroom = Classroom(
+            name='Grade 5/1',
+            grade_level='Grade 5',
+            room_number='1',
+            semester=1,
+            academic_year='2568',
+            school_id=school['id'],
+            is_active=True,
+        )
+        db.add(classroom)
+        db.flush()
+
+        active_suffix = _suffix()
+        active_student = User(
+            username=f'availableactive{active_suffix}',
+            email=f'availableactive{active_suffix}@example.com',
+            hashed_password=hash_password('studentpass'),
+            role='student',
+            full_name='Available Active Student',
+            school_id=school['id'],
+            grade_level='Grade 5',
+            is_active=True,
+            user_status='active',
+        )
+        resigned_suffix = _suffix()
+        resigned_student = User(
+            username=f'availableresigned{resigned_suffix}',
+            email=f'availableresigned{resigned_suffix}@example.com',
+            hashed_password=hash_password('studentpass'),
+            role='student',
+            full_name='Available Resigned Student',
+            school_id=school['id'],
+            grade_level='Grade 5',
+            is_active=True,
+            user_status='resigned',
+        )
+        graduated_suffix = _suffix()
+        graduated_student = User(
+            username=f'availablegraduated{graduated_suffix}',
+            email=f'availablegraduated{graduated_suffix}@example.com',
+            hashed_password=hash_password('studentpass'),
+            role='student',
+            full_name='Available Graduated Student',
+            school_id=school['id'],
+            grade_level='Grade 5',
+            is_active=False,
+            user_status='graduated',
+        )
+        inactive_suffix = _suffix()
+        inactive_student = User(
+            username=f'availableinactive{inactive_suffix}',
+            email=f'availableinactive{inactive_suffix}@example.com',
+            hashed_password=hash_password('studentpass'),
+            role='student',
+            full_name='Available Inactive Student',
+            school_id=school['id'],
+            grade_level='Grade 5',
+            is_active=False,
+            user_status='active',
+        )
+
+        db.add_all([
+            active_student,
+            resigned_student,
+            graduated_student,
+            inactive_student,
+        ])
+        db.commit()
+
+        classroom_id = classroom.id
+        active_student_id = active_student.id
+    finally:
+        db.close()
+
+    response = client.get(f'/classrooms/{classroom_id}/available-students', headers=headers)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert {item['id'] for item in payload} == {active_student_id}

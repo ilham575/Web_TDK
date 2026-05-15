@@ -78,6 +78,7 @@ class StudentInClassroom(BaseModel):
     full_name: str
     username: str
     email: Optional[str] = None
+    user_status: Optional[str] = None
     student_number: Optional[int] = None  # เลขที่
     is_active: bool
 

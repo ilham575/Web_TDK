@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import html2pdf from 'html2pdf.js/dist/html2pdf.bundle.min.js';
 import { API_BASE_URL } from '../../../endpoints';
 import { toast } from 'react-toastify';
 import { getStoredAccessToken } from '../../../../utils/authUtils';
@@ -17,8 +18,16 @@ import {
   Hash,
   ListOrdered,
   Pencil,
-  RotateCcw
+  RotateCcw,
+  FileDown
 } from 'lucide-react';
+
+const escapeHtml = (value) => String(value ?? '')
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#039;');
 
 const AddStudentsModal = ({
   isOpen,
@@ -33,6 +42,7 @@ const AddStudentsModal = ({
   onStudentCountUpdate,
   isHistoricalClassroom = false,
   refreshKey,
+  schoolData = null,
 }) => {
   const { t } = useTranslation();
   // Local state สำหรับ modal นี้เท่านั้น
@@ -59,6 +69,28 @@ const AddStudentsModal = ({
   const [copyingStudents, setCopyingStudents] = useState(false);
   const [restoreClassrooms, setRestoreClassrooms] = useState([]);
   const [restoreSelectedClassroomId, setRestoreSelectedClassroomId] = useState('');
+  const [exportingPdf, setExportingPdf] = useState(false);
+
+  const isStudentEligibleForAssignment = (student) => {
+    if (!student || student.is_active === false) {
+      return false;
+    }
+
+    if (student.user_status && student.user_status !== 'active') {
+      return false;
+    }
+
+    return true;
+  };
+
+  const buildClassroomStudentsUrl = (classroomId, includeInactive = false) => {
+    const params = new URLSearchParams();
+    if (includeInactive) {
+      params.set('include_inactive', 'true');
+    }
+
+    return `${API_BASE_URL}/classrooms/${classroomId}/students${params.toString() ? `?${params.toString()}` : ''}`;
+  };
 
   // ดึงข้อมูลนักเรียนที่สามารถเพิ่มได้เมื่อ modal เปิด
   useEffect(() => {
@@ -87,7 +119,7 @@ const AddStudentsModal = ({
     if (isOpen && selectedClassroom && classroomStep === 'view_students') {
       setLoadingClassroomStudents(true);
       const token = getStoredAccessToken();
-      fetch(`${API_BASE_URL}/classrooms/${selectedClassroom.id}/students`, {
+      fetch(buildClassroomStudentsUrl(selectedClassroom.id, isHistoricalClassroom), {
         headers: {
           'Authorization': `Bearer ${token}`,
         }
@@ -104,14 +136,14 @@ const AddStudentsModal = ({
         })
         .finally(() => setLoadingClassroomStudents(false));
     }
-  }, [isOpen, selectedClassroom, classroomStep, refreshKey, students]);
+  }, [isOpen, selectedClassroom, classroomStep, refreshKey, students, isHistoricalClassroom]);
 
   useEffect(() => {
     const sourceStudents = classroomStep === 'add_students' ? availableStudents : classroomStudents;
     const shouldShowAllStudents = classroomStep === 'view_students' && isHistoricalClassroom;
     const visibleStudents = shouldShowAllStudents
       ? sourceStudents
-      : sourceStudents.filter(s => s.is_active !== false);
+      : sourceStudents.filter(isStudentEligibleForAssignment);
     
     if (searchTerm.trim() === '') {
       setFilteredStudents(visibleStudents);
@@ -198,7 +230,7 @@ const AddStudentsModal = ({
         setShowRestorePanel(false);
         setSelectedRestoreIds(new Set());
         // Reload classroom students
-        const studentsRes = await fetch(`${API_BASE_URL}/classrooms/${selectedClassroom.id}/students`, {
+        const studentsRes = await fetch(buildClassroomStudentsUrl(selectedClassroom.id, isHistoricalClassroom), {
           headers: { Authorization: `Bearer ${token}` }
         });
         if (studentsRes.ok) {
@@ -215,6 +247,124 @@ const AddStudentsModal = ({
       toast.error('เกิดข้อผิดพลาด');
     } finally {
       setCopyingStudents(false);
+    }
+  };
+
+  const handleExportStudentListPDF = async () => {
+    if (!selectedClassroom) return;
+    setExportingPdf(true);
+    try {
+      const token = getStoredAccessToken();
+
+      // ดึงข้อมูลครูประจำชั้น
+      let homeroomName = '-';
+      try {
+        const yearStr = String(selectedClassroom.academic_year || '');
+        const hrRes = await fetch(
+          `${API_BASE_URL}/homeroom?classroom_id=${selectedClassroom.id}&academic_year=${encodeURIComponent(yearStr)}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (hrRes.ok) {
+          const hrData = await hrRes.json();
+          if (Array.isArray(hrData) && hrData.length > 0) {
+            homeroomName = hrData[0].teacher_name || '-';
+          }
+        }
+      } catch (_) {/* silent */}
+
+      const schoolName = schoolData?.name || '';
+      const classroomName = selectedClassroom.name || selectedClassroom.grade_level || '-';
+      const academicYear = selectedClassroom.academic_year || '-';
+      const semester = selectedClassroom.semester || '-';
+      const printDate = new Date().toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' });
+      const exportStudents = isHistoricalClassroom
+        ? classroomStudents
+        : classroomStudents.filter(isStudentEligibleForAssignment);
+
+      if (exportStudents.length === 0) {
+        toast.error('ไม่มีนักเรียนในชั้นเรียนนี้สำหรับส่งออก');
+        return;
+      }
+
+      // เรียงลำดับตามเลขที่ แล้วตามชื่อ
+      const sortedStudents = [...exportStudents].sort((a, b) => {
+        const numA = a.student_number ?? Infinity;
+        const numB = b.student_number ?? Infinity;
+        if (numA !== numB) return numA - numB;
+        return (a.full_name || '').localeCompare(b.full_name || '', 'th');
+      });
+
+      const rowsHtml = sortedStudents.map((s, idx) => `
+        <tr style="${!s.is_active ? 'color:#aaa;' : ''}">
+          <td style="text-align:center;">${escapeHtml(s.student_number ?? (idx + 1))}</td>
+          <td>${escapeHtml(s.full_name || '-')}</td>
+          <td style="text-align:center; color:#777; font-size:0.85em;">${escapeHtml(s.username || '-')}</td>
+          <td style="text-align:center; color:#777; font-size:0.85em;">${escapeHtml(s.email || '-')}</td>
+          <td></td>
+        </tr>
+      `).join('');
+
+      const htmlContent = `
+        <div style="font-family: 'Mali','Tajawal','Tahoma','Segoe UI','Arial Unicode MS',sans-serif; padding:16px; color:#222;">
+          <style>
+            @page { size: A4 portrait; margin: 10mm; }
+            html, body { margin:0; padding:0; }
+            table { width:100%; border-collapse:collapse; font-size:13px; }
+            th, td { border:1px solid #ccc; padding:7px 10px; vertical-align:middle; }
+            thead th { background:#2563eb; color:#fff; font-weight:700; }
+            tbody tr:nth-child(even) { background:#f5f8ff; }
+          </style>
+          <div style="text-align:center; margin-bottom:14px; border-bottom:3px solid #2563eb; padding-bottom:10px;">
+            ${schoolName ? `<div style="font-size:20px; font-weight:800; color:#2563eb; margin-bottom:4px;">${escapeHtml(schoolName)}</div>` : ''}
+            <div style="font-size:16px; font-weight:700; color:#334155;">บัญชีรายชื่อนักเรียน</div>
+          </div>
+          <div style="background:#f0f4ff; border-left:4px solid #2563eb; border-radius:6px; padding:10px 14px; margin-bottom:16px; font-size:13px; display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+            <div><strong>ชั้นเรียน:</strong> ${escapeHtml(classroomName)}</div>
+            <div><strong>ระดับชั้น:</strong> ${escapeHtml(selectedClassroom.grade_level || '-')}</div>
+            <div><strong>ปีการศึกษา:</strong> ${escapeHtml(academicYear)}</div>
+            <div><strong>ภาคเรียนที่:</strong> ${escapeHtml(semester)}</div>
+            <div><strong>ครูประจำชั้น:</strong> ${escapeHtml(homeroomName)}</div>
+            <div><strong>วันที่พิมพ์:</strong> ${escapeHtml(printDate)}</div>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th style="width:7%; text-align:center;">เลขที่</th>
+                <th style="width:38%;">ชื่อ-สกุล</th>
+                <th style="width:20%; text-align:center;">ชื่อผู้ใช้</th>
+                <th style="width:25%; text-align:center;">อีเมล</th>
+                <th style="width:10%;">หมายเหตุ</th>
+              </tr>
+            </thead>
+            <tbody>${rowsHtml}</tbody>
+          </table>
+          <div style="margin-top:14px; font-size:12px; color:#666;">
+            จำนวนนักเรียนทั้งหมด: <strong>${sortedStudents.length}</strong> คน
+          </div>
+        </div>
+      `;
+
+      const element = document.createElement('div');
+      element.innerHTML = htmlContent;
+
+      const filename = `บัญชีรายชื่อนักเรียน_${classroomName}_ปี${academicYear}_เทอม${semester}.pdf`;
+      const options = {
+        margin: 8,
+        filename,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true },
+        jsPDF: { orientation: 'portrait', unit: 'mm', format: 'a4' }
+      };
+
+      if (document.fonts?.ready) await document.fonts.ready;
+
+      await html2pdf().set(options).from(element).save();
+      toast.success('ส่งออก PDF สำเร็จ');
+    } catch (err) {
+      console.error('Error exporting student list PDF:', err);
+      toast.error('เกิดข้อผิดพลาดในการส่งออก PDF');
+    } finally {
+      setExportingPdf(false);
     }
   };
 
@@ -235,7 +385,7 @@ const AddStudentsModal = ({
       });
       if (res.ok) {
         // Refresh classroom students
-        const studentsRes = await fetch(`${API_BASE_URL}/classrooms/${selectedClassroom.id}/students`, {
+        const studentsRes = await fetch(buildClassroomStudentsUrl(selectedClassroom.id, isHistoricalClassroom), {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (studentsRes.ok) {
@@ -263,7 +413,7 @@ const AddStudentsModal = ({
       });
       if (res.ok) {
         // Refresh list
-        const studentsRes = await fetch(`${API_BASE_URL}/classrooms/${selectedClassroom.id}/students`, {
+        const studentsRes = await fetch(buildClassroomStudentsUrl(selectedClassroom.id, isHistoricalClassroom), {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (studentsRes.ok) {
@@ -662,6 +812,17 @@ const AddStudentsModal = ({
           
           {isViewMode && (
             <div className="flex items-center gap-2 flex-wrap">
+              {classroomStudents.length > 0 && (
+                <button
+                  type="button"
+                  className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl font-black text-sm shadow-lg shadow-indigo-200 transition-all hover:bg-indigo-700 active:scale-95 disabled:opacity-50"
+                  onClick={handleExportStudentListPDF}
+                  disabled={exportingPdf}
+                >
+                  {exportingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
+                  {exportingPdf ? 'กำลังสร้าง PDF...' : 'Export PDF รายชื่อ'}
+                </button>
+              )}
               {canManageClassroomStudents && classroomStudents.length > 0 && (
                 <button
                   type="button"

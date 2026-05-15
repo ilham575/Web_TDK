@@ -19,10 +19,12 @@ export default function ScheduleDetailModal({ isOpen, item, onClose, role = 'stu
 
   if (!isOpen || !item) return null;
 
-  const teacherName = item.teacher_name || item.teacher || item.teacher_full_name || item.teacher_fullname || '';
-  const subject = item.subject_name || item.subject || item.subject_code || 'ไม่ระบุชื่อวิชา';
-  const classroom = item.classroom_name || item.classroom || '';
-  const room = item.room || '';
+  const isBreak = Boolean(item.is_break);
+  const teacherName = isBreak ? '' : (item.teacher_name || item.teacher || item.teacher_full_name || item.teacher_fullname || '');
+  const subject = isBreak ? (item.subject_name || 'เวลาพัก') : (item.subject_name || item.subject || item.subject_code || 'ไม่ระบุชื่อวิชา');
+  const classroom = isBreak ? '' : (item.classroom_name || item.classroom || '');
+  const room = isBreak ? '' : (item.room || '');
+  const scopeLabel = item.scope_label || 'ทุกชั้นเรียน';
   const day = item.day_of_week;
   const dayNames = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
   const dayColors = [
@@ -35,6 +37,8 @@ export default function ScheduleDetailModal({ isOpen, item, onClose, role = 'stu
     'from-purple-500 to-violet-600', // Sat
   ];
   const dayLabel = (day !== undefined && day !== null) ? (dayNames[Number(day)] || String(day)) : 'ไม่ระบุ';
+  const canManageItem = role === 'admin' || (!isBreak && role === 'teacher');
+  const breakNote = item.note || 'ระบบจะไม่อนุญาตให้ลงวิชาในช่วงเวลานี้';
 
   // Calculate duration
   const calcDuration = () => {
@@ -62,7 +66,7 @@ export default function ScheduleDetailModal({ isOpen, item, onClose, role = 'stu
       {/* Modal Content */}
       <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden transform transition-all animate-in fade-in zoom-in duration-200 max-h-[calc(100dvh-2rem)] flex flex-col">
         {/* Header */}
-        <div className={`bg-gradient-to-r ${dayColors[Number(day)] || 'from-emerald-500 to-teal-600'} p-8 text-white relative shrink-0`}>
+        <div className={`bg-gradient-to-r ${isBreak ? 'from-amber-500 to-orange-600' : dayColors[Number(day)] || 'from-emerald-500 to-teal-600'} p-8 text-white relative shrink-0`}>
           <button 
                 onClick={onClose}
                 className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/20 transition-colors text-2xl leading-none"
@@ -72,11 +76,11 @@ export default function ScheduleDetailModal({ isOpen, item, onClose, role = 'stu
           
           <div className="flex items-center gap-5">
             <div className="w-16 h-16 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center text-4xl shadow-inner shrink-0">
-              📚
+              {isBreak ? '☕' : '📚'}
             </div>
             <div className="flex-1 min-w-0">
               <h3 className="text-2xl font-black truncate leading-tight">{subject}</h3>
-              {item.subject_code && (
+              {item.subject_code && !isBreak && (
                 <div className="mt-1 inline-flex items-center px-2.5 py-0.5 rounded-full bg-white/20 backdrop-blur-md text-[10px] font-bold uppercase tracking-wider">
                   รหัสวิชา: {item.subject_code}
                 </div>
@@ -92,7 +96,7 @@ export default function ScheduleDetailModal({ isOpen, item, onClose, role = 'stu
             <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between">
                 <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                    ช่วงเวลาเรียน
+                {isBreak ? 'ช่วงเวลาพัก' : 'ช่วงเวลาเรียน'}
                 </div>
                 <div className="flex items-center gap-2">
                     <span className="text-lg font-black text-slate-700">{item.start_time}</span>
@@ -120,6 +124,16 @@ export default function ScheduleDetailModal({ isOpen, item, onClose, role = 'stu
 
           {/* Details Section */}
           <div className="space-y-3">
+             {isBreak && (
+              <div className="flex items-center gap-4 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+                <div className="w-12 h-12 bg-amber-50 rounded-xl flex items-center justify-center text-xl shrink-0">☕</div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[10px] font-bold text-slate-400 uppercase">มีผลกับ</div>
+                  <div className="font-bold text-slate-700 truncate">{scopeLabel}</div>
+                </div>
+              </div>
+             )}
+
              {teacherName && (
                 <div className="flex items-center gap-4 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
                     <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center text-xl shrink-0">👨‍🏫</div>
@@ -142,12 +156,12 @@ export default function ScheduleDetailModal({ isOpen, item, onClose, role = 'stu
                 </div>
              )}
 
-             {item.note && (
+                   {(item.note || isBreak) && (
                 <div className="flex items-start gap-4 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
                     <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center text-xl shrink-0">📝</div>
                     <div className="flex-1 min-w-0">
                         <div className="text-[10px] font-bold text-slate-400 uppercase">หมายเหตุ</div>
-                        <div className="text-sm text-slate-600 mt-1 whitespace-pre-wrap">{item.note}</div>
+                        <div className="text-sm text-slate-600 mt-1 whitespace-pre-wrap">{isBreak ? breakNote : item.note}</div>
                     </div>
                 </div>
              )}
@@ -156,10 +170,10 @@ export default function ScheduleDetailModal({ isOpen, item, onClose, role = 'stu
 
         {/* Footer */}
         <div className="p-6 bg-white border-t border-slate-100 flex flex-wrap gap-3 justify-end items-center shrink-0">
-            {(role === 'teacher' || role === 'admin') && onDelete && (
+          {canManageItem && onDelete && (
                 <button 
                     className="px-6 py-2.5 bg-rose-50 text-rose-600 rounded-xl font-bold hover:bg-rose-100 transition-all active:scale-95 flex items-center gap-2 mr-auto"
-                    onClick={() => { onDelete(item.id); onClose(); }}
+                onClick={() => { onDelete(item); onClose(); }}
                 >
                     🗑️ ลบ
                 </button>
@@ -172,7 +186,7 @@ export default function ScheduleDetailModal({ isOpen, item, onClose, role = 'stu
                 ปิด
             </button>
 
-            {(role === 'teacher' || role === 'admin') && onEdit && (
+            {canManageItem && onEdit && (
                 <button 
                     className="px-8 py-2.5 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-100 transition-all active:scale-95 flex items-center gap-2"
                     onClick={() => { onEdit(item); onClose(); }}

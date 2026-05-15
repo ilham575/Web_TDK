@@ -17,12 +17,27 @@ import {
   FileText,
   Mail,
   MoreHorizontal,
-  Brain
+  Brain,
+  FileDown
 } from 'lucide-react';
 
+import html2pdf from 'html2pdf.js/dist/html2pdf.bundle.min.js';
+import * as XLSX from 'xlsx';
 import Loading from '../../Loading';
 import { API_BASE_URL } from '../../../endpoints';
 import { fetchCurrentUser, hasSessionMarker, logout, getStoredAccessToken } from '../../../../utils/authUtils';
+
+const escapeHtml = (value) => String(value ?? '')
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#039;');
+
+const sanitizeFileNamePart = (value) => String(value ?? '')
+  .replace(/[\\/:*?"<>|]/g, '_')
+  .replace(/\s+/g, '_')
+  .trim();
 
 function AdminSubjectDetails() {
   const { subjectId } = useParams();
@@ -84,7 +99,7 @@ function AdminSubjectDetails() {
         if (scopedSemester) evaluationParams.set('semester', String(scopedSemester));
 
         const [studentsRes, attendanceRes, gradesRes, assignmentsRes, evaluationsRes] = await Promise.all([
-          fetch(`${API_BASE_URL}/subjects/${subjectId}/students`, { headers }),
+          fetch(`${API_BASE_URL}/subjects/${subjectId}/students?include_inactive=true`, { headers }),
           fetch(`${API_BASE_URL}/attendance/?subject_id=${subjectId}`, { headers }),
           fetch(`${API_BASE_URL}/grades/?subject_id=${subjectId}`, { headers }),
           fetch(`${API_BASE_URL}/grades/assignments/${subjectId}`, { headers }),
@@ -101,23 +116,38 @@ function AdminSubjectDetails() {
 
         const studentsArr = Array.isArray(studs) ? studs : [];
         setStudents(studentsArr);
-        // Build distinct class list from students — group by NAME so same-named classrooms
-        // across different semesters (e.g. "ป.1/1" เทอม 1 vs เทอม 2) appear as one group.
+        // Preserve the actual classroom id so historical/admin views do not merge
+        // different classroom records that happen to share the same name.
         const classMap = {};
         studentsArr.forEach(s => {
           let label = 'Default';
+          const classroomId = s.classroom?.id || null;
           if (s.classroom && (s.classroom.name || s.classroom.id)) {
             label = (s.classroom.name || String(s.classroom.id));
           } else if (s.classroom_name) {
             label = s.classroom_name;
           }
           label = String(label).trim();
-          const key = `label:${label}`;
-          classMap[key] = { key, label };
+          const key = classroomId ? `id:${classroomId}` : `label:${label}`;
+          classMap[key] = {
+            key,
+            id: classroomId,
+            label,
+            academicYear: s.classroom?.academic_year || null,
+            semester: s.classroom?.semester || null,
+          };
         });
         const distinctClasses = Object.values(classMap);
         setClasses(distinctClasses);
-        if (distinctClasses.length > 0 && !selectedClass) setSelectedClass(distinctClasses[0]);
+        setSelectedClass((prev) => {
+          if (distinctClasses.length === 1) {
+            return distinctClasses[0];
+          }
+          if (!prev) {
+            return null;
+          }
+          return distinctClasses.find((item) => item.key === prev.key) || null;
+        });
         setAttendanceRecords(Array.isArray(att) ? att : []);
         setGrades(Array.isArray(grds) ? grds : []);
         setAssignments(Array.isArray(ass) ? ass : []);
@@ -134,6 +164,9 @@ function AdminSubjectDetails() {
   }, [currentUser, subjectId, location.search]);
 
   const displaySchool = currentUser?.school_name || currentUser?.school?.name || localStorage.getItem('school_name') || '-';
+  const exportAcademicYear = String(subject?.academic_year || selectedClass?.academicYear || new URLSearchParams(location.search).get('academic_year') || '');
+  const exportSemester = String(subject?.semester || selectedClass?.semester || new URLSearchParams(location.search).get('semester') || '');
+  const exportClassLabel = selectedClass?.label || 'ทุกห้อง';
 
   useEffect(() => {
     const tryResolveSchoolName = async () => {
@@ -202,7 +235,9 @@ function AdminSubjectDetails() {
 
   const evaluationMap = {};
   evaluations.forEach(evaluation => {
-    evaluationMap[evaluation.student_id] = evaluation;
+    if (!evaluationMap[evaluation.student_id]) {
+      evaluationMap[evaluation.student_id] = evaluation;
+    }
   });
 
   const individualAssignments = assignments.filter(
@@ -219,15 +254,45 @@ function AdminSubjectDetails() {
     return t.includes('กลางภาค') || t.includes('ปลายภาค') || t.includes('final') || t.includes('midterm') || t.includes('คะแนนสอบ');
   };
 
+  const getStudentClassroomIdValue = (student) => student?.classroom?.id || null;
+  const getAssignmentGradeRecordForStudent = (student, assignment) => {
+    const studentClassId = getStudentClassroomIdValue(student);
+    if (assignment?.classroom_id && assignment.classroom_id !== studentClassId) return null;
+    return assignmentGradeMap[`${student.id}::${assignment.title}::${assignment.classroom_id ?? 'global'}`] || null;
+  };
+
   const calculateStudentSummary = (studentId) => {
     const s = students.find(stud => stud.id === studentId);
     if (!s) return null;
 
     let presentCount = 0;
-    const totalDays = attendanceDates.length;
+    let absentCount = 0;
+    let sickLeaveCount = 0;
+    let lateCount = 0;
+    let otherCount = 0;
     attendanceDates.forEach(date => {
-      if (attendanceMap[date] && attendanceMap[date][studentId]) presentCount++;
+      const status = attendanceMap[date]?.[studentId];
+      if (!status) return;
+
+      switch (status) {
+        case 'present':
+          presentCount++;
+          break;
+        case 'absent':
+          absentCount++;
+          break;
+        case 'sick_leave':
+          sickLeaveCount++;
+          break;
+        case 'late':
+          lateCount++;
+          break;
+        default:
+          otherCount++;
+          break;
+      }
     });
+    const totalDays = presentCount + absentCount + sickLeaveCount + lateCount + otherCount;
     const attendancePercentage = totalDays > 0 ? Math.round((presentCount / totalDays) * 100) : 0;
 
     let rawCollectedScore = 0;
@@ -247,10 +312,10 @@ function AdminSubjectDetails() {
     
     realAssignments.forEach(assignment => {
       // Check if assignment is global or for student's classroom
-      const studentClassId = s.classroom?.id || null;
+      const studentClassId = getStudentClassroomIdValue(s);
       if (assignment.classroom_id && assignment.classroom_id !== studentClassId) return;
 
-      const gradeRecord = studentGrades[assignment.title];
+      const gradeRecord = getAssignmentGradeRecordForStudent(s, assignment);
       if (!gradeRecord) return;
 
       const score = Math.min(Number(gradeRecord.grade || 0), assignment.max_score);
@@ -315,7 +380,15 @@ function AdminSubjectDetails() {
 
     return {
       ...s,
-      attendance: { present: presentCount, absent: totalDays - presentCount, percentage: attendancePercentage },
+      attendance: {
+        present: presentCount,
+        absent: absentCount,
+        sickLeave: sickLeaveCount,
+        late: lateCount,
+        other: otherCount,
+        totalDays,
+        percentage: attendancePercentage
+      },
       grade: { 
         percentage: gradePercentage, 
         letter: letterGrade, 
@@ -348,17 +421,21 @@ function AdminSubjectDetails() {
   const computeClassroomStats = () => {
     const classroomMap = {};
 
-    // Group students by classroom name (merge same-named classrooms across semesters)
+    // Keep classroom records separate by actual id to avoid cross-term / cross-class merges.
     studentSummaries.forEach(student => {
+      const classroomId = student.classroom?.id || null;
       const classroomName = student.classroom?.name || 'ไม่ระบุห้อง';
       const gradeLevel = student.classroom?.grade_level || student.grade_level || '-';
-      const classroomKey = `${classroomName}::${gradeLevel}`;
+      const classroomKey = classroomId ? `id:${classroomId}` : `${classroomName}::${gradeLevel}`;
 
       if (!classroomMap[classroomKey]) {
         classroomMap[classroomKey] = {
           key: classroomKey,
+          id: classroomId,
           name: classroomName,
           gradeLevel,
+          academicYear: student.classroom?.academic_year || null,
+          semester: student.classroom?.semester || null,
           students: [],
           totalScore: 0,
           totalMaxScore: 0,
@@ -390,7 +467,9 @@ function AdminSubjectDetails() {
     return Object.values(classroomMap).sort((a, b) => {
       // Sort by grade level first, then by name
       if (a.gradeLevel !== b.gradeLevel) return String(a.gradeLevel).localeCompare(String(b.gradeLevel));
-      return String(a.name).localeCompare(String(b.name));
+      if (a.name !== b.name) return String(a.name).localeCompare(String(b.name));
+      if (String(a.academicYear || '') !== String(b.academicYear || '')) return String(a.academicYear || '').localeCompare(String(b.academicYear || ''));
+      return Number(a.semester || 0) - Number(b.semester || 0);
     });
   };
 
@@ -398,8 +477,8 @@ function AdminSubjectDetails() {
 
   // Build visible student summaries filtered by selected class and sorted by student number
   const getClassKey = (s) => {
-    // Always key by name so classrooms with the same name across different semesters merge.
     if (!s) return 'label:Default';
+    if (s.classroom?.id) return `id:${s.classroom.id}`;
     if (s.classroom && (s.classroom.name || s.classroom.id)) return `label:${String(s.classroom.name || String(s.classroom.id)).trim()}`;
     if (s.classroom_name) return `label:${String(s.classroom_name).trim()}`;
     return 'label:Default';
@@ -620,6 +699,71 @@ function AdminSubjectDetails() {
     return 'rose';
   };
 
+  const getAttendanceStatusMeta = (status) => {
+    switch (status) {
+      case 'present':
+        return {
+          label: 'มาเรียน',
+          cardClass: 'border-emerald-100 bg-emerald-50/70',
+          textClass: 'text-emerald-600',
+          cellClass: 'bg-emerald-500 text-white shadow-emerald-200',
+          Icon: CheckCircle
+        };
+      case 'absent':
+        return {
+          label: 'ขาด',
+          cardClass: 'border-rose-100 bg-rose-50/70',
+          textClass: 'text-rose-600',
+          cellClass: 'bg-rose-100 text-rose-600',
+          Icon: XCircle
+        };
+      case 'sick_leave':
+        return {
+          label: 'ลาป่วย',
+          cardClass: 'border-amber-100 bg-amber-50/70',
+          textClass: 'text-amber-600',
+          cellClass: 'bg-amber-100 text-amber-600',
+          Icon: Clock
+        };
+      case 'late':
+        return {
+          label: 'สาย',
+          cardClass: 'border-sky-100 bg-sky-50/70',
+          textClass: 'text-sky-600',
+          cellClass: 'bg-sky-100 text-sky-600',
+          Icon: Clock
+        };
+      case 'other':
+        return {
+          label: 'อื่นๆ',
+          cardClass: 'border-slate-200 bg-slate-100/80',
+          textClass: 'text-slate-600',
+          cellClass: 'bg-slate-200 text-slate-600',
+          Icon: MoreHorizontal
+        };
+      default:
+        return {
+          label: 'ยังไม่เช็ค',
+          cardClass: 'border-slate-100 bg-white',
+          textClass: 'text-slate-400',
+          cellClass: 'bg-slate-100 text-slate-300',
+          Icon: MoreHorizontal
+        };
+    }
+  };
+
+  const getAttendanceSummaryItems = (attendance) => {
+    if (!attendance || attendance.totalDays === 0) return [];
+
+    return [
+      { key: 'present', label: 'มา', value: attendance.present, className: 'text-emerald-600' },
+      { key: 'absent', label: 'ขาด', value: attendance.absent, className: 'text-rose-600' },
+      { key: 'sickLeave', label: 'ลาป่วย', value: attendance.sickLeave, className: 'text-amber-600' },
+      { key: 'late', label: 'สาย', value: attendance.late, className: 'text-sky-600' },
+      { key: 'other', label: 'อื่นๆ', value: attendance.other, className: 'text-slate-600' }
+    ].filter(item => item.value > 0 || item.key === 'present');
+  };
+
   const getLetterBadgeClass = (letter) => {
     if (letter.startsWith('A')) return 'bg-emerald-50 text-emerald-600 border-emerald-100';
     if (letter.startsWith('B')) return 'bg-blue-50 text-blue-600 border-blue-100';
@@ -654,6 +798,157 @@ function AdminSubjectDetails() {
     return adminAssignmentGrades[studentId]?.[assignmentId] ?? '';
   };
 
+  const buildScoreExportRows = () => visibleStudentsSortedByNumber.map((student, index) => ([
+    index + 1,
+    student.student_number || '-',
+    student.student_id || student.username || '-',
+    student.full_name || '-',
+    student.classroom_label || getClassKey(student) || '-',
+    Number(student.grade.collectedScore || 0).toFixed(2),
+    Number(student.grade.examScore || 0).toFixed(2),
+    Number(student.grade.totalScore || 0).toFixed(2),
+    student.grade.letter
+  ]));
+
+  const exportScoreToPDF = async () => {
+    if (!visibleStudentsSortedByNumber || visibleStudentsSortedByNumber.length === 0) {
+      toast.error('ไม่มีข้อมูลนักเรียนสำหรับการส่งออก');
+      return;
+    }
+
+    try {
+      const tableRows = buildScoreExportRows().map((row) => `
+        <tr>
+          <td style="text-align:center;">${escapeHtml(row[0])}</td>
+          <td style="text-align:center;">${escapeHtml(row[1])}</td>
+          <td style="text-align:center;">${escapeHtml(row[2])}</td>
+          <td>${escapeHtml(row[3])}</td>
+          <td>${escapeHtml(row[4])}</td>
+          <td style="text-align:right;">${escapeHtml(row[5])}</td>
+          <td style="text-align:right;">${escapeHtml(row[6])}</td>
+          <td style="text-align:right; font-weight:700; color:#1d4ed8;">${escapeHtml(row[7])}</td>
+          <td style="text-align:center; font-weight:700;">${escapeHtml(row[8])}</td>
+        </tr>
+      `).join('');
+
+      const html = `
+        <div style="font-family:'Sarabun','Tahoma','Segoe UI',sans-serif;padding:16px;color:#1e293b;">
+          <style>
+            @page { size: A4 landscape; margin: 10mm; }
+            h1 { margin: 0; font-size: 20px; color: #0f766e; }
+            h2 { margin: 4px 0 0; font-size: 13px; color: #475569; font-weight: 600; }
+            .meta { margin: 14px 0 16px; padding: 12px 14px; background: #f8fafc; border-left: 4px solid #14b8a6; border-radius: 8px; font-size: 12px; }
+            .meta-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+            table { width: 100%; border-collapse: collapse; font-size: 12px; }
+            th, td { border: 1px solid #dbe2ea; padding: 7px 8px; vertical-align: middle; }
+            th { background: #0f766e; color: #fff; font-weight: 700; }
+            tr { page-break-inside: avoid; }
+            tbody tr:nth-child(even) td { background: #f8fafc; }
+            .footer { margin-top: 12px; font-size: 11px; color: #64748b; text-align: right; }
+          </style>
+          <div style="text-align:center; border-bottom:2px solid #14b8a6; padding-bottom:12px; margin-bottom:12px;">
+            <h1>${escapeHtml(displaySchool)}</h1>
+            <h2>รายงานคะแนนเก็บและคะแนนสอบ</h2>
+          </div>
+          <div class="meta">
+            <div class="meta-grid">
+              <div><strong>รายวิชา:</strong> ${escapeHtml(subject?.name || '-')}</div>
+              <div><strong>ชั้นเรียน:</strong> ${escapeHtml(exportClassLabel)}</div>
+              <div><strong>ปีการศึกษา:</strong> ${escapeHtml(exportAcademicYear || '-')}</div>
+              <div><strong>ภาคเรียน:</strong> ${escapeHtml(exportSemester || '-')}</div>
+            </div>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th style="width:5%; text-align:center;">ลำดับ</th>
+                <th style="width:6%; text-align:center;">เลขที่</th>
+                <th style="width:12%; text-align:center;">รหัสนักเรียน</th>
+                <th style="width:24%; text-align:left;">ชื่อ-สกุล</th>
+                <th style="width:12%; text-align:left;">ชั้นเรียน</th>
+                <th style="width:10%; text-align:right;">คะแนนเก็บ</th>
+                <th style="width:10%; text-align:right;">คะแนนสอบ</th>
+                <th style="width:11%; text-align:right;">คะแนนรวม</th>
+                <th style="width:10%; text-align:center;">เกรด</th>
+              </tr>
+            </thead>
+            <tbody>${tableRows}</tbody>
+          </table>
+          <div class="footer">วันที่พิมพ์: ${escapeHtml(new Date().toLocaleDateString('th-TH'))}</div>
+        </div>
+      `;
+
+      const element = document.createElement('div');
+      element.innerHTML = html;
+
+      if (document.fonts?.ready) {
+        await document.fonts.ready;
+      }
+
+      await html2pdf().set({
+        margin: [10, 8, 10, 8],
+        filename: `คะแนน_${sanitizeFileNamePart(subject?.name || 'Subject')}_${sanitizeFileNamePart(exportAcademicYear || 'Year')}_เทอม${sanitizeFileNamePart(exportSemester || 'Current')}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true },
+        jsPDF: { orientation: 'landscape', unit: 'mm', format: 'a4' },
+        pagebreak: { mode: 'css', avoid: 'tr' }
+      }).from(element).save();
+
+      toast.success('ส่งออก PDF สำเร็จ');
+    } catch (error) {
+      console.error('Error exporting PDF:', error);
+      toast.error('เกิดข้อผิดพลาดในการส่งออกไฟล์ PDF');
+    }
+  };
+
+  const exportScoreToExcel = () => {
+    if (!visibleStudentsSortedByNumber || visibleStudentsSortedByNumber.length === 0) {
+      toast.error('ไม่มีข้อมูลนักเรียนสำหรับการส่งออก');
+      return;
+    }
+
+    try {
+      const headerRow = [
+        'ลำดับ', 
+        'เลขที่', 
+        'รหัสนักเรียน', 
+        'ชื่อ-สกุล', 
+        'ชั้นเรียน',
+        `คะแนนเก็บ (${subject?.max_collected_score || 100})`, 
+        `คะแนนสอบ (${subject?.max_exam_score || 100})`, 
+        `คะแนนรวม (${(subject?.max_collected_score || 100) + (subject?.max_exam_score || 100)})`, 
+        'เกรด'
+      ];
+
+      const rows = buildScoreExportRows();
+
+      const worksheetName = 'คะแนน';
+      const ws = XLSX.utils.aoa_to_sheet([headerRow, ...rows]);
+
+      ws['!cols'] = [
+        { wch: 6 }, 
+        { wch: 6 }, 
+        { wch: 15 }, 
+        { wch: 35 }, 
+        { wch: 15 }, 
+        { wch: 15 }, 
+        { wch: 15 }, 
+        { wch: 10 }, 
+        { wch: 10 }
+      ];
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, worksheetName);
+
+      const fileName = `คะแนน_${sanitizeFileNamePart(subject?.name || 'Subject')}_${sanitizeFileNamePart(exportAcademicYear || 'Year')}_เทอม${sanitizeFileNamePart(exportSemester || 'Current')}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+      toast.success('ส่งออก Excel สำเร็จ');
+    } catch (error) {
+      console.error('Error exporting scores:', error);
+      toast.error('เกิดข้อผิดพลาดในการส่งออกไฟล์ Excel');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/20 to-blue-50/20 pb-32 md:pb-20">
       {/* Header section */}
@@ -678,6 +973,25 @@ function AdminSubjectDetails() {
                   <span className="text-xs font-bold text-slate-400">{displaySchool}</span>
                 </div>
               </div>
+            </div>
+            
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                onClick={exportScoreToPDF}
+                className="flex items-center gap-2 px-4 py-2.5 bg-rose-50 text-rose-600 hover:bg-rose-100 hover:text-rose-700 rounded-xl font-bold text-sm transition-colors"
+                title="ส่งออกคะแนนเก็บและคะแนนสอบเป็น PDF"
+              >
+                <FileDown className="w-4 h-4" />
+                ส่งออก PDF
+              </button>
+              <button
+                onClick={exportScoreToExcel}
+                className="flex items-center gap-2 px-4 py-2.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700 rounded-xl font-bold text-sm transition-colors"
+                title="ส่งออกคะแนนเก็บและคะแนนสอบเป็น Excel"
+              >
+                <FileDown className="w-4 h-4" />
+                ส่งออก Excel
+              </button>
             </div>
           </div>
         </div>
@@ -821,6 +1135,16 @@ function AdminSubjectDetails() {
         {/* Class Filter */}
         {classes.length > 1 && (
           <div className="flex overflow-x-auto gap-2 mb-2 pb-2 no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0">
+            <button
+              onClick={() => setSelectedClass(null)}
+              className={`px-5 py-3 rounded-2xl font-black text-sm whitespace-nowrap transition-all duration-300 active:scale-95 ${
+                !selectedClass
+                  ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200'
+                  : 'bg-white text-slate-500 border border-slate-100 hover:bg-slate-50 hover:text-emerald-600'
+              }`}
+            >
+              ทุกห้อง
+            </button>
             {classes.map(c => (
               <button
                 key={c.key}
@@ -850,6 +1174,7 @@ function AdminSubjectDetails() {
           <div className="md:hidden p-4 space-y-4">
             {visibleStudentsSortedByNumber.map(student => {
               const attendanceTone = getAttendanceTone(student.attendance.percentage);
+              const attendanceSummaryItems = getAttendanceSummaryItems(student.attendance);
               return (
                 <article key={student.id} className="rounded-[1.5rem] border border-slate-100 bg-slate-50/80 p-4 shadow-sm">
                   <div className="flex items-start justify-between gap-3">
@@ -894,8 +1219,15 @@ function AdminSubjectDetails() {
                         </span>
                       </div>
                       <div className="mt-2 flex items-center justify-between text-[11px] font-bold text-slate-500">
-                        <span className="text-emerald-600">มา {student.attendance.present}</span>
-                        <span className="text-rose-600">ขาด {student.attendance.absent}</span>
+                        {attendanceSummaryItems.length > 0 ? (
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                            {attendanceSummaryItems.map(item => (
+                              <span key={item.key} className={item.className}>{item.label} {item.value}</span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-slate-400">ยังไม่มีข้อมูลการเช็คชื่อ</span>
+                        )}
                       </div>
                     </div>
 
@@ -1051,12 +1383,21 @@ function AdminSubjectDetails() {
                     <div className="md:hidden space-y-4">
                       {visibleStudentsSortedByNumber.map(student => {
                         const attendanceTone = getAttendanceTone(student.attendance.percentage);
+                        const attendanceSummaryItems = getAttendanceSummaryItems(student.attendance);
                         return (
                           <article key={student.id} className="rounded-[1.5rem] border border-slate-100 bg-slate-50/80 p-4 shadow-sm">
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">
                                 <p className="text-sm font-black text-slate-800 break-words">{student.full_name || student.username}</p>
-                                <p className="mt-1 text-[11px] font-semibold text-slate-400">มา {student.attendance.present} วัน • ขาด {student.attendance.absent} วัน</p>
+                                <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-semibold text-slate-400">
+                                  {attendanceSummaryItems.length > 0 ? (
+                                    attendanceSummaryItems.map(item => (
+                                      <span key={item.key} className={item.className}>{item.label} {item.value} วัน</span>
+                                    ))
+                                  ) : (
+                                    <span>ยังไม่มีข้อมูลการเช็คชื่อ</span>
+                                  )}
+                                </div>
                               </div>
                               <span className={`inline-flex items-center justify-center px-3 h-9 rounded-xl text-xs font-black shrink-0 ${
                                 attendanceTone === 'emerald' ? 'bg-emerald-50 text-emerald-600' :
@@ -1068,18 +1409,17 @@ function AdminSubjectDetails() {
 
                             <div className="mt-4 flex gap-2 overflow-x-auto no-scrollbar pb-1">
                               {attendanceDates.map(date => {
-                                const isPresent = attendanceMap[date] && attendanceMap[date][student.id];
+                                const statusMeta = getAttendanceStatusMeta(attendanceMap[date]?.[student.id]);
+                                const StatusIcon = statusMeta.Icon;
                                 return (
                                   <div
                                     key={date}
-                                    className={`min-w-[92px] rounded-2xl border px-3 py-3 ${
-                                      isPresent ? 'border-emerald-100 bg-emerald-50/70' : 'border-rose-100 bg-rose-50/70'
-                                    }`}
+                                    className={`min-w-[92px] rounded-2xl border px-3 py-3 ${statusMeta.cardClass}`}
                                   >
                                     <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">{formatShortThaiDate(date)}</div>
-                                    <div className={`mt-2 flex items-center gap-2 text-xs font-black ${isPresent ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                      {isPresent ? <CheckCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
-                                      {isPresent ? 'มาเรียน' : 'ขาด'}
+                                    <div className={`mt-2 flex items-center gap-2 text-xs font-black ${statusMeta.textClass}`}>
+                                      <StatusIcon className="w-4 h-4" />
+                                      {statusMeta.label}
                                     </div>
                                   </div>
                                 );
@@ -1109,13 +1449,12 @@ function AdminSubjectDetails() {
                                 {student.full_name || student.username}
                               </td>
                               {attendanceDates.map(date => {
-                                const isPresent = attendanceMap[date] && attendanceMap[date][student.id];
+                                const statusMeta = getAttendanceStatusMeta(attendanceMap[date]?.[student.id]);
+                                const StatusIcon = statusMeta.Icon;
                                 return (
                                   <td key={date} className="px-4 py-4 text-center">
-                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center mx-auto transition-transform group-hover:scale-110 ${
-                                      isPresent ? 'bg-emerald-500 text-white shadow-emerald-200' : 'bg-rose-50 text-rose-300'
-                                    }`}>
-                                      {isPresent ? <CheckCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center mx-auto transition-transform group-hover:scale-110 ${statusMeta.cellClass}`} title={statusMeta.label}>
+                                      <StatusIcon className="w-4 h-4" />
                                     </div>
                                   </td>
                                 );

@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import {
   ArrowLeft,
+  BadgeCheck,
   ChevronDown,
   GraduationCap,
   Info,
@@ -11,10 +12,41 @@ import {
   School,
   User
 } from 'lucide-react';
+import GoogleIdentityButton, { hasGoogleIdentityConfig } from '../../GoogleIdentityButton';
 import { API_BASE_URL } from '../../../endpoints';
+
+const GOOGLE_SIGNUP_DRAFT_KEY = 'tdk_google_signup_draft';
+
+function decodeGoogleCredentialProfile(credential) {
+  try {
+    const payloadSegment = credential.split('.')[1];
+    if (!payloadSegment) {
+      return null;
+    }
+    const normalized = payloadSegment.replace(/-/g, '+').replace(/_/g, '/');
+    const decoded = window.atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '='));
+    const data = JSON.parse(decoded);
+    return {
+      email: data.email || '',
+      full_name: data.name || '',
+    };
+  } catch (error) {
+    return null;
+  }
+}
+
+function buildSuggestedUsername(emailValue) {
+  const base = String(emailValue || '')
+    .split('@')[0]
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]/g, '')
+    .slice(0, 30);
+  return base || '';
+}
 
 function SignupPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState('');
@@ -25,11 +57,46 @@ function SignupPage() {
   const [selectedSchoolId, setSelectedSchoolId] = useState('');
   const [loadingSchools, setLoadingSchools] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [googleCredential, setGoogleCredential] = useState('');
+  const [googleProfile, setGoogleProfile] = useState(null);
 
   // Set page title
   useEffect(() => {
     document.title = 'สมัครสมาชิก - TDK Learning System';
   }, []);
+
+  useEffect(() => {
+    const stateDraft = location.state?.googleSignupDraft;
+    let storedDraft = null;
+
+    try {
+      const raw = sessionStorage.getItem(GOOGLE_SIGNUP_DRAFT_KEY);
+      storedDraft = raw ? JSON.parse(raw) : null;
+    } catch (error) {
+      storedDraft = null;
+    }
+
+    const draft = stateDraft || storedDraft;
+    if (!draft?.credential) {
+      return;
+    }
+
+    const profile = draft.profile || decodeGoogleCredentialProfile(draft.credential) || null;
+    setGoogleCredential(draft.credential);
+    setGoogleProfile(profile);
+    sessionStorage.setItem(GOOGLE_SIGNUP_DRAFT_KEY, JSON.stringify({
+      credential: draft.credential,
+      profile,
+    }));
+
+    if (profile?.email) {
+      setEmail((prev) => prev || profile.email);
+      setUsername((prev) => prev || buildSuggestedUsername(profile.email));
+    }
+    if (profile?.full_name) {
+      setFullName((prev) => prev || profile.full_name);
+    }
+  }, [location.state]);
 
   // ensure Kanit font is loaded for this page
   useEffect(() => {
@@ -71,6 +138,29 @@ function SignupPage() {
   const inputClass = 'block w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition-all placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-50';
   const inputClassIcon = 'block w-full rounded-xl border border-slate-200 bg-white py-3 pl-11 pr-4 text-sm text-slate-700 outline-none transition-all placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-50';
 
+  const clearGoogleSignupDraft = () => {
+    sessionStorage.removeItem(GOOGLE_SIGNUP_DRAFT_KEY);
+    setGoogleCredential('');
+    setGoogleProfile(null);
+  };
+
+  const handleGoogleSignupCredential = (credential) => {
+    const profile = decodeGoogleCredentialProfile(credential);
+    setGoogleCredential(credential);
+    setGoogleProfile(profile);
+    sessionStorage.setItem(GOOGLE_SIGNUP_DRAFT_KEY, JSON.stringify({ credential, profile }));
+
+    if (profile?.email) {
+      setEmail(profile.email);
+      setUsername((prev) => prev || buildSuggestedUsername(profile.email));
+    }
+    if (profile?.full_name) {
+      setFullName((prev) => prev || profile.full_name);
+    }
+
+    toast.success('เชื่อมบัญชี Google สำหรับคำขอสมัครเรียบร้อยแล้ว', { theme: 'colored' });
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     // Validate required fields. For school, behavior depends on schoolMode and available schools list.
@@ -106,14 +196,26 @@ function SignupPage() {
         email: email || null,
         full_name: fullName,
         password,
+        google_credential: googleCredential || null,
       };
 
       // attach school info depending on the mode / available data
       if (schoolMode === 'new' || (schoolMode === 'existing' && schools.length === 0)) {
         body.school_name = schoolName;
       } else if (schoolMode === 'existing') {
-        body.school_id = selectedSchoolId;
+        const selectedSchool = schools.find((school) => {
+          const value = school.id ?? school.school_id ?? school.name ?? school.school_name;
+          return String(value) === String(selectedSchoolId);
+        });
+        body.school_name = selectedSchool?.name ?? selectedSchool?.school_name ?? '';
       }
+
+      if (!body.school_name) {
+        toast.error('ไม่พบชื่อโรงเรียนสำหรับคำขอสมัคร กรุณาเลือกหรือกรอกใหม่อีกครั้ง', { theme: 'colored' });
+        setIsLoading(false);
+        return;
+      }
+
       const res = await fetch(`${API_BASE_URL}/owner/request_admin`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -127,6 +229,7 @@ function SignupPage() {
           theme: "colored"
         });
       } else {
+        clearGoogleSignupDraft();
         toast.success('ส่งคำขอสร้างบัญชีเรียบร้อยแล้ว รอการอนุมัติจากผู้ดูแลระบบ', {
           position: "top-center",
           theme: "colored"
@@ -189,6 +292,48 @@ function SignupPage() {
 
           <div className="p-5 sm:p-8">
             <form className="space-y-5" onSubmit={handleSubmit}>
+              {hasGoogleIdentityConfig() ? (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-5">
+                  <div className="text-center">
+                    <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">Google Sign-Up</p>
+                    <p className="mt-2 text-sm font-medium text-slate-600">สมัครด้วย Google ได้ แม้ยังไม่มีบัญชีในระบบ</p>
+                  </div>
+
+                  {googleCredential ? (
+                    <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-800">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="inline-flex items-center gap-2 font-semibold">
+                            <BadgeCheck className="h-4 w-4" /> เชื่อม Google ไว้กับคำขอสมัครแล้ว
+                          </p>
+                          <p className="mt-2 break-all text-emerald-700">{googleProfile?.email || email || 'บัญชี Google พร้อมใช้งาน'}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={clearGoogleSignupDraft}
+                          className="shrink-0 rounded-xl border border-emerald-200 bg-white px-3 py-2 text-xs font-semibold text-emerald-700 transition-colors hover:bg-emerald-100"
+                        >
+                          ยกเลิก Google
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-4 flex justify-center">
+                      <GoogleIdentityButton
+                        onCredential={handleGoogleSignupCredential}
+                        text="continue_with"
+                        width={320}
+                        disabled={isLoading}
+                      />
+                    </div>
+                  )}
+
+                  <p className="mt-3 text-center text-xs font-medium leading-5 text-slate-400">
+                    เมื่อ owner อนุมัติคำขอ ระบบจะสร้างบัญชีใหม่และผูก Google บัญชีนี้ให้โดยอัตโนมัติ
+                  </p>
+                </div>
+              ) : null}
+
               <div className="space-y-1.5">
                 <label className="block text-sm font-medium text-slate-700">โรงเรียน / ศูนย์การเรียนรู้</label>
                 <div className="mb-3 grid grid-cols-2 rounded-full bg-slate-100 p-1">
@@ -297,12 +442,16 @@ function SignupPage() {
                     </div>
                     <input
                       type="email"
-                      className={inputClassIcon}
+                      className={`${inputClassIcon} ${googleCredential ? 'bg-slate-50 text-slate-500' : ''}`}
                       placeholder="example@school.ac.th"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
+                      readOnly={Boolean(googleCredential)}
                     />
                   </div>
+                  {googleCredential ? (
+                    <p className="text-xs text-slate-400">อีเมลจะใช้ค่าที่ Google ยืนยันแล้ว เพื่อผูกบัญชีหลังอนุมัติ</p>
+                  ) : null}
                 </div>
               </div>
 
@@ -353,7 +502,7 @@ function SignupPage() {
 
               <div className="flex gap-3 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-800">
                 <Info className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
-                <p>บัญชีนี้ต้องได้รับการตรวจสอบและอนุมัติจากผู้ดูแลระบบส่วนกลางก่อน จึงจะสามารถเข้าใช้งานได้</p>
+                <p>บัญชีนี้ต้องได้รับการตรวจสอบและอนุมัติจากผู้ดูแลระบบส่วนกลางก่อน จึงจะสามารถเข้าใช้งานได้ {googleCredential ? 'และเมื่ออนุมัติแล้วจะเข้าสู่ระบบด้วย Google ได้ทันที' : ''}</p>
               </div>
 
               <button
@@ -366,7 +515,7 @@ function SignupPage() {
                     <svg className="h-5 w-5 animate-spin text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                     กำลังส่งคำขอ...
                   </span>
-                ) : 'ส่งคำขอเปิดบัญชีแอดมิน'}
+                ) : googleCredential ? 'ส่งคำขอเปิดบัญชีแอดมินพร้อมเชื่อม Google' : 'ส่งคำขอเปิดบัญชีแอดมิน'}
               </button>
 
               <p className="text-center text-xs text-slate-500">

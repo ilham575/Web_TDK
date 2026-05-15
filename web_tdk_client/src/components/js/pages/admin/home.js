@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import '../../../css/pages/admin/admin-home.css';
 import { toast } from 'react-toastify';
-import { Users, GraduationCap, Megaphone } from 'lucide-react';
+import { Users, GraduationCap, Megaphone, FileDown, FileSpreadsheet, Loader2 } from 'lucide-react';
 
 import Loading from '../../Loading';
 import PageHeader, { getInitials } from '../../PageHeader';
@@ -12,6 +12,7 @@ import swalMessenger from '../owner/swalmessenger';
 import ExpiryModal from '../../ExpiryModal';
 import AnnouncementModal from '../../AnnouncementModal';
 import LogoUploadModal from '../../LogoUploadModal';
+import DailySubjectTrackingBoard from '../../DailySubjectTrackingBoard';
 import ScheduleGrid from '../../ScheduleGrid';
 import AbsenceApproval from './AbsenceApproval';
 import PromoteClassroomModal from './PromoteClassroomModal';
@@ -35,6 +36,12 @@ import StudentGradeTab from './StudentGradeTab';
 import SummaryCompletionTab from './SummaryCompletionTab';
 import AdminTabIntro from './AdminTabIntro';
 import { API_BASE_URL } from '../../../endpoints';
+import {
+  exportAdminOverviewExcel,
+  exportAdminOverviewPdf,
+  exportTeacherScheduleExcel,
+  exportTeacherSchedulePdf,
+} from '../../../../utils/scheduleExportUtils';
 import FirstVisitOnboarding, {
   ONBOARDING_KEYS,
   markOnboardingSeen,
@@ -210,6 +217,7 @@ function AdminPage() {
   const [newRole, setNewRole] = useState('teacher');
   const [creatingUser, setCreatingUser] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [editingUser, setEditingUser] = useState(null);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [expiry, setExpiry] = useState('');
@@ -318,6 +326,22 @@ function AdminPage() {
       return studentList.length;
     }
     return studentList.filter(student => student.is_active !== false).length;
+  };
+
+  const buildClassroomStudentsUrl = (classroomOrId, options = {}) => {
+    const { bustCache = false } = options;
+    const classroomId = typeof classroomOrId === 'object' ? classroomOrId?.id : classroomOrId;
+    const includeInactive = typeof classroomOrId === 'object' && isHistoricalClassroomPeriod(classroomOrId);
+    const params = new URLSearchParams();
+
+    if (includeInactive) {
+      params.set('include_inactive', 'true');
+    }
+    if (bustCache) {
+      params.set('t', Date.now().toString());
+    }
+
+    return `${API_BASE_URL}/classrooms/${classroomId}/students${params.toString() ? `?${params.toString()}` : ''}`;
   };
 
   // Sync the unified filter to match the active semester period whenever it changes
@@ -643,6 +667,31 @@ function AdminPage() {
   const [editingSchedule, setEditingSchedule] = useState(null);
   const [adminScheduleYear, setAdminScheduleYear] = useState(String(new Date().getFullYear() + 543));
   const [adminScheduleSemester, setAdminScheduleSemester] = useState('');
+  const [scheduleExportingKey, setScheduleExportingKey] = useState('');
+  const [selectedScheduleTeacherId, setSelectedScheduleTeacherId] = useState('');
+
+  const scheduleTeacherExportOptions = React.useMemo(() => {
+    const optionsMap = new Map();
+
+    teachers.forEach((teacher) => {
+      const teacherId = teacher?.id ?? teacher?.user_id;
+      const label = String(teacher?.full_name || teacher?.username || teacher?.email || '').trim();
+      if (teacherId !== null && teacherId !== undefined && label) {
+        optionsMap.set(String(teacherId), { value: String(teacherId), label });
+      }
+    });
+
+    adminSchedules.forEach((item) => {
+      if (item?.is_break) return;
+      const teacherId = item?.teacher_id ?? item?.teacher?.id;
+      const label = String(item?.teacher_name || item?.teacher?.name || item?.teacher_full_name || '').trim();
+      if (teacherId !== null && teacherId !== undefined && label && !optionsMap.has(String(teacherId))) {
+        optionsMap.set(String(teacherId), { value: String(teacherId), label });
+      }
+    });
+
+    return [...optionsMap.values()].sort((left, right) => left.label.localeCompare(right.label, 'th'));
+  }, [teachers, adminSchedules]);
 
   // Teacher/Student Schedule Management Modal state
   const [showScheduleManagementModal, setShowScheduleManagementModal] = useState(false);
@@ -738,6 +787,34 @@ function AdminPage() {
   const [showStudentDetailModal, setShowStudentDetailModal] = useState(false);
   const [selectedStudentDetail, setSelectedStudentDetail] = useState(null);
   const [loadingStudentDetail, setLoadingStudentDetail] = useState(false);
+
+  const closeUserModal = () => {
+    setShowModal(false);
+    setEditingUser(null);
+  };
+
+  const openEditUserModal = (user) => {
+    setShowModal(false);
+    setEditingUser(user);
+  };
+
+  const handleUserModalSuccess = (data, meta = {}) => {
+    if (meta.isEditMode) {
+      if (data.role === 'teacher') {
+        setTeachers(prev => prev.map(item => item.id === data.id ? { ...item, ...data } : item));
+      } else if (data.role === 'student') {
+        setStudents(prev => prev.map(item => item.id === data.id ? { ...item, ...data } : item));
+        setSelectedStudentDetail(prev => prev && prev.id === data.id ? { ...prev, ...data } : prev);
+      }
+      return;
+    }
+
+    if (data.role === 'teacher') {
+      setTeachers(prev => [data, ...prev]);
+    } else if (data.role === 'student') {
+      setStudents(prev => [data, ...prev]);
+    }
+  };
 
   const getLetterGrade = (percentage) => {
     percentage = parseFloat(percentage);
@@ -1198,8 +1275,7 @@ function AdminPage() {
     
     const token = getStoredAccessToken();
     classrooms.forEach(classroom => {
-      // Add cache-busting timestamp to force fresh data from server
-      fetch(`${API_BASE_URL}/classrooms/${classroom.id}/students?t=${Date.now()}`, {
+      fetch(buildClassroomStudentsUrl(classroom, { bustCache: true }), {
         headers: { ...(token ? { 'Authorization': `Bearer ${token}` } : {}) }
       })
         .then(res => res.json())
@@ -2285,7 +2361,7 @@ function AdminPage() {
       }
 
       // Single day create
-      const body = { school_id: Number(schoolId), day_of_week: Number(day), start_time: start, end_time: end };
+  const body = { school_id: Number(schoolId), day_of_week: Number(day), start_time: start, end_time: end };
       const res = await fetch(`${API_BASE_URL}/schedule/slots`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(body) });
       if (res.ok) {
         toast.success(t('admin.addScheduleSuccess'));
@@ -2380,6 +2456,147 @@ function AdminPage() {
     } catch (err) {
       console.error('Delete assignment error:', err);
       toast.error(t('admin.cancelScheduleError'));
+    }
+  };
+
+  const deleteBreakSchedule = async (breakId) => {
+    try {
+      const token = getStoredAccessToken();
+      const res = await fetch(`${API_BASE_URL}/schedule/breaks/${breakId}`, {
+        method: 'DELETE',
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
+      });
+      if (res.ok) {
+        toast.success('ลบเวลาพักเรียบร้อย');
+        await loadAdminSchedules();
+      } else {
+        const data = await res.json();
+        toast.error(data.detail || 'ลบเวลาพักไม่สำเร็จ');
+      }
+    } catch (err) {
+      console.error('Delete break schedule error:', err);
+      toast.error('เกิดข้อผิดพลาดขณะลบเวลาพัก');
+    }
+  };
+
+  const loadAdminSchedulesForExport = async () => {
+    let schedulesToExport = Array.isArray(adminSchedules) ? adminSchedules : [];
+
+    if (!schedulesToExport.length) {
+      try {
+        const schoolId = localStorage.getItem('school_id');
+        if (schoolId) {
+          const token = getStoredAccessToken();
+          const params = new URLSearchParams({ school_id: schoolId });
+          if (adminScheduleYear) params.set('academic_year', adminScheduleYear);
+          if (adminScheduleSemester) params.set('semester', adminScheduleSemester);
+          const res = await fetch(`${API_BASE_URL}/schedule/assignments?${params.toString()}`, { headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+          if (res.ok) {
+            const data = await res.json();
+            schedulesToExport = Array.isArray(data) ? data : [];
+            setAdminSchedules(schedulesToExport);
+          }
+        }
+      } catch (loadError) {
+        console.error('Admin schedule export preload error:', loadError);
+      }
+    }
+
+    return schedulesToExport;
+  };
+
+  const handleAdminOverviewExport = async (format) => {
+    const schedulesToExport = await loadAdminSchedulesForExport();
+
+    if (!Array.isArray(schedulesToExport) || schedulesToExport.length === 0) {
+      toast.error('ไม่มีข้อมูลตารางสำหรับส่งออก');
+      return;
+    }
+
+    const exportKey = `overview-${format}`;
+    const schoolName = currentUser?.school_name || currentUser?.school?.name || localStorage.getItem('school_name') || 'โรงเรียน';
+
+    setScheduleExportingKey(exportKey);
+    try {
+      if (format === 'pdf') {
+        await exportAdminOverviewPdf({
+          schoolName,
+          academicYear: adminScheduleYear,
+          semester: adminScheduleSemester,
+          schedules: schedulesToExport,
+        });
+      } else {
+        await exportAdminOverviewExcel({
+          schoolName,
+          academicYear: adminScheduleYear,
+          semester: adminScheduleSemester,
+          schedules: schedulesToExport,
+        });
+      }
+      toast.success(format === 'pdf' ? 'ส่งออกภาพรวมตารางเรียน PDF สำเร็จ' : 'ส่งออกภาพรวมตารางเรียน Excel สำเร็จ');
+    } catch (error) {
+      console.error('Admin overview schedule export error:', error);
+      toast.error('เกิดข้อผิดพลาดในการส่งออกภาพรวมตารางเรียน');
+    } finally {
+      setScheduleExportingKey('');
+    }
+  };
+
+  const handleAdminTeacherExport = async (format) => {
+    if (!selectedScheduleTeacherId) {
+      toast.error('กรุณาเลือกครูก่อนส่งออกตาราง');
+      return;
+    }
+
+    const schedulesToExport = await loadAdminSchedulesForExport();
+    const selectedTeacher = scheduleTeacherExportOptions.find((option) => option.value === String(selectedScheduleTeacherId));
+    const selectedTeacherLabel = String(selectedTeacher?.label || '').trim() || 'ครูผู้สอน';
+    const selectedTeacherSchedules = schedulesToExport.filter((item) => {
+      if (item?.is_break) return true;
+
+      const teacherId = item?.teacher_id ?? item?.teacher?.id;
+      if (teacherId !== null && teacherId !== undefined) {
+        return String(teacherId) === String(selectedScheduleTeacherId);
+      }
+
+      const teacherName = String(item?.teacher_name || item?.teacher?.name || item?.teacher_full_name || '').trim().toLowerCase();
+      return teacherName && teacherName === selectedTeacherLabel.toLowerCase();
+    });
+
+    const hasTeacherSchedules = Array.isArray(selectedTeacherSchedules) && selectedTeacherSchedules.some((item) => !item?.is_break);
+    if (!hasTeacherSchedules) {
+      toast.error(`ไม่พบตารางเรียนของ ${selectedTeacherLabel} ในตัวกรองที่เลือก`);
+      return;
+    }
+
+    const exportKey = `teachers-${format}`;
+    const schoolName = currentUser?.school_name || currentUser?.school?.name || localStorage.getItem('school_name') || 'โรงเรียน';
+
+    setScheduleExportingKey(exportKey);
+    try {
+      if (format === 'pdf') {
+        await exportTeacherSchedulePdf({
+          schoolName,
+          academicYear: adminScheduleYear,
+          semester: adminScheduleSemester,
+          schedules: selectedTeacherSchedules,
+          teacherName: selectedTeacherLabel,
+        });
+      } else {
+        await exportTeacherScheduleExcel({
+          schoolName,
+          academicYear: adminScheduleYear,
+          semester: adminScheduleSemester,
+          schedules: selectedTeacherSchedules,
+          teacherName: selectedTeacherLabel,
+        });
+      }
+      toast.success(format === 'pdf' ? `ส่งออกตารางของ ${selectedTeacherLabel} เป็น PDF สำเร็จ` : `ส่งออกตารางของ ${selectedTeacherLabel} เป็น Excel สำเร็จ`);
+    } catch (error) {
+      console.error('Admin teacher schedule export error:', error);
+      toast.error('เกิดข้อผิดพลาดในการส่งออกตารางครู');
+    } finally {
+      setScheduleExportingKey('');
     }
   };
 
@@ -2731,10 +2948,12 @@ function AdminPage() {
     if (activeTab === 'schedule') {
       loadScheduleSlots();
       loadAdminSchedules();
+      loadSubjects();
     } else if (activeTab === 'schedules') {
       // Load admin schedules when switching to "เพิ่มตารางเรียน" tab
       loadScheduleSlots();
       loadAdminSchedules();
+      loadSubjects();
     } else if (activeTab !== 'rankings') {
       // Reset ranking state when leaving rankings tab
       setRankingData([]);
@@ -3514,12 +3733,12 @@ function AdminPage() {
             toast.success(`✓ ${t('admin.removeStudentSuccess')}`);
             
             // Update student count for this classroom
-            const studentRes = await fetch(`${API_BASE_URL}/classrooms/${classroomId}/students`, {
+            const classroom = classrooms.find(item => item.id === classroomId) || selectedClassroom || classroomId;
+            const studentRes = await fetch(buildClassroomStudentsUrl(classroom, { bustCache: true }), {
               headers: { 'Authorization': `Bearer ${token}` }
             });
             if (studentRes.ok) {
               const students = await studentRes.json();
-              const classroom = classrooms.find(item => item.id === classroomId) || selectedClassroom;
               const studentCount = getVisibleStudentCount(classroom, students);
               setClassroomStudentCounts(prev => ({ 
                 ...prev, 
@@ -3585,6 +3804,11 @@ function AdminPage() {
         params.append('grade_level', gradeLevel); // ส่ง grade_level แทน classroom_id
         if (academicYear) params.append('academic_year', academicYear);
         if (semester) params.append('semester', semester);
+        const includeInactive = academicYear && semester && (
+          String(academicYear) !== String(systemYear || '') ||
+          Number(semester) !== Number(systemSemester || 0)
+        );
+        if (includeInactive) params.append('include_inactive', 'true');
         url = `${API_BASE_URL}/grades/classroom/0/ranking?${params.toString()}`;
       }
       const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
@@ -3693,7 +3917,7 @@ function AdminPage() {
     // ดึงข้อมูลนักเรียนในชั้นเรียน (guaranteed fresh data)
     const token = getStoredAccessToken();
     try {
-      const response = await fetch(`${API_BASE_URL}/classrooms/${classroom.id}/students?t=${Date.now()}`, {
+      const response = await fetch(buildClassroomStudentsUrl(classroom, { bustCache: true }), {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
@@ -3835,69 +4059,39 @@ function AdminPage() {
       />
 
       <div className="relative bg-white border-b border-slate-200">
-          <PageHeader 
+        <PageHeader
           currentUser={currentUser}
           role="admin"
           displaySchool={displaySchool}
-          hideLogout={true}
-          rightContent={
+          stats={{
+            teachers: teachers.length,
+            students: students.length,
+            classes: classrooms.length,
+            announcements: announcements.length,
+          }}
+          onLogout={handleSignout}
+          extraActions={(
             <>
-              {/* Mobile Menu Button */}
               <button
-                className="md:hidden p-2 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
-                onClick={() => setShowHeaderMenu(s => !s)}
-                aria-expanded={showHeaderMenu}
-                aria-label="Open header menu"
+                type="button"
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-slate-200 text-slate-700 font-medium hover:bg-slate-50 transition-colors text-sm"
+                onClick={() => setShowLogoUploadModal(true)}
+                title="อัพโหลดโลโก้"
               >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
+                <span className="text-lg">📸</span>
+                <span className="hidden lg:inline">อัพโหลดโลโก้</span>
               </button>
-              
-              {/* Mobile Dropdown Menu */}
-              <div className={`${showHeaderMenu ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 -translate-y-2 pointer-events-none'} md:hidden absolute right-4 top-16 bg-white rounded-xl border border-slate-200 shadow-xl p-3 z-50 min-w-[200px] transition-all duration-200 ease-out`}>
-                <button role="menuitem" className="w-full flex items-center gap-3 px-4 py-3 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition-colors mb-2" onClick={() => { setShowModal(true); setShowHeaderMenu(false); }}>➕ {t('admin.addNewUser')}</button>
-                <button role="menuitem" className="w-full flex items-center gap-3 px-4 py-3 rounded-lg bg-white text-slate-700 font-medium border border-slate-200 hover:bg-slate-50 transition-colors mb-2" onClick={() => { navigate('/profile'); setShowHeaderMenu(false); }}>👤 {t('admin.profile')}</button>
-                <button role="menuitem" className="w-full flex items-center gap-3 px-4 py-3 rounded-lg bg-white text-slate-700 font-medium border border-slate-200 hover:bg-slate-50 transition-colors" onClick={() => { handleSignout(); setShowHeaderMenu(false); }}>🚪 {t('admin.logout')}</button>
-              </div>
-              
-              {/* Desktop Actions */}
-              <div className="hidden md:flex items-center gap-3">
-                <button 
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-slate-200 text-slate-700 font-medium hover:bg-slate-50 transition-colors text-sm"
-                  onClick={() => setShowLogoUploadModal(true)}
-                  title="อัพโหลดโลโก้"
-                >
-                  <span className="text-lg">📸</span>
-                  <span className="hidden lg:inline">อัพโหลดโลโก้</span>
-                </button>
-                <button 
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition-colors text-sm"
-                  onClick={() => setShowModal(true)}
-                  title="สร้างผู้ใช้ใหม่"
-                >
-                  <span className="text-lg">➕</span>
-                  <span className="hidden lg:inline">เพิ่มผู้ใช้ใหม่</span>
-                </button>
-                <button 
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-slate-200 text-slate-700 font-medium hover:bg-slate-50 transition-colors text-sm"
-                  onClick={() => navigate('/profile')}
-                  title="ดูโปรไฟล์"
-                >
-                  <span className="text-lg">👤</span>
-                  <span className="hidden lg:inline">โปรไฟล์</span>
-                </button>
-                <button 
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-slate-200 text-slate-700 font-medium hover:bg-slate-50 transition-colors text-sm"
-                  onClick={handleSignout}
-                  title="ออกจากระบบ"
-                >
-                  <span className="text-lg">🚪</span>
-                  <span className="hidden lg:inline">ออกจากระบบ</span>
-                </button>
-              </div>
+              <button
+                type="button"
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition-colors text-sm"
+                onClick={() => setShowModal(true)}
+                title="สร้างผู้ใช้ใหม่"
+              >
+                <span className="text-lg">➕</span>
+                <span className="hidden lg:inline">เพิ่มผู้ใช้ใหม่</span>
+              </button>
             </>
-          }
+          )}
         />
       </div>
 
@@ -3914,6 +4108,67 @@ function AdminPage() {
 
         {/* Right Content - Tab content */}
         <div className={`flex-1 ${isMobile ? 'min-w-0' : 'min-w-[640px]'}`}>
+          {activeTab !== 'schedules' && (
+            <div className="mb-6 flex flex-col gap-4 rounded-2xl border border-indigo-100 bg-white p-4 shadow-sm xl:flex-row xl:items-center xl:justify-between">
+              <div>
+                <h3 className="text-base font-black text-slate-800">ส่งออกตารางเรียน</h3>
+                <p className="mt-1 text-sm font-medium text-slate-500">ปุ่ม export อยู่ตรงนี้ด้วย และแท็บที่มีปุ่มเต็มคือ “เพิ่มตารางเรียนสำหรับครูและนักเรียน”</p>
+                <p className="mt-1 text-xs font-bold text-slate-400">ตัวกรองปัจจุบัน: ปี {adminScheduleYear || '-'} · {adminScheduleSemester ? `ภาคเรียนที่ ${adminScheduleSemester}` : 'ทุกภาคเรียน'}</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <select
+                  value={selectedScheduleTeacherId}
+                  onChange={(event) => setSelectedScheduleTeacherId(event.target.value)}
+                  disabled={Boolean(scheduleExportingKey) || scheduleTeacherExportOptions.length === 0}
+                  className="min-w-[220px] rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 outline-none transition-colors focus:border-indigo-300 focus:ring-2 focus:ring-indigo-500/20 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                >
+                  <option value="">เลือกครูสำหรับ export รายครู</option>
+                  {scheduleTeacherExportOptions.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={() => setActiveTab('schedules')}
+                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-black text-slate-700 transition-colors hover:bg-slate-100"
+                >
+                  เปิดแท็บตารางเรียน
+                </button>
+                <button
+                  onClick={() => handleAdminOverviewExport('pdf')}
+                  disabled={Boolean(scheduleExportingKey)}
+                  className="inline-flex items-center gap-2 rounded-xl border border-indigo-200 bg-white px-4 py-2.5 text-sm font-black text-indigo-700 transition-colors hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {scheduleExportingKey === 'overview-pdf' ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
+                  ภาพรวม PDF
+                </button>
+                <button
+                  onClick={() => handleAdminOverviewExport('excel')}
+                  disabled={Boolean(scheduleExportingKey)}
+                  className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-black text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {scheduleExportingKey === 'overview-excel' ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
+                  ภาพรวม Excel
+                </button>
+                <button
+                  onClick={() => handleAdminTeacherExport('pdf')}
+                  disabled={Boolean(scheduleExportingKey)}
+                  className="inline-flex items-center gap-2 rounded-xl border border-sky-200 bg-white px-4 py-2.5 text-sm font-black text-sky-700 transition-colors hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {scheduleExportingKey === 'teachers-pdf' ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
+                  รายครู PDF
+                </button>
+                <button
+                  onClick={() => handleAdminTeacherExport('excel')}
+                  disabled={Boolean(scheduleExportingKey)}
+                  className="inline-flex items-center gap-2 rounded-xl bg-sky-600 px-4 py-2.5 text-sm font-black text-white transition-colors hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {scheduleExportingKey === 'teachers-excel' ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
+                  รายครู Excel
+                </button>
+              </div>
+            </div>
+          )}
+
           {activeTab === 'home' && (
             <AdminTabIntro
               teachers={teachers}
@@ -4269,6 +4524,13 @@ function AdminPage() {
                                       >
                                         👁️
                                       </button>
+                                      <button
+                                        className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-blue-100 text-blue-600 hover:bg-blue-200 hover:text-blue-800 transition-all duration-200"
+                                        onClick={() => openEditUserModal(teacher)}
+                                        title="แก้ไขข้อมูล"
+                                      >
+                                        ✏️
+                                      </button>
                                       <button 
                                         className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-amber-100 text-amber-600 hover:bg-amber-200 hover:text-amber-800 transition-all duration-200" 
                                         onClick={() => openConfirmModal(t('admin.resetTitle'), `${t('admin.resetPasswordOf')} "${teacher.full_name || teacher.username}"?`, async () => {
@@ -4457,6 +4719,13 @@ function AdminPage() {
                                         }}
                                       >
                                         👁️ ดูข้อมูล
+                                      </button>
+                                      <button
+                                        className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-blue-100 text-blue-600 hover:bg-blue-200 hover:text-blue-800 transition-all"
+                                        onClick={() => openEditUserModal(teacher)}
+                                        title="แก้ไขข้อมูล"
+                                      >
+                                        ✏️
                                       </button>
                                       <button 
                                         className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-amber-100 text-amber-600 hover:bg-amber-200 hover:text-amber-800 transition-all" 
@@ -4915,6 +5184,13 @@ function AdminPage() {
                                   </td>
                                   <td className="px-4 py-4">
                                     <div className="flex flex-wrap gap-2">
+                                      <button
+                                        className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-blue-100 text-blue-600 hover:bg-blue-200 hover:text-blue-800 transition-all duration-200"
+                                        onClick={() => openEditUserModal(student)}
+                                        title="แก้ไขข้อมูล"
+                                      >
+                                        ✏️
+                                      </button>
                                       <button 
                                         className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-amber-100 text-amber-600 hover:bg-amber-200 hover:text-amber-800 transition-all duration-200" 
                                         onClick={() => openConfirmModal(t('admin.resetTitle'), `${t('admin.resetPasswordOf')} "${student.full_name || student.username}"?`, async () => {
@@ -5118,6 +5394,13 @@ function AdminPage() {
                                   </div>
 
                                   <div className="flex flex-wrap gap-2 pt-3 border-t border-slate-50">
+                                      <button
+                                        className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-blue-100 text-blue-600 hover:bg-blue-200 hover:text-blue-800 transition-all"
+                                        onClick={() => openEditUserModal(student)}
+                                        title="แก้ไขข้อมูล"
+                                      >
+                                        ✏️
+                                      </button>
                                       <button 
                                         className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-amber-100 text-amber-600 hover:bg-amber-200 hover:text-amber-800 transition-all" 
                                         onClick={() => openConfirmModal(t('admin.resetTitle'), `${t('admin.resetPasswordOf')} "${student.full_name || student.username}"?`, async () => {
@@ -6521,10 +6804,10 @@ function AdminPage() {
                           </div>
                         </div>
                         <div className="flex flex-wrap gap-2">
-                          {ownedBy(item) && !(item.expires_at && parseLocalDatetime(item.expires_at) <= new Date()) && (
+                          {(ownedBy(item) || currentUser?.role === 'admin') && !(item.expires_at && parseLocalDatetime(item.expires_at) <= new Date()) && (
                             <button className="px-3 py-1.5 rounded-lg text-sm font-medium bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all duration-200" onClick={() => openExpiryModal(item)}>{t('admin.setExpired')}</button>
                           )}
-                          {ownedBy(item) && (
+                          {(ownedBy(item) || currentUser?.role === 'admin') && (
                             <>
                               <button className="px-3 py-1.5 rounded-lg text-sm font-medium bg-amber-100 text-amber-700 hover:bg-amber-200 transition-all duration-200" onClick={() => openAnnouncementModal(item)}>{t('common.edit')}</button>
                               <button className="px-3 py-1.5 rounded-lg text-sm font-medium bg-red-100 text-red-700 hover:bg-red-200 transition-all duration-200" onClick={() => openConfirmModal(t('admin.deleteNewsTitle'), t('admin.confirmDeleteNewsShort'), async () => { await deleteAnnouncement(item.id); })}>{t('common.delete')}</button>
@@ -6627,9 +6910,6 @@ function AdminPage() {
                               
                               <div className="flex justify-between items-start relative z-10">
                                   <div>
-                                      <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-cyan-100 text-cyan-700 text-xs font-bold mb-2">
-                                          {t('admin.day')}
-                                      </span>
                                       <h3 className="text-xl font-black text-slate-800">{getDayName(slot.day_of_week)}</h3>
                                   </div>
                               </div>
@@ -6785,13 +7065,56 @@ function AdminPage() {
               )}
             </div>
             <div className="p-8">
-              <div className="mb-6">
+              <div className="mb-6 flex flex-wrap gap-3">
                 <button
                   className="group inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-indigo-500 to-violet-600 text-white font-semibold shadow-lg shadow-indigo-500/30 hover:shadow-xl hover:shadow-indigo-500/40 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-300"
                   onClick={() => { setEditingAssignment(null); setShowScheduleManagementModal(true); }}
                 >
                   <span className="group-hover:scale-125 transition-transform duration-300">➕</span>
                   เพิ่มตารางเรียนใหม่
+                </button>
+                <button
+                  className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-white border border-indigo-200 text-indigo-700 font-semibold shadow-sm hover:bg-indigo-50 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                  onClick={() => handleAdminOverviewExport('pdf')}
+                  disabled={Boolean(scheduleExportingKey)}
+                >
+                  {scheduleExportingKey === 'overview-pdf' ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
+                  ภาพรวม PDF
+                </button>
+                <button
+                  className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-emerald-600 text-white font-semibold shadow-sm hover:bg-emerald-700 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                  onClick={() => handleAdminOverviewExport('excel')}
+                  disabled={Boolean(scheduleExportingKey)}
+                >
+                  {scheduleExportingKey === 'overview-excel' ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
+                  ภาพรวม Excel
+                </button>
+                <select
+                  value={selectedScheduleTeacherId}
+                  onChange={(event) => setSelectedScheduleTeacherId(event.target.value)}
+                  disabled={Boolean(scheduleExportingKey) || scheduleTeacherExportOptions.length === 0}
+                  className="min-w-[240px] rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition-colors focus:border-sky-300 focus:ring-2 focus:ring-sky-500/20 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                >
+                  <option value="">เลือกครูสำหรับ export รายครู</option>
+                  {scheduleTeacherExportOptions.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+                <button
+                  className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-white border border-sky-200 text-sky-700 font-semibold shadow-sm hover:bg-sky-50 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                  onClick={() => handleAdminTeacherExport('pdf')}
+                  disabled={Boolean(scheduleExportingKey)}
+                >
+                  {scheduleExportingKey === 'teachers-pdf' ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
+                  รายครู PDF
+                </button>
+                <button
+                  className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-sky-600 text-white font-semibold shadow-sm hover:bg-sky-700 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                  onClick={() => handleAdminTeacherExport('excel')}
+                  disabled={Boolean(scheduleExportingKey)}
+                >
+                  {scheduleExportingKey === 'teachers-excel' ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
+                  รายครู Excel
                 </button>
               </div>
               
@@ -6800,9 +7123,11 @@ function AdminPage() {
                 <h4 className="flex items-center gap-2 text-lg font-bold text-blue-700 mb-3">📋 วิธีการใช้งาน</h4>
                 <ul className="space-y-2 text-blue-600">
                   <li className="flex items-start gap-2">• คลิกปุ่ม "เพิ่มตารางเรียนใหม่" เพื่อสร้างตารางเรียน</li>
-                  <li className="flex items-start gap-2">• เลือกประเภท: ตารางครู หรือ ตารางนักเรียน</li>
-                  <li className="flex items-start gap-2">• เลือกครู/นักเรียน วิชา ชั้นเรียน วัน และเวลา</li>
-                  <li className="flex items-start gap-2">• ตารางเรียนจะมีผลทันที</li>
+                  <li className="flex items-start gap-2">• เลือกว่าจะเพิ่มคาบเรียนวิชา หรือเวลาพักรายเทอม</li>
+                  <li className="flex items-start gap-2">• คาบเรียนต้องเลือกวิชา ครู ชั้นเรียน วัน และเวลา</li>
+                  <li className="flex items-start gap-2">• เวลาพักจะมีผลกับทุกชั้นเรียนของปีและเทอมที่เลือก</li>
+                  <li className="flex items-start gap-2">• หลังสร้างตารางแล้ว ไปที่แท็บ "บันทึกเวลา" เพื่อกรอกเวลาเรียนจริงรายวัน</li>
+                  <li className="flex items-start gap-2">• ตาราง เวลาเรียนจริง และเวลาพักจะแสดงในหน้าครูและนักเรียนทันที</li>
                 </ul>
               </div>
               
@@ -6813,10 +7138,70 @@ function AdminPage() {
                   operatingHours={scheduleSlots}
                   schedules={adminSchedules}
                   role="admin"
-                  onActionDelete={(id)=>{ openConfirmModal(t('admin.cancelScheduleTitle'), t('admin.confirmCancelSchedule'), async ()=>{ await deleteAssignment(id); }); }}
+                  onActionDelete={(item)=>{
+                    openConfirmModal(
+                      item?.is_break ? 'ลบเวลาพัก' : t('admin.cancelScheduleTitle'),
+                      item?.is_break ? 'เวลาพักนี้จะถูกลบถาวร ต้องการดำเนินการหรือไม่?' : t('admin.confirmCancelSchedule'),
+                      async ()=>{ if (item?.is_break) await deleteBreakSchedule(item.id); else await deleteAssignment(item.id); }
+                    );
+                  }}
                   onActionEdit={(item)=>{ setEditingAssignment(item); setShowScheduleManagementModal(true); }}
                 />
               </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'dailyTracking' && (
+          <div className="bg-white/80 backdrop-blur-xl rounded-3xl border border-white/60 shadow-xl shadow-slate-200/50 overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-semibold text-slate-800">บันทึกเวลาเรียนจริงรายวัน</h2>
+                <p className="mt-1 text-sm text-slate-500">กรอกเวลาเข้าเรียนจริง เวลาเลิกเรียนจริง หรือทำเครื่องหมายผ่านคาบ โดยยึดเลขคาบเป็นหลักในแต่ละวัน</p>
+              </div>
+              {semesterPeriods.length > 0 && (
+                <div className="flex items-center gap-2 bg-white p-1.5 rounded-2xl shadow-sm border border-slate-100/60">
+                  <select
+                    value={adminScheduleYear}
+                    onChange={e => setAdminScheduleYear(e.target.value)}
+                    className="py-2 pl-4 pr-10 bg-slate-50 hover:bg-slate-100 border border-transparent rounded-xl text-slate-700 font-bold text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 appearance-none cursor-pointer transition-all"
+                  >
+                    {[...new Set(semesterPeriods.map(p => p.academic_year))].sort((a, b) => parseInt(b) - parseInt(a)).map(y => (
+                      <option key={y} value={y}>ปี {y}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={adminScheduleSemester}
+                    onChange={e => setAdminScheduleSemester(e.target.value)}
+                    className="py-2 pl-4 pr-10 bg-slate-50 hover:bg-slate-100 border border-transparent rounded-xl text-slate-700 font-bold text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 appearance-none cursor-pointer transition-all"
+                  >
+                    <option value="">ทุกภาคเรียน</option>
+                    {[...new Set(semesterPeriods.filter(p => String(p.academic_year) === String(adminScheduleYear)).map(p => p.semester))].sort().map(s => (
+                      <option key={s} value={s}>ภาคเรียนที่ {s}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+
+            <div className="p-8">
+              <div className="mb-8 rounded-2xl border border-sky-100 bg-gradient-to-br from-sky-50 via-white to-indigo-50 p-6">
+                <h4 className="text-lg font-bold text-slate-800">แนวทางการบันทึกในแท็บนี้</h4>
+                <div className="mt-3 grid gap-3 text-sm text-slate-600 md:grid-cols-2">
+                  <div className="rounded-xl border border-white/70 bg-white/80 p-4">ระบบรวมรายการที่เวลาเริ่มและเวลาสิ้นสุดตรงกันเป็นเลขคาบเดียว เพื่อไม่ให้แอดมินต้องกรอกซ้ำหลายห้อง</div>
+                  <div className="rounded-xl border border-white/70 bg-white/80 p-4">เมื่อเปลี่ยนเวลาในคาบนั้น ระบบจะบันทึกอัตโนมัติและกระจายไปทุกชั้นเรียนที่อยู่คาบเดียวกันทันที</div>
+                </div>
+              </div>
+
+              <DailySubjectTrackingBoard
+                endpointPath="/schedule/tracking/admin"
+                canEdit
+                academicYear={adminScheduleYear}
+                semester={adminScheduleSemester}
+                title="บันทึกเวลาเรียนจริงรายวัน"
+                description="หน้าจอนี้แยกจากการจัดตารางเรียน และแสดงเป็นเลขคาบของวันนั้นเพื่อให้บันทึกเวลาได้เร็วขึ้นแม้หลายชั้นเรียนจะใช้ช่วงเวลาเดียวกัน"
+                emptyMessage="ยังไม่มีคาบเรียนที่ต้องบันทึกในวันที่เลือก"
+              />
             </div>
           </div>
         )}
@@ -7797,19 +8182,13 @@ function AdminPage() {
       </div>
       </div>
 
-      {showModal && (
-        <CreateUserModal 
-          isOpen={showModal}
-          onClose={() => setShowModal(false)}
-          onSuccess={(data) => {
-            if (data.role === 'teacher') {
-              setTeachers(prev => [data, ...prev]);
-            } else if (data.role === 'student') {
-              setStudents(prev => [data, ...prev]);
-            }
-          }}
-        />
-      )}
+      <CreateUserModal 
+        isOpen={showModal || Boolean(editingUser)}
+        editingUser={editingUser}
+        availableGradeLevels={availableGradeLevels}
+        onClose={closeUserModal}
+        onSuccess={handleUserModalSuccess}
+      />
       {/* Confirm & Alert modals (shared) */}
   <ExpiryModal isOpen={showExpiryModal} initialValue={expiryModalValue} onClose={() => setShowExpiryModal(false)} onSave={saveExpiry} title="ตั้งวันหมดอายุ" />
   <AnnouncementModal isOpen={showAnnouncementModal} initialData={modalAnnouncement} apiBaseUrl={API_BASE_URL} onClose={closeAnnouncementModal} onSave={saveAnnouncementFromModal} allowAudienceSelection={true} />
@@ -7870,6 +8249,7 @@ function AdminPage() {
         onRemoveStudent={removeStudentFromClassroom}
         isHistoricalClassroom={isHistoricalClassroomPeriod(selectedClassroom)}
         refreshKey={classroomRefreshKey}
+        schoolData={schoolData}
       />
 
     {/* Promote Classroom Modal (Group B) */}
